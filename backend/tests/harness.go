@@ -2,6 +2,7 @@
 //
 //	auth_test.go    注册 / 登录 / 登出 / 会话
 //	repos_test.go   仓库 CRUD 与用户隔离
+//	issues_test.go  Issue CRUD / 状态流转 / 删除级联
 //	sshkeys_test.go SSH 公钥 CRUD 与用户绑定
 //	browse_test.go  代码浏览（tree / blob / commits / branches）
 //	sshgit_test.go  SSH git clone / push / 权限拒绝

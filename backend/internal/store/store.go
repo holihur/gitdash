@@ -43,6 +43,20 @@ type SSHKey struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+type Issue struct {
+	ID        int64   `json:"id"`
+	Owner     string  `json:"-"`
+	Repo      string  `json:"-"`
+	Number    int64   `json:"number"`
+	Title     string  `json:"title"`
+	Body      string  `json:"body"`
+	State     string  `json:"state"` // "open" | "closed"
+	Author    string  `json:"author"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
+	ClosedAt  *string `json:"closed_at"`
+}
+
 // PublicKeyAuth 用于 SSH 鉴权：公钥行 + 所属用户
 type PublicKeyAuth struct {
 	UserID   int64
@@ -102,6 +116,20 @@ CREATE TABLE IF NOT EXISTS ssh_keys (
 	public_key  TEXT NOT NULL,
 	fingerprint TEXT NOT NULL UNIQUE,
 	created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS issues (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	number     INTEGER NOT NULL,
+	title      TEXT NOT NULL,
+	body       TEXT NOT NULL DEFAULT '',
+	state      TEXT NOT NULL DEFAULT 'open',
+	author     TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	closed_at  TEXT,
+	UNIQUE(owner, repo, number)
 );`)
 	return err
 }
@@ -235,14 +263,111 @@ func (s *Store) GetRepo(owner, name string) (Repo, error) {
 }
 
 func (s *Store) DeleteRepo(owner, name string) error {
-	res, err := s.db.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM issues WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	res, err := tx.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit()
+}
+
+// ---- issues ----
+
+func (s *Store) getIssue(owner, repo string, number int64) (Issue, error) {
+	var it Issue
+	var ca sql.NullString
+	err := s.db.QueryRow(`SELECT id, owner, repo, number, title, body, state, author, created_at, updated_at, closed_at
+		FROM issues WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).
+		Scan(&it.ID, &it.Owner, &it.Repo, &it.Number, &it.Title, &it.Body, &it.State, &it.Author,
+			&it.CreatedAt, &it.UpdatedAt, &ca)
+	if errors.Is(err, sql.ErrNoRows) {
+		return it, ErrNotFound
+	}
+	if ca.Valid {
+		v := ca.String
+		it.ClosedAt = &v
+	}
+	return it, err
+}
+
+func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, error) {
+	var it Issue
+	var err error
+	now := now()
+	// 号码在同一仓库内递增；并发冲突时重试（UNIQUE(owner, repo, number)）
+	for attempt := 0; attempt < 5; attempt++ {
+		res, e := s.db.Exec(`INSERT INTO issues (owner, repo, number, title, body, state, author, created_at, updated_at)
+			VALUES (?, ?, (SELECT COALESCE(MAX(number), 0) + 1 FROM issues WHERE owner = ? AND repo = ?), ?, ?, 'open', ?, ?, ?)`,
+			owner, repo, owner, repo, title, body, author, now, now)
+		if e == nil {
+			it.ID, _ = res.LastInsertId()
+			it = Issue{ID: it.ID, Owner: owner, Repo: repo, Title: title, Body: body,
+				State: "open", Author: author, CreatedAt: now, UpdatedAt: now}
+			if err := s.db.QueryRow(`SELECT number FROM issues WHERE id = ?`, it.ID).Scan(&it.Number); err != nil {
+				return it, err
+			}
+			return it, nil
+		}
+		if !isUniqueErr(e) {
+			return it, e
+		}
+		err = e
+	}
+	return it, err
+}
+
+func (s *Store) ListIssues(owner, repo string) ([]Issue, error) {
+	rows, err := s.db.Query(`SELECT id, owner, repo, number, title, body, state, author, created_at, updated_at, closed_at
+		FROM issues WHERE owner = ? AND repo = ? ORDER BY (state = 'open') DESC, number DESC`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	issues := []Issue{}
+	for rows.Next() {
+		var it Issue
+		var ca sql.NullString
+		if err := rows.Scan(&it.ID, &it.Owner, &it.Repo, &it.Number, &it.Title, &it.Body, &it.State,
+			&it.Author, &it.CreatedAt, &it.UpdatedAt, &ca); err != nil {
+			return nil, err
+		}
+		if ca.Valid {
+			v := ca.String
+			it.ClosedAt = &v
+		}
+		issues = append(issues, it)
+	}
+	return issues, rows.Err()
+}
+
+func (s *Store) SetIssueState(owner, repo string, number int64, state string) (Issue, error) {
+	if state != "open" && state != "closed" {
+		return Issue{}, errors.New("invalid state")
+	}
+	now := now()
+	var closedAt any
+	if state == "closed" {
+		closedAt = now
+	}
+	res, err := s.db.Exec(`UPDATE issues SET state = ?, updated_at = ?, closed_at = ?
+		WHERE owner = ? AND repo = ? AND number = ?`, state, now, closedAt, owner, repo, number)
+	if err != nil {
+		return Issue{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Issue{}, ErrNotFound
+	}
+	return s.getIssue(owner, repo, number)
 }
 
 // ---- ssh keys ----

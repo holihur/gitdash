@@ -34,6 +34,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import RepoIssues from "@/pages/RepoIssues";
 
 function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
   return (
@@ -186,6 +187,9 @@ export default function RepoView() {
           </TabsTrigger>
           <TabsTrigger value="commits" className="flex-1 sm:flex-none">
             {t("repo.commits")}
+          </TabsTrigger>
+          <TabsTrigger value="issues" className="flex-1 sm:flex-none">
+            {t("issues.title")}
           </TabsTrigger>
         </TabsList>
 
@@ -394,6 +398,10 @@ export default function RepoView() {
               </Table>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="issues">
+          <RepoIssues owner={owner} name={name} />
         </TabsContent>
       </Tabs>
     </div>

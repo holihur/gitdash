@@ -59,6 +59,18 @@ export interface Commit {
   message: string;
 }
 
+export interface Issue {
+  id: number;
+  number: number;
+  title: string;
+  body: string;
+  state: "open" | "closed";
+  author: string;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+}
+
 export function cloneUrl(owner: string, name: string): string {
   return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
 }
@@ -130,6 +142,19 @@ export const api = {
     ),
   commits: (_owner: string, name: string, ref: string) =>
     req<Commit[]>(`/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
+
+  // issues
+  listIssues: (_owner: string, name: string) => req<Issue[]>(`/repos/${name}/issues`),
+  createIssue: (_owner: string, name: string, title: string, body: string) =>
+    req<Issue>(`/repos/${name}/issues`, {
+      method: "POST",
+      body: JSON.stringify({ title, body }),
+    }),
+  setIssueState: (_owner: string, name: string, number: number, state: "open" | "closed") =>
+    req<Issue>(`/repos/${name}/issues/${number}`, {
+      method: "PATCH",
+      body: JSON.stringify({ state }),
+    }),
 
   // ssh keys
   listKeys: () => req<SSHKey[]>("/keys"),

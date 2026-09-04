@@ -95,6 +95,28 @@ export const en = {
     keyType: "Key type",
     addedAt: "Added",
   },
+  issues: {
+    title: "Issues",
+    open: "Open",
+    closed: "Closed",
+    new: "New issue",
+    newDialogTitle: "Create issue",
+    titleLabel: "Title",
+    titlePlaceholder: "A short summary of the problem",
+    bodyLabel: "Description",
+    bodyPlaceholder: "Optional. Details, steps to reproduce, expected behavior…",
+    empty: "No issues yet",
+    emptyHint: "Report a bug or request a feature.",
+    close: "Close",
+    reopen: "Reopen",
+    created: "Issue #{number} created",
+    stateClosed: "Issue #{number} closed",
+    stateOpen: "Issue #{number} reopened",
+    openedOn: "opened by {author} · {date}",
+    closedOn: "closed by {author} · {date}",
+    noBody: "No description provided.",
+    loadFailed: "Failed to load issues: {error}",
+  },
 };
 
 export type Messages = typeof en;

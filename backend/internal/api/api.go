@@ -62,6 +62,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
 
+	// issues
+	mux.HandleFunc("GET /api/repos/{name}/issues", a.auth(a.listIssues))
+	mux.HandleFunc("POST /api/repos/{name}/issues", a.auth(a.createIssue))
+	mux.HandleFunc("PATCH /api/repos/{name}/issues/{number}", a.auth(a.setIssueState))
+
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))
 	mux.HandleFunc("POST /api/keys", a.auth(a.createKey))
@@ -423,6 +428,97 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, cs)
+}
+
+// ---- issues ----
+
+// requireRepo 校验仓库存在且归当前用户所有。
+func (a *API) requireRepo(w http.ResponseWriter, r *http.Request) bool {
+	_, err := a.store.GetRepo(userFrom(r), r.PathValue("name"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "repo not found")
+		return false
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return false
+	}
+	return true
+}
+
+func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
+	if !a.requireRepo(w, r) {
+		return
+	}
+	issues, err := a.store.ListIssues(userFrom(r), r.PathValue("name"))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, issues)
+}
+
+func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
+	if !a.requireRepo(w, r) {
+		return
+	}
+	var in struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		writeErr(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	if len([]rune(title)) > 200 {
+		writeErr(w, http.StatusBadRequest, "title too long (max 200 chars)")
+		return
+	}
+	if len([]rune(in.Body)) > 10000 {
+		writeErr(w, http.StatusBadRequest, "body too long (max 10000 chars)")
+		return
+	}
+	issue, err := a.store.CreateIssue(userFrom(r), r.PathValue("name"), userFrom(r), title, in.Body)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, issue)
+}
+
+func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
+	if !a.requireRepo(w, r) {
+		return
+	}
+	number, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || number < 1 {
+		writeErr(w, http.StatusBadRequest, "invalid issue number")
+		return
+	}
+	var in struct {
+		State string `json:"state"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.State != "open" && in.State != "closed" {
+		writeErr(w, http.StatusBadRequest, "state must be 'open' or 'closed'")
+		return
+	}
+	issue, err := a.store.SetIssueState(userFrom(r), r.PathValue("name"), number, in.State)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "issue not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, issue)
 }
 
 // ---- ssh keys ----
