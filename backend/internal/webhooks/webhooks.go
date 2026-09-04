@@ -3,6 +3,9 @@ package webhooks
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net"
@@ -62,7 +65,7 @@ func drain(spoolDir string, st *store.Store) {
 		hooks, err := st.ListWebhooks(ev.Owner, ev.Repo)
 		if err == nil {
 			for _, h := range hooks {
-				post(h.URL, ev)
+				post(h.URL, ev, h.Secret)
 			}
 		}
 		_ = os.Remove(f)
@@ -98,7 +101,26 @@ func blockedLinkLocal(u *urlpkg.URL) bool {
 	return false
 }
 
-func post(url string, ev Event) {
+// httpAllowed: 仅回环地址允许明文 http（其余要求 https，除非显式 GITDASH_WEBHOOK_ALLOW_HTTP=1）。
+func httpAllowed(u *urlpkg.URL) bool {
+	if os.Getenv("GITDASH_WEBHOOK_ALLOW_HTTP") != "" {
+		return true
+	}
+	host := u.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if ok && addr.Unmap().IsLoopback() {
+			return true
+		}
+	}
+	return false
+}
+
+func post(url string, ev Event, secret string) {
 	body, err := json.Marshal(ev)
 	if err != nil {
 		return
@@ -108,6 +130,10 @@ func post(url string, ev Event) {
 		log.Printf("webhook: blocked delivery to %q (ssrf guard)", url)
 		return
 	}
+	if u.Scheme != "https" && !httpAllowed(u) {
+		log.Printf("webhook: rejected plaintext delivery to %q (use https or GITDASH_WEBHOOK_ALLOW_HTTP=1)", url)
+		return
+	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		log.Printf("webhook: invalid url %q: %v", url, err)
@@ -115,6 +141,11 @@ func post(url string, ev Event) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "gitdash-webhook")
+	if secret != "" {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write(body)
+		req.Header.Set("X-Gitdash-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("webhook: deliver %s/%s -> %s: %v", ev.Owner, ev.Repo, url, err)

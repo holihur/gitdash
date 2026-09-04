@@ -133,6 +133,7 @@ type Webhook struct {
 	Owner     string `json:"owner"`
 	Repo      string `json:"repo"`
 	URL       string `json:"url"`
+	Secret    string `json:"-"` // 签名密钥，不回传
 	CreatedAt string `json:"created_at"`
 }
 
@@ -249,6 +250,7 @@ CREATE TABLE IF NOT EXISTS webhooks (
 	owner      TEXT NOT NULL,
 	repo       TEXT NOT NULL,
 	url        TEXT NOT NULL,
+	secret     TEXT NOT NULL DEFAULT '',
 	created_at TEXT NOT NULL,
 	UNIQUE(owner, repo, url)
 );
@@ -289,6 +291,9 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 		return err
 	}
 	if err := ensureColumn(s.db, "issues", "milestone_id", "INTEGER"); err != nil {
+		return err
+	}
+	if err := ensureColumn(s.db, "webhooks", "secret", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	return nil
@@ -718,10 +723,10 @@ func (s *Store) RemoveCollab(owner, repo, username string) error {
 
 // ---- webhooks ----
 
-func (s *Store) CreateWebhook(owner, repo, url string) (Webhook, error) {
-	w := Webhook{Owner: owner, Repo: repo, URL: url, CreatedAt: now()}
-	res, err := s.db.Exec(`INSERT INTO webhooks (owner, repo, url, created_at) VALUES (?, ?, ?, ?)`,
-		owner, repo, url, w.CreatedAt)
+func (s *Store) CreateWebhook(owner, repo, url, secret string) (Webhook, error) {
+	w := Webhook{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: now()}
+	res, err := s.db.Exec(`INSERT INTO webhooks (owner, repo, url, secret, created_at) VALUES (?, ?, ?, ?, ?)`,
+		owner, repo, url, secret, w.CreatedAt)
 	if err != nil {
 		if isUniqueErr(err) {
 			return w, ErrExists
@@ -733,7 +738,7 @@ func (s *Store) CreateWebhook(owner, repo, url string) (Webhook, error) {
 }
 
 func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
-	rows, err := s.db.Query(`SELECT id, owner, repo, url, created_at
+	rows, err := s.db.Query(`SELECT id, owner, repo, url, secret, created_at
 		FROM webhooks WHERE owner = ? AND repo = ? ORDER BY id`, owner, repo)
 	if err != nil {
 		return nil, err
@@ -742,7 +747,7 @@ func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
 	ws := []Webhook{}
 	for rows.Next() {
 		var w Webhook
-		if err := rows.Scan(&w.ID, &w.Owner, &w.Repo, &w.URL, &w.CreatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.Owner, &w.Repo, &w.URL, &w.Secret, &w.CreatedAt); err != nil {
 			return nil, err
 		}
 		ws = append(ws, w)

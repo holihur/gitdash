@@ -1,11 +1,16 @@
 package webhooks
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,10 +40,10 @@ func TestDrainDeliversAndCleansSpool(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := st.CreateWebhook("alice", "demo", srv.URL+"/a"); err != nil {
+	if _, err := st.CreateWebhook("alice", "demo", srv.URL+"/a", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.CreateWebhook("alice", "demo", srv.URL+"/b"); err != nil {
+	if _, err := st.CreateWebhook("alice", "demo", srv.URL+"/b", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,5 +78,42 @@ func TestDrainDeliversAndCleansSpool(t *testing.T) {
 	left, _ = filepath.Glob(filepath.Join(spool, "*.json"))
 	if len(left) != 0 {
 		t.Fatalf("spool files not cleaned for unknown repo: %v", left)
+	}
+}
+
+func TestWebhookSignatureHeader(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spool := filepath.Join(dir, "events")
+	_ = os.MkdirAll(spool, 0o755)
+
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mac := hmac.New(sha256.New, []byte("super-secret-key-123"))
+		mac.Write(b)
+		want := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+		if r.Header.Get("X-Gitdash-Signature") != want {
+			t.Errorf("bad signature header %q want %q", r.Header.Get("X-Gitdash-Signature"), want)
+		}
+		got <- r.Header.Get("X-Gitdash-Signature")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	st.CreateWebhook("alice", "demo", srv.URL+"/h", "super-secret-key-123")
+	ev := `{"event":"push","owner":"alice","repo":"demo","ref":"refs/heads/main"}`
+	os.WriteFile(filepath.Join(spool, "a.json"), []byte(ev), 0o644)
+	drain(spool, st)
+	select {
+	case h := <-got:
+		if !strings.HasPrefix(h, "sha256=") {
+			t.Fatalf("signature header = %q", h)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no delivery")
 	}
 }

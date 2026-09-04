@@ -27,6 +27,7 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
   const { t, to } = useI18n();
   const [hooks, setHooks] = useState<Webhook[]>([]);
   const [url, setUrl] = useState("");
+  const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -48,9 +49,10 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
     if (!url.trim()) return;
     setBusy(true);
     try {
-      await api.createWebhook(owner, repo, url.trim());
+      await api.createWebhook(owner, repo, url.trim(), secret.trim());
       toast.success(t("webhooks.added"));
       setUrl("");
+      setSecret("");
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -117,13 +119,19 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
               placeholder={t("webhooks.urlPlaceholder")}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  add();
-                }
-              }}
             />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="wh-secret">{t("webhooks.secretLabel")}</Label>
+            <Input
+              id="wh-secret"
+              type="password"
+              autoComplete="off"
+              placeholder={t("webhooks.secretPlaceholder")}
+              value={secret}
+              onChange={(e) => setSecret(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">{t("webhooks.secretHint")}</p>
           </div>
         </div>
 

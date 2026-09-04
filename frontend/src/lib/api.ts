@@ -1,4 +1,4 @@
-const TOKEN_KEY = "gitdash-token";
+// 会话通过 httpOnly Cookie(gitdash_session) 自动携带，前端不再持有 token。
 
 /** 带后端错误码的 API 错误（code 供前端 i18n 映射，缺失时用 message 兜底） */
 export class ApiError extends Error {
@@ -14,15 +14,15 @@ export class ApiError extends Error {
 }
 
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? "";
+  return "";
 }
 
-export function setToken(t: string) {
-  localStorage.setItem(TOKEN_KEY, t);
+export function setToken(_t: string) {
+  /* cookie-based sessions */
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  /* cookie-based sessions */
 }
 
 export interface User {
@@ -172,19 +172,17 @@ export function cloneCommand(owner: string, name: string): string {
 }
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const res = await fetch(`/api${path}`, {
     ...opts,
+    credentials: "same-origin", // 携带 httpOnly cookie
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(opts.headers ?? {}),
     },
   });
   if (!res.ok) {
     if (res.status === 401 && window.location.pathname !== "/login") {
-      // 会话失效：清除并回登录页
-      clearToken();
+      // 会话失效：回登录页（cookie 由服务端在 logout 时清除）
       window.location.href = "/login";
     }
     let msg = res.statusText;
@@ -303,10 +301,10 @@ export const api = {
   // webhooks
   listWebhooks: (owner: string, name: string) =>
     req<Webhook[]>(`/users/${owner}/repos/${name}/webhooks`),
-  createWebhook: (owner: string, name: string, url: string) =>
+  createWebhook: (owner: string, name: string, url: string, secret?: string) =>
     req<Webhook>(`/users/${owner}/repos/${name}/webhooks`, {
       method: "POST",
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, secret: secret ?? "" }),
     }),
   deleteWebhook: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/webhooks/${id}`, { method: "DELETE" }),

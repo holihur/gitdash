@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,6 +42,71 @@ type API struct {
 
 	mu         sync.Mutex
 	mfaPending map[string]mfaChallenge // mfa_token -> 待二次验证的登录
+
+	rateMu    sync.Mutex
+	rateFails map[string]rateRec // 登录失败计数（username|ip）
+}
+
+// 登录限速：15 分钟窗口内最多 5 次失败
+const (
+	loginMaxFails   = 5
+	loginWindow     = 15 * time.Minute
+	loginRateCutoff = 5000
+)
+
+type rateRec struct {
+	count int
+	until time.Time
+}
+
+func (a *API) rateKey(username, ip string) string { return username + "|" + ip }
+
+func (a *API) rateBlocked(key string) bool {
+	a.rateMu.Lock()
+	defer a.rateMu.Unlock()
+	if len(a.rateFails) > loginRateCutoff { // 防止内存无限增长
+		a.rateFails = map[string]rateRec{}
+	}
+	rec, ok := a.rateFails[key]
+	if !ok {
+		return false
+	}
+	if time.Now().After(rec.until) {
+		delete(a.rateFails, key)
+		return false
+	}
+	return rec.count >= loginMaxFails
+}
+
+func (a *API) rateFail(key string) {
+	a.rateMu.Lock()
+	defer a.rateMu.Unlock()
+	rec, ok := a.rateFails[key]
+	if !ok || time.Now().After(rec.until) {
+		rec = rateRec{until: time.Now().Add(loginWindow)}
+	}
+	rec.count++
+	a.rateFails[key] = rec
+}
+
+func (a *API) rateReset(key string) {
+	a.rateMu.Lock()
+	delete(a.rateFails, key)
+	a.rateMu.Unlock()
+}
+
+func clientIP(r *http.Request) string {
+	if h := r.Header.Get("X-Forwarded-For"); h != "" {
+		if i := strings.IndexByte(h, ','); i > 0 {
+			return strings.TrimSpace(h[:i])
+		}
+		return strings.TrimSpace(h)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 type mfaChallenge struct {
@@ -54,6 +120,7 @@ func New(s *store.Store, version string) *API {
 		store:      s,
 		version:    version,
 		mfaPending: map[string]mfaChallenge{},
+		rateFails:  map[string]rateRec{},
 	}
 }
 
@@ -167,7 +234,23 @@ func (a *API) Handler(staticDir string) http.Handler {
 		mux.HandleFunc("/", a.embeddedHandler())
 	}
 
-	return secureHeaders(logMiddleware(mux))
+	return secureHeaders(logMiddleware(csrfGuard(mux)))
+}
+
+// csrfGuard 校验跨站请求：带 Origin 的非安全方法必须与本站同源（cookie 会话的 CSRF 防线）。
+func csrfGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+			if origin := r.Header.Get("Origin"); origin != "" && origin != "null" {
+				u, err := url.Parse(origin)
+				if err != nil || !strings.EqualFold(u.Host, r.Host) {
+					writeCode(w, http.StatusForbidden, "invalid_origin", "cross-origin request rejected")
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // secureHeaders 基础安全响应头（CSP 允许内联主题脚本，其 sha256 随 index.html 保持同步）。
@@ -197,6 +280,24 @@ func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+const sessionCookie = "gitdash_session"
+
+func (a *API) setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(store.SessionTTL.Seconds()),
+	})
+}
+
+func (a *API) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
+}
+
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if len(h) > 7 && strings.EqualFold(h[:7], "Bearer ") {
@@ -207,6 +308,11 @@ func bearerToken(r *http.Request) string {
 
 func (a *API) sessionUser(r *http.Request) string {
 	tok := bearerToken(r)
+	if tok == "" {
+		if c, err := r.Cookie(sessionCookie); err == nil {
+			tok = c.Value
+		}
+	}
 	if tok == "" {
 		return ""
 	}
@@ -225,7 +331,7 @@ func newSessionToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func (a *API) startSession(w http.ResponseWriter, status int, username string) {
+func (a *API) startSession(w http.ResponseWriter, r *http.Request, status int, username string) {
 	ua, err := a.store.GetByUsername(username)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -240,6 +346,7 @@ func (a *API) startSession(w http.ResponseWriter, status int, username string) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.setSessionCookie(w, r, token)
 	writeJSON(w, status, map[string]string{"token": token, "username": ua.Username})
 }
 
@@ -278,7 +385,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.startSession(w, http.StatusCreated, u.Username)
+	a.startSession(w, r, http.StatusCreated, u.Username)
 }
 
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
@@ -289,15 +396,24 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	ua, err := a.store.GetByUsername(strings.ToLower(strings.TrimSpace(in.Username)))
+	username := strings.ToLower(strings.TrimSpace(in.Username))
+	key := a.rateKey(username, clientIP(r))
+	if a.rateBlocked(key) {
+		writeCode(w, http.StatusTooManyRequests, "too_many_attempts", "too many failed attempts, try again later")
+		return
+	}
+	ua, err := a.store.GetByUsername(username)
 	if err != nil {
+		a.rateFail(key)
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(ua.PasswordHash), []byte(in.Password)) != nil {
+		a.rateFail(key)
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
+	a.rateReset(key)
 	if ua.MFAEnabled {
 		token, err := newSessionToken()
 		if err != nil {
@@ -313,7 +429,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	a.startSession(w, http.StatusOK, ua.Username)
+	a.startSession(w, r, http.StatusOK, ua.Username)
 }
 
 // mfaVerify 完成 MFA 二次验证并签发正式会话。
@@ -361,7 +477,7 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	delete(a.mfaPending, in.MFAToken)
 	a.mu.Unlock()
-	a.startSession(w, http.StatusOK, ua.Username)
+	a.startSession(w, r, http.StatusOK, ua.Username)
 }
 
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
@@ -525,9 +641,16 @@ func (a *API) mfaDisable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
-	if tok := bearerToken(r); tok != "" {
+	tok := bearerToken(r)
+	if tok == "" {
+		if c, err := r.Cookie(sessionCookie); err == nil {
+			tok = c.Value
+		}
+	}
+	if tok != "" {
 		_ = a.store.DeleteSession(tok)
 	}
+	a.clearSessionCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 func (a *API) listGPGKeys(w http.ResponseWriter, r *http.Request) {
@@ -838,7 +961,13 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"path": dir, "entries": entries})
+	// 超大目录分页上限，防止每次请求产生过多子进程
+	const maxEntries = 1000
+	truncated := len(entries) > maxEntries
+	if truncated {
+		entries = entries[:maxEntries]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"path": dir, "entries": entries, "truncated": truncated})
 }
 
 func (a *API) blob(w http.ResponseWriter, r *http.Request) {
@@ -1780,12 +1909,14 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		URL string `json:"url"`
+		URL    string `json:"url"`
+		Secret string `json:"secret"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
 	in.URL = strings.TrimSpace(in.URL)
+	in.Secret = strings.TrimSpace(in.Secret)
 	if !validWebhookURL(in.URL) {
 		writeCode(w, http.StatusBadRequest, "invalid_url", "url must be a valid http(s) url")
 		return
@@ -1794,7 +1925,11 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_url", "url too long (max 2048 chars)")
 		return
 	}
-	hk, err := a.store.CreateWebhook(owner, name, in.URL)
+	if in.Secret != "" && len(in.Secret) < 16 {
+		writeCode(w, http.StatusBadRequest, "invalid_secret", "webhook secret must be at least 16 characters")
+		return
+	}
+	hk, err := a.store.CreateWebhook(owner, name, in.URL, in.Secret)
 	if errors.Is(err, store.ErrExists) {
 		writeCode(w, http.StatusConflict, "webhook_exists", "webhook already registered")
 		return

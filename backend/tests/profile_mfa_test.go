@@ -2,6 +2,7 @@ package tests
 
 import (
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 	"testing"
 	"time"
@@ -204,4 +205,73 @@ func TestSecurityHeadersAndWebhookSSRFGuard(t *testing.T) {
 	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'self'") {
 		t.Fatalf("missing CSP: %v", resp.Header.Get("Content-Security-Policy"))
 	}
+}
+
+func TestSessionCookieAndCSRFGuard(t *testing.T) {
+	jar, _ := cookiejar.New(nil)
+	env := start(t)
+	hc := &http.Client{Jar: jar}
+
+	// 注册（无 Authorization 头）→ cookie 会话自动建立
+	req, _ := http.NewRequest("POST", env.BaseURL+"/api/auth/register", strings.NewReader(`{"username":"cooky","password":"cookie-pass-123"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := hc.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != 201 {
+		t.Fatalf("register = %d", resp.StatusCode)
+	}
+	// 不带 token，仅凭 cookie 访问 /me
+	me, _ := http.NewRequest("GET", env.BaseURL+"/api/me", nil)
+	r2, err := hc.Do(me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r2.Body.Close()
+	if r2.StatusCode != 200 {
+		t.Fatalf("cookie session /me = %d", r2.StatusCode)
+	}
+	// 跨站 Origin 的写请求被拒绝
+	post, _ := http.NewRequest("POST", env.BaseURL+"/api/repos", strings.NewReader(`{"name":"x"}`))
+	post.Header.Set("Content-Type", "application/json")
+	post.Header.Set("Origin", "http://evil.example")
+	r3, err := hc.Do(post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r3.Body.Close()
+	if r3.StatusCode != 403 {
+		t.Fatalf("csrf guard = %d", r3.StatusCode)
+	}
+	// 登出清 cookie，会话失效
+	lo, _ := http.NewRequest("POST", env.BaseURL+"/api/auth/logout", nil)
+	r4, err := hc.Do(lo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r4.Body.Close()
+	me2, _ := http.NewRequest("GET", env.BaseURL+"/api/me", nil)
+	r5, err := hc.Do(me2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r5.Body.Close()
+	if r5.StatusCode != 401 {
+		t.Fatalf("after logout /me = %d", r5.StatusCode)
+	}
+}
+
+func TestLoginRateLimit(t *testing.T) {
+	env := start(t)
+	register(t, env, "alice", "alice-pass-123")
+	anon := &Client{env: env}
+	// 5 次失败 → 第 6 次即使密码正确也被限速
+	for i := 0; i < 5; i++ {
+		anon.mustFail("POST", "/auth/login",
+			map[string]string{"username": "alice", "password": "wrong-pass-999"}, 401)
+	}
+	anon.mustFail("POST", "/auth/login",
+		map[string]string{"username": "alice", "password": "alice-pass-123"}, 429)
 }
