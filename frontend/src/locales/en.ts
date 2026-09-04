@@ -132,6 +132,17 @@ export const en = {
     remove: "Remove",
     sharedBy: "shared by {owner}",
   },
+  webhooks: {
+    manage: "Webhooks",
+    add: "Add webhook",
+    urlLabel: "Payload URL",
+    urlPlaceholder: "https://example.com/hook",
+    empty: "No webhooks yet",
+    emptyHint: "A POST request with a JSON payload is sent to this URL whenever code is pushed (event: push).",
+    added: "Webhook added",
+    removed: "Webhook removed",
+    remove: "Remove",
+  },
   errors: {
     unauthorized: "Not signed in or session expired",
     invalid_credentials: "Invalid username or password",
@@ -157,6 +168,9 @@ export const en = {
     invalid_state: "Invalid state",
     issue_not_found: "Issue not found",
     invalid_issue_number: "Invalid issue number",
+    invalid_url: "URL must be a valid http(s) URL",
+    webhook_exists: "This webhook URL is already registered",
+    webhook_not_found: "Webhook not found",
   },
 };
 

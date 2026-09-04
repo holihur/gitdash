@@ -13,16 +13,24 @@ import (
 
 var (
 	reposDir string
+	spoolDir string
 	nameRe   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 	refRe    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 )
 
 func Init(dataDir string) error {
 	reposDir = filepath.Join(dataDir, "repos")
-	return os.MkdirAll(reposDir, 0o755)
+	spoolDir = filepath.Join(dataDir, "webhook-events")
+	if err := os.MkdirAll(reposDir, 0o755); err != nil {
+		return err
+	}
+	return os.MkdirAll(spoolDir, 0o755)
 }
 
 func ReposDir() string { return reposDir }
+
+// SpoolDir push 事件 spool 目录（post-receive hook 写入，webhook 调度器消费）
+func SpoolDir() string { return spoolDir }
 
 func ValidName(name string) bool {
 	return nameRe.MatchString(name)
@@ -89,6 +97,34 @@ func CreateBare(owner, name string) error {
 	}
 	// allow deleting the default branch in a bare repo
 	_, _ = gitOut(path, "config", "receive.denyDeleteCurrent", "ignore")
+	return installPostReceiveHook(path, owner, name)
+}
+
+// installPostReceiveHook 安装 post-receive hook：把每次 push 事件写成一行 JSON
+// 追加到 spool 目录下的独立文件，供服务端 webhook 调度器投递。
+func installPostReceiveHook(repoPath, owner, name string) error {
+	hooksDir := filepath.Join(repoPath, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		return err
+	}
+	script := `#!/bin/sh
+# gitdash: record push events (consumed by the webhook dispatcher)
+while read oldrev newrev refname; do
+	[ -z "$refname" ] && continue
+	f="@SPOOL@/@OWNER@__@REPO@-$$-$(date +%s%N).json"
+	printf '{"event":"push","owner":"@OWNER@","repo":"@REPO@","old":"%s","new":"%s","ref":"%s","user":"%s","created_at":"%s"}\n' \
+		"$oldrev" "$newrev" "$refname" "${GITDASH_USER:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$f"
+done
+`
+	script = strings.NewReplacer(
+		"@SPOOL@", spoolDir,
+		"@OWNER@", owner,
+		"@REPO@", name,
+	).Replace(script)
+	hook := filepath.Join(hooksDir, "post-receive")
+	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
+		return err
+	}
 	return nil
 }
 

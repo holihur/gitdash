@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -81,6 +82,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/collabs", a.auth(a.listCollabs))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/collabs", a.auth(a.addCollab))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/collabs/{username}", a.auth(a.removeCollab))
+
+	// webhooks
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/webhooks", a.auth(a.listWebhooks))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/webhooks", a.auth(a.createWebhook))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/webhooks/{id}", a.auth(a.deleteWebhook))
 
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))
@@ -675,6 +681,75 @@ func (a *API) removeCollab(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- webhooks ----
+
+func validWebhookURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	hooks, err := a.store.ListWebhooks(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, hooks)
+}
+
+func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		URL string `json:"url"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.URL = strings.TrimSpace(in.URL)
+	if !validWebhookURL(in.URL) {
+		writeCode(w, http.StatusBadRequest, "invalid_url", "url must be a valid http(s) url")
+		return
+	}
+	if len([]rune(in.URL)) > 2048 {
+		writeCode(w, http.StatusBadRequest, "invalid_url", "url too long (max 2048 chars)")
+		return
+	}
+	hk, err := a.store.CreateWebhook(owner, name, in.URL)
+	if errors.Is(err, store.ErrExists) {
+		writeCode(w, http.StatusConflict, "webhook_exists", "webhook already registered")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, hk)
+}
+
+func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
+		return
+	}
+	if errors.Is(a.store.DeleteWebhook(owner, name, id), store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "webhook_not_found", "webhook not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

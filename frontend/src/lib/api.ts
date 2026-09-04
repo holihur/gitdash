@@ -92,6 +92,14 @@ export interface Collab {
   permission: "read" | "write";
   created_at: string;
 }
+
+export interface Webhook {
+  id: number;
+  owner: string;
+  repo: string;
+  url: string;
+  created_at: string;
+}
 export function cloneUrl(owner: string, name: string): string {
   return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
 }
@@ -191,6 +199,17 @@ export const api = {
     }),
   removeCollab: (owner: string, name: string, username: string) =>
     req<null>(`/users/${owner}/repos/${name}/collabs/${username}`, { method: "DELETE" }),
+
+  // webhooks
+  listWebhooks: (owner: string, name: string) =>
+    req<Webhook[]>(`/users/${owner}/repos/${name}/webhooks`),
+  createWebhook: (owner: string, name: string, url: string) =>
+    req<Webhook>(`/users/${owner}/repos/${name}/webhooks`, {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    }),
+  deleteWebhook: (owner: string, name: string, id: number) =>
+    req<null>(`/users/${owner}/repos/${name}/webhooks/${id}`, { method: "DELETE" }),
 
   // ssh keys
   listKeys: () => req<SSHKey[]>("/keys"),

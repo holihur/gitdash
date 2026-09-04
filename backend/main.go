@@ -15,6 +15,7 @@ import (
 	"gitdash/backend/internal/sshserver"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/updater"
+	"gitdash/backend/internal/webhooks"
 )
 
 // -X main.version 注入
@@ -72,6 +73,10 @@ func run() {
 	}
 
 	a := api.New(st, version)
+
+	// webhook 调度：消费 post-receive spool 中的 push 事件
+	go webhooks.Run(gitsvc.SpoolDir(), st, 2*time.Second)
+
 	if staticDir == "" {
 		staticDir = resolveStaticDir()
 	}

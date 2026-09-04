@@ -68,6 +68,16 @@ type Collab struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+// Webhook push 事件回调配置
+
+type Webhook struct {
+	ID        int64  `json:"id"`
+	Owner     string `json:"owner"`
+	Repo      string `json:"repo"`
+	URL       string `json:"url"`
+	CreatedAt string `json:"created_at"`
+}
+
 // PublicKeyAuth 用于 SSH 鉴权：公钥行 + 所属用户
 type PublicKeyAuth struct {
 	UserID   int64
@@ -149,6 +159,14 @@ CREATE TABLE IF NOT EXISTS repo_collabs (
 	permission TEXT NOT NULL DEFAULT 'read',
 	created_at TEXT NOT NULL,
 	PRIMARY KEY (owner, repo, username)
+);
+CREATE TABLE IF NOT EXISTS webhooks (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	url        TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	UNIQUE(owner, repo, url)
 );`)
 	return err
 }
@@ -291,6 +309,9 @@ func (s *Store) DeleteRepo(owner, name string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM webhooks WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
 	res, err := tx.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
@@ -484,6 +505,51 @@ func (s *Store) ListCollabs(owner, repo string) ([]Collab, error) {
 
 func (s *Store) RemoveCollab(owner, repo, username string) error {
 	res, err := s.db.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ?`, owner, repo, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ---- webhooks ----
+
+func (s *Store) CreateWebhook(owner, repo, url string) (Webhook, error) {
+	w := Webhook{Owner: owner, Repo: repo, URL: url, CreatedAt: now()}
+	res, err := s.db.Exec(`INSERT INTO webhooks (owner, repo, url, created_at) VALUES (?, ?, ?, ?)`,
+		owner, repo, url, w.CreatedAt)
+	if err != nil {
+		if isUniqueErr(err) {
+			return w, ErrExists
+		}
+		return w, err
+	}
+	w.ID, _ = res.LastInsertId()
+	return w, nil
+}
+
+func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
+	rows, err := s.db.Query(`SELECT id, owner, repo, url, created_at
+		FROM webhooks WHERE owner = ? AND repo = ? ORDER BY id`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ws := []Webhook{}
+	for rows.Next() {
+		var w Webhook
+		if err := rows.Scan(&w.ID, &w.Owner, &w.Repo, &w.URL, &w.CreatedAt); err != nil {
+			return nil, err
+		}
+		ws = append(ws, w)
+	}
+	return ws, rows.Err()
+}
+
+func (s *Store) DeleteWebhook(owner, repo string, id int64) error {
+	res, err := s.db.Exec(`DELETE FROM webhooks WHERE owner = ? AND repo = ? AND id = ?`, owner, repo, id)
 	if err != nil {
 		return err
 	}

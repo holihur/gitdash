@@ -214,6 +214,7 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 
 	cmd := exec.Command("git", sub, repoPath)
 	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = append(cmd.Env, "GITDASH_USER="+username) // post-receive hook 记录 pusher
 	cmd.Stderr = ch.Stderr()
 
 	stdinR, stdinW, err := os.Pipe()

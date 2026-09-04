@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Copy, FolderGit2, MoreVertical, Plus, Trash2, Users } from "lucide-react";
+import { Copy, FolderGit2, MoreVertical, Plus, Trash2, Users, Webhook } from "lucide-react";
 import { api, cloneCommand, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import CollaboratorsDialog from "@/components/collabs-dialog";
+import WebhooksDialog from "@/components/webhooks-dialog";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -39,6 +40,7 @@ export default function Repos() {
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
   const [collabRepo, setCollabRepo] = useState<Repo | null>(null);
+  const [hookRepo, setHookRepo] = useState<Repo | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -181,6 +183,10 @@ export default function Repos() {
                           <Users />
                           {t("collabs.manage")}
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setHookRepo(repo)}>
+                          <Webhook />
+                          {t("webhooks.manage")}
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive"
                           onClick={() => remove(repo)}
@@ -236,6 +242,14 @@ export default function Repos() {
         }}
         owner={collabRepo?.owner ?? ""}
         repo={collabRepo?.name ?? ""}
+      />
+      <WebhooksDialog
+        open={hookRepo !== null}
+        onOpenChange={(o) => {
+          if (!o) setHookRepo(null);
+        }}
+        owner={hookRepo?.owner ?? ""}
+        repo={hookRepo?.name ?? ""}
       />
     </div>
   );

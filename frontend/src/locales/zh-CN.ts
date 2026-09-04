@@ -131,6 +131,17 @@ export const zhCN: Messages = {
     remove: "移除",
     sharedBy: "由 {owner} 共享",
   },
+  webhooks: {
+    manage: "Webhooks",
+    add: "添加 Webhook",
+    urlLabel: "回调地址",
+    urlPlaceholder: "https://example.com/hook",
+    empty: "还没有 Webhook",
+    emptyHint: "代码被 push 时，向该地址发送一次 JSON POST（event: push）。",
+    added: "Webhook 已添加",
+    removed: "Webhook 已删除",
+    remove: "删除",
+  },
   errors: {
     unauthorized: "未登录或会话已过期",
     invalid_credentials: "用户名或密码错误",
@@ -155,5 +166,8 @@ export const zhCN: Messages = {
     invalid_state: "状态无效",
     issue_not_found: "该 Issue 不存在",
     invalid_issue_number: "Issue 编号无效",
+    invalid_url: "回调地址必须是合法的 http(s) URL",
+    webhook_exists: "该 Webhook 地址已注册",
+    webhook_not_found: "Webhook 不存在",
   },
 };
