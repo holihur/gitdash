@@ -47,6 +47,18 @@ go run .
 | `GITDASH_TOKEN` | `dev` | Web API Bearer Token |
 | `GITDASH_STATIC` | 自动探测 | 前端静态文件目录（开发模式覆盖 embed 资源） |
 
+**修改监听地址**：
+
+```bash
+GITDASH_HTTP_ADDR=:9090 GITDASH_SSH_ADDR=:2322 gitdash serve
+# 或
+GITDASH_HTTP_ADDR=127.0.0.1:8080 GITDASH_SSH_ADDR=127.0.0.1:2222 gitdash serve
+```
+
+- `GITDASH_HTTP_ADDR` / `GITDASH_SSH_ADDR` 均为 Go `net.Listen` 地址，支持 `host:port`、`:port`（监听所有网卡）
+- systemd 方式：修改 `packaging/gitdash.service` 中对应的 `Environment=` 行后 `systemctl daemon-reload && systemctl restart gitdash`
+- 注意：网页上显示的 clone 地址端口固定为 2222，SSH 端口改动后 clone 命令需手动调整（如 `ssh://git@host:2322/demo.git`）
+
 ### 2. 启动前端（开发）
 
 ```bash
