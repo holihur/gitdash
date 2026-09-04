@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"gitdash/backend/internal/sshserver"
 	"gitdash/backend/internal/store"
 )
+
+// -X main.version 注入
+var version = "dev"
 
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -31,7 +35,7 @@ func resolveStaticDir() string {
 	return ""
 }
 
-func main() {
+func run() {
 	dataDir := getenv("GITDASH_DATA", "./data")
 	httpAddr := getenv("GITDASH_HTTP_ADDR", ":8080")
 	sshAddr := getenv("GITDASH_SSH_ADDR", ":2222")
@@ -57,11 +61,23 @@ func main() {
 		}
 	}()
 
-	a := api.New(st, token)
+	a := api.New(st, token, version)
 	if staticDir == "" {
 		staticDir = resolveStaticDir()
 	}
 
-	log.Printf("gitdash: http on %s | ssh on %s | data in %s", httpAddr, sshAddr, dataDir)
+	log.Printf("gitdash %s: http on %s | ssh on %s | data in %s", version, httpAddr, sshAddr, dataDir)
 	log.Fatal(http.ListenAndServe(httpAddr, a.Handler(staticDir)))
+}
+
+func main() {
+	switch {
+	case len(os.Args) < 2 || os.Args[1] == "serve":
+		run()
+	case os.Args[1] == "version" || os.Args[1] == "--version" || os.Args[1] == "-v":
+		fmt.Println("gitdash", version)
+	default:
+		fmt.Fprintf(os.Stderr, "usage: gitdash [serve|version]\n")
+		os.Exit(2)
+	}
 }

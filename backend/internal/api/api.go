@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,15 +17,17 @@ import (
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webui"
 )
 
 type API struct {
-	store *store.Store
-	token string
+	store   *store.Store
+	token   string
+	version string
 }
 
-func New(s *store.Store, token string) *API {
-	return &API{store: s, token: token}
+func New(s *store.Store, token, version string) *API {
+	return &API{store: s, token: token, version: version}
 }
 
 func (a *API) Handler(staticDir string) http.Handler {
@@ -43,9 +47,15 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"version": a.version})
+	})
 
-	if staticDir != "" {
+	switch {
+	case staticDir != "":
 		mux.HandleFunc("/", a.staticHandler(staticDir))
+	case webui.HasAssets():
+		mux.HandleFunc("/", a.embeddedHandler())
 	}
 
 	return logMiddleware(mux)
@@ -82,6 +92,33 @@ func (a *API) staticHandler(dir string) http.HandlerFunc {
 			return
 		}
 		http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+	}
+}
+
+func (a *API) embeddedHandler() http.HandlerFunc {
+	fsys := webui.Dist()
+	fileServer := http.FileServerFS(fsys)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			writeErr(w, http.StatusNotFound, "not found")
+			return
+		}
+		p := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+		if p != "" {
+			if f, err := fsys.Open(p); err == nil {
+				_ = f.Close()
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+		// SPA fallback
+		index, err := fs.ReadFile(fsys, "index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(index)
 	}
 }
 

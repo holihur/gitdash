@@ -1,7 +1,11 @@
 node_modules/
-dist/
+/dist/
+frontend/dist/
 backend/gitdash-server
+backend/gitdash-server-e2e
 backend/static/
+backend/internal/webui/dist/*
+!backend/internal/webui/dist/.gitkeep
 data/
 *.log
 *.db
