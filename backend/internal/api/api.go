@@ -187,6 +187,12 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
 
+	// star & fork
+	mux.HandleFunc("GET /api/starred", a.auth(a.listStarred))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/star", a.auth(a.starRepo))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/star", a.auth(a.unstarRepo))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/fork", a.auth(a.forkRepo))
+
 	// issues
 	mux.HandleFunc("GET /api/repos/{name}/issues", a.auth(a.listIssues))
 	mux.HandleFunc("POST /api/repos/{name}/issues", a.auth(a.createIssue))
@@ -1475,12 +1481,30 @@ func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) 
 	return owner, name, true
 }
 
+// attachStars 批量填充仓库的 star 数与当前用户是否已 star。
+func (a *API) attachStars(repos []store.Repo, me string) {
+	if len(repos) == 0 {
+		return
+	}
+	pairs := make([][2]string, 0, len(repos))
+	for _, r := range repos {
+		pairs = append(pairs, [2]string{r.Owner, r.Name})
+	}
+	counts := a.store.StarCounts(pairs)
+	for i := range repos {
+		repos[i].Stars = counts[[2]string{repos[i].Owner, repos[i].Name}]
+		repos[i].Starred = a.store.IsStarred(me, repos[i].Owner, repos[i].Name)
+	}
+}
+
 func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := a.store.AccessibleRepos(userFrom(r))
+	me := userFrom(r)
+	repos, err := a.store.AccessibleRepos(me)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.attachStars(repos, me)
 	writeJSON(w, http.StatusOK, repos)
 }
 
@@ -1552,7 +1576,121 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	me := userFrom(r)
+	list := []store.Repo{repo}
+	a.attachStars(list, me)
+	repo = list[0]
+	if fo, fr, err := a.store.ForkSource(owner, name); err == nil {
+		repo.ForkOwner, repo.ForkRepo = fo, fr
+	}
 	writeJSON(w, http.StatusOK, repo)
+}
+
+// ---- star & fork ----
+
+func (a *API) writeStarState(w http.ResponseWriter, owner, name, me string) {
+	counts := a.store.StarCounts([][2]string{{owner, name}})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"starred": a.store.IsStarred(me, owner, name),
+		"stars":   counts[[2]string{owner, name}],
+	})
+}
+
+func (a *API) starRepo(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	me := userFrom(r)
+	if !a.store.IsStarred(me, owner, name) {
+		if err := a.store.StarRepo(me, owner, name); err != nil && !errors.Is(err, store.ErrExists) {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	a.writeStarState(w, owner, name, me)
+}
+
+func (a *API) unstarRepo(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	me := userFrom(r)
+	if err := a.store.UnstarRepo(me, owner, name); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.writeStarState(w, owner, name, me)
+}
+
+func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
+	me := userFrom(r)
+	repos, err := a.store.StarredRepos(me)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.attachStars(repos, me)
+	writeJSON(w, http.StatusOK, repos)
+}
+
+func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
+	srcOwner, srcName, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	var in struct {
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	me := userFrom(r)
+	targetOwner := me
+	if ns := strings.TrimSpace(in.Namespace); ns != "" && ns != me {
+		if !a.store.IsOrg(ns) || a.store.OrgRole(ns, me) == "" {
+			writeCode(w, http.StatusForbidden, "org_forbidden", "you are not a member of this organization")
+			return
+		}
+		targetOwner = ns
+	}
+	targetName := strings.TrimSpace(in.Name)
+	if targetName == "" {
+		targetName = srcName
+	}
+	if !gitsvc.ValidName(targetName) {
+		writeCode(w, http.StatusBadRequest, "repo_name_invalid", "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
+		return
+	}
+	if _, err := a.store.GetRepo(targetOwner, targetName); err == nil || gitsvc.Exists(targetOwner, targetName) {
+		writeCode(w, http.StatusConflict, "repo_exists", "repo already exists")
+		return
+	}
+	srcRepo, err := a.store.GetRepo(srcOwner, srcName)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// fork 保持源仓库可见性（私有源 -> 私有 fork；公开源 -> 公开 fork）
+	repo, err := a.store.CreateRepo(targetOwner, targetName, srcRepo.Description, srcRepo.Private)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := gitsvc.ForkRepo(srcOwner, srcName, targetOwner, targetName); err != nil {
+		_ = a.store.DeleteRepo(targetOwner, targetName)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.store.SetForkSource(targetOwner, targetName, srcOwner, srcName); err != nil {
+		_ = a.store.DeleteRepo(targetOwner, targetName)
+		_ = gitsvc.Delete(targetOwner, targetName)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, repo)
 }
 
 func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
@@ -2623,6 +2761,7 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 	for _, rp := range rows {
 		out = append(out, rp)
 	}
+	a.attachStars(out, me)
 	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out})
 }
 
@@ -2663,6 +2802,7 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 			out = append(out, rp)
 		}
 	}
+	a.attachStars(out, me)
 	writeJSON(w, http.StatusOK, out)
 }
 

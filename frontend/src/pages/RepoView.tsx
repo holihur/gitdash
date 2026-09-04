@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   BadgeCheck,
@@ -13,6 +13,8 @@ import {
   GitBranch,
   GitBranchPlus,
   GitCommitHorizontal,
+  GitFork,
+  Star,
   Tag as TagIcon,
   MoreVertical,
   Pencil,
@@ -30,6 +32,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -89,6 +101,11 @@ export default function RepoView() {
   const [loadTick, setLoadTick] = useState(0);
   const [tags, setTags] = useState<Tag[]>([]);
   const [refsOpen, setRefsOpen] = useState(false);
+  const [starBusy, setStarBusy] = useState(false);
+  const [forkOpen, setForkOpen] = useState(false);
+  const [forkName, setForkName] = useState("");
+  const [forkBusy, setForkBusy] = useState(false);
+  const navigate = useNavigate();
   const currentDir = path.join("/");
   const refreshRefs = useCallback(async () => {
     try {
@@ -106,6 +123,39 @@ export default function RepoView() {
     },
     [t],
   );
+
+  const toggleStar = async () => {
+    if (!repo) return;
+    setStarBusy(true);
+    try {
+      const s = repo.starred ? await api.unstar(owner, name) : await api.star(owner, name);
+      setRepo({ ...repo, starred: s.starred, stars: s.stars });
+      toast.success(t(repo.starred ? "social.unstarred" : "social.starred"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setStarBusy(false);
+    }
+  };
+
+  const openFork = () => {
+    setForkName(name);
+    setForkOpen(true);
+  };
+
+  const doFork = async () => {
+    setForkBusy(true);
+    try {
+      const r = await api.forkRepo(owner, name, { name: forkName.trim() || name });
+      toast.success(t("social.forked", { name: r.name }));
+      setForkOpen(false);
+      navigate(`/repo/${r.owner}/${r.name}`);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setForkBusy(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -279,26 +329,54 @@ export default function RepoView() {
             {owner}/{name}
           </h1>
           <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
+          {repo?.fork_owner && repo?.fork_repo && (
+            <p className="text-xs text-muted-foreground">
+              {t("social.forkedFrom")}{" "}
+              <button
+                className="hover:underline"
+                onClick={() => navigate(`/repo/${repo.fork_owner}/${repo.fork_repo}`)}
+              >
+                {repo.fork_owner}/{repo.fork_repo}
+              </button>
+            </p>
+          )}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full gap-2 font-mono text-xs sm:w-auto">
-              <GitBranch className="h-3.5 w-3.5" />
-              SSH
-              <MoreVertical className="ml-auto h-3.5 w-3.5 sm:ml-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
-            <DropdownMenuLabel className="break-all font-mono text-xs normal-case">
-              {cloneCommand(owner, name)}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => copy(cloneCommand(owner, name))}>
-              <Copy />
-              {t("repo.copyCloneCommand")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={starBusy}
+            onClick={toggleStar}
+          >
+            <Star className={cn("h-4 w-4", repo?.starred && "fill-current text-yellow-500")} />
+            {repo?.starred ? t("social.starredBtn") : t("social.star")}
+            <span className="text-muted-foreground">{repo?.stars ?? 0}</span>
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={openFork}>
+            <GitFork className="h-4 w-4" />
+            {t("social.fork")}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full gap-2 font-mono text-xs sm:w-auto">
+                <GitBranch className="h-3.5 w-3.5" />
+                SSH
+                <MoreVertical className="ml-auto h-3.5 w-3.5 sm:ml-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
+              <DropdownMenuLabel className="break-all font-mono text-xs normal-case">
+                {cloneCommand(owner, name)}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => copy(cloneCommand(owner, name))}>
+                <Copy />
+                {t("repo.copyCloneCommand")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -713,6 +791,29 @@ export default function RepoView() {
         current={ref || branches[0]?.name || "main"}
         onRefresh={refreshRefs}
       />
+      <Dialog open={forkOpen} onOpenChange={setForkOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("social.forkTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("social.forkDescription", { name: `${owner}/${name}` })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="fork-name">{t("social.forkNameLabel")}</Label>
+            <Input
+              id="fork-name"
+              value={forkName}
+              onChange={(e) => setForkName(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button onClick={doFork} disabled={forkBusy || !forkName.trim()}>
+              {t("social.fork")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -55,8 +55,15 @@ export interface Repo {
   name: string;
   description: string;
   created_at: string;
+  private?: boolean;
   /** 仅“可访问仓库列表”返回：owner / read / write */
   role?: "owner" | "read" | "write";
+  /** star 数量与当前用户是否已 star */
+  stars?: number;
+  starred?: boolean;
+  /** fork 来源（仅 fork 仓库） */
+  fork_owner?: string;
+  fork_repo?: string;
 }
 
 export interface GPGKey {
@@ -247,6 +254,22 @@ export const api = {
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
   deleteRepo: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),
+
+  // star & fork
+  listStarred: () => req<Repo[]>("/starred"),
+  star: (owner: string, name: string) =>
+    req<{ starred: boolean; stars: number }>(`/users/${owner}/repos/${name}/star`, {
+      method: "PUT",
+    }),
+  unstar: (owner: string, name: string) =>
+    req<{ starred: boolean; stars: number }>(`/users/${owner}/repos/${name}/star`, {
+      method: "DELETE",
+    }),
+  forkRepo: (owner: string, name: string, opts?: { name?: string; namespace?: string }) =>
+    req<Repo>(`/users/${owner}/repos/${name}/fork`, {
+      method: "POST",
+      body: JSON.stringify(opts ?? {}),
+    }),
 
   // git browsing
   branches: (owner: string, name: string) =>

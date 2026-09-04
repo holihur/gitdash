@@ -62,3 +62,33 @@ func TestCleanPath(t *testing.T) {
 		t.Errorf("CleanPath empty = %q, %v", p, err)
 	}
 }
+
+func TestForkRepoPreservesRefs(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitReadme("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ForkRepo("alice", "src", "bob", "forked"); err != nil {
+		t.Fatal(err)
+	}
+	if !Exists("bob", "forked") {
+		t.Fatal("fork repo should exist on disk")
+	}
+	bs, err := Branches("bob", "forked")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bs) != 1 || bs[0].Name != "main" {
+		t.Fatalf("fork branches = %+v, want [main]", bs)
+	}
+	// 源仓库不受影响
+	if !Exists("alice", "src") {
+		t.Fatal("source repo should still exist")
+	}
+}

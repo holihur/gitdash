@@ -133,6 +133,27 @@ func Delete(owner, name string) error {
 	return os.RemoveAll(RepoPath(owner, name))
 }
 
+// ForkRepo 把源仓库（bare）镜像复制到目标路径，用于 fork：保留全部分支/标签。
+func ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
+	if !ValidName(sourceOwner) || !ValidName(sourceName) || !ValidName(targetOwner) || !ValidName(targetName) {
+		return fmt.Errorf("invalid fork repo")
+	}
+	src := RepoPath(sourceOwner, sourceName)
+	if fi, err := os.Stat(src); err != nil || !fi.IsDir() {
+		return fmt.Errorf("source repo %s/%s not on disk", sourceOwner, sourceName)
+	}
+	dst := RepoPath(targetOwner, targetName)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if _, err := gitOut("", "clone", "--mirror", "--quiet", src, dst); err != nil {
+		return err
+	}
+	// mirror clone 不继承源 hooks；重新安装 post-receive 并放开默认分支删除限制
+	_, _ = gitOut(dst, "config", "receive.denyDeleteCurrent", "ignore")
+	return installPostReceiveHook(dst, targetOwner, targetName)
+}
+
 type Branch struct {
 	Name   string `json:"name"`
 	IsHead bool   `json:"is_head"`

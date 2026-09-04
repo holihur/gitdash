@@ -39,6 +39,11 @@ type Repo struct {
 	CreatedAt   string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
+	// 展示字段（由 API 层填充，store 查询不扫描）
+	Stars     int    `json:"stars"`
+	Starred   bool   `json:"starred"`
+	ForkOwner string `json:"fork_owner,omitempty"`
+	ForkRepo  string `json:"fork_repo,omitempty"`
 }
 
 type SSHKey struct {
@@ -313,6 +318,14 @@ CREATE TABLE IF NOT EXISTS repo_stars (
 	repo       TEXT NOT NULL,
 	created_at TEXT NOT NULL,
 	PRIMARY KEY (username, owner, repo)
+);
+CREATE TABLE IF NOT EXISTS repo_forks (
+	owner        TEXT NOT NULL,
+	repo         TEXT NOT NULL,
+	source_owner TEXT NOT NULL,
+	source_repo  TEXT NOT NULL,
+	created_at   TEXT NOT NULL,
+	PRIMARY KEY (owner, repo)
 );
 CREATE TABLE IF NOT EXISTS gpg_keys (
 	id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -611,6 +624,12 @@ func (s *Store) DeleteRepo(owner, name string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_stars WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_forks WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_forks WHERE source_owner = ? AND source_repo = ?`, owner, name); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
@@ -1583,6 +1602,28 @@ func (s *Store) StarredRepos(username string) ([]Repo, error) {
 func (s *Store) DeleteRepoStars(owner, repo string) error {
 	_, err := s.db.Exec(`DELETE FROM repo_stars WHERE owner = ? AND repo = ?`, owner, repo)
 	return err
+}
+
+// ---- forks ----
+
+// SetForkSource 记录仓库的 fork 来源。
+func (s *Store) SetForkSource(owner, repo, sourceOwner, sourceRepo string) error {
+	_, err := s.db.Exec(`INSERT INTO repo_forks (owner, repo, source_owner, source_repo, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(owner, repo) DO UPDATE SET source_owner = excluded.source_owner, source_repo = excluded.source_repo`,
+		owner, repo, sourceOwner, sourceRepo, now())
+	return err
+}
+
+// ForkSource 返回 fork 来源；非 fork 仓库返回空串。
+func (s *Store) ForkSource(owner, repo string) (string, string, error) {
+	var so, sr string
+	err := s.db.QueryRow(`SELECT source_owner, source_repo FROM repo_forks WHERE owner = ? AND repo = ?`, owner, repo).
+		Scan(&so, &sr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", nil
+	}
+	return so, sr, err
 }
 
 // ---- orgs (namespace) ----
