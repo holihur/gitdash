@@ -3,6 +3,7 @@
 //	auth_test.go    注册 / 登录 / 登出 / 会话
 //	profile_mfa_test.go 资料/改密/MFA(TOTP)
 //	gpg_test.go         GPG 公钥 CRUD + 签名提交验证
+//	refs_test.go          分支与标签管理
 //	fileops_test.go      网页提交式文件/目录 CRUD
 //	pulls_test.go        PR 生命周期 / diff / 合并 / bad path
 //	repos_test.go   仓库 CRUD 与用户隔离

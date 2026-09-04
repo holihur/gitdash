@@ -11,12 +11,14 @@ import {
   Folder,
   FolderPlus,
   GitBranch,
+  GitBranchPlus,
   GitCommitHorizontal,
+  Tag as TagIcon,
   MoreVertical,
   Pencil,
   Trash2,
 } from "lucide-react";
-import { api, cloneCommand, type Blob, type Branch, type Commit, type PullDiff, type Repo, type TreeEntry } from "@/lib/api";
+import { api, cloneCommand, type Blob, type Branch, type Commit, type PullDiff, type Repo, type Tag, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +46,7 @@ import { MarkdownView } from "@/components/markdown";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
 import CodeMirrorEditor from "@/components/code-editor";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
+import RefsDialog from "@/components/refs-dialog";
 import RepoIssues from "@/pages/RepoIssues";
 import RepoPulls from "@/pages/RepoPulls";
 
@@ -83,7 +86,18 @@ export default function RepoView() {
   const [missing, setMissing] = useState(false);
   const [fileOp, setFileOp] = useState<FileOp | null>(null);
   const [loadTick, setLoadTick] = useState(0);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [refsOpen, setRefsOpen] = useState(false);
   const currentDir = path.join("/");
+  const refreshRefs = useCallback(async () => {
+    try {
+      const [bs, ts] = await Promise.all([api.branches(owner, name), api.listTags(owner, name)]);
+      setBranches(bs);
+      setTags(ts);
+    } catch {
+      /* ignore */
+    }
+  }, [owner, name]);
 
   const copy = useCallback(
     (text: string) => {
@@ -100,6 +114,7 @@ export default function RepoView() {
         setBranches(bs);
         const head = bs.find((b) => b.is_head) ?? bs[0];
         if (head) setRef(head.name);
+        api.listTags(owner, name).then(setTags).catch(() => undefined);
       } catch (e) {
         setMissing(true);
         setError(e instanceof Error ? e.message : String(e));
@@ -320,8 +335,37 @@ export default function RepoView() {
                     )}
                   </DropdownMenuItem>
                 ))}
+                {tags.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs">{t("refs.tags")}</DropdownMenuLabel>
+                    {tags.map((tg) => (
+                      <DropdownMenuItem
+                        key={tg.name}
+                        onClick={() => {
+                          setRef(tg.name);
+                          setPath([]);
+                          setBlob(null);
+                        }}
+                      >
+                        <TagIcon className="shrink-0" />
+                        <span className="truncate">{tg.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 px-0"
+              title={t("refs.manage")}
+              onClick={() => setRefsOpen(true)}
+            >
+              <GitBranchPlus className="h-4 w-4" />
+            </Button>
 
             {!emptyRepo && (
               <nav className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
@@ -607,6 +651,17 @@ export default function RepoView() {
           onSaved={afterCommit}
         />
       )}
+      <RefsDialog
+        open={refsOpen}
+        onClose={() => setRefsOpen(false)}
+        owner={owner}
+        repo={name}
+        branches={branches.map((b) => b.name)}
+        head={branches.find((b) => b.is_head)?.name ?? branches[0]?.name ?? ""}
+        tags={tags}
+        current={ref || branches[0]?.name || "main"}
+        onRefresh={refreshRefs}
+      />
     </div>
   );
 }

@@ -107,6 +107,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.auth(a.commitDiff))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits", a.auth(a.writeCommit))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tags", a.auth(a.listTags))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/refs", a.auth(a.createRef))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/refs/{kind}/{refname}", a.auth(a.deleteRef))
 
 	// pull requests
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.auth(a.listPulls))
@@ -925,6 +928,80 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)
+}
+
+func (a *API) listTags(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	tags, err := gitsvc.Tags(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, tags)
+}
+
+func (a *API) createRef(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	var in struct {
+		Type string `json:"type"`
+		Name string `json:"name"`
+		From string `json:"from"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.Type != "branch" && in.Type != "tag" {
+		writeCode(w, http.StatusBadRequest, "invalid_ref_type", "type must be 'branch' or 'tag'")
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	in.From = strings.TrimSpace(in.From)
+	if in.Name == "" {
+		writeCode(w, http.StatusBadRequest, "invalid_ref_name", "ref name is required")
+		return
+	}
+	if in.From == "" {
+		in.From = "HEAD"
+	}
+	sha, err := gitsvc.CreateRef(owner, name, in.Type, in.Name, in.From)
+	if errors.Is(err, gitsvc.ErrRefExists) {
+		writeCode(w, http.StatusConflict, "ref_exists", in.Type+" already exists: "+in.Name)
+		return
+	}
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_ref_name", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"type": in.Type, "name": in.Name, "sha": sha})
+}
+
+func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	kind := r.PathValue("kind")
+	refName := r.PathValue("refname")
+	err := gitsvc.DeleteRef(owner, name, kind, refName)
+	if errors.Is(err, gitsvc.ErrHeadBranch) {
+		writeCode(w, http.StatusConflict, "branch_is_head", "cannot delete the default (HEAD) branch")
+		return
+	}
+	if errors.Is(err, gitsvc.ErrRefNotFound) {
+		writeCode(w, http.StatusNotFound, "ref_not_found", kind+" not found")
+		return
+	}
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_ref_name", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {

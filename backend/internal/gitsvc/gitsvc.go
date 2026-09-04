@@ -2,6 +2,7 @@ package gitsvc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -624,4 +625,101 @@ func WriteCommit(owner, name, branch, message, author string, changes []FileChan
 		return "", err
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// Tag 轻量/附注标签信息（sha 为指向的提交）。
+type Tag struct {
+	Name    string `json:"name"`
+	SHA     string `json:"sha"`
+	Message string `json:"message"`
+}
+
+// Tags 列出标签（附注标签取被指提交）。
+func Tags(owner, name string) ([]Tag, error) {
+	out, err := gitOut(RepoPath(owner, name),
+		"for-each-ref", "--format=%(refname:short)%1f%(objectname)%1f%(*objectname)%1f%(*subject)",
+		"refs/tags")
+	if err != nil {
+		return nil, err
+	}
+	tags := []Tag{}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\x1f")
+		if len(parts) < 2 {
+			continue
+		}
+		sha := parts[1]
+		msg := ""
+		if len(parts) > 3 && parts[3] != "" {
+			msg = parts[3]
+			if len(parts) > 2 && parts[2] != "" {
+				sha = parts[2] // 附注标签指向提交
+			}
+		}
+		tags = append(tags, Tag{Name: parts[0], SHA: sha, Message: msg})
+	}
+	return tags, nil
+}
+
+// CreateRef 创建分支或标签（lightweight），from 可为任意可解析 rev。
+func CreateRef(owner, name, kind, refName, from string) (string, error) {
+	full := "refs/heads/" + refName
+	if kind == "tag" {
+		full = "refs/tags/" + refName
+	}
+	if err := checkRefFormat(full); err != nil {
+		return "", err
+	}
+	sha, err := RevSHA(owner, name, from)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve %q to a commit", from)
+	}
+	repo := RepoPath(owner, name)
+	if _, err := gitOut(repo, "rev-parse", "-q", "--verify", full); err == nil {
+		return "", ErrRefExists
+	}
+	if _, err := gitOut(repo, "update-ref", full, sha); err != nil {
+		return "", err
+	}
+	return sha, nil
+}
+
+// DeleteRef 删除分支或标签；默认分支(HEAD)不可删除。
+func DeleteRef(owner, name, kind, refName string) error {
+	full := "refs/heads/" + refName
+	if kind == "tag" {
+		full = "refs/tags/" + refName
+	} else if kind != "branch" {
+		return fmt.Errorf("invalid ref kind %q", kind)
+	}
+	if err := checkRefFormat(full); err != nil {
+		return err
+	}
+	repo := RepoPath(owner, name)
+	if _, err := gitOut(repo, "rev-parse", "-q", "--verify", full); err != nil {
+		return ErrRefNotFound
+	}
+	if kind == "branch" {
+		if head, err := HeadBranch(owner, name); err == nil && head == refName {
+			return ErrHeadBranch
+		}
+	}
+	_, err := gitOut(repo, "update-ref", "-d", full)
+	return err
+}
+
+var (
+	ErrRefExists   = errors.New("ref already exists")
+	ErrRefNotFound = errors.New("ref not found")
+	ErrHeadBranch  = errors.New("cannot delete the default (HEAD) branch")
+)
+
+func checkRefFormat(full string) error {
+	if _, err := gitOut("", "check-ref-format", full); err != nil {
+		return fmt.Errorf("invalid ref name %q", strings.TrimPrefix(full, "refs/heads/"))
+	}
+	return nil
 }

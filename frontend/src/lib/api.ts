@@ -140,6 +140,12 @@ export interface PullRequest {
   merged_by: string;
 }
 
+export interface Tag {
+  name: string;
+  sha: string;
+  message: string;
+}
+
 export interface PullDiff {
   files: { path: string; status: "A" | "M" | "D"; insertions: number; deletions: number }[];
   patch: string;
@@ -301,6 +307,25 @@ export const api = {
     }),
   deleteWebhook: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/webhooks/${id}`, { method: "DELETE" }),
+
+  // branches & tags
+  listTags: (owner: string, name: string) =>
+    req<Tag[]>(`/users/${owner}/repos/${name}/tags`),
+  createRef: (
+    owner: string,
+    name: string,
+    type: "branch" | "tag",
+    refName: string,
+    from: string,
+  ) =>
+    req<{ type: string; name: string; sha: string }>(
+      `/users/${owner}/repos/${name}/refs`,
+      { method: "POST", body: JSON.stringify({ type, name: refName, from }) },
+    ),
+  deleteRef: (owner: string, name: string, type: "branch" | "tag", refName: string) =>
+    req<null>(`/users/${owner}/repos/${name}/refs/${type}/${encodeURIComponent(refName)}`, {
+      method: "DELETE",
+    }),
 
   // pull requests
   listPulls: (owner: string, name: string, state?: PullState) =>
