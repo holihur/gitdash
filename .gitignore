@@ -1,0 +1,9 @@
+node_modules/
+dist/
+backend/gitdash-server
+backend/static/
+data/
+*.log
+*.db
+*.db-shm
+*.db-wal
