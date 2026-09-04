@@ -33,6 +33,7 @@ var gitCommands = map[string]string{
 }
 
 type Server struct {
+	st       *store.Store
 	reposDir string
 	config   *ssh.ServerConfig
 }
@@ -45,7 +46,7 @@ func NewServer(st *store.Store, reposDir, dataDir string) (*Server, error) {
 	}
 	cfg := buildConfig(st)
 	cfg.AddHostKey(signer)
-	return &Server{reposDir: reposDir, config: cfg}, nil
+	return &Server{st: st, reposDir: reposDir, config: cfg}, nil
 }
 
 func Serve(addr string, st *store.Store, reposDir, dataDir string) error {
@@ -194,7 +195,13 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 		deny(fmt.Sprintf("invalid repository path %q", args[0]))
 		return
 	}
-	if owner != username {
+	// 权限：push（receive-pack）需 write，clone/fetch/archive 需 read；所有者恒有全部权限
+	if sub == "git-receive-pack" {
+		if !s.st.CanWrite(owner, name, username) {
+			deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
+			return
+		}
+	} else if !s.st.CanRead(owner, name, username) {
 		deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
 		return
 	}

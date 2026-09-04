@@ -61,11 +61,26 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/tree", a.auth(a.tree))
 	mux.HandleFunc("GET /api/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
+	// repos（owner 限定版：供协作者 / 跨用户访问，owner 显式声明）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}", a.auth(a.getRepo))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}", a.auth(a.deleteRepo))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branches", a.auth(a.branches))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tree", a.auth(a.tree))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.auth(a.blob))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
 
 	// issues
 	mux.HandleFunc("GET /api/repos/{name}/issues", a.auth(a.listIssues))
 	mux.HandleFunc("POST /api/repos/{name}/issues", a.auth(a.createIssue))
 	mux.HandleFunc("PATCH /api/repos/{name}/issues/{number}", a.auth(a.setIssueState))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues", a.auth(a.listIssues))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues", a.auth(a.createIssue))
+	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.setIssueState))
+
+	// collaborators
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/collabs", a.auth(a.listCollabs))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/collabs", a.auth(a.addCollab))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/collabs/{username}", a.auth(a.removeCollab))
 
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))
@@ -312,8 +327,52 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 
 // ---- repos ----
 
+// resolveTarget 解析请求目标仓库 (owner, name)。
+// 新式路由带 {owner}；旧式单段路由解析为当前用户“自己拥有的或作为协作者可访问的”仓库。
+func (a *API) resolveTarget(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	name := r.PathValue("name")
+	if owner := r.PathValue("owner"); owner != "" {
+		if _, err := a.store.GetRepo(owner, name); err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				writeNotFound(w, "repo")
+			} else {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+			}
+			return "", "", false
+		}
+		return owner, name, true
+	}
+	me := userFrom(r)
+	if o, err := a.store.OwnedByName(me, name); err == nil {
+		return o, name, true
+	}
+	if o, err := a.store.SharedByName(me, name); err == nil {
+		return o, name, true
+	}
+	writeNotFound(w, "repo")
+	return "", "", false
+}
+
+// requireAccess 校验目标仓库存在且当前用户拥有所需权限（无权限一律 404）。
+func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) (string, string, bool) {
+	owner, name, ok := a.resolveTarget(w, r)
+	if !ok {
+		return "", "", false
+	}
+	me := userFrom(r)
+	can := a.store.CanWrite(owner, name, me)
+	if !write {
+		can = a.store.CanRead(owner, name, me)
+	}
+	if !can {
+		writeNotFound(w, "repo")
+		return "", "", false
+	}
+	return owner, name, true
+}
+
 func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := a.store.ListRepos(userFrom(r))
+	repos, err := a.store.AccessibleRepos(userFrom(r))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -353,11 +412,11 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
-	repo, err := a.store.GetRepo(userFrom(r), r.PathValue("name"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeNotFound(w, "repo")
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
 		return
 	}
+	repo, err := a.store.GetRepo(owner, name)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -366,25 +425,31 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
-	err := a.store.DeleteRepo(userFrom(r), r.PathValue("name"))
-	if errors.Is(err, store.ErrNotFound) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	if userFrom(r) != owner { // 仅仓库所有者可删除
 		writeNotFound(w, "repo")
 		return
 	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+	if err := a.store.DeleteRepo(owner, name); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeNotFound(w, "repo")
+		} else {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
-	_ = gitsvc.Delete(userFrom(r), r.PathValue("name"))
+	_ = gitsvc.Delete(owner, name)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---- git browsing ----
 
 func (a *API) branches(w http.ResponseWriter, r *http.Request) {
-	owner, name := userFrom(r), r.PathValue("name")
-	if !gitsvc.Exists(owner, name) {
-		writeErr(w, http.StatusNotFound, "repo not found")
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
 		return
 	}
 	bs, err := gitsvc.Branches(owner, name)
@@ -396,9 +461,8 @@ func (a *API) branches(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) tree(w http.ResponseWriter, r *http.Request) {
-	owner, name := userFrom(r), r.PathValue("name")
-	if !gitsvc.Exists(owner, name) {
-		writeErr(w, http.StatusNotFound, "repo not found")
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
 		return
 	}
 	ref := r.URL.Query().Get("ref")
@@ -416,9 +480,8 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) blob(w http.ResponseWriter, r *http.Request) {
-	owner, name := userFrom(r), r.PathValue("name")
-	if !gitsvc.Exists(owner, name) {
-		writeErr(w, http.StatusNotFound, "repo not found")
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
 		return
 	}
 	b, err := gitsvc.ReadBlob(owner, name, r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
@@ -430,9 +493,8 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) commits(w http.ResponseWriter, r *http.Request) {
-	owner, name := userFrom(r), r.PathValue("name")
-	if !gitsvc.Exists(owner, name) {
-		writeErr(w, http.StatusNotFound, "repo not found")
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -446,25 +508,12 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 
 // ---- issues ----
 
-// requireRepo 校验仓库存在且归当前用户所有。
-func (a *API) requireRepo(w http.ResponseWriter, r *http.Request) bool {
-	_, err := a.store.GetRepo(userFrom(r), r.PathValue("name"))
-	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "repo not found")
-		return false
-	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return false
-	}
-	return true
-}
-
 func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
-	if !a.requireRepo(w, r) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
 		return
 	}
-	issues, err := a.store.ListIssues(userFrom(r), r.PathValue("name"))
+	issues, err := a.store.ListIssues(owner, name)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -473,7 +522,8 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
-	if !a.requireRepo(w, r) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
 		return
 	}
 	var in struct {
@@ -485,18 +535,19 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	}
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
-		writeErr(w, http.StatusBadRequest, "title is required")
+		writeCode(w, http.StatusBadRequest, "title_required", "title is required")
 		return
 	}
 	if len([]rune(title)) > 200 {
-		writeErr(w, http.StatusBadRequest, "title too long (max 200 chars)")
+		writeCode(w, http.StatusBadRequest, "title_too_long", "title too long (max 200 chars)")
 		return
 	}
 	if len([]rune(in.Body)) > 10000 {
-		writeErr(w, http.StatusBadRequest, "body too long (max 10000 chars)")
+		writeCode(w, http.StatusBadRequest, "body_too_long", "body too long (max 10000 chars)")
 		return
 	}
-	issue, err := a.store.CreateIssue(userFrom(r), r.PathValue("name"), userFrom(r), title, in.Body)
+	me := userFrom(r)
+	issue, err := a.store.CreateIssue(owner, name, me, title, in.Body)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -505,12 +556,13 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
-	if !a.requireRepo(w, r) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
 		return
 	}
 	number, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
 	if err != nil || number < 1 {
-		writeErr(w, http.StatusBadRequest, "invalid issue number")
+		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
 		return
 	}
 	var in struct {
@@ -520,12 +572,12 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.State != "open" && in.State != "closed" {
-		writeErr(w, http.StatusBadRequest, "state must be 'open' or 'closed'")
+		writeCode(w, http.StatusBadRequest, "invalid_state", "state must be 'open' or 'closed'")
 		return
 	}
-	issue, err := a.store.SetIssueState(userFrom(r), r.PathValue("name"), number, in.State)
+	issue, err := a.store.SetIssueState(owner, name, number, in.State)
 	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "issue not found")
+		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
 		return
 	}
 	if err != nil {
@@ -533,6 +585,99 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)
+}
+
+// ---- collaborators ----
+
+// requireOwner 仅仓库所有者可访问（管理协作者等）。
+func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	owner, name, ok := a.resolveTarget(w, r)
+	if !ok {
+		return "", "", false
+	}
+	if userFrom(r) != owner {
+		writeNotFound(w, "repo")
+		return "", "", false
+	}
+	return owner, name, true
+}
+
+func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	collabs, err := a.store.ListCollabs(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, collabs)
+}
+
+func (a *API) addCollab(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		Username   string `json:"username"`
+		Permission string `json:"permission"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.Username = strings.ToLower(strings.TrimSpace(in.Username))
+	if !usernameRe.MatchString(in.Username) {
+		writeCode(w, http.StatusBadRequest, "username_invalid", "invalid collaborator username")
+		return
+	}
+	if in.Username == userFrom(r) {
+		writeCode(w, http.StatusBadRequest, "owner_as_collab", "owner is already the owner")
+		return
+	}
+	if in.Permission != "read" && in.Permission != "write" {
+		writeCode(w, http.StatusBadRequest, "invalid_permission", "permission must be 'read' or 'write'")
+		return
+	}
+	if _, err := a.store.GetByUsername(in.Username); err != nil {
+		writeCode(w, http.StatusNotFound, "user_not_found", "user not found")
+		return
+	}
+	if err := a.store.UpsertCollab(owner, name, in.Username, in.Permission); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	collabs, err := a.store.ListCollabs(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, c := range collabs {
+		if c.Username == in.Username {
+			writeJSON(w, http.StatusOK, c)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"username": in.Username, "permission": in.Permission})
+}
+
+func (a *API) removeCollab(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	username := strings.ToLower(strings.TrimSpace(r.PathValue("username")))
+	err := a.store.RemoveCollab(owner, name, username)
+	if errors.Is(err, store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "collab_not_found", "collaborator not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---- ssh keys ----

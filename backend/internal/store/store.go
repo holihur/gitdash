@@ -33,6 +33,8 @@ type Repo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	CreatedAt   string `json:"created_at"`
+	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
+	Role string `json:"role,omitempty"`
 }
 
 type SSHKey struct {
@@ -55,6 +57,15 @@ type Issue struct {
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 	ClosedAt  *string `json:"closed_at"`
+}
+
+// Collab 仓库协作者（read=可克隆/浏览，write=可 push）
+type Collab struct {
+	Owner      string `json:"owner"`
+	Repo       string `json:"repo"`
+	Username   string `json:"username"`
+	Permission string `json:"permission"` // "read" | "write"
+	CreatedAt  string `json:"created_at"`
 }
 
 // PublicKeyAuth 用于 SSH 鉴权：公钥行 + 所属用户
@@ -130,6 +141,14 @@ CREATE TABLE IF NOT EXISTS issues (
 	updated_at TEXT NOT NULL,
 	closed_at  TEXT,
 	UNIQUE(owner, repo, number)
+);
+CREATE TABLE IF NOT EXISTS repo_collabs (
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	username   TEXT NOT NULL,
+	permission TEXT NOT NULL DEFAULT 'read',
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (owner, repo, username)
 );`)
 	return err
 }
@@ -271,6 +290,9 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	if _, err := tx.Exec(`DELETE FROM issues WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
 	res, err := tx.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
 	if err != nil {
 		return err
@@ -368,6 +390,107 @@ func (s *Store) SetIssueState(owner, repo string, number int64, state string) (I
 		return Issue{}, ErrNotFound
 	}
 	return s.getIssue(owner, repo, number)
+}
+
+// ---- collaborators ----
+
+func (s *Store) OwnedByName(username, name string) (string, error) {
+	var owner string
+	err := s.db.QueryRow(`SELECT owner FROM repos WHERE owner = ? AND name = ?`, username, name).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return owner, err
+}
+
+// SharedByName 返回用户以协作者身份可访问的、指定名称的仓库 owner（同名多仓库取其一）。
+func (s *Store) SharedByName(username, name string) (string, error) {
+	var owner string
+	err := s.db.QueryRow(`SELECT owner FROM repo_collabs WHERE username = ? AND repo = ? ORDER BY owner LIMIT 1`, username, name).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return owner, err
+}
+
+func (s *Store) CanRead(owner, repo, username string) bool {
+	if owner == username {
+		return true
+	}
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ?`, owner, repo, username).Scan(&one)
+	return err == nil
+}
+
+func (s *Store) CanWrite(owner, repo, username string) bool {
+	if owner == username {
+		return true
+	}
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ? AND permission = 'write'`, owner, repo, username).Scan(&one)
+	return err == nil
+}
+
+// AccessibleRepos 返回用户自己拥有的仓库 + 作为协作者可访问的仓库（带 role）。
+func (s *Store) AccessibleRepos(username string) ([]Repo, error) {
+	rows, err := s.db.Query(`
+SELECT r.id, r.owner, r.name, r.description, r.created_at, 'owner' AS role
+  FROM repos r WHERE r.owner = ?
+UNION ALL
+SELECT r.id, r.owner, r.name, r.description, r.created_at, c.permission AS role
+  FROM repo_collabs c JOIN repos r ON r.owner = c.owner AND r.name = c.repo
+ WHERE c.username = ?
+ORDER BY owner, name`, username, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	repos := []Repo{}
+	for rows.Next() {
+		var r Repo
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.CreatedAt, &r.Role); err != nil {
+			return nil, err
+		}
+		repos = append(repos, r)
+	}
+	return repos, rows.Err()
+}
+
+func (s *Store) UpsertCollab(owner, repo, username, permission string) error {
+	_, err := s.db.Exec(`INSERT INTO repo_collabs (owner, repo, username, permission, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(owner, repo, username) DO UPDATE SET permission = excluded.permission`,
+		owner, repo, username, permission, now())
+	return err
+}
+
+func (s *Store) ListCollabs(owner, repo string) ([]Collab, error) {
+	rows, err := s.db.Query(`SELECT owner, repo, username, permission, created_at
+		FROM repo_collabs WHERE owner = ? AND repo = ? ORDER BY username`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	collabs := []Collab{}
+	for rows.Next() {
+		var c Collab
+		if err := rows.Scan(&c.Owner, &c.Repo, &c.Username, &c.Permission, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		collabs = append(collabs, c)
+	}
+	return collabs, rows.Err()
+}
+
+func (s *Store) RemoveCollab(owner, repo, username string) error {
+	res, err := s.db.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ?`, owner, repo, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ---- ssh keys ----

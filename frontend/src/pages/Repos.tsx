@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Copy, FolderGit2, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Copy, FolderGit2, MoreVertical, Plus, Trash2, Users } from "lucide-react";
 import { api, cloneCommand, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import CollaboratorsDialog from "@/components/collabs-dialog";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -37,6 +38,7 @@ export default function Repos() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
+  const [collabRepo, setCollabRepo] = useState<Repo | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -153,43 +155,61 @@ export default function Repos() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {repos.map((repo) => (
-          <Card key={repo.id} className="flex flex-col">
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between gap-2">
-                <CardTitle className="min-w-0 text-lg">
-                  <Link
-                    to={`/repo/${repo.owner}/${repo.name}`}
-                    className="block truncate hover:underline"
-                  >
-                    {repo.name}
-                  </Link>
-                </CardTitle>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => remove(repo)}
+        {repos.map((repo) => {
+          const isOwner = repo.role === undefined || repo.role === "owner";
+          return (
+            <Card key={`${repo.owner}/${repo.name}`} className="flex flex-col">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="min-w-0 text-lg">
+                    <Link
+                      to={`/repo/${repo.owner}/${repo.name}`}
+                      className="block truncate hover:underline"
                     >
-                      <Trash2 />
-                      {t("repos.delete")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <CardDescription className="line-clamp-2 min-h-10">
-                {repo.description || t("common.noDescription")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="mt-auto space-y-3">
-              <Badge variant="secondary" className="font-normal">
-                {formatDate(repo.created_at, lang === "zh-CN" ? "zh-CN" : "en-US")}
-              </Badge>
+                      {repo.name}
+                    </Link>
+                  </CardTitle>
+                  {isOwner && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setCollabRepo(repo)}>
+                          <Users />
+                          {t("collabs.manage")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => remove(repo)}
+                        >
+                          <Trash2 />
+                          {t("repos.delete")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+                <CardDescription className="min-h-10">
+                  {!isOwner && repo.role && (
+                    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                      <Badge variant="secondary" className="font-normal">
+                        {t("collabs.sharedBy", { owner: repo.owner })} ·
+                        {repo.role === "write" ? t("collabs.write") : t("collabs.read")}
+                      </Badge>
+                    </span>
+                  )}
+                  <span className="line-clamp-2 block">
+                    {repo.description || t("common.noDescription")}
+                  </span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto space-y-3">
+                <Badge variant="secondary" className="font-normal">
+                  {formatDate(repo.created_at, lang === "zh-CN" ? "zh-CN" : "en-US")}
+                </Badge>
               <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
                 <code className="flex-1 truncate text-xs text-muted-foreground">
                   {cloneCommand(repo.owner, repo.name)}
@@ -204,9 +224,19 @@ export default function Repos() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
+
+      <CollaboratorsDialog
+        open={collabRepo !== null}
+        onOpenChange={(o) => {
+          if (!o) setCollabRepo(null);
+        }}
+        owner={collabRepo?.owner ?? ""}
+        repo={collabRepo?.name ?? ""}
+      />
     </div>
   );
 }

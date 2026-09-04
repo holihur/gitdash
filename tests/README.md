@@ -37,6 +37,7 @@ GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest -v
 | --- | --- |
 | `test_auth.py` | 注册 / 登录 / me / 登出、401、400、409、非法 JSON |
 | `test_repos.py` | 仓库 CRUD、名称/重复校验、多用户隔离、重复删除 |
+| `test_collabs.py` | 协作者管理、读写权限、角色列表、同名仓库、级联删除 |
 | `test_issues.py` | Issue 创建/列表/关闭/重开、编号递增、参数校验、隔离、删除级联 |
 | `test_ssh_keys.py` | 公钥增删查、非法公钥、指纹全局唯一（跨用户 409） |
 

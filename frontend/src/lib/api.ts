@@ -35,6 +35,8 @@ export interface Repo {
   name: string;
   description: string;
   created_at: string;
+  /** 仅“可访问仓库列表”返回：owner / read / write */
+  role?: "owner" | "read" | "write";
 }
 
 export interface SSHKey {
@@ -81,6 +83,14 @@ export interface Issue {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+}
+
+export interface Collab {
+  owner: string;
+  repo: string;
+  username: string;
+  permission: "read" | "write";
+  created_at: string;
 }
 export function cloneUrl(owner: string, name: string): string {
   return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
@@ -136,38 +146,51 @@ export const api = {
   logout: () => req<null>("/auth/logout", { method: "POST" }),
   me: () => req<User>("/me"),
 
-  // repos（owner 用于展示/校验，URL 由会话中的用户决定）
+  // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
   listRepos: () => req<Repo[]>("/repos"),
   createRepo: (name: string, description: string) =>
     req<Repo>("/repos", { method: "POST", body: JSON.stringify({ name, description }) }),
-  getRepo: (_owner: string, name: string) => req<Repo>(`/repos/${name}`),
-  deleteRepo: (_owner: string, name: string) => req<null>(`/repos/${name}`, { method: "DELETE" }),
+  getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
+  deleteRepo: (owner: string, name: string) =>
+    req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),
 
   // git browsing
-  branches: (_owner: string, name: string) => req<Branch[]>(`/repos/${name}/branches`),
-  tree: (_owner: string, name: string, ref: string, path: string) =>
+  branches: (owner: string, name: string) =>
+    req<Branch[]>(`/users/${owner}/repos/${name}/branches`),
+  tree: (owner: string, name: string, ref: string, path: string) =>
     req<{ path: string; entries: TreeEntry[] }>(
-      `/repos/${name}/tree?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
+      `/users/${owner}/repos/${name}/tree?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
     ),
-  blob: (_owner: string, name: string, ref: string, path: string) =>
+  blob: (owner: string, name: string, ref: string, path: string) =>
     req<Blob>(
-      `/repos/${name}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
+      `/users/${owner}/repos/${name}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
     ),
-  commits: (_owner: string, name: string, ref: string) =>
-    req<Commit[]>(`/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
+  commits: (owner: string, name: string, ref: string) =>
+    req<Commit[]>(`/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
 
   // issues
-  listIssues: (_owner: string, name: string) => req<Issue[]>(`/repos/${name}/issues`),
-  createIssue: (_owner: string, name: string, title: string, body: string) =>
-    req<Issue>(`/repos/${name}/issues`, {
+  listIssues: (owner: string, name: string) => req<Issue[]>(`/users/${owner}/repos/${name}/issues`),
+  createIssue: (owner: string, name: string, title: string, body: string) =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues`, {
       method: "POST",
       body: JSON.stringify({ title, body }),
     }),
-  setIssueState: (_owner: string, name: string, number: number, state: "open" | "closed") =>
-    req<Issue>(`/repos/${name}/issues/${number}`, {
+  setIssueState: (owner: string, name: string, number: number, state: "open" | "closed") =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`, {
       method: "PATCH",
       body: JSON.stringify({ state }),
     }),
+
+  // collaborators
+  listCollabs: (owner: string, name: string) =>
+    req<Collab[]>(`/users/${owner}/repos/${name}/collabs`),
+  addCollab: (owner: string, name: string, username: string, permission: "read" | "write") =>
+    req<Collab>(`/users/${owner}/repos/${name}/collabs`, {
+      method: "POST",
+      body: JSON.stringify({ username, permission }),
+    }),
+  removeCollab: (owner: string, name: string, username: string) =>
+    req<null>(`/users/${owner}/repos/${name}/collabs/${username}`, { method: "DELETE" }),
 
   // ssh keys
   listKeys: () => req<SSHKey[]>("/keys"),
