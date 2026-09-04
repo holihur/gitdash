@@ -42,6 +42,7 @@ GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest -v
 | `test_ssh_keys.py` | 公钥增删查、非法公钥、指纹全局唯一（跨用户 409） |
 | `test_webhooks.py` | Webhook CRUD、URL 校验、owner-only 隔离、级联删除 |
 | `test_profile.py` | 资料字段、改密流程、MFA(TOTP)启用/两步登录/禁用、隔离 |
+| `test_fileops.py` | 网页文件/文件夹 CRUD(提交式)、bad path、读写协作者权限 |
 | `test_pulls.py` | PR 创建/diff/关闭重开/合并、分叉冲突、bad path 与隔离(SSH 场景) |
 | `test_gpg.py` | GPG 公钥增删查、非法/重复(跨用户)校验、401 |
 

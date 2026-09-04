@@ -6,11 +6,15 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  FilePlus2,
   FileText,
   Folder,
+  FolderPlus,
   GitBranch,
   GitCommitHorizontal,
   MoreVertical,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { api, cloneCommand, type Blob, type Branch, type Commit, type PullDiff, type Repo, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -36,8 +40,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import { MarkdownView, CodeText } from "@/components/markdown";
+import { MarkdownView } from "@/components/markdown";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
+import CodeMirrorEditor from "@/components/code-editor";
+import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import RepoIssues from "@/pages/RepoIssues";
 import RepoPulls from "@/pages/RepoPulls";
 
@@ -46,69 +52,6 @@ function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
   const lower = base.toLowerCase();
   return /^readme(\.(md|markdown|txt))?$/.test(lower) || /\.(md|markdown)$/.test(lower);
-}
-
-// 根据扩展名推断 highlight.js 语言
-function langFromPath(path: string): string | undefined {
-  const ext = (path.split(".").pop() ?? "").toLowerCase();
-  const map: Record<string, string> = {
-    ts: "typescript",
-    tsx: "typescript",
-    js: "javascript",
-    jsx: "javascript",
-    mjs: "javascript",
-    cjs: "javascript",
-    py: "python",
-    rb: "ruby",
-    go: "go",
-    rs: "rust",
-    java: "java",
-    kt: "kotlin",
-    c: "c",
-    h: "c",
-    cpp: "cpp",
-    hpp: "cpp",
-    cs: "csharp",
-    sh: "bash",
-    bash: "bash",
-    zsh: "bash",
-    fish: "bash",
-    yml: "yaml",
-    yaml: "yaml",
-    json: "json",
-    toml: "ini",
-    ini: "ini",
-    sql: "sql",
-    html: "xml",
-    htm: "xml",
-    xml: "xml",
-    css: "css",
-    scss: "scss",
-    less: "less",
-    dockerfile: "dockerfile",
-    vue: "xml",
-    php: "php",
-    swift: "swift",
-    scala: "scala",
-    lua: "lua",
-    r: "r",
-    dart: "dart",
-    elm: "elm",
-    ex: "elixir",
-    exs: "elixir",
-    erl: "erlang",
-    hs: "haskell",
-    ml: "ocaml",
-    pas: "pascal",
-    pl: "perl",
-    ps1: "powershell",
-    proto: "protobuf",
-    tex: "latex",
-  };
-  const name = (path.split("/").pop() ?? "").toLowerCase();
-  if (name === "dockerfile") return "dockerfile";
-  if (name.startsWith("makefile")) return "makefile";
-  return map[ext];
 }
 
 function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
@@ -138,6 +81,9 @@ export default function RepoView() {
   const [tab, setTab] = useState("code");
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
+  const [fileOp, setFileOp] = useState<FileOp | null>(null);
+  const [loadTick, setLoadTick] = useState(0);
+  const currentDir = path.join("/");
 
   const copy = useCallback(
     (text: string) => {
@@ -162,6 +108,7 @@ export default function RepoView() {
   }, [name]);
 
   const loadTree = useCallback(async () => {
+    void loadTick;
     if (!ref) return;
     try {
       const dir = path.join("/");
@@ -172,7 +119,7 @@ export default function RepoView() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [name, ref, path]);
+  }, [name, ref, path, loadTick]);
 
   useEffect(() => {
     loadTree();
@@ -217,6 +164,51 @@ export default function RepoView() {
     // depth = -1 -> root, otherwise index of segment
     setPath(depth < 0 ? [] : path.slice(0, depth + 1));
     setBlob(null);
+  };
+  const openCreateDialog = (kind: "create-file" | "create-dir") => {
+    const prefix = currentDir ? currentDir + "/" : "";
+    setFileOp({
+      kind,
+      path: kind === "create-dir" ? prefix : prefix + "",
+      content: "",
+      branch: ref || branches[0]?.name || "main",
+    });
+  };
+
+  const openEditDialog = (filePath: string, content: string) => {
+    setFileOp({ kind: "edit", path: filePath, content, branch: ref });
+  };
+
+  const removeEntry = async (targetPath: string, isDir: boolean) => {
+    const ok = window.confirm(
+      isDir
+        ? t("fops.confirmDeleteFolder", { path: targetPath })
+        : t("fops.confirmDeleteFile", { path: targetPath }),
+    );
+    if (!ok) return;
+    const branch = ref || branches[0]?.name || "main";
+    try {
+      await api.createCommit(owner, name, branch, `Delete ${targetPath}`, [
+        { path: targetPath, action: isDir ? "delete_tree" : "delete" },
+      ]);
+      toast.success(t("fops.deleted", { path: targetPath }));
+      afterCommit(branch, isDir ? currentDir : undefined);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    }
+  };
+
+  const afterCommit = async (branch: string, backToDir?: string) => {
+    setBlob(null);
+    if (backToDir !== undefined) setPath(backToDir ? backToDir.split("/") : []);
+    else if (blob) setPath([]);
+    setRef(branch);
+    setLoadTick((n) => n + 1);
+    try {
+      setBranches(await api.branches(owner, name));
+    } catch {
+      /* ignore */
+    }
   };
 
   const emptyRepo = branches.length === 0;
@@ -289,6 +281,16 @@ export default function RepoView() {
         </TabsList>
 
         <TabsContent value="code" className="space-y-4">
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
+              <FilePlus2 className="h-4 w-4" />
+              {t("fops.newFile")}
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-dir")}>
+              <FolderPlus className="h-4 w-4" />
+              {t("fops.newFolder")}
+            </Button>
+          </div>
           {/* branch selector + breadcrumb */}
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
@@ -389,6 +391,20 @@ export default function RepoView() {
                         {blob.encoding === "binary" ? t("repo.binaryFile") : t("repo.fileTooLarge")}
                       </Badge>
                     )}
+                    {blob.encoding === "utf-8" && !isMarkdown(blob.path) && (
+                      <>
+                        <Button size="sm" variant="outline" className="gap-1.5"
+                          onClick={() => openEditDialog(blob.path, blob.content)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          {t("fops.editFile")}
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1.5 text-destructive hover:text-destructive"
+                          onClick={() => removeEntry(blob.path, false)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {t("fops.deleteFile")}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -399,8 +415,10 @@ export default function RepoView() {
                       <MarkdownView text={blob.content} />
                     </div>
                   ) : (
-                    <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
-                      <CodeText text={blob.content} lang={langFromPath(blob.path)} />
+                    <div className="overflow-hidden rounded-md border">
+                      <div className="h-[65vh] overflow-auto bg-background/60">
+                        <CodeMirrorEditor value={blob.content} path={blob.path} readOnly />
+                      </div>
                     </div>
                   )
                 ) : (
@@ -421,22 +439,53 @@ export default function RepoView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map((entry) => (
+                  {entries.map((entry) => {
+                    const targetPath = currentDir ? currentDir + "/" + entry.name : entry.name;
+                    return (
                     <TableRow key={entry.name}>
                       <TableCell>
-                        <button
-                          className="flex items-center gap-2 hover:underline"
-                          onClick={() => openEntry(entry)}
-                        >
-                          {entry.type === "tree" ? (
-                            <Folder className="h-4 w-4 shrink-0 text-blue-500" />
-                          ) : (
-                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                          <span className={cn("truncate", entry.type === "tree" ? "font-medium" : "")}>
-                            {entry.name}
-                          </span>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="flex min-w-0 items-center gap-2 hover:underline"
+                            onClick={() => openEntry(entry)}
+                          >
+                            {entry.type === "tree" ? (
+                              <Folder className="h-4 w-4 shrink-0 text-blue-500" />
+                            ) : (
+                              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            )}
+                            <span className={cn("truncate", entry.type === "tree" ? "font-medium" : "")}>
+                              {entry.name}
+                            </span>
+                          </button>
+                          <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                            {entry.type === "blob" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title={t("fops.editFile")}
+                                onClick={() =>
+                                  api
+                                    .blob(owner, name, ref, targetPath)
+                                    .then((b) => b.encoding === "utf-8" && openEditDialog(targetPath, b.content))
+                                    .catch((e) => toast.error(apiErrorMsg(to, e)))
+                                }
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              title={entry.type === "tree" ? t("fops.deleteFolder") : t("fops.deleteFile")}
+                              onClick={() => removeEntry(targetPath, entry.type === "tree")}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
@@ -447,7 +496,8 @@ export default function RepoView() {
                         {entry.type === "blob" ? formatSize(entry.size) : "-"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                   {entries.length === 0 && (
                     <TableRow>
                       <TableCell
@@ -545,6 +595,18 @@ export default function RepoView() {
           <RepoPulls owner={owner} name={name} />
         </TabsContent>
       </Tabs>
+
+      {fileOp && (
+        <FileOpDialog
+          open
+          onOpenChange={(o) => !o && setFileOp(null)}
+          owner={owner}
+          repo={name}
+          branches={branches.map((b) => b.name)}
+          init={fileOp}
+          onSaved={afterCommit}
+        />
+      )}
     </div>
   );
 }

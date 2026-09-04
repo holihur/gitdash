@@ -106,6 +106,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.setIssueState))
 
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.auth(a.commitDiff))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits", a.auth(a.writeCommit))
 
 	// pull requests
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.auth(a.listPulls))
@@ -924,6 +925,68 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, issue)
+}
+
+func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	var in struct {
+		Branch  string              `json:"branch"`
+		Message string              `json:"message"`
+		Changes []gitsvc.FileChange `json:"changes"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.Branch = strings.TrimSpace(in.Branch)
+	in.Message = strings.TrimSpace(in.Message)
+	if in.Branch == "" {
+		in.Branch = "main"
+	}
+	if in.Message == "" {
+		writeCode(w, http.StatusBadRequest, "message_required", "commit message is required")
+		return
+	}
+	if len(in.Changes) == 0 {
+		writeCode(w, http.StatusBadRequest, "no_changes", "no file changes provided")
+		return
+	}
+	if len(in.Changes) > 100 {
+		writeCode(w, http.StatusBadRequest, "too_many_changes", "too many changes (max 100)")
+		return
+	}
+	total := 0
+	for i := range in.Changes {
+		c := &in.Changes[i]
+		c.Path = strings.TrimSpace(c.Path)
+		c.Path = strings.TrimPrefix(c.Path, "/")
+		if _, err := gitsvc.CleanPath(c.Path); err != nil {
+			writeCode(w, http.StatusBadRequest, "invalid_path", err.Error())
+			return
+		}
+		if c.Action == "" {
+			c.Action = "update"
+		}
+		switch c.Action {
+		case "create", "update", "delete", "delete_tree":
+		default:
+			writeCode(w, http.StatusBadRequest, "invalid_action", "action must be create/update/delete/delete_tree")
+			return
+		}
+		total += len(c.Content)
+	}
+	if total > 2<<20 { // 2MB
+		writeCode(w, http.StatusBadRequest, "content_too_large", "content too large (max 2MB per commit)")
+		return
+	}
+	sha, err := gitsvc.WriteCommit(owner, name, in.Branch, in.Message, userFrom(r), in.Changes)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "commit_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"sha": sha, "branch": in.Branch, "message": in.Message})
 }
 
 func (a *API) commitDiff(w http.ResponseWriter, r *http.Request) {

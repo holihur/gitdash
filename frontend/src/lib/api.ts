@@ -255,6 +255,17 @@ export const api = {
     req<Commit[]>(`/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
   commitDiff: (owner: string, name: string, sha: string) =>
     req<PullDiff>(`/users/${owner}/repos/${name}/commits/${sha}/diff`),
+  createCommit: (
+    owner: string,
+    name: string,
+    branch: string,
+    message: string,
+    changes: { path: string; action: "create" | "update" | "delete" | "delete_tree"; content?: string }[],
+  ) =>
+    req<{ sha: string; branch: string; message: string }>(
+      `/users/${owner}/repos/${name}/commits`,
+      { method: "POST", body: JSON.stringify({ branch, message, changes }) },
+    ),
 
   // issues
   listIssues: (owner: string, name: string) => req<Issue[]>(`/users/${owner}/repos/${name}/issues`),
