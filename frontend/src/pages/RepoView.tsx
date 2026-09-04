@@ -38,6 +38,7 @@ import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MarkdownView, CodeText } from "@/components/markdown";
 import RepoIssues from "@/pages/RepoIssues";
+import RepoPulls from "@/pages/RepoPulls";
 
 // 判断文件名是否需要 Markdown 渲染（README 任意扩展名或 .md/.markdown）
 function isMarkdown(path: string): boolean {
@@ -263,6 +264,9 @@ export default function RepoView() {
           </TabsTrigger>
           <TabsTrigger value="issues" className="flex-1 sm:flex-none">
             {t("issues.title")}
+          </TabsTrigger>
+          <TabsTrigger value="pulls" className="flex-1 sm:flex-none">
+            {t("pulls.title")}
           </TabsTrigger>
         </TabsList>
 
@@ -491,6 +495,10 @@ export default function RepoView() {
 
         <TabsContent value="issues">
           <RepoIssues owner={owner} name={name} />
+        </TabsContent>
+
+        <TabsContent value="pulls">
+          <RepoPulls owner={owner} name={name} />
         </TabsContent>
       </Tabs>
     </div>

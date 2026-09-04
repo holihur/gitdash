@@ -68,6 +68,18 @@ class ApiClient:
         return self.request("DELETE", path, **kw)
 
 
+# 若本会话由本夹具自启实例（GITDASH_BIN 模式），记录 SSH 端口供 git 相关黑盒测试使用
+_SPAWNED_SSH_PORT: dict = {"port": None}
+
+
+@pytest.fixture(scope="session")
+def ssh_port(base_url):
+    """BIN 模式返回自启实例的 SSH 端口；外部实例模式跳过。"""
+    if _SPAWNED_SSH_PORT["port"]:
+        return _SPAWNED_SSH_PORT["port"]
+    pytest.skip("SSH-based tests need a self-spawned instance (GITDASH_BIN)")
+
+
 # ---- 会话级实例管理 ----
 
 def _spawn_server(binary: Path, tmpdir: Path):
@@ -79,6 +91,7 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
     )
+    _SPAWNED_SSH_PORT["port"] = ssh_port
     log_path = tmpdir / "server.log"
     log = open(log_path, "wb")
     proc = subprocess.Popen(

@@ -121,6 +121,32 @@ export interface Collab {
   created_at: string;
 }
 
+export type PullState = "open" | "merged" | "closed";
+
+export interface PullRequest {
+  id: number;
+  number: number;
+  title: string;
+  body: string;
+  source_branch: string;
+  target_branch: string;
+  base_sha: string;
+  head_sha: string;
+  state: PullState;
+  author: string;
+  created_at: string;
+  updated_at: string;
+  merged_at: string | null;
+  merged_by: string;
+}
+
+export interface PullDiff {
+  files: { path: string; status: "A" | "M" | "D"; insertions: number; deletions: number }[];
+  patch: string;
+  base_sha: string;
+  head_sha: string;
+}
+
 export interface Webhook {
   id: number;
   owner: string;
@@ -259,6 +285,35 @@ export const api = {
     }),
   deleteWebhook: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/webhooks/${id}`, { method: "DELETE" }),
+
+  // pull requests
+  listPulls: (owner: string, name: string, state?: PullState) =>
+    req<PullRequest[]>(
+      `/users/${owner}/repos/${name}/pulls${state ? `?state=${state}` : ""}`,
+    ),
+  createPull: (
+    owner: string,
+    name: string,
+    title: string,
+    body: string,
+    sourceBranch: string,
+    targetBranch: string,
+  ) =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls`, {
+      method: "POST",
+      body: JSON.stringify({ title, body, source_branch: sourceBranch, target_branch: targetBranch }),
+    }),
+  getPull: (owner: string, name: string, number: number) =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}`),
+  pullDiff: (owner: string, name: string, number: number) =>
+    req<PullDiff>(`/users/${owner}/repos/${name}/pulls/${number}/diff`),
+  mergePull: (owner: string, name: string, number: number) =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/merge`, { method: "POST" }),
+  setPullState: (owner: string, name: string, number: number, state: "open" | "closed") =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/state`, {
+      method: "POST",
+      body: JSON.stringify({ state }),
+    }),
 
   // ssh keys
   listKeys: () => req<SSHKey[]>("/keys"),
