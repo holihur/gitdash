@@ -64,6 +64,9 @@ export const en = {
     emptyHint: 'Click "New repository" in the top right to create your first repository.',
     loadFailed: "Failed to load: {error}",
   },
+  commits: {
+    gpgSigned: "GPG signature verified for {user}",
+  },
   repo: {
     notFound: "Repository not found: {error}",
     copyCloneCommand: "Copy clone command",
@@ -174,8 +177,20 @@ export const en = {
     mfaEnabledToast: "Two-factor authentication enabled",
     mfaDisabledToast: "Two-factor authentication disabled",
     disableRequires: "Enter your password and a current code to disable",
+    gpg: "GPG keys",
+    gpgHint: "Add the public keys used to sign your commits. Signed commits will show as verified.",
+    gpgArmor: "Public key (ASCII armor)",
+    gpgPlaceholder: "-----BEGIN PGP PUBLIC KEY BLOCK-----",
+    gpgAdded: "GPG key added",
+    gpgRemoved: "GPG key removed",
+    gpgAdd: "Add GPG key",
+    gpgEmpty: "No GPG keys yet",
   },
   errors: {
+    gpg_key_required: "Armored public key is required",
+    gpg_key_invalid: "Invalid GPG public key",
+    gpg_key_exists: "This GPG key is already registered",
+    gpg_key_not_found: "GPG key not found",
     unauthorized: "Not signed in or session expired",
     invalid_credentials: "Invalid username or password",
     username_invalid:

@@ -24,6 +24,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/totp"
 	"gitdash/backend/internal/webui"
@@ -115,6 +116,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))
 	mux.HandleFunc("POST /api/keys", a.auth(a.createKey))
 	mux.HandleFunc("DELETE /api/keys/{id}", a.auth(a.deleteKey))
+
+	// gpg keys
+	mux.HandleFunc("GET /api/gpg", a.auth(a.listGPGKeys))
+	mux.HandleFunc("POST /api/gpg", a.auth(a.addGPGKey))
+	mux.HandleFunc("DELETE /api/gpg/{id}", a.auth(a.deleteGPGKey))
 
 	// public
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -463,6 +469,56 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+func (a *API) listGPGKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := a.store.ListGPGKeys(userFrom(r))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, keys)
+}
+
+func (a *API) addGPGKey(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Armor string `json:"armor"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	armor := strings.TrimSpace(in.Armor)
+	if armor == "" {
+		writeCode(w, http.StatusBadRequest, "gpg_key_required", "armored public key is required")
+		return
+	}
+	fp, err := gpgsig.ParseArmoredKey(armor)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "gpg_key_invalid", err.Error())
+		return
+	}
+	k, err := a.store.AddGPGKey(userFrom(r), fp, armor)
+	if errors.Is(err, store.ErrExists) {
+		writeCode(w, http.StatusConflict, "gpg_key_exists", "this gpg key is already registered")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, k)
+}
+
+func (a *API) deleteGPGKey(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
+		return
+	}
+	if errors.Is(a.store.DeleteGPGKey(userFrom(r), id), store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "gpg_key_not_found", "gpg key not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 // ---- plumbing ----
 
@@ -734,7 +790,32 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, cs)
+	// GPG 签名校验（对已注册公钥；失败不影响列表展示）
+	keys := []gpgsig.Key{}
+	if gks, err := a.store.AllGPGKeys(); err == nil {
+		for _, k := range gks {
+			keys = append(keys, gpgsig.Key{Username: k.Username, Fingerprint: k.Fingerprint, Armor: k.Armor})
+		}
+	}
+	out := make([]commitResp, 0, len(cs))
+	for _, c := range cs {
+		r := commitResp{SHA: c.SHA, Author: c.Author, Date: c.Date, Message: c.Message}
+		if raw, err := gitsvc.RawCommit(owner, name, c.SHA); err == nil {
+			if user, _, ok := gpgsig.VerifyCommit(raw, keys); ok && user != "" {
+				r.GPGVerified = user
+			}
+		}
+		out = append(out, r)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+type commitResp struct {
+	SHA         string `json:"sha"`
+	Author      string `json:"author"`
+	Date        string `json:"date"`
+	Message     string `json:"message"`
+	GPGVerified string `json:"gpg_verified,omitempty"`
 }
 
 // ---- issues ----

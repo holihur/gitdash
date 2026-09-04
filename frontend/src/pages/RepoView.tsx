@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  BadgeCheck,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -464,6 +465,16 @@ export default function RepoView() {
                             {c.sha.slice(0, 7)}
                           </code>
                           <span className="truncate">{c.message}</span>
+                          {c.gpg_verified && (
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 gap-1 border-green-600/40 text-green-600"
+                              title={t("commits.gpgSigned", { user: c.gpg_verified })}
+                            >
+                              <BadgeCheck className="h-3 w-3" />
+                              {c.gpg_verified}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">{c.author}</TableCell>

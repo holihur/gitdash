@@ -251,6 +251,13 @@ func ReadBlob(owner, name, ref, file string) (*Blob, error) {
 	return b, nil
 }
 
+// RawCommit 返回提交对象的原始内容（含 gpgsig 头，供签名校验）。
+func RawCommit(owner, name, sha string) ([]byte, error) {
+	path := RepoPath(owner, name)
+	cmd := exec.Command("git", "-C", path, "cat-file", "commit", sha)
+	return cmd.Output()
+}
+
 type Commit struct {
 	SHA     string `json:"sha"`
 	Author  string `json:"author"`

@@ -30,8 +30,9 @@ def test_register_success(client_factory):
 
 def test_register_then_me_then_logout(user_factory):
     username, token, client = user_factory()
-    me = client.get("/me", expect=200)
-    assert me.json() == {"username": username}
+    me = client.get("/me", expect=200).json()
+    assert me["username"] == username
+    assert "created_at" in me and "mfa_enabled" in me
 
     client.post("/auth/logout", expect=204)
     # token 注销后立即失效

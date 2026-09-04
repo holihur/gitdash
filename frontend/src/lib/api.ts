@@ -59,6 +59,12 @@ export interface Repo {
   role?: "owner" | "read" | "write";
 }
 
+export interface GPGKey {
+  id: number;
+  fingerprint: string;
+  created_at: string;
+}
+
 export interface SSHKey {
   id: number;
   name: string;
@@ -92,6 +98,8 @@ export interface Commit {
   author: string;
   date: string;
   message: string;
+  /** 经已注册 GPG 公钥验证的提交所属用户 */
+  gpg_verified?: string;
 }
 export interface Issue {
   id: number;
@@ -257,4 +265,10 @@ export const api = {
   createKey: (name: string, publicKey: string) =>
     req<SSHKey>("/keys", { method: "POST", body: JSON.stringify({ name, public_key: publicKey }) }),
   deleteKey: (id: number) => req<null>(`/keys/${id}`, { method: "DELETE" }),
+
+  // gpg keys（提交签名验证）
+  listGPGKeys: () => req<GPGKey[]>("/gpg"),
+  addGPGKey: (armor: string) =>
+    req<GPGKey>("/gpg", { method: "POST", body: JSON.stringify({ armor }) }),
+  deleteGPGKey: (id: number) => req<null>(`/gpg/${id}`, { method: "DELETE" }),
 };
