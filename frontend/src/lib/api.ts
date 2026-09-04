@@ -1,15 +1,24 @@
 const TOKEN_KEY = "gitdash-token";
 
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? "dev";
+  return localStorage.getItem(TOKEN_KEY) ?? "";
 }
 
 export function setToken(t: string) {
   localStorage.setItem(TOKEN_KEY, t);
 }
 
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export interface User {
+  username: string;
+}
+
 export interface Repo {
   id: number;
+  owner: string;
   name: string;
   description: string;
   created_at: string;
@@ -50,24 +59,30 @@ export interface Commit {
   message: string;
 }
 
-export function cloneUrl(name: string): string {
-  return `ssh://git@${window.location.hostname}:2222/${name}.git`;
+export function cloneUrl(owner: string, name: string): string {
+  return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
 }
 
-export function cloneCommand(name: string): string {
-  return `git clone ${cloneUrl(name)}`;
+export function cloneCommand(owner: string, name: string): string {
+  return `git clone ${cloneUrl(owner, name)}`;
 }
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+  const token = getToken();
   const res = await fetch(`/api${path}`, {
     ...opts,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(opts.headers ?? {}),
     },
   });
   if (!res.ok) {
+    if (res.status === 401 && window.location.pathname !== "/login") {
+      // 会话失效：清除并回登录页
+      clearToken();
+      window.location.href = "/login";
+    }
     let msg = res.statusText;
     try {
       const body = await res.json();
@@ -82,26 +97,43 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  // auth
+  register: (username: string, password: string) =>
+    req<{ token: string; username: string }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  login: (username: string, password: string) =>
+    req<{ token: string; username: string }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => req<null>("/auth/logout", { method: "POST" }),
+  me: () => req<User>("/me"),
+
+  // repos（owner 用于展示/校验，URL 由会话中的用户决定）
   listRepos: () => req<Repo[]>("/repos"),
-  getRepo: (name: string) => req<Repo>(`/repos/${name}`),
   createRepo: (name: string, description: string) =>
     req<Repo>("/repos", { method: "POST", body: JSON.stringify({ name, description }) }),
-  deleteRepo: (name: string) => req<null>(`/repos/${name}`, { method: "DELETE" }),
+  getRepo: (_owner: string, name: string) => req<Repo>(`/repos/${name}`),
+  deleteRepo: (_owner: string, name: string) => req<null>(`/repos/${name}`, { method: "DELETE" }),
 
+  // git browsing
+  branches: (_owner: string, name: string) => req<Branch[]>(`/repos/${name}/branches`),
+  tree: (_owner: string, name: string, ref: string, path: string) =>
+    req<{ path: string; entries: TreeEntry[] }>(
+      `/repos/${name}/tree?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
+    ),
+  blob: (_owner: string, name: string, ref: string, path: string) =>
+    req<Blob>(
+      `/repos/${name}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
+    ),
+  commits: (_owner: string, name: string, ref: string) =>
+    req<Commit[]>(`/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
+
+  // ssh keys
   listKeys: () => req<SSHKey[]>("/keys"),
   createKey: (name: string, publicKey: string) =>
     req<SSHKey>("/keys", { method: "POST", body: JSON.stringify({ name, public_key: publicKey }) }),
   deleteKey: (id: number) => req<null>(`/keys/${id}`, { method: "DELETE" }),
-
-  branches: (repo: string) => req<Branch[]>(`/repos/${repo}/branches`),
-  tree: (repo: string, ref: string, path: string) =>
-    req<{ path: string; entries: TreeEntry[] }>(
-      `/repos/${repo}/tree?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
-    ),
-  blob: (repo: string, ref: string, path: string) =>
-    req<Blob>(
-      `/repos/${repo}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
-    ),
-  commits: (repo: string, ref: string) =>
-    req<Commit[]>(`/repos/${repo}/commits?ref=${encodeURIComponent(ref)}`),
 };

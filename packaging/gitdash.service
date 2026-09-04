@@ -6,13 +6,15 @@ After=network.target
 Type=simple
 # 按需修改运行用户与目录
 # User=gitdash
-# Environment=GITDASH_TOKEN=change-me
+# 自动更新默认关闭，如需开启：
+# Environment=GITDASH_AUTO_UPDATE=1
 Environment=GITDASH_DATA=/var/lib/gitdash
 Environment=GITDASH_HTTP_ADDR=:8080
 Environment=GITDASH_SSH_ADDR=:2222
 ExecStartPre=/usr/bin/env mkdir -p /var/lib/gitdash
 ExecStart=/usr/local/bin/gitdash serve
-Restart=on-failure
+Restart=always
+RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 

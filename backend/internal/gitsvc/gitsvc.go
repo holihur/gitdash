@@ -46,10 +46,12 @@ func CleanPath(p string) (string, error) {
 	return p, nil
 }
 
-func RepoPath(name string) string { return filepath.Join(reposDir, name+".git") }
+func RepoPath(owner, name string) string {
+	return filepath.Join(reposDir, owner, name+".git")
+}
 
-func Exists(name string) bool {
-	fi, err := os.Stat(RepoPath(name))
+func Exists(owner, name string) bool {
+	fi, err := os.Stat(RepoPath(owner, name))
 	return err == nil && fi.IsDir()
 }
 
@@ -71,11 +73,14 @@ func gitOut(dir string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-func CreateBare(name string) error {
-	if !ValidName(name) {
-		return fmt.Errorf("invalid repo name %q", name)
+func CreateBare(owner, name string) error {
+	if !ValidName(owner) || !ValidName(name) {
+		return fmt.Errorf("invalid repo %s/%s", owner, name)
 	}
-	path := RepoPath(name)
+	path := RepoPath(owner, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	if _, err := gitOut("", "init", "--bare", "--initial-branch=main", path); err != nil {
 		// older git without --initial-branch
 		if _, err2 := gitOut("", "init", "--bare", path); err2 != nil {
@@ -87,8 +92,8 @@ func CreateBare(name string) error {
 	return nil
 }
 
-func Delete(name string) error {
-	return os.RemoveAll(RepoPath(name))
+func Delete(owner, name string) error {
+	return os.RemoveAll(RepoPath(owner, name))
 }
 
 type Branch struct {
@@ -96,17 +101,17 @@ type Branch struct {
 	IsHead bool   `json:"is_head"`
 }
 
-func HeadBranch(name string) (string, error) {
-	out, err := gitOut(RepoPath(name), "symbolic-ref", "--short", "HEAD")
+func HeadBranch(owner, name string) (string, error) {
+	out, err := gitOut(RepoPath(owner, name), "symbolic-ref", "--short", "HEAD")
 	return strings.TrimSpace(out), err
 }
 
-func Branches(name string) ([]Branch, error) {
-	out, err := gitOut(RepoPath(name), "for-each-ref", "--format=%(refname:short)", "refs/heads")
+func Branches(owner, name string) ([]Branch, error) {
+	out, err := gitOut(RepoPath(owner, name), "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
 		return nil, err
 	}
-	head, _ := HeadBranch(name)
+	head, _ := HeadBranch(owner, name)
 	branches := []Branch{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if line == "" {
@@ -125,11 +130,11 @@ type Entry struct {
 	SHA  string `json:"sha"`
 }
 
-func Tree(name, ref, dir string) ([]Entry, error) {
+func Tree(owner, name, ref, dir string) ([]Entry, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
-	path := RepoPath(name)
+	path := RepoPath(owner, name)
 	treeish := ref
 	if dir != "" {
 		t, err := gitOut(path, "cat-file", "-t", ref+":"+dir)
@@ -173,7 +178,7 @@ type Blob struct {
 	Content  string `json:"content"`
 }
 
-func ReadBlob(name, ref, file string) (*Blob, error) {
+func ReadBlob(owner, name, ref, file string) (*Blob, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
@@ -181,7 +186,7 @@ func ReadBlob(name, ref, file string) (*Blob, error) {
 	if err != nil || file == "" {
 		return nil, fmt.Errorf("invalid file path")
 	}
-	path := RepoPath(name)
+	path := RepoPath(owner, name)
 	obj := ref + ":" + file
 
 	sizeOut, err := gitOut(path, "cat-file", "-s", obj)
@@ -217,14 +222,14 @@ type Commit struct {
 	Message string `json:"message"`
 }
 
-func Commits(name, ref string, limit int) ([]Commit, error) {
+func Commits(owner, name, ref string, limit int) ([]Commit, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
-	out, err := gitOut(RepoPath(name),
+	out, err := gitOut(RepoPath(owner, name),
 		"log", "--max-count="+strconv.Itoa(limit), "--date=iso-strict",
 		"--pretty=format:%H%x1f%an%x1f%ad%x1f%s%x1e", ref)
 	if err != nil {

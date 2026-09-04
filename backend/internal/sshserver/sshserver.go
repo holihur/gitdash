@@ -23,7 +23,8 @@ import (
 	"gitdash/backend/internal/store"
 )
 
-var repoNameRe = regexp.MustCompile(`^/?([\w.-]+?)(?:\.git)?/?$`)
+// 匹配 "demo.git"（owner=空，解析为当前登录用户）或 "alice/demo.git"
+var repoPathRe = regexp.MustCompile(`^/?([\w.-]+?)(?:/([\w.-]+?))?(?:\.git)?/?$`)
 
 var gitCommands = map[string]string{
 	"git-upload-pack":    "upload-pack",
@@ -33,45 +34,36 @@ var gitCommands = map[string]string{
 
 type Server struct {
 	reposDir string
+	config   *ssh.ServerConfig
+}
+
+// NewServer 创建 SSH git 服务（供 main 与测试使用）。
+func NewServer(st *store.Store, reposDir, dataDir string) (*Server, error) {
+	signer, err := loadOrGenerateHostKey(filepath.Join(dataDir, "ssh_host_ed25519_key"))
+	if err != nil {
+		return nil, fmt.Errorf("host key: %w", err)
+	}
+	cfg := buildConfig(st)
+	cfg.AddHostKey(signer)
+	return &Server{reposDir: reposDir, config: cfg}, nil
 }
 
 func Serve(addr string, st *store.Store, reposDir, dataDir string) error {
-	s := &Server{reposDir: reposDir}
-	signer, err := loadOrGenerateHostKey(filepath.Join(dataDir, "ssh_host_ed25519_key"))
+	s, err := NewServer(st, reposDir, dataDir)
 	if err != nil {
-		return fmt.Errorf("host key: %w", err)
+		return err
 	}
-
-	config := &ssh.ServerConfig{
-		ServerVersion: "SSH-2.0-gitdash",
-		PublicKeyCallback: func(meta ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			keys, err := st.PublicKeys()
-			if err != nil {
-				return nil, err
-			}
-			for _, line := range keys {
-				parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line))
-				if err != nil {
-					continue
-				}
-				if parsed.Type() == key.Type() && bytes.Equal(parsed.Marshal(), key.Marshal()) {
-					fp := ssh.FingerprintSHA256(key)
-					log.Printf("ssh: %s authenticated with key %s", meta.User(), fp)
-					return &ssh.Permissions{Extensions: map[string]string{"fingerprint": fp}}, nil
-				}
-			}
-			log.Printf("ssh: rejected %s, unknown key %s", meta.User(), ssh.FingerprintSHA256(key))
-			return nil, fmt.Errorf("unknown public key")
-		},
-	}
-	config.AddHostKey(signer)
-
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
+	return s.ServeOn(listener)
+}
+
+// ServeOn 在给定 listener 上运行（测试可注入随机端口）。
+func (s *Server) ServeOn(ln net.Listener) error {
 	for {
-		conn, err := listener.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				return nil
@@ -79,7 +71,32 @@ func Serve(addr string, st *store.Store, reposDir, dataDir string) error {
 			log.Printf("ssh accept: %v", err)
 			continue
 		}
-		go s.handleConn(conn, config)
+		go s.handleConn(conn, s.config)
+	}
+}
+
+func buildConfig(st *store.Store) *ssh.ServerConfig {
+	return &ssh.ServerConfig{
+		ServerVersion: "SSH-2.0-gitdash",
+		PublicKeyCallback: func(meta ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			keys, err := st.PublicKeys()
+			if err != nil {
+				return nil, err
+			}
+			for _, ka := range keys {
+				parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(ka.Line))
+				if err != nil {
+					continue
+				}
+				if parsed.Type() == key.Type() && bytes.Equal(parsed.Marshal(), key.Marshal()) {
+					fp := ssh.FingerprintSHA256(key)
+					log.Printf("ssh: %s authenticated as user %q with key %s", meta.User(), ka.Username, fp)
+					return &ssh.Permissions{Extensions: map[string]string{"username": ka.Username}}, nil
+				}
+			}
+			log.Printf("ssh: rejected %s, unknown key %s", meta.User(), ssh.FingerprintSHA256(key))
+			return nil, fmt.Errorf("unknown public key")
+		},
 	}
 }
 
@@ -92,6 +109,7 @@ func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
 	defer sconn.Close()
 	go ssh.DiscardRequests(reqs)
 
+	username := sconn.Permissions.Extensions["username"]
 	for newCh := range chans {
 		if newCh.ChannelType() != "session" {
 			_ = newCh.Reject(ssh.UnknownChannelType, "unsupported channel type")
@@ -101,11 +119,11 @@ func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
 		if err != nil {
 			continue
 		}
-		go s.handleSession(ch, requests)
+		go s.handleSession(ch, requests, username)
 	}
 }
 
-func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request) {
+func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, username string) {
 	defer ch.Close()
 
 	var env []string
@@ -131,7 +149,7 @@ func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request) {
 			if req.WantReply {
 				_ = req.Reply(true, nil)
 			}
-			s.runGit(ch, env, cmdline)
+			s.runGit(ch, env, cmdline, username)
 			return
 		default:
 			if req.WantReply {
@@ -141,30 +159,49 @@ func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request) {
 	}
 }
 
-func (s *Server) runGit(ch ssh.Channel, env []string, cmdline string) {
+func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) {
+	deny := func(msg string) {
+		fmt.Fprintf(ch.Stderr(), "gitdash: %s\n", msg)
+		sendExit(ch, 1)
+	}
+	if username == "" {
+		deny("authentication required")
+		return
+	}
+
 	prog, args, err := splitCommandLine(cmdline)
 	sub, known := gitCommands[prog]
 	if err != nil || !known {
-		fmt.Fprintf(ch.Stderr(), "gitdash: only git-upload-pack / git-receive-pack / git-upload-archive are allowed\n")
-		sendExit(ch, 1)
+		deny("only git-upload-pack / git-receive-pack / git-upload-archive are allowed")
 		return
 	}
 	if len(args) != 1 {
-		fmt.Fprintf(ch.Stderr(), "gitdash: expected exactly one repository argument\n")
-		sendExit(ch, 1)
+		deny("expected exactly one repository argument")
 		return
 	}
-	m := repoNameRe.FindStringSubmatch(args[0])
+
+	m := repoPathRe.FindStringSubmatch(args[0])
 	if m == nil {
-		fmt.Fprintf(ch.Stderr(), "gitdash: invalid repository path %q\n", args[0])
-		sendExit(ch, 1)
+		deny(fmt.Sprintf("invalid repository path %q", args[0]))
 		return
 	}
-	repoName := m[1]
-	repoPath := filepath.Join(s.reposDir, repoName+".git")
+	owner, name := m[1], m[2]
+	if name == "" {
+		// 单段路径（demo.git）解析为当前登录用户自己的仓库
+		name, owner = owner, username
+	}
+	if !validToken(owner) || !validToken(name) {
+		deny(fmt.Sprintf("invalid repository path %q", args[0]))
+		return
+	}
+	if owner != username {
+		deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
+		return
+	}
+
+	repoPath := filepath.Join(s.reposDir, owner, name+".git")
 	if fi, err := os.Stat(repoPath); err != nil || !fi.IsDir() {
-		fmt.Fprintf(ch.Stderr(), "gitdash: repository %q not found\n", repoName)
-		sendExit(ch, 1)
+		deny(fmt.Sprintf("repository %q not found", args[0]))
 		return
 	}
 
@@ -217,10 +254,26 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline string) {
 			code = ee.ExitCode()
 		} else {
 			code = 1
-			log.Printf("ssh exec %s %s: %v", sub, repoName, err)
+			log.Printf("ssh exec %s %s/%s: %v", sub, owner, name, err)
 		}
 	}
 	sendExit(ch, code)
+}
+
+// validToken 校验 owner/name 片段（含 username），必须是字母或数字开头，防止路径穿越与参数注入
+func validToken(s string) bool {
+	if s == "" || s[0] == '-' || s[0] == '.' {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '_' || r == '-' || r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func sendExit(ch ssh.Channel, code int) {
@@ -258,7 +311,7 @@ func parseEnvPayload(payload []byte) (string, string, bool) {
 	return name, string(payload[:v]), true
 }
 
-// splitCommandLine parses something like: git-upload-pack 'demo.git'
+// splitCommandLine parses something like: git-upload-pack 'alice/demo.git'
 func splitCommandLine(cmdline string) (string, []string, error) {
 	var fields []string
 	var cur strings.Builder

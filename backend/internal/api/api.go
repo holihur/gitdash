@@ -2,6 +2,9 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -10,9 +13,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
+	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh"
 
 	"gitdash/backend/internal/gitsvc"
@@ -20,19 +25,34 @@ import (
 	"gitdash/backend/internal/webui"
 )
 
+var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
+
 type API struct {
 	store   *store.Store
-	token   string
 	version string
 }
 
-func New(s *store.Store, token, version string) *API {
-	return &API{store: s, token: token, version: version}
+func New(s *store.Store, version string) *API {
+	return &API{store: s, version: version}
+}
+
+type ctxUser struct{}
+
+func userFrom(r *http.Request) string {
+	v, _ := r.Context().Value(ctxUser{}).(string)
+	return v
 }
 
 func (a *API) Handler(staticDir string) http.Handler {
 	mux := http.NewServeMux()
 
+	// auth
+	mux.HandleFunc("POST /api/auth/register", a.register)
+	mux.HandleFunc("POST /api/auth/login", a.login)
+	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))
+	mux.HandleFunc("GET /api/me", a.auth(a.me))
+
+	// repos
 	mux.HandleFunc("GET /api/repos", a.auth(a.listRepos))
 	mux.HandleFunc("POST /api/repos", a.auth(a.createRepo))
 	mux.HandleFunc("GET /api/repos/{name}", a.auth(a.getRepo))
@@ -41,9 +61,13 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/tree", a.auth(a.tree))
 	mux.HandleFunc("GET /api/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
+
+	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))
 	mux.HandleFunc("POST /api/keys", a.auth(a.createKey))
 	mux.HandleFunc("DELETE /api/keys/{id}", a.auth(a.deleteKey))
+
+	// public
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -60,6 +84,136 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	return logMiddleware(mux)
 }
+
+// ---- auth ----
+
+func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username := a.sessionUser(r)
+		if username == "" {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), ctxUser{}, username)))
+	}
+}
+
+func bearerToken(r *http.Request) string {
+	h := r.Header.Get("Authorization")
+	if len(h) > 7 && strings.EqualFold(h[:7], "Bearer ") {
+		return strings.TrimSpace(h[7:])
+	}
+	return ""
+}
+
+func (a *API) sessionUser(r *http.Request) string {
+	tok := bearerToken(r)
+	if tok == "" {
+		return ""
+	}
+	username, err := a.store.GetSession(tok)
+	if err != nil {
+		return ""
+	}
+	return username
+}
+
+func newSessionToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func (a *API) startSession(w http.ResponseWriter, status int, username string) {
+	ua, err := a.store.GetByUsername(username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	token, err := newSessionToken()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.store.CreateSession(token, ua.ID); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, status, map[string]string{"token": token, "username": ua.Username})
+}
+
+func (a *API) register(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	username := strings.ToLower(strings.TrimSpace(in.Username))
+	if !usernameRe.MatchString(username) {
+		writeErr(w, http.StatusBadRequest, "用户名需 2-32 位小写字母/数字，可含 _ -，字母或数字开头")
+		return
+	}
+	if len(in.Password) < 8 {
+		writeErr(w, http.StatusBadRequest, "密码至少 8 位")
+		return
+	}
+	if _, err := a.store.GetByUsername(username); err == nil {
+		writeErr(w, http.StatusConflict, "用户名已被注册")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	u, err := a.store.CreateUser(username, string(hash))
+	if errors.Is(err, store.ErrExists) {
+		writeErr(w, http.StatusConflict, "用户名已被注册")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.startSession(w, http.StatusCreated, u.Username)
+}
+
+func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	ua, err := a.store.GetByUsername(strings.ToLower(strings.TrimSpace(in.Username)))
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, "用户名或密码错误")
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(ua.PasswordHash), []byte(in.Password)) != nil {
+		writeErr(w, http.StatusUnauthorized, "用户名或密码错误")
+		return
+	}
+	a.startSession(w, http.StatusOK, ua.Username)
+}
+
+func (a *API) logout(w http.ResponseWriter, r *http.Request) {
+	if tok := bearerToken(r); tok != "" {
+		_ = a.store.DeleteSession(tok)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) me(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"username": userFrom(r)})
+}
+
+// ---- plumbing ----
 
 func logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,16 +276,6 @@ func (a *API) embeddedHandler() http.HandlerFunc {
 	}
 }
 
-func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if a.token != "" && r.Header.Get("Authorization") != "Bearer "+a.token {
-			writeErr(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-		next(w, r)
-	}
-}
-
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -152,19 +296,10 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	return nil
 }
 
-func repoOr404(w http.ResponseWriter, r *http.Request) (string, bool) {
-	name := r.PathValue("name")
-	if !gitsvc.ValidName(name) || !gitsvc.Exists(name) {
-		writeErr(w, http.StatusNotFound, "repo not found")
-		return "", false
-	}
-	return name, true
-}
-
 // ---- repos ----
 
 func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := a.store.ListRepos()
+	repos, err := a.store.ListRepos(userFrom(r))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -180,22 +315,23 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	owner := userFrom(r)
 	in.Name = strings.TrimSpace(in.Name)
 	if !gitsvc.ValidName(in.Name) {
 		writeErr(w, http.StatusBadRequest, "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
 		return
 	}
-	if _, err := a.store.GetRepo(in.Name); err == nil || gitsvc.Exists(in.Name) {
+	if _, err := a.store.GetRepo(owner, in.Name); err == nil || gitsvc.Exists(owner, in.Name) {
 		writeErr(w, http.StatusConflict, "repo already exists")
 		return
 	}
-	repo, err := a.store.CreateRepo(in.Name, strings.TrimSpace(in.Description))
+	repo, err := a.store.CreateRepo(owner, in.Name, strings.TrimSpace(in.Description))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if err := gitsvc.CreateBare(in.Name); err != nil {
-		_ = a.store.DeleteRepo(in.Name)
+	if err := gitsvc.CreateBare(owner, in.Name); err != nil {
+		_ = a.store.DeleteRepo(owner, in.Name)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -203,8 +339,7 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	repo, err := a.store.GetRepo(name)
+	repo, err := a.store.GetRepo(userFrom(r), r.PathValue("name"))
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "repo not found")
 		return
@@ -217,23 +352,23 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if err := a.store.DeleteRepo(name); err != nil {
+	if err := a.store.DeleteRepo(userFrom(r), r.PathValue("name")); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = gitsvc.Delete(name)
+	_ = gitsvc.Delete(userFrom(r), r.PathValue("name"))
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---- git browsing ----
 
 func (a *API) branches(w http.ResponseWriter, r *http.Request) {
-	name, ok := repoOr404(w, r)
-	if !ok {
+	owner, name := userFrom(r), r.PathValue("name")
+	if !gitsvc.Exists(owner, name) {
+		writeErr(w, http.StatusNotFound, "repo not found")
 		return
 	}
-	bs, err := gitsvc.Branches(name)
+	bs, err := gitsvc.Branches(owner, name)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -242,8 +377,9 @@ func (a *API) branches(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) tree(w http.ResponseWriter, r *http.Request) {
-	name, ok := repoOr404(w, r)
-	if !ok {
+	owner, name := userFrom(r), r.PathValue("name")
+	if !gitsvc.Exists(owner, name) {
+		writeErr(w, http.StatusNotFound, "repo not found")
 		return
 	}
 	ref := r.URL.Query().Get("ref")
@@ -252,7 +388,7 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	entries, err := gitsvc.Tree(name, ref, dir)
+	entries, err := gitsvc.Tree(owner, name, ref, dir)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -261,13 +397,12 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) blob(w http.ResponseWriter, r *http.Request) {
-	name, ok := repoOr404(w, r)
-	if !ok {
+	owner, name := userFrom(r), r.PathValue("name")
+	if !gitsvc.Exists(owner, name) {
+		writeErr(w, http.StatusNotFound, "repo not found")
 		return
 	}
-	ref := r.URL.Query().Get("ref")
-	file := r.URL.Query().Get("path")
-	b, err := gitsvc.ReadBlob(name, ref, file)
+	b, err := gitsvc.ReadBlob(owner, name, r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -276,13 +411,13 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) commits(w http.ResponseWriter, r *http.Request) {
-	name, ok := repoOr404(w, r)
-	if !ok {
+	owner, name := userFrom(r), r.PathValue("name")
+	if !gitsvc.Exists(owner, name) {
+		writeErr(w, http.StatusNotFound, "repo not found")
 		return
 	}
-	ref := r.URL.Query().Get("ref")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	cs, err := gitsvc.Commits(name, ref, limit)
+	cs, err := gitsvc.Commits(owner, name, r.URL.Query().Get("ref"), limit)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -293,7 +428,7 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 // ---- ssh keys ----
 
 func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
-	keys, err := a.store.ListKeys()
+	keys, err := a.store.ListKeys(userFrom(r))
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -320,9 +455,8 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid public key: "+err.Error())
 		return
 	}
-	// normalize: single line, original format
 	pub = strings.Join(strings.Fields(string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))), " ")
-	k, err := a.store.CreateKey(in.Name, pub, ssh.FingerprintSHA256(key))
+	k, err := a.store.CreateKey(userFrom(r), in.Name, pub, ssh.FingerprintSHA256(key))
 	if errors.Is(err, store.ErrExists) {
 		writeErr(w, http.StatusConflict, "this key is already registered")
 		return
@@ -340,7 +474,7 @@ func (a *API) deleteKey(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteKey(id), store.ErrNotFound) {
+	if errors.Is(a.store.DeleteKey(userFrom(r), id), store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "key not found")
 		return
 	}

@@ -46,7 +46,7 @@ function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
 }
 
 export default function RepoView() {
-  const { name = "" } = useParams();
+  const { owner = "", name = "" } = useParams();
   const [repo, setRepo] = useState<Repo | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [ref, setRef] = useState("");
@@ -65,7 +65,7 @@ export default function RepoView() {
   useEffect(() => {
     (async () => {
       try {
-        const [r, bs] = await Promise.all([api.getRepo(name), api.branches(name)]);
+        const [r, bs] = await Promise.all([api.getRepo(owner, name), api.branches(owner, name)]);
         setRepo(r);
         setBranches(bs);
         const head = bs.find((b) => b.is_head) ?? bs[0];
@@ -81,7 +81,7 @@ export default function RepoView() {
     if (!ref) return;
     try {
       const dir = path.join("/");
-      const data = await api.tree(name, ref, dir);
+      const data = await api.tree(owner, name, ref, dir);
       setEntries(data.entries);
       setBlob(null);
       setError("");
@@ -97,7 +97,7 @@ export default function RepoView() {
   useEffect(() => {
     if (tab !== "commits" || !ref) return;
     api
-      .commits(name, ref)
+      .commits(owner, name, ref)
       .then(setCommits)
       .catch((e) => toast.error(e instanceof Error ? e.message : String(e)));
   }, [tab, name, ref]);
@@ -108,7 +108,7 @@ export default function RepoView() {
       return;
     }
     try {
-      setBlob(await api.blob(name, ref, [...path, entry.name].join("/")));
+      setBlob(await api.blob(owner, name, ref, [...path, entry.name].join("/")));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     }
@@ -123,7 +123,7 @@ export default function RepoView() {
   const emptyRepo = branches.length === 0;
   const commands = useMemo(
     () => [
-      cloneCommand(name),
+      cloneCommand(owner, name),
       `cd ${name}`,
       `echo "# ${name}" >> README.md`,
       "git add README.md",
@@ -145,7 +145,7 @@ export default function RepoView() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold">{name}</h1>
+          <h1 className="truncate text-2xl font-bold">{owner}/{name}</h1>
           <p className="text-sm text-muted-foreground">{repo?.description || "无描述"}</p>
         </div>
         <DropdownMenu>
@@ -158,10 +158,10 @@ export default function RepoView() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel className="font-mono text-xs normal-case">
-              {cloneCommand(name)}
+              {cloneCommand(owner, name)}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => copy(cloneCommand(name))}>
+            <DropdownMenuItem onClick={() => copy(cloneCommand(owner, name))}>
               <Copy />
               复制 clone 命令
             </DropdownMenuItem>

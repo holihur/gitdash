@@ -66,27 +66,43 @@ func TestParseEnvPayload(t *testing.T) {
 	}
 }
 
-func TestRepoNameRegex(t *testing.T) {
+func TestRepoPathRegex(t *testing.T) {
 	cases := []struct {
-		in   string
-		want string
+		in    string
+		owner string
+		name  string
 	}{
-		{"demo.git", "demo"},
-		{"/demo.git", "demo"},
-		{"demo", "demo"},
-		{"/demo/", "demo"},
-		{"nested/repo.git", ""},
-		{"../evil", ""},
-		{"", ""},
+		{"/alice/demo.git", "alice", "demo"},
+		{"alice/demo.git", "alice", "demo"},
+		{"alice/demo", "alice", "demo"},
+		{"/alice/demo/", "alice", "demo"},
+		{"demo.git", "demo", ""},
+		{"demo", "demo", ""},
+		{"/demo/", "demo", ""},
+		{"nested/repo.git", "nested", "repo"},
+		{"a/b/c", "", ""},
+		// regex 会解析出 ("..", "evil")，由 validToken 兜底拒绝（见 TestValidToken）
+		{"../evil", "..", "evil"},
+		{"", "", ""},
+		{"has space", "", ""},
 	}
 	for _, c := range cases {
-		m := repoNameRe.FindStringSubmatch(c.in)
-		got := ""
+		m := repoPathRe.FindStringSubmatch(c.in)
+		owner, name := "", ""
 		if m != nil {
-			got = m[1]
+			owner, name = m[1], m[2]
 		}
-		if got != c.want {
-			t.Errorf("repoNameRe(%q) = %q, want %q", c.in, got, c.want)
+		if owner != c.owner || name != c.name {
+			t.Errorf("repoPathRe(%q) = (%q, %q), want (%q, %q)", c.in, owner, name, c.owner, c.name)
 		}
+	}
+}
+
+func TestValidToken(t *testing.T) {
+	if !validToken("alice_01") || !validToken("a-b.c") {
+		t.Error("valid tokens rejected")
+	}
+	if validToken("") || validToken("has space") || validToken("a/b") || validToken("-x") || validToken("..") {
+		t.Error("invalid tokens accepted")
 	}
 }

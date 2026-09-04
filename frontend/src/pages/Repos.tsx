@@ -71,7 +71,7 @@ export default function Repos() {
   const remove = async (repo: Repo) => {
     if (!window.confirm(`确定删除仓库 ${repo.name}？磁盘上的数据也会被删除，不可恢复。`)) return;
     try {
-      await api.deleteRepo(repo.name);
+      await api.deleteRepo(repo.owner, repo.name);
       toast.success(`仓库 ${repo.name} 已删除`);
       load();
     } catch (e) {
@@ -134,7 +134,7 @@ export default function Repos() {
       {error && (
         <Card className="border-destructive">
           <CardContent className="pt-6 text-sm text-destructive">
-            加载失败：{error}（可在右上角检查 API Token）
+            加载失败：{error}
           </CardContent>
         </Card>
       )}
@@ -155,7 +155,7 @@ export default function Repos() {
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <CardTitle className="text-lg">
-                  <Link to={`/repo/${repo.name}`} className="hover:underline">
+                  <Link to={`/repo/${repo.owner}/${repo.name}`} className="hover:underline">
                     {repo.name}
                   </Link>
                 </CardTitle>
@@ -183,9 +183,9 @@ export default function Repos() {
               </Badge>
               <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
                 <code className="flex-1 truncate text-xs text-muted-foreground">
-                  {cloneCommand(repo.name)}
+                  {cloneCommand(repo.owner, repo.name)}
                 </code>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copy(cloneCommand(repo.name))}>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copy(cloneCommand(repo.owner, repo.name))}>
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
               </div>
