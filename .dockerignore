@@ -1,0 +1,15 @@
+.git
+.github
+.gitignore
+dist
+frontend/dist
+frontend/node_modules
+backend/internal/webui/dist
+backend/gitdash-server*
+backend/*.db
+backend/static
+tests/.venv
+tests/.pytest_cache
+**/__pycache__
+*.log
+data

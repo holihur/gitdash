@@ -107,6 +107,28 @@ GITDASH_AUTO_UPDATE=1 gitdash serve
 
 开启后进程会周期性检查 GitHub Releases，发现新版本即下载（校验 checksums.txt）、替换自身二进制并退出，由 systemd（`Restart=always`）拉起新版本。`dev` 编译版本不参与自动更新，但可手动 `gitdash update`。
 
+## Docker 部署
+
+```bash
+docker compose up -d --build
+# Web http://localhost:8080 ，Git SSH localhost:2222
+```
+
+- 数据（SQLite + bare 仓库 + SSH host key）持久化在 Docker volume `gitdash-data`（容器内 `/data`）。
+- 监听端口 / 自动更新通过 `docker-compose.yml` 的 `environment` 调整。
+- 也可直接构建镜像：`docker build -t gitdash .`，挂载 `-v gitdash-data:/data -p 8080:8080 -p 2222:2222`。
+
+## 备份与恢复
+
+```bash
+# 在线备份（SQLite 一致性快照 + 仓库打包，保留最近 14 份）
+bash scripts/backup.sh ./data ./backups
+# KEEP=30 bash scripts/backup.sh   # 保留更多份
+```
+
+恢复：停掉服务，把备份解包回数据目录（`tar -xzf gitdash-backup-*.tar.gz -C <数据目录>`），再启动即可。
+若宿主机没有 `sqlite3`，脚本会用直接拷贝兜底（WAL 模式建议先停服保证一致性）；Docker 内亦可 `docker compose exec gitdash bash` 执行同款脚本。
+
 ## 自动化测试
 
 后端集成测试（Go）：
