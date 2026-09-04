@@ -44,6 +44,16 @@ type Repo struct {
 	Starred   bool   `json:"starred"`
 	ForkOwner string `json:"fork_owner,omitempty"`
 	ForkRepo  string `json:"fork_repo,omitempty"`
+	ImportURL string `json:"import_url,omitempty"`
+}
+
+// Mirror 仓库 push 镜像目标（同步到 GitHub/GitLab 等第三方）。
+type Mirror struct {
+	Owner      string `json:"owner"`
+	Repo       string `json:"repo"`
+	URL        string `json:"url"`
+	PrivateKey string `json:"-"` // 认证私钥，不回传
+	CreatedAt  string `json:"created_at"`
 }
 
 type SSHKey struct {
@@ -325,6 +335,21 @@ CREATE TABLE IF NOT EXISTS repo_forks (
 	source_owner TEXT NOT NULL,
 	source_repo  TEXT NOT NULL,
 	created_at   TEXT NOT NULL,
+	PRIMARY KEY (owner, repo)
+);
+CREATE TABLE IF NOT EXISTS repo_imports (
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	source_url TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (owner, repo)
+);
+CREATE TABLE IF NOT EXISTS repo_mirrors (
+	owner       TEXT NOT NULL,
+	repo        TEXT NOT NULL,
+	url         TEXT NOT NULL,
+	private_key TEXT NOT NULL DEFAULT '',
+	created_at  TEXT NOT NULL,
 	PRIMARY KEY (owner, repo)
 );
 CREATE TABLE IF NOT EXISTS gpg_keys (
@@ -630,6 +655,12 @@ func (s *Store) DeleteRepo(owner, name string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_forks WHERE source_owner = ? AND source_repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_imports WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_mirrors WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
@@ -1624,6 +1655,55 @@ func (s *Store) ForkSource(owner, repo string) (string, string, error) {
 		return "", "", nil
 	}
 	return so, sr, err
+}
+
+// ---- imports ----
+
+// SetImportSource 记录仓库的导入来源 URL。
+func (s *Store) SetImportSource(owner, repo, url string) error {
+	_, err := s.db.Exec(`INSERT INTO repo_imports (owner, repo, source_url, created_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(owner, repo) DO UPDATE SET source_url = excluded.source_url`,
+		owner, repo, url, now())
+	return err
+}
+
+// ImportSource 返回导入来源 URL；非导入仓库返回空串。
+func (s *Store) ImportSource(owner, repo string) (string, error) {
+	var u string
+	err := s.db.QueryRow(`SELECT source_url FROM repo_imports WHERE owner = ? AND repo = ?`, owner, repo).Scan(&u)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return u, err
+}
+
+// ---- mirrors ----
+
+// SetMirror 配置仓库的 push 镜像目标（覆盖式）。
+func (s *Store) SetMirror(owner, repo, url, privateKey string) error {
+	_, err := s.db.Exec(`INSERT INTO repo_mirrors (owner, repo, url, private_key, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(owner, repo) DO UPDATE SET url = excluded.url, private_key = excluded.private_key`,
+		owner, repo, url, privateKey, now())
+	return err
+}
+
+// GetMirror 返回镜像配置；未配置返回空 URL。
+func (s *Store) GetMirror(owner, repo string) (Mirror, error) {
+	var m Mirror
+	err := s.db.QueryRow(`SELECT owner, repo, url, private_key, created_at FROM repo_mirrors WHERE owner = ? AND repo = ?`, owner, repo).
+		Scan(&m.Owner, &m.Repo, &m.URL, &m.PrivateKey, &m.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Mirror{Owner: owner, Repo: repo}, nil
+	}
+	return m, err
+}
+
+// DeleteMirror 移除镜像配置。
+func (s *Store) DeleteMirror(owner, repo string) error {
+	_, err := s.db.Exec(`DELETE FROM repo_mirrors WHERE owner = ? AND repo = ?`, owner, repo)
+	return err
 }
 
 // ---- orgs (namespace) ----

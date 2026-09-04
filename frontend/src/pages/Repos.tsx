@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Copy, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
+import { Copy, Download, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
 import { api, cloneCommand, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -45,6 +46,12 @@ export default function Repos() {
   const [busy, setBusy] = useState(false);
   const [collabRepo, setCollabRepo] = useState<Repo | null>(null);
   const [hookRepo, setHookRepo] = useState<Repo | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importName, setImportName] = useState("");
+  const [importPrivate, setImportPrivate] = useState(true);
+  const [importKey, setImportKey] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -85,6 +92,33 @@ export default function Repos() {
     }
   };
 
+  const doImport = async () => {
+    if (!importUrl.trim()) {
+      toast.error(t("imports.urlRequired"));
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const repo = await api.importRepo({
+        url: importUrl.trim(),
+        name: importName.trim() || undefined,
+        private: importPrivate,
+        private_key: importKey.trim() || undefined,
+      });
+      toast.success(t("imports.imported", { name: repo.name }));
+      setImportOpen(false);
+      setImportUrl("");
+      setImportName("");
+      setImportPrivate(true);
+      setImportKey("");
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   const remove = async (repo: Repo) => {
     if (!window.confirm(t("repos.confirmDelete", { name: repo.name }))) return;
     try {
@@ -107,13 +141,18 @@ export default function Repos() {
           <h1 className="text-2xl font-bold">{t("repos.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("repos.subtitle")}</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2 sm:self-start">
-              <Plus className="h-4 w-4" />
-              {t("repos.new")}
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2 sm:self-start">
+          <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+            <Download className="h-4 w-4" />
+            {t("imports.import")}
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                {t("repos.new")}
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{t("repos.new")}</DialogTitle>
@@ -157,7 +196,8 @@ export default function Repos() {
               </Button>
             </DialogFooter>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "repos" | "starred")}>
@@ -297,6 +337,63 @@ export default function Repos() {
         owner={hookRepo?.owner ?? ""}
         repo={hookRepo?.name ?? ""}
       />
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("imports.importTitle")}</DialogTitle>
+            <DialogDescription>{t("imports.importDescription")}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="import-url">{t("imports.urlLabel")}</Label>
+              <Input
+                id="import-url"
+                placeholder="https://github.com/owner/repo.git"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="import-name">{t("imports.nameLabel")}</Label>
+              <Input
+                id="import-name"
+                placeholder={t("common.optional")}
+                value={importName}
+                onChange={(e) => setImportName(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="import-private"
+                type="checkbox"
+                checked={importPrivate}
+                onChange={(e) => setImportPrivate(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="import-private" className="text-sm font-normal">
+                {t("imports.privateLabel")}
+              </Label>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="import-key">{t("imports.keyLabel")}</Label>
+              <Textarea
+                id="import-key"
+                rows={4}
+                placeholder={t("imports.keyPlaceholder")}
+                value={importKey}
+                onChange={(e) => setImportKey(e.target.value)}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">{t("imports.keyHint")}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={doImport} disabled={importBusy || !importUrl.trim()}>
+              {t("imports.import")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

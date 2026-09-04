@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
 )
 
@@ -68,7 +69,17 @@ func drain(spoolDir string, st *store.Store) {
 				post(h.URL, ev, h.Secret)
 			}
 		}
+		// push mirror 自动同步（异步，避免阻塞 webhook 投递）
+		if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
+			go syncMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey)
+		}
 		_ = os.Remove(f)
+	}
+}
+
+func syncMirror(owner, repo, url, privateKey string) {
+	if err := gitsvc.PushMirror(owner, repo, url, privateKey); err != nil {
+		log.Printf("mirror: sync %s/%s -> %s: %v", owner, repo, url, err)
 	}
 }
 

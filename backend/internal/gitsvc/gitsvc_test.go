@@ -1,6 +1,10 @@
 package gitsvc
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestValidName(t *testing.T) {
 	cases := []struct {
@@ -90,5 +94,60 @@ func TestForkRepoPreservesRefs(t *testing.T) {
 	// 源仓库不受影响
 	if !Exists("alice", "src") {
 		t.Fatal("source repo should still exist")
+	}
+}
+
+func TestImportRepoFromLocalPath(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "upstream"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitReadme("alice", "upstream"); err != nil {
+		t.Fatal(err)
+	}
+	// 从本地 bare 路径导入（模拟远程 URL）
+	if err := ImportRepo(RepoPath("alice", "upstream"), "bob", "imported", ""); err != nil {
+		t.Fatal(err)
+	}
+	if !Exists("bob", "imported") {
+		t.Fatal("imported repo should exist on disk")
+	}
+	bs, err := Branches("bob", "imported")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bs) != 1 || bs[0].Name != "main" {
+		t.Fatalf("imported branches = %+v, want [main]", bs)
+	}
+}
+
+func TestPushMirror(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitReadme("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	// 目标：一个空 bare 仓库（模拟第三方远程）
+	target := filepath.Join(t.TempDir(), "remote.git")
+	if _, err := gitOut("", "init", "--bare", "--initial-branch=main", target); err != nil {
+		t.Fatal(err)
+	}
+	if err := PushMirror("alice", "src", target, ""); err != nil {
+		t.Fatal(err)
+	}
+	out, err := gitOut(target, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "main") {
+		t.Fatalf("target branches = %q, want main", out)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -187,11 +188,18 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
 
-	// star & fork
+	// star & fork & import
 	mux.HandleFunc("GET /api/starred", a.auth(a.listStarred))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/star", a.auth(a.starRepo))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/star", a.auth(a.unstarRepo))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/fork", a.auth(a.forkRepo))
+	mux.HandleFunc("POST /api/imports", a.auth(a.importRepo))
+
+	// push mirror（同步到第三方）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/mirror", a.auth(a.getMirror))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/mirror", a.auth(a.setMirror))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/mirror", a.auth(a.deleteMirror))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/mirror/sync", a.auth(a.syncMirror))
 
 	// issues
 	mux.HandleFunc("GET /api/repos/{name}/issues", a.auth(a.listIssues))
@@ -1583,6 +1591,9 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	if fo, fr, err := a.store.ForkSource(owner, name); err == nil {
 		repo.ForkOwner, repo.ForkRepo = fo, fr
 	}
+	if iu, err := a.store.ImportSource(owner, name); err == nil {
+		repo.ImportURL = iu
+	}
 	writeJSON(w, http.StatusOK, repo)
 }
 
@@ -1691,6 +1702,261 @@ func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, repo)
+}
+
+// ---- import ----
+
+// validImportURL 校验导入地址并返回规范化后的 URL（http/https/ssh/scp-like）。
+func validImportURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("empty url")
+	}
+	switch {
+	case strings.HasPrefix(raw, "http://"), strings.HasPrefix(raw, "https://"):
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" {
+			return "", fmt.Errorf("invalid http url")
+		}
+		if importHostBlocked(u) {
+			return "", fmt.Errorf("blocked host")
+		}
+		return raw, nil
+	case strings.HasPrefix(raw, "ssh://"):
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" {
+			return "", fmt.Errorf("invalid ssh url")
+		}
+		if importHostBlocked(u) {
+			return "", fmt.Errorf("blocked host")
+		}
+		return raw, nil
+	case strings.HasPrefix(raw, "git://"):
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" {
+			return "", fmt.Errorf("invalid git url")
+		}
+		// git:// 明文且无认证：仅允许回环/内网（本地测试 / 内网 Git 服务器）
+		if importHostBlocked(u) || !importHostLoopbackOrPrivate(u) {
+			return "", fmt.Errorf("git:// only allowed for loopback/private hosts")
+		}
+		return raw, nil
+	default:
+		// scp-like: git@host:path（无 :// 前缀）
+		if strings.Contains(raw, "@") && strings.Contains(raw, ":") {
+			return raw, nil
+		}
+		return "", fmt.Errorf("unsupported url scheme")
+	}
+}
+
+// importHostBlocked 防 SSRF：阻止 link-local / 云元数据网段。
+func importHostBlocked(u *url.URL) bool {
+	host := u.Hostname()
+	if host == "" {
+		return true
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true
+	}
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			continue
+		}
+		addr = addr.Unmap()
+		if addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
+			return true
+		}
+		s := addr.String()
+		if addr.IsPrivate() && strings.HasPrefix(s, "169.254.") {
+			return true
+		}
+		if s == "100.100.100.200" {
+			return true
+		}
+	}
+	return false
+}
+
+func importHostLoopbackOrPrivate(u *url.URL) bool {
+	host := u.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if ok {
+			addr = addr.Unmap()
+			if addr.IsLoopback() || addr.IsPrivate() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// repoNameFromURL 从仓库 URL 推断默认名称（去 .git 后缀取最后一段）。
+func repoNameFromURL(raw string) string {
+	if u, err := url.Parse(raw); err == nil && u.Path != "" && u.Path != "/" {
+		p := strings.TrimSuffix(strings.TrimSuffix(u.Path, "/"), ".git")
+		if i := strings.LastIndex(p, "/"); i >= 0 {
+			p = p[i+1:]
+		}
+		return p
+	}
+	// scp-like fallback: git@host:owner/repo.git
+	s := raw
+	if i := strings.LastIndex(s, ":"); i >= 0 {
+		s = s[i+1:]
+	}
+	s = strings.TrimSuffix(strings.TrimSuffix(s, "/"), ".git")
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
+}
+
+func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		URL        string `json:"url"`
+		Name       string `json:"name"`
+		Namespace  string `json:"namespace"`
+		Private    *bool  `json:"private"`
+		PrivateKey string `json:"private_key"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	raw, err := validImportURL(in.URL)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_url", "URL must be a valid http(s)/ssh/git repository URL")
+		return
+	}
+	me := userFrom(r)
+	targetOwner := me
+	if ns := strings.TrimSpace(in.Namespace); ns != "" && ns != me {
+		if !a.store.IsOrg(ns) || a.store.OrgRole(ns, me) == "" {
+			writeCode(w, http.StatusForbidden, "org_forbidden", "you are not a member of this organization")
+			return
+		}
+		targetOwner = ns
+	}
+	targetName := strings.TrimSpace(in.Name)
+	if targetName == "" {
+		targetName = repoNameFromURL(raw)
+	}
+	if !gitsvc.ValidName(targetName) {
+		writeCode(w, http.StatusBadRequest, "repo_name_invalid", "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
+		return
+	}
+	if _, err := a.store.GetRepo(targetOwner, targetName); err == nil || gitsvc.Exists(targetOwner, targetName) {
+		writeCode(w, http.StatusConflict, "repo_exists", "repo already exists")
+		return
+	}
+	private := true
+	if in.Private != nil {
+		private = *in.Private
+	}
+	repo, err := a.store.CreateRepo(targetOwner, targetName, "", private)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := gitsvc.ImportRepo(raw, targetOwner, targetName, in.PrivateKey); err != nil {
+		_ = a.store.DeleteRepo(targetOwner, targetName)
+		writeCode(w, http.StatusBadRequest, "import_failed", err.Error())
+		return
+	}
+	if err := a.store.SetImportSource(targetOwner, targetName, raw); err != nil {
+		_ = a.store.DeleteRepo(targetOwner, targetName)
+		_ = gitsvc.Delete(targetOwner, targetName)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, repo)
+}
+
+// ---- push mirror ----
+
+func (a *API) getMirror(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	m, err := a.store.GetMirror(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"url":        m.URL,
+		"created_at": m.CreatedAt,
+	})
+}
+
+func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		URL        string `json:"url"`
+		PrivateKey string `json:"private_key"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	raw, err := validImportURL(in.URL)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_url", "URL must be a valid http(s)/ssh/git repository URL")
+		return
+	}
+	if err := a.store.SetMirror(owner, name, raw, strings.TrimSpace(in.PrivateKey)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	m, err := a.store.GetMirror(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"url": m.URL, "created_at": m.CreatedAt})
+}
+
+func (a *API) deleteMirror(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	if err := a.store.DeleteMirror(owner, name); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	m, err := a.store.GetMirror(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if m.URL == "" {
+		writeCode(w, http.StatusBadRequest, "mirror_not_configured", "no mirror target configured")
+		return
+	}
+	if err := gitsvc.PushMirror(owner, name, m.URL, m.PrivateKey); err != nil {
+		writeCode(w, http.StatusBadGateway, "mirror_sync_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {

@@ -270,6 +270,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify(opts ?? {}),
     }),
+  importRepo: (opts: {
+    url: string;
+    name?: string;
+    namespace?: string;
+    private?: boolean;
+    private_key?: string;
+  }) =>
+    req<Repo>("/imports", {
+      method: "POST",
+      body: JSON.stringify(opts),
+    }),
+
+  // push mirror（同步到第三方）
+  getMirror: (owner: string, name: string) =>
+    req<{ url: string; created_at: string }>(`/users/${owner}/repos/${name}/mirror`),
+  setMirror: (owner: string, name: string, url: string, privateKey?: string) =>
+    req<{ url: string; created_at: string }>(`/users/${owner}/repos/${name}/mirror`, {
+      method: "PUT",
+      body: JSON.stringify({ url, private_key: privateKey ?? "" }),
+    }),
+  deleteMirror: (owner: string, name: string) =>
+    req<null>(`/users/${owner}/repos/${name}/mirror`, { method: "DELETE" }),
+  syncMirror: (owner: string, name: string) =>
+    req<{ ok: boolean }>(`/users/${owner}/repos/${name}/mirror/sync`, { method: "POST" }),
 
   // git browsing
   branches: (owner: string, name: string) =>

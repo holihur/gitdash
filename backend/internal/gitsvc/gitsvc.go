@@ -82,6 +82,26 @@ func gitOut(dir string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+// gitOutEnv 与 gitOut 相同，但额外注入环境变量（如导入私有仓库时指定临时 SSH 私钥）。
+func gitOutEnv(env []string, dir string, args ...string) (string, error) {
+	if dir != "" {
+		args = append([]string{"-C", dir}, args...)
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Env = append(os.Environ(), env...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
+	}
+	return stdout.String(), nil
+}
+
 func CreateBare(owner, name string) error {
 	if !ValidName(owner) || !ValidName(name) {
 		return fmt.Errorf("invalid repo %s/%s", owner, name)
@@ -152,6 +172,83 @@ func ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 	// mirror clone 不继承源 hooks；重新安装 post-receive 并放开默认分支删除限制
 	_, _ = gitOut(dst, "config", "receive.denyDeleteCurrent", "ignore")
 	return installPostReceiveHook(dst, targetOwner, targetName)
+}
+
+// ImportRepo 从远程 URL 镜像导入仓库到目标路径（保留全部分支/标签）。
+// privateKey 非空时用于 SSH 认证（专用导入 key，如 GitHub/GitLab 的只读 deploy key）。
+func ImportRepo(url, targetOwner, targetName, privateKey string) error {
+	if !ValidName(targetOwner) || !ValidName(targetName) {
+		return fmt.Errorf("invalid target repo")
+	}
+	dst := RepoPath(targetOwner, targetName)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	var env []string
+	if strings.TrimSpace(privateKey) != "" {
+		keyPath, err := writeTempImportKey(privateKey)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(keyPath)
+		env = append(env,
+			"GIT_SSH_COMMAND=ssh -i '"+strings.ReplaceAll(keyPath, "'", "'\\''")+"' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
+		)
+	}
+	if _, err := gitOutEnv(env, "", "clone", "--mirror", "--quiet", url, dst); err != nil {
+		_ = os.RemoveAll(dst)
+		return err
+	}
+	_, _ = gitOut(dst, "config", "receive.denyDeleteCurrent", "ignore")
+	return installPostReceiveHook(dst, targetOwner, targetName)
+}
+
+// PushMirror 把仓库的全部 refs 推送到远程镜像目标（同步到 GitHub/GitLab 等）。
+func PushMirror(owner, name, url, privateKey string) error {
+	if !ValidName(owner) || !ValidName(name) {
+		return fmt.Errorf("invalid repo")
+	}
+	path := RepoPath(owner, name)
+	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
+		return fmt.Errorf("repo %s/%s not on disk", owner, name)
+	}
+	var env []string
+	if strings.TrimSpace(privateKey) != "" {
+		keyPath, err := writeTempImportKey(privateKey)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(keyPath)
+		env = append(env,
+			"GIT_SSH_COMMAND=ssh -i '"+strings.ReplaceAll(keyPath, "'", "'\\''")+"' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
+		)
+	}
+	_, err := gitOutEnv(env, path, "push", "--mirror", url)
+	return err
+}
+
+// writeTempImportKey 把导入私钥写入临时文件（0600），调用方负责删除。
+func writeTempImportKey(privateKey string) (string, error) {
+	f, err := os.CreateTemp("", "gitdash-import-key-*")
+	if err != nil {
+		return "", err
+	}
+	path := f.Name()
+	if _, err := f.WriteString(strings.TrimSpace(privateKey) + "\n"); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return "", err
+	}
+	if err := f.Chmod(0o600); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	return path, nil
 }
 
 type Branch struct {

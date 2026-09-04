@@ -18,6 +18,7 @@ import {
   Tag as TagIcon,
   MoreVertical,
   Pencil,
+  RefreshCw,
   Trash2,
 } from "lucide-react";
 import { api, cloneCommand, type Blob, type Branch, type Commit, type PullDiff, type Repo, type Tag, type TreeEntry } from "@/lib/api";
@@ -58,6 +59,7 @@ import { MarkdownView } from "@/components/markdown";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
 import CodeMirrorEditor from "@/components/code-editor";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
+import MirrorDialog from "@/components/mirror-dialog";
 import RefsDialog from "@/components/refs-dialog";
 import RepoIssues from "@/pages/RepoIssues";
 import RepoPulls from "@/pages/RepoPulls";
@@ -105,6 +107,7 @@ export default function RepoView() {
   const [forkOpen, setForkOpen] = useState(false);
   const [forkName, setForkName] = useState("");
   const [forkBusy, setForkBusy] = useState(false);
+  const [mirrorOpen, setMirrorOpen] = useState(false);
   const navigate = useNavigate();
   const currentDir = path.join("/");
   const refreshRefs = useCallback(async () => {
@@ -356,6 +359,16 @@ export default function RepoView() {
           <Button variant="outline" size="sm" className="gap-1.5" onClick={openFork}>
             <GitFork className="h-4 w-4" />
             {t("social.fork")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            title={t("mirror.title")}
+            onClick={() => setMirrorOpen(true)}
+          >
+            <RefreshCw className="h-4 w-4" />
+            {t("mirror.sync")}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -814,6 +827,12 @@ export default function RepoView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <MirrorDialog
+        open={mirrorOpen}
+        onOpenChange={setMirrorOpen}
+        owner={owner}
+        repo={name}
+      />
     </div>
   );
 }
