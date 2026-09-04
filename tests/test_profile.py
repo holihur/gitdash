@@ -138,3 +138,17 @@ def test_mfa_endpoints_require_auth(anon):
     anon.get("/me/mfa", expect=401)
     anon.post("/me/mfa/enroll", expect=401)
     anon.post("/me/password", json={}, expect=401)
+
+
+def test_mfa_verify_attempt_limit(user):
+    _, _, c = user
+    username = c.get("/me", expect=200).json()["username"]
+    e = c.post("/me/mfa/enroll", expect=200).json()
+    secret = e["secret"]
+    c.post("/me/mfa/activate", json={"code": _totp(secret)}, expect=204)
+    tok = c.post("/auth/login", json={"username": username, "password": "test-pass-123456"}, expect=200).json()["mfa_token"]
+    for _ in range(4):
+        c.post("/auth/mfa-verify", json={"mfa_token": tok, "code": "000000"}, expect=401)
+    # 第 5 次错误触发锁定并销毁挑战
+    c.post("/auth/mfa-verify", json={"mfa_token": tok, "code": "000000"}, expect=429)
+    c.post("/auth/mfa-verify", json={"mfa_token": tok, "code": _totp(secret)}, expect=401)

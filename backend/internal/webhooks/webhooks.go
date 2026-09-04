@@ -5,9 +5,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
+	"net/netip"
+	urlpkg "net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gitdash/backend/internal/store"
@@ -65,9 +69,43 @@ func drain(spoolDir string, st *store.Store) {
 	}
 }
 
+// blockedLinkLocal 防 SSRF：不允许投递到 link-local / 云元数据网段。
+func blockedLinkLocal(u *urlpkg.URL) bool {
+	host := u.Hostname()
+	if host == "" {
+		return false
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true // 无法解析视为不可达，跳过避免误投递
+	}
+	for _, ip := range ips {
+		addr, ok := netip.AddrFromSlice(ip)
+		if !ok {
+			continue
+		}
+		addr = addr.Unmap()
+		if addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
+			return true
+		}
+		if addr.IsPrivate() && strings.HasPrefix(addr.String(), "169.254.") {
+			return true
+		}
+		if addr.String() == "100.100.100.200" {
+			return true
+		}
+	}
+	return false
+}
+
 func post(url string, ev Event) {
 	body, err := json.Marshal(ev)
 	if err != nil {
+		return
+	}
+	u, perr := urlpkg.Parse(url)
+	if perr != nil || blockedLinkLocal(u) {
+		log.Printf("webhook: blocked delivery to %q (ssrf guard)", url)
 		return
 	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))

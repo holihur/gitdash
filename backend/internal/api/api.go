@@ -46,6 +46,7 @@ type API struct {
 type mfaChallenge struct {
 	username string
 	expires  time.Time
+	attempts int
 }
 
 func New(s *store.Store, version string) *API {
@@ -166,7 +167,21 @@ func (a *API) Handler(staticDir string) http.Handler {
 		mux.HandleFunc("/", a.embeddedHandler())
 	}
 
-	return logMiddleware(mux)
+	return secureHeaders(logMiddleware(mux))
+}
+
+// secureHeaders 基础安全响应头（CSP 允许内联主题脚本，其 sha256 随 index.html 保持同步）。
+func secureHeaders(next http.Handler) http.Handler {
+	csp := "default-src 'self'; script-src 'self' 'sha256-3ErQTYhfRUcdQMKUwZWjeUj+0gLQwEdW3gtvOjOALlg='; " +
+		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; " +
+		"font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", csp)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ---- auth ----
@@ -326,6 +341,19 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+		a.mu.Lock()
+		ch.attempts++
+		expired := ch.attempts >= 5
+		if expired {
+			delete(a.mfaPending, in.MFAToken)
+		} else {
+			a.mfaPending[in.MFAToken] = ch
+		}
+		a.mu.Unlock()
+		if expired {
+			writeCode(w, http.StatusTooManyRequests, "mfa_too_many_attempts", "too many attempts, sign in again")
+			return
+		}
 		writeCode(w, http.StatusUnauthorized, "invalid_mfa_code", "invalid authenticator code")
 		return
 	}
@@ -380,6 +408,10 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	if err := a.store.UpdatePassword(ua.Username, string(hash)); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// 改密后撤销其它会话，仅保留当前会话
+	if tok := bearerToken(r); tok != "" {
+		_ = a.store.DeleteSessionsExcept(ua.Username, tok)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

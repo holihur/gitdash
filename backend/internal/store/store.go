@@ -404,6 +404,13 @@ func (s *Store) DeleteSession(token string) error {
 	return err
 }
 
+// DeleteSessionsExcept 撤销用户除 keepToken 外的全部会话（改密/安全操作后调用）。
+func (s *Store) DeleteSessionsExcept(username, keepToken string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = ?) AND token <> ?`,
+		username, keepToken)
+	return err
+}
+
 // ---- user profile & mfa ----
 
 func (s *Store) UpdatePassword(username, passwordHash string) error {

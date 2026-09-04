@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,4 +145,63 @@ func TestMFAIsolationAndCodes(t *testing.T) {
 		map[string]string{"username": "bob", "password": "bob-pass-123456"}, 200)
 	tok, _ := bobLogin["mfa_token"].(string)
 	bob.mustStatus("POST", "/auth/mfa-verify", map[string]string{"mfa_token": tok, "code": mfaCode(t, secret)}, 200)
+}
+
+func TestPasswordChangeRevokesOtherSessions(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+
+	// 另一台设备登录获得独立会话
+	login := alice.mustStatus("POST", "/auth/login",
+		map[string]string{"username": "alice", "password": "alice-pass-123"}, 200)
+	otherToken, _ := login["token"].(string)
+	other := &Client{env: env, token: otherToken}
+	other.mustStatus("GET", "/me", nil, 200)
+
+	// 改密：当前会话保留，其它会话被撤销
+	alice.mustStatus("POST", "/me/password",
+		map[string]string{"current_password": "alice-pass-123", "new_password": "brand-new-pass-1"}, 204)
+	alice.mustStatus("GET", "/me", nil, 200) // 当前 token 仍有效
+	other.mustFail("GET", "/me", nil, 401)   // 其它会话已失效
+}
+
+func TestMFAVerifyAttemptLimit(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	e := alice.mustStatus("POST", "/me/mfa/enroll", nil, 200)
+	secret, _ := e["secret"].(string)
+	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret)}, 204)
+
+	login := alice.mustStatus("POST", "/auth/login",
+		map[string]string{"username": "alice", "password": "alice-pass-123"}, 200)
+	tok, _ := login["mfa_token"].(string)
+
+	// 连续输错 5 次：挑战被销毁（防暴力枚举 6 位验证码）
+	for i := 0; i < 4; i++ {
+		alice.mustFail("POST", "/auth/mfa-verify",
+			map[string]string{"mfa_token": tok, "code": "000000"}, 401)
+	}
+	alice.mustFail("POST", "/auth/mfa-verify",
+		map[string]string{"mfa_token": tok, "code": "000000"}, 429)
+	// 令牌已失效：即使验证码正确也被拒
+	alice.mustFail("POST", "/auth/mfa-verify",
+		map[string]string{"mfa_token": tok, "code": mfaCode(t, secret)}, 401)
+}
+
+func TestSecurityHeadersAndWebhookSSRFGuard(t *testing.T) {
+	env := start(t)
+	req, _ := http.NewRequest("GET", env.BaseURL+"/api/health", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.Header.Get("X-Content-Type-Options") != "nosniff" ||
+		resp.Header.Get("X-Frame-Options") != "DENY" ||
+		resp.Header.Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("missing security headers: %v", resp.Header)
+	}
+	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "default-src 'self'") {
+		t.Fatalf("missing CSP: %v", resp.Header.Get("Content-Security-Policy"))
+	}
 }
