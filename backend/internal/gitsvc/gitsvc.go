@@ -168,6 +168,7 @@ type Entry struct {
 	ModifiedAt  string `json:"modified_at,omitempty"`
 	ModifiedBy  string `json:"modified_by,omitempty"`
 	ModifiedMsg string `json:"modified_msg,omitempty"`
+	LastCommit  string `json:"last_commit,omitempty"`
 }
 
 func Tree(owner, name, ref, dir string) ([]Entry, error) {
@@ -206,25 +207,28 @@ func Tree(owner, name, ref, dir string) ([]Entry, error) {
 		size, _ := strconv.ParseInt(fields[3], 10, 64)
 		entries = append(entries, Entry{Name: file, Type: fields[1], Mode: fields[0], Size: size, SHA: fields[2]})
 	}
-	// 每个条目的最后修改信息：最后一次触碰该路径的提交时间/作者/说明
+	// 每个条目的最后变更提交：sha/时间/作者/说明（一次 git log 每项）
 	for i := range entries {
 		p := entries[i].Name
 		if dir != "" {
 			p = dir + "/" + p
 		}
-		out, err := gitOut(path, "log", "-1", "--pretty=format:%cI%x1f%an%x1f%s", ref, "--", p)
+		out, err := gitOut(path, "log", "-1", "--pretty=format:%H%x1f%cI%x1f%an%x1f%s", ref, "--", p)
 		if err != nil {
 			continue
 		}
-		parts := strings.SplitN(strings.TrimSpace(out), "\x1f", 3)
+		parts := strings.SplitN(strings.TrimSpace(out), "\x1f", 4)
 		if len(parts) >= 1 && parts[0] != "" {
-			entries[i].ModifiedAt = parts[0]
+			entries[i].LastCommit = parts[0]
 		}
 		if len(parts) >= 2 {
-			entries[i].ModifiedBy = parts[1]
+			entries[i].ModifiedAt = parts[1]
 		}
 		if len(parts) >= 3 {
-			entries[i].ModifiedMsg = parts[2]
+			entries[i].ModifiedBy = parts[2]
+		}
+		if len(parts) >= 4 {
+			entries[i].ModifiedMsg = parts[3]
 		}
 	}
 	return entries, nil

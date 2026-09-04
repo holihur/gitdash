@@ -84,6 +84,7 @@ export default function RepoView() {
   const [tab, setTab] = useState("code");
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
+  const [readmeContent, setReadmeContent] = useState<string | null>(null);
   const [fileOp, setFileOp] = useState<FileOp | null>(null);
   const [loadTick, setLoadTick] = useState(0);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -139,6 +140,27 @@ export default function RepoView() {
   useEffect(() => {
     loadTree();
   }, [loadTree]);
+
+  // 目录 README：列表底部渲染
+  const readmeEntry = entries.find(
+    (e) => e.type === "blob" && /^readme(\..+)?$/i.test(e.name),
+  );
+  useEffect(() => {
+    let alive = true;
+    if (!ref || blob || !readmeEntry) {
+      setReadmeContent(null);
+      return;
+    }
+    const full = currentDir ? currentDir + "/" + readmeEntry.name : readmeEntry.name;
+    api
+      .blob(owner, name, ref, full)
+      .then((b) => alive && b.encoding === "utf-8" && setReadmeContent(b.content))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ref, entries, blob, owner, name, currentDir]);
 
   useEffect(() => {
     if (tab !== "commits" || !ref) return;
@@ -571,6 +593,18 @@ export default function RepoView() {
                   )}
                 </TableBody>
               </Table>
+            </div>
+          )}
+
+          {!emptyRepo && !error && !blob && readmeContent !== null && readmeEntry && (
+            <div className="rounded-lg border bg-card">
+              <div className="flex items-center gap-2 border-b px-4 py-2">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-muted-foreground">{readmeEntry.name}</span>
+              </div>
+              <div className="max-h-[60vh] overflow-auto p-4">
+                <MarkdownView text={readmeContent} />
+              </div>
             </div>
           )}
         </TabsContent>

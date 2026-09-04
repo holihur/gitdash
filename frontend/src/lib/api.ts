@@ -87,6 +87,7 @@ export interface TreeEntry {
   modified_at?: string;
   modified_by?: string;
   modified_msg?: string;
+  last_commit?: string;
 }
 
 export interface Blob {
