@@ -25,8 +25,11 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 export default function Keys() {
+  const { t, lang } = useI18n();
+  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [keys, setKeys] = useState<SSHKey[]>([]);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -49,7 +52,7 @@ export default function Keys() {
     setBusy(true);
     try {
       await api.createKey(name.trim(), publicKey.trim());
-      toast.success(`SSH Key ${name.trim()} 已添加`);
+      toast.success(t("keys.added", { name: name.trim() }));
       setOpen(false);
       setName("");
       setPublicKey("");
@@ -62,10 +65,10 @@ export default function Keys() {
   };
 
   const remove = async (key: SSHKey) => {
-    if (!window.confirm(`删除 SSH Key ${key.name}？该 key 将无法再通过 SSH 访问。`)) return;
+    if (!window.confirm(t("keys.confirmDelete", { name: key.name }))) return;
     try {
       await api.deleteKey(key.id);
-      toast.success("已删除");
+      toast.success(t("keys.deleted"));
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -74,42 +77,41 @@ export default function Keys() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">SSH Keys</h1>
-          <p className="text-sm text-muted-foreground">
-            在这里添加公钥后，即可用对应私钥通过 SSH 操作仓库（clone / push）。
-          </p>
+          <h1 className="text-2xl font-bold">{t("keys.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("keys.subtitle")}</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2 sm:self-start">
               <Plus className="h-4 w-4" />
-              添加 Key
+              {t("keys.add")}
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle>添加 SSH 公钥</DialogTitle>
+              <DialogTitle>{t("keys.addTitle")}</DialogTitle>
               <DialogDescription>
-                粘贴 openssh 格式的公钥，例如 <code>ssh-ed25519 AAAA... user@host</code>
+                {t("keys.addDescription")}{" "}
+                <code>ssh-ed25519 AAAA... user@host</code>
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="key-name">备注名称</Label>
+                <Label htmlFor="key-name">{t("keys.name")}</Label>
                 <Input
                   id="key-name"
-                  placeholder="my laptop"
+                  placeholder={t("keys.namePlaceholder")}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="key-pub">公钥</Label>
+                <Label htmlFor="key-pub">{t("keys.publicKey")}</Label>
                 <Textarea
                   id="key-pub"
-                  placeholder="ssh-ed25519 AAAAC3Nza..."
+                  placeholder={t("keys.publicKeyPlaceholder")}
                   className="min-h-32 font-mono text-xs"
                   value={publicKey}
                   onChange={(e) => setPublicKey(e.target.value)}
@@ -118,7 +120,7 @@ export default function Keys() {
             </div>
             <DialogFooter>
               <Button onClick={create} disabled={busy || !name.trim() || !publicKey.trim()}>
-                添加
+                {t("common.add")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -126,20 +128,20 @@ export default function Keys() {
       </div>
 
       {keys.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 px-4 text-center">
           <KeyRound className="h-10 w-10 text-muted-foreground" />
-          <p className="font-medium">还没有 SSH Key</p>
-          <p className="text-sm text-muted-foreground">添加公钥后才能通过 SSH 访问仓库。</p>
+          <p className="font-medium">{t("keys.empty")}</p>
+          <p className="text-sm text-muted-foreground">{t("keys.emptyHint")}</p>
         </div>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
+        <div className="overflow-x-auto rounded-lg border">
+          <Table className="min-w-[680px]">
             <TableHeader>
               <TableRow>
-                <TableHead>名称</TableHead>
-                <TableHead>指纹 (SHA256)</TableHead>
-                <TableHead>公钥类型</TableHead>
-                <TableHead>添加时间</TableHead>
+                <TableHead>{t("keys.name")}</TableHead>
+                <TableHead>{t("keys.fingerprint")}</TableHead>
+                <TableHead>{t("keys.keyType")}</TableHead>
+                <TableHead>{t("keys.addedAt")}</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
@@ -152,7 +154,7 @@ export default function Keys() {
                     <Badge variant="secondary">{key.public_key.split(" ")[0]}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(key.created_at)}
+                    {formatDate(key.created_at, locale)}
                   </TableCell>
                   <TableCell>
                     <Button

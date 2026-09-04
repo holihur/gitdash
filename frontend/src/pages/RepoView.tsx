@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate, formatSize } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
   return (
@@ -46,6 +47,8 @@ function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
 }
 
 export default function RepoView() {
+  const { t, lang } = useI18n();
+  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const { owner = "", name = "" } = useParams();
   const [repo, setRepo] = useState<Repo | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -58,9 +61,12 @@ export default function RepoView() {
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
 
-  const copy = useCallback((text: string) => {
-    navigator.clipboard.writeText(text).then(() => toast.success("已复制"));
-  }, []);
+  const copy = useCallback(
+    (text: string) => {
+      navigator.clipboard.writeText(text).then(() => toast.success(t("common.copied")));
+    },
+    [t],
+  );
 
   useEffect(() => {
     (async () => {
@@ -136,43 +142,51 @@ export default function RepoView() {
   if (missing) {
     return (
       <Card className="border-destructive">
-        <CardContent className="pt-6 text-sm text-destructive">仓库不存在：{error}</CardContent>
+        <CardContent className="pt-6 text-sm text-destructive">
+          {t("repo.notFound", { error })}
+        </CardContent>
       </Card>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold">{owner}/{name}</h1>
-          <p className="text-sm text-muted-foreground">{repo?.description || "无描述"}</p>
+          <h1 className="truncate text-2xl font-bold">
+            {owner}/{name}
+          </h1>
+          <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2 font-mono text-xs">
+            <Button variant="outline" className="w-full gap-2 font-mono text-xs sm:w-auto">
               <GitBranch className="h-3.5 w-3.5" />
               SSH
-              <MoreVertical className="h-3.5 w-3.5" />
+              <MoreVertical className="ml-auto h-3.5 w-3.5 sm:ml-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel className="font-mono text-xs normal-case">
+          <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
+            <DropdownMenuLabel className="break-all font-mono text-xs normal-case">
               {cloneCommand(owner, name)}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => copy(cloneCommand(owner, name))}>
               <Copy />
-              复制 clone 命令
+              {t("repo.copyCloneCommand")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="code">Code</TabsTrigger>
-          <TabsTrigger value="commits">Commits</TabsTrigger>
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="code" className="flex-1 sm:flex-none">
+            {t("repo.code")}
+          </TabsTrigger>
+          <TabsTrigger value="commits" className="flex-1 sm:flex-none">
+            {t("repo.commits")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="code" className="space-y-4">
@@ -180,27 +194,41 @@ export default function RepoView() {
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2" disabled={emptyRepo}>
-                  <GitBranch className="h-4 w-4" />
-                  {ref || "no branch"}
-                  <ChevronDown className="h-3.5 w-3.5" />
+                <Button variant="outline" size="sm" className="max-w-full gap-2" disabled={emptyRepo}>
+                  <GitBranch className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{ref || t("repo.noBranch")}</span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
+              <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-auto">
                 {branches.map((b) => (
-                  <DropdownMenuItem key={b.name} onClick={() => { setRef(b.name); setPath([]); setBlob(null); }}>
-                    <GitBranch />
-                    {b.name}
-                    {b.is_head && <Badge variant="secondary" className="ml-auto">HEAD</Badge>}
+                  <DropdownMenuItem
+                    key={b.name}
+                    onClick={() => {
+                      setRef(b.name);
+                      setPath([]);
+                      setBlob(null);
+                    }}
+                  >
+                    <GitBranch className="shrink-0" />
+                    <span className="truncate">{b.name}</span>
+                    {b.is_head && (
+                      <Badge variant="secondary" className="ml-auto shrink-0">
+                        HEAD
+                      </Badge>
+                    )}
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
 
             {!emptyRepo && (
-              <nav className="flex flex-wrap items-center gap-1 text-sm">
+              <nav className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
                 <button
-                  className={cn("font-medium hover:underline", path.length === 0 || blob ? "" : "text-muted-foreground")}
+                  className={cn(
+                    "font-medium hover:underline",
+                    path.length === 0 || blob ? "" : "text-muted-foreground",
+                  )}
                   onClick={() => jumpTo(-1)}
                 >
                   {name}
@@ -238,16 +266,14 @@ export default function RepoView() {
           {emptyRepo && !error && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">空仓库</CardTitle>
-                <CardDescription>按下面的命令推送第一次提交：</CardDescription>
+                <CardTitle className="text-lg">{t("repo.emptyRepo")}</CardTitle>
+                <CardDescription>{t("repo.emptyRepoHint")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {commands.map((cmd) => (
                   <CodeBlock key={cmd} text={cmd} onCopy={() => copy(cmd)} />
                 ))}
-                <p className="pt-2 text-xs text-muted-foreground">
-                  提示：先在「SSH Keys」页面添加你的公钥，才能通过 SSH 访问。
-                </p>
+                <p className="pt-2 text-xs text-muted-foreground">{t("repo.sshHint")}</p>
               </CardContent>
             </Card>
           )}
@@ -255,13 +281,13 @@ export default function RepoView() {
           {!emptyRepo && !error && blob && (
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="font-mono text-sm">{blob.path}</CardTitle>
-                  <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle className="break-all font-mono text-sm">{blob.path}</CardTitle>
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{formatSize(blob.size)}</Badge>
                     {blob.encoding !== "utf-8" && (
                       <Badge variant="destructive">
-                        {blob.encoding === "binary" ? "二进制文件" : "文件过大，仅显示大小"}
+                        {blob.encoding === "binary" ? t("repo.binaryFile") : t("repo.fileTooLarge")}
                       </Badge>
                     )}
                   </div>
@@ -273,20 +299,20 @@ export default function RepoView() {
                     {blob.content}
                   </pre>
                 ) : (
-                  <p className="text-sm text-muted-foreground">该文件无法在浏览器中预览。</p>
+                  <p className="text-sm text-muted-foreground">{t("repo.previewNotAvailable")}</p>
                 )}
               </CardContent>
             </Card>
           )}
 
           {!emptyRepo && !error && !blob && (
-            <div className="rounded-lg border">
-              <Table>
+            <div className="overflow-x-auto rounded-lg border">
+              <Table className="min-w-[560px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>名称</TableHead>
-                    <TableHead className="w-24">类型</TableHead>
-                    <TableHead className="w-28 text-right">大小</TableHead>
+                    <TableHead>{t("common.name")}</TableHead>
+                    <TableHead className="w-24">{t("common.type")}</TableHead>
+                    <TableHead className="w-28 text-right">{t("common.size")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -298,15 +324,19 @@ export default function RepoView() {
                           onClick={() => openEntry(entry)}
                         >
                           {entry.type === "tree" ? (
-                            <Folder className="h-4 w-4 text-blue-500" />
+                            <Folder className="h-4 w-4 shrink-0 text-blue-500" />
                           ) : (
-                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                           )}
-                          <span className={entry.type === "tree" ? "font-medium" : ""}>{entry.name}</span>
+                          <span className={cn("truncate", entry.type === "tree" ? "font-medium" : "")}>
+                            {entry.name}
+                          </span>
                         </button>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{entry.type === "tree" ? "目录" : "文件"}</Badge>
+                        <Badge variant="secondary">
+                          {entry.type === "tree" ? t("common.directory") : t("common.file")}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {entry.type === "blob" ? formatSize(entry.size) : "-"}
@@ -315,8 +345,11 @@ export default function RepoView() {
                   ))}
                   {entries.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
-                        该目录为空
+                      <TableCell
+                        colSpan={3}
+                        className="py-10 text-center text-sm text-muted-foreground"
+                      >
+                        {t("repo.emptyDir")}
                       </TableCell>
                     </TableRow>
                   )}
@@ -328,15 +361,15 @@ export default function RepoView() {
 
         <TabsContent value="commits">
           {emptyRepo ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">暂无提交</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{t("repo.noCommits")}</p>
           ) : (
-            <div className="rounded-lg border">
-              <Table>
+            <div className="overflow-x-auto rounded-lg border">
+              <Table className="min-w-[640px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>提交</TableHead>
-                    <TableHead className="w-36">作者</TableHead>
-                    <TableHead className="w-56">时间</TableHead>
+                    <TableHead>{t("repo.commit")}</TableHead>
+                    <TableHead className="w-36">{t("common.author")}</TableHead>
+                    <TableHead className="w-56">{t("common.date")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -345,12 +378,16 @@ export default function RepoView() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <GitCommitHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{c.sha.slice(0, 7)}</code>
+                          <code className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs">
+                            {c.sha.slice(0, 7)}
+                          </code>
                           <span className="truncate">{c.message}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">{c.author}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{formatDate(c.date)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatDate(c.date, locale)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
