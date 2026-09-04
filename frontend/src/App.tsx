@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Link, NavLink, Route, Routes } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { GitBranch, KeyRound, LogOut, FolderGit2 } from "lucide-react";
+import { GitBranch, KeyRound, LogOut, FolderGit2, UserRound } from "lucide-react";
 import { api, clearToken, getToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
@@ -11,6 +11,7 @@ import Repos from "@/pages/Repos";
 import RepoView from "@/pages/RepoView";
 import Keys from "@/pages/Keys";
 import Login from "@/pages/Login";
+import ProfilePage from "@/pages/Profile";
 
 export default function App() {
   const { t } = useI18n();
@@ -22,7 +23,8 @@ export default function App() {
     (async () => {
       if (getToken()) {
         try {
-          setUser((await api.me()).username);
+          const me = await api.me();
+          setUser(me.username);
         } catch {
           clearToken();
         }
@@ -84,9 +86,14 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
             <ThemeToggle />
             <LangToggle />
-            <span className="hidden text-sm text-muted-foreground md:inline">
-              <span className="font-medium text-foreground">{user}</span>
-            </span>
+            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
+              <Link to="/profile" className="flex items-center gap-2">
+                <UserRound className="h-4 w-4" />
+                <span className="hidden max-w-32 truncate font-medium text-foreground md:inline">
+                  {user}
+                </span>
+              </Link>
+            </Button>
             <Button variant="outline" size="sm" className="gap-2 px-2 sm:px-3" onClick={onLogout}>
               <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">{t("app.logout")}</span>
@@ -99,6 +106,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           <Route path="/" element={<Repos />} />
           <Route path="/repo/:owner/:name" element={<RepoView />} />
           <Route path="/keys" element={<Keys />} />
+          <Route path="/profile" element={<ProfilePage />} />
         </Routes>
       </main>
     </div>

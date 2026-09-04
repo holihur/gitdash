@@ -1,6 +1,7 @@
 // Package tests 是按功能划分的集成测试目录：
 //
 //	auth_test.go    注册 / 登录 / 登出 / 会话
+//	profile_mfa_test.go 资料/改密/MFA(TOTP)
 //	repos_test.go   仓库 CRUD 与用户隔离
 //	collab_test.go  协作者（读写权限 / 管理 / 同名仓库 / 级联）
 //	issues_test.go  Issue CRUD / 状态流转 / 删除级联

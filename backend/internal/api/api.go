@@ -17,12 +17,15 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh"
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/totp"
 	"gitdash/backend/internal/webui"
 )
 
@@ -31,10 +34,22 @@ var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
 type API struct {
 	store   *store.Store
 	version string
+
+	mu         sync.Mutex
+	mfaPending map[string]mfaChallenge // mfa_token -> 待二次验证的登录
+}
+
+type mfaChallenge struct {
+	username string
+	expires  time.Time
 }
 
 func New(s *store.Store, version string) *API {
-	return &API{store: s, version: version}
+	return &API{
+		store:      s,
+		version:    version,
+		mfaPending: map[string]mfaChallenge{},
+	}
 }
 
 type ctxUser struct{}
@@ -50,8 +65,16 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// auth
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
+	mux.HandleFunc("POST /api/auth/mfa-verify", a.mfaVerify)
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))
 	mux.HandleFunc("GET /api/me", a.auth(a.me))
+
+	// user profile & mfa
+	mux.HandleFunc("POST /api/me/password", a.auth(a.changePassword))
+	mux.HandleFunc("GET /api/me/mfa", a.auth(a.mfaStatus))
+	mux.HandleFunc("POST /api/me/mfa/enroll", a.auth(a.mfaEnroll))
+	mux.HandleFunc("POST /api/me/mfa/activate", a.auth(a.mfaActivate))
+	mux.HandleFunc("POST /api/me/mfa/disable", a.auth(a.mfaDisable))
 
 	// repos
 	mux.HandleFunc("GET /api/repos", a.auth(a.listRepos))
@@ -225,7 +248,213 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
+	if ua.MFAEnabled {
+		token, err := newSessionToken()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		a.mu.Lock()
+		a.mfaPending[token] = mfaChallenge{username: ua.Username, expires: time.Now().Add(10 * time.Minute)}
+		a.mu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"mfa_required": true,
+			"mfa_token":    token,
+		})
+		return
+	}
 	a.startSession(w, http.StatusOK, ua.Username)
+}
+
+// mfaVerify 完成 MFA 二次验证并签发正式会话。
+func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		MFAToken string `json:"mfa_token"`
+		Code     string `json:"code"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	a.mu.Lock()
+	ch, ok := a.mfaPending[in.MFAToken]
+	a.mu.Unlock()
+	if !ok || time.Now().After(ch.expires) {
+		a.mu.Lock()
+		delete(a.mfaPending, in.MFAToken)
+		a.mu.Unlock()
+		writeCode(w, http.StatusUnauthorized, "mfa_challenge_expired", "mfa challenge expired, sign in again")
+		return
+	}
+	ua, err := a.store.GetByUsername(ch.username)
+	if err != nil || !ua.MFAEnabled {
+		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
+		return
+	}
+	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+		writeCode(w, http.StatusUnauthorized, "invalid_mfa_code", "invalid authenticator code")
+		return
+	}
+	// 校验通过：令牌一次性作废并签发正式会话
+	a.mu.Lock()
+	delete(a.mfaPending, in.MFAToken)
+	a.mu.Unlock()
+	a.startSession(w, http.StatusOK, ua.Username)
+}
+
+func (a *API) me(w http.ResponseWriter, r *http.Request) {
+	ua, err := a.store.GetByUsername(userFrom(r))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"username":    ua.Username,
+		"created_at":  ua.CreatedAt,
+		"mfa_enabled": ua.MFAEnabled,
+	})
+}
+
+// ---- user profile & mfa ----
+
+func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Current string `json:"current_password"`
+		New     string `json:"new_password"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	ua, err := a.store.GetByUsername(userFrom(r))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(ua.PasswordHash), []byte(in.Current)) != nil {
+		writeCode(w, http.StatusUnauthorized, "invalid_current_password", "current password is incorrect")
+		return
+	}
+	if len(in.New) < 8 {
+		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.New), bcrypt.DefaultCost)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.store.UpdatePassword(ua.Username, string(hash)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) mfaStatus(w http.ResponseWriter, r *http.Request) {
+	ua, err := a.store.GetByUsername(userFrom(r))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp := map[string]any{"enabled": ua.MFAEnabled}
+	if !ua.MFAEnabled && ua.MFASecret != "" { // 待激活的 secret（页面刷新后仍可继续）
+		resp["pending_secret"] = ua.MFASecret
+		resp["otpauth_url"] = totp.URI("gitdash", ua.Username, ua.MFASecret)
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (a *API) mfaEnroll(w http.ResponseWriter, r *http.Request) {
+	username := userFrom(r)
+	ua, err := a.store.GetByUsername(username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if ua.MFAEnabled {
+		writeCode(w, http.StatusConflict, "mfa_already_enabled", "mfa is already enabled")
+		return
+	}
+	secret := ua.MFASecret
+	if secret == "" {
+		secret, err = totp.GenerateSecret()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := a.store.SetMFASecret(username, secret, false); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"secret":      secret,
+		"otpauth_url": totp.URI("gitdash", username, secret),
+	})
+}
+
+func (a *API) mfaActivate(w http.ResponseWriter, r *http.Request) {
+	username := userFrom(r)
+	ua, err := a.store.GetByUsername(username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if ua.MFAEnabled {
+		writeCode(w, http.StatusConflict, "mfa_already_enabled", "mfa is already enabled")
+		return
+	}
+	if ua.MFASecret == "" {
+		writeCode(w, http.StatusBadRequest, "mfa_not_enrolled", "enroll first to get a secret")
+		return
+	}
+	var in struct {
+		Code string `json:"code"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+		writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid authenticator code")
+		return
+	}
+	if err := a.store.SetMFASecret(username, ua.MFASecret, true); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) mfaDisable(w http.ResponseWriter, r *http.Request) {
+	username := userFrom(r)
+	ua, err := a.store.GetByUsername(username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ua.MFAEnabled {
+		writeCode(w, http.StatusConflict, "mfa_not_enabled", "mfa is not enabled")
+		return
+	}
+	var in struct {
+		Password string `json:"password"`
+		Code     string `json:"code"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(ua.PasswordHash), []byte(in.Password)) != nil {
+		writeCode(w, http.StatusUnauthorized, "invalid_current_password", "current password is incorrect")
+		return
+	}
+	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+		writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid authenticator code")
+		return
+	}
+	if err := a.store.ClearMFA(username); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
@@ -233,10 +462,6 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 		_ = a.store.DeleteSession(tok)
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (a *API) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"username": userFrom(r)})
 }
 
 // ---- plumbing ----

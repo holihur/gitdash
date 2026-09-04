@@ -27,6 +27,26 @@ export function clearToken() {
 
 export interface User {
   username: string;
+  created_at: string;
+  mfa_enabled: boolean;
+}
+
+export interface LoginResult {
+  token?: string;
+  username?: string;
+  mfa_required?: boolean;
+  mfa_token?: string;
+}
+
+export interface MFAStatus {
+  enabled: boolean;
+  pending_secret?: string;
+  otpauth_url?: string;
+}
+
+export interface MFAEnroll {
+  secret: string;
+  otpauth_url: string;
 }
 
 export interface Repo {
@@ -147,12 +167,33 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
   login: (username: string, password: string) =>
-    req<{ token: string; username: string }>("/auth/login", {
+    req<LoginResult>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  mfaVerify: (mfaToken: string, code: string) =>
+    req<{ token: string; username: string }>("/auth/mfa-verify", {
+      method: "POST",
+      body: JSON.stringify({ mfa_token: mfaToken, code }),
+    }),
   logout: () => req<null>("/auth/logout", { method: "POST" }),
   me: () => req<User>("/me"),
+
+  // profile
+  changePassword: (currentPassword: string, newPassword: string) =>
+    req<null>("/me/password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  mfaStatus: () => req<MFAStatus>("/me/mfa"),
+  mfaEnroll: () => req<MFAEnroll>("/me/mfa/enroll", { method: "POST" }),
+  mfaActivate: (code: string) =>
+    req<null>("/me/mfa/activate", { method: "POST", body: JSON.stringify({ code }) }),
+  mfaDisable: (password: string, code: string) =>
+    req<null>("/me/mfa/disable", {
+      method: "POST",
+      body: JSON.stringify({ password, code }),
+    }),
 
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
   listRepos: () => req<Repo[]>("/repos"),

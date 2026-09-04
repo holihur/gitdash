@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { GitBranch } from "lucide-react";
+import { GitBranch, ShieldCheck } from "lucide-react";
 import { api, setToken } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -22,6 +22,17 @@ export default function Login({ onAuthed }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // MFA 二次验证阶段
+  const [mfaToken, setMfaToken] = useState("");
+  const [code, setCode] = useState("");
+
+  const finish = (r: { token?: string; username?: string }) => {
+    if (!r.token || !r.username) return;
+    setToken(r.token);
+    onAuthed(r.username);
+    toast.success(t("login.welcomeBack", { name: r.username }));
+    nav("/");
+  };
 
   const submit = async (mode: "login" | "register") => {
     if (!username.trim() || !password) {
@@ -30,24 +41,92 @@ export default function Login({ onAuthed }: Props) {
     }
     setBusy(true);
     try {
-      const r =
-        mode === "login"
-          ? await api.login(username.trim(), password)
-          : await api.register(username.trim(), password);
-      setToken(r.token);
-      onAuthed(r.username);
-      toast.success(
-        mode === "login"
-          ? t("login.welcomeBack", { name: r.username })
-          : t("login.accountCreated", { name: r.username }),
-      );
-      nav("/");
+      if (mode === "login") {
+        const r = await api.login(username.trim(), password);
+        if (r.mfa_required && r.mfa_token) {
+          setMfaToken(r.mfa_token);
+          setCode("");
+          return; // 进入第二步
+        }
+        finish(r);
+      } else {
+        const r = await api.register(username.trim(), password);
+        finish(r);
+      }
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setBusy(false);
     }
   };
+
+  const submitCode = async () => {
+    if (!code.trim()) return;
+    setBusy(true);
+    try {
+      const r = await api.mfaVerify(mfaToken, code.trim());
+      finish(r);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (mfaToken) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
+          <ThemeToggle />
+          <LangToggle />
+        </div>
+        <div className="flex flex-1 items-center justify-center px-4 pb-8">
+          <Card className="w-full max-w-sm">
+            <CardHeader className="items-center text-center">
+              <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <CardTitle>{t("login.mfaTitle")}</CardTitle>
+              <CardDescription>{t("login.mfaSubtitle")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitCode();
+                }}
+              >
+                <div className="grid gap-2">
+                  <Label htmlFor="mfa-code">{t("login.authenticatorCode")}</Label>
+                  <Input
+                    id="mfa-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="000000"
+                    className="text-center text-lg tracking-widest"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  />
+                </div>
+                <Button type="submit" className="mt-4 w-full" disabled={busy || code.length < 6}>
+                  {t("login.verify")}
+                </Button>
+              </form>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => setMfaToken("")}
+              >
+                {t("login.back")}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen flex-col">

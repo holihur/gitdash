@@ -25,6 +25,9 @@ type UserAuth struct {
 	ID           int64
 	Username     string
 	PasswordHash string
+	CreatedAt    string
+	MFASecret    string // 空 = 未启用/无待激活 secret
+	MFAEnabled   bool
 }
 
 type Repo struct {
@@ -114,7 +117,9 @@ CREATE TABLE IF NOT EXISTS users (
 	id            INTEGER PRIMARY KEY AUTOINCREMENT,
 	username      TEXT NOT NULL UNIQUE,
 	password_hash TEXT NOT NULL,
-	created_at    TEXT NOT NULL
+	created_at    TEXT NOT NULL,
+	mfa_secret    TEXT NOT NULL DEFAULT '',
+	mfa_enabled   INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS sessions (
 	token      TEXT PRIMARY KEY,
@@ -168,6 +173,38 @@ CREATE TABLE IF NOT EXISTS webhooks (
 	created_at TEXT NOT NULL,
 	UNIQUE(owner, repo, url)
 );`)
+	if err != nil {
+		return err
+	}
+	// 存量库增量迁移：为 users 补 MFA 列
+	if err := ensureColumn(s.db, "users", "mfa_secret", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumn(s.db, "users", "mfa_enabled", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ensureColumn 若表缺少指定列则 ALTER TABLE 添加（SQLite 不支持 IF NOT EXISTS on ADD COLUMN）。
+func ensureColumn(db *sql.DB, table, column, ddl string) error {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, typ string
+		var dflt any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return nil
+		}
+	}
+	_, err = db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + ddl)
 	return err
 }
 
@@ -223,8 +260,11 @@ func (s *Store) CreateUser(username, passwordHash string) (User, error) {
 
 func (s *Store) GetByUsername(username string) (UserAuth, error) {
 	var ua UserAuth
-	err := s.db.QueryRow(`SELECT id, username, password_hash FROM users WHERE username = ?`, username).
-		Scan(&ua.ID, &ua.Username, &ua.PasswordHash)
+	var mfa int
+	err := s.db.QueryRow(`SELECT id, username, password_hash, created_at, COALESCE(mfa_secret,''), mfa_enabled
+		FROM users WHERE username = ?`, username).
+		Scan(&ua.ID, &ua.Username, &ua.PasswordHash, &ua.CreatedAt, &ua.MFASecret, &mfa)
+	ua.MFAEnabled = mfa != 0
 	if errors.Is(err, sql.ErrNoRows) {
 		return ua, ErrNotFound
 	}
@@ -253,6 +293,40 @@ func (s *Store) GetSession(token string) (string, error) {
 
 func (s *Store) DeleteSession(token string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE token = ?`, token)
+	return err
+}
+
+// ---- user profile & mfa ----
+
+func (s *Store) UpdatePassword(username, passwordHash string) error {
+	res, err := s.db.Exec(`UPDATE users SET password_hash = ? WHERE username = ?`, passwordHash, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetMFASecret 写入（或覆盖）MFA secret；enable=false 时保留 secret 但标记未激活。
+func (s *Store) SetMFASecret(username, secret string, enabled bool) error {
+	en := 0
+	if enabled {
+		en = 1
+	}
+	res, err := s.db.Exec(`UPDATE users SET mfa_secret = ?, mfa_enabled = ? WHERE username = ?`, secret, en, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) ClearMFA(username string) error {
+	_, err := s.db.Exec(`UPDATE users SET mfa_secret = '', mfa_enabled = 0 WHERE username = ?`, username)
 	return err
 }
 
