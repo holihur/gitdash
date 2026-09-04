@@ -35,7 +35,78 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import { MarkdownView, CodeText } from "@/components/markdown";
 import RepoIssues from "@/pages/RepoIssues";
+
+// 判断文件名是否需要 Markdown 渲染（README 任意扩展名或 .md/.markdown）
+function isMarkdown(path: string): boolean {
+  const base = path.split("/").pop() ?? "";
+  const lower = base.toLowerCase();
+  return /^readme(\.(md|markdown|txt))?$/.test(lower) || /\.(md|markdown)$/.test(lower);
+}
+
+// 根据扩展名推断 highlight.js 语言
+function langFromPath(path: string): string | undefined {
+  const ext = (path.split(".").pop() ?? "").toLowerCase();
+  const map: Record<string, string> = {
+    ts: "typescript",
+    tsx: "typescript",
+    js: "javascript",
+    jsx: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    py: "python",
+    rb: "ruby",
+    go: "go",
+    rs: "rust",
+    java: "java",
+    kt: "kotlin",
+    c: "c",
+    h: "c",
+    cpp: "cpp",
+    hpp: "cpp",
+    cs: "csharp",
+    sh: "bash",
+    bash: "bash",
+    zsh: "bash",
+    fish: "bash",
+    yml: "yaml",
+    yaml: "yaml",
+    json: "json",
+    toml: "ini",
+    ini: "ini",
+    sql: "sql",
+    html: "xml",
+    htm: "xml",
+    xml: "xml",
+    css: "css",
+    scss: "scss",
+    less: "less",
+    dockerfile: "dockerfile",
+    vue: "xml",
+    php: "php",
+    swift: "swift",
+    scala: "scala",
+    lua: "lua",
+    r: "r",
+    dart: "dart",
+    elm: "elm",
+    ex: "elixir",
+    exs: "elixir",
+    erl: "erlang",
+    hs: "haskell",
+    ml: "ocaml",
+    pas: "pascal",
+    pl: "perl",
+    ps1: "powershell",
+    proto: "protobuf",
+    tex: "latex",
+  };
+  const name = (path.split("/").pop() ?? "").toLowerCase();
+  if (name === "dockerfile") return "dockerfile";
+  if (name.startsWith("makefile")) return "makefile";
+  return map[ext];
+}
 
 function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
   return (
@@ -300,9 +371,15 @@ export default function RepoView() {
               </CardHeader>
               <CardContent>
                 {blob.encoding === "utf-8" ? (
-                  <pre className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4 text-xs leading-5">
-                    {blob.content}
-                  </pre>
+                  isMarkdown(blob.path) ? (
+                    <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
+                      <MarkdownView text={blob.content} />
+                    </div>
+                  ) : (
+                    <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
+                      <CodeText text={blob.content} lang={langFromPath(blob.path)} />
+                    </div>
+                  )
                 ) : (
                   <p className="text-sm text-muted-foreground">{t("repo.previewNotAvailable")}</p>
                 )}
