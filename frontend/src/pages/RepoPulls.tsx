@@ -8,9 +8,9 @@ import {
   Plus,
 } from "lucide-react";
 import { api, type PullDiff, type PullRequest } from "@/lib/api";
+import { DiffView } from "@/components/diff-view";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -295,6 +295,20 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
                         })}
                       </p>
                     )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {pr.state === "open" && (
+                        <>
+                          <Button size="sm" variant="outline" disabled={busyId}
+                            onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "squash"), "pulls.squashMerged")}>
+                            {t("pulls.squashMerge")}
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={busyId}
+                            onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "merge"), "pulls.mergeCommitted")}>
+                            {t("pulls.mergeCommit")}
+                          </Button>
+                        </>
+                      )}
+                    </div>
                     <PullDiffView owner={owner} name={name} number={pr.number} />
                   </div>
                 )}
@@ -308,10 +322,8 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
 }
 
 function PullDiffView({ owner, name, number }: { owner: string; name: string; number: number }) {
-  const { t } = useI18n();
   const [diff, setDiff] = useState<PullDiff | null>(null);
   const [err, setErr] = useState("");
-
   useEffect(() => {
     let alive = true;
     api
@@ -322,64 +334,7 @@ function PullDiffView({ owner, name, number }: { owner: string; name: string; nu
       alive = false;
     };
   }, [owner, name, number]);
-
   if (err) return <p className="text-xs text-destructive">{err}</p>;
   if (!diff) return <p className="py-4 text-center text-xs text-muted-foreground">…</p>;
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {diff.files.map((f) => (
-          <Badge
-            key={f.path}
-            variant="outline"
-            className="max-w-full font-mono text-xs"
-            title={`${f.path} (+${f.insertions} -${f.deletions})`}
-          >
-            <span
-              className={
-                f.status === "A"
-                  ? "text-green-600"
-                  : f.status === "D"
-                    ? "text-red-600"
-                    : "text-yellow-600"
-              }
-            >
-              {f.status}
-            </span>
-            <span className="mx-1 truncate">{f.path}</span>
-            <span className="shrink-0 text-muted-foreground">
-              +{f.insertions} -{f.deletions}
-            </span>
-          </Badge>
-        ))}
-      </div>
-      {diff.patch ? (
-        <div className="max-h-[60vh] overflow-auto rounded-md border bg-background/60">
-          <DiffLines patch={diff.patch} />
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">{t("pulls.noChanges")}</p>
-      )}
-    </div>
-  );
-}
-
-function DiffLines({ patch }: { patch: string }) {
-  return (
-    <pre className="min-w-max px-3 py-2 font-mono text-xs leading-5">
-      {patch.split("\n").map((line, i) => {
-        let cls = "";
-        if (line.startsWith("+") && !line.startsWith("+++")) cls = "bg-green-500/15 text-green-700 dark:text-green-400";
-        else if (line.startsWith("-") && !line.startsWith("---")) cls = "bg-red-500/15 text-red-700 dark:text-red-400";
-        else if (line.startsWith("@")) cls = "text-blue-600 dark:text-blue-400";
-        else if (line.startsWith("diff --git") || line.startsWith("index ")) cls = "text-muted-foreground";
-        return (
-          <div key={i} className={cls}>
-            {line || " "}
-          </div>
-        );
-      })}
-    </pre>
-  );
+  return <DiffView files={diff.files} patch={diff.patch} />;
 }

@@ -38,6 +38,7 @@ export default function Repos() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [template, setTemplate] = useState<"" | "readme">("");
   const [busy, setBusy] = useState(false);
   const [collabRepo, setCollabRepo] = useState<Repo | null>(null);
   const [hookRepo, setHookRepo] = useState<Repo | null>(null);
@@ -62,11 +63,12 @@ export default function Repos() {
     }
     setBusy(true);
     try {
-      await api.createRepo(name.trim(), desc.trim());
+      await api.createRepo(name.trim(), desc.trim(), template);
       toast.success(t("repos.created", { name: name.trim() }));
       setOpen(false);
       setName("");
       setDesc("");
+      setTemplate("");
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -127,6 +129,18 @@ export default function Repos() {
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="repo-template">{t("repos.templateLabel")}</Label>
+                <select
+                  id="repo-template"
+                  value={template}
+                  onChange={(e) => setTemplate(e.target.value as "" | "readme")}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">{t("repos.templateNone")}</option>
+                  <option value="readme">{t("repos.templateReadme")}</option>
+                </select>
               </div>
             </div>
             <DialogFooter>

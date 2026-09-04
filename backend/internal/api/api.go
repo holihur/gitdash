@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -29,6 +30,8 @@ import (
 	"gitdash/backend/internal/totp"
 	"gitdash/backend/internal/webui"
 )
+
+var shaRe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
 var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
 
@@ -101,6 +104,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues", a.auth(a.listIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues", a.auth(a.createIssue))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.setIssueState))
+
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.auth(a.commitDiff))
 
 	// pull requests
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.auth(a.listPulls))
@@ -679,14 +684,20 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
+		Template    string `json:"template"` // "" = 空仓库；"readme" = 默认模版（README.md）
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
 	owner := userFrom(r)
 	in.Name = strings.TrimSpace(in.Name)
+	in.Template = strings.ToLower(strings.TrimSpace(in.Template))
 	if !gitsvc.ValidName(in.Name) {
 		writeCode(w, http.StatusBadRequest, "repo_name_invalid", "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
+		return
+	}
+	if in.Template != "" && in.Template != "readme" {
+		writeCode(w, http.StatusBadRequest, "invalid_template", "template must be empty or 'readme'")
 		return
 	}
 	if _, err := a.store.GetRepo(owner, in.Name); err == nil || gitsvc.Exists(owner, in.Name) {
@@ -702,6 +713,14 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 		_ = a.store.DeleteRepo(owner, in.Name)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if in.Template == "readme" {
+		if err := gitsvc.InitReadme(owner, in.Name); err != nil {
+			_ = a.store.DeleteRepo(owner, in.Name)
+			_ = gitsvc.Delete(owner, in.Name)
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, repo)
 }
@@ -907,6 +926,24 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, issue)
 }
 
+func (a *API) commitDiff(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	sha := r.PathValue("sha")
+	if !shaRe.MatchString(sha) {
+		writeCode(w, http.StatusBadRequest, "invalid_sha", "invalid commit sha")
+		return
+	}
+	files, patch, err := gitsvc.CommitDiff(owner, name, sha)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": files, "patch": patch})
+}
+
 // ---- pull requests ----
 
 func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
@@ -1039,9 +1076,34 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged")
 		return
 	}
-	headSHA, err := gitsvc.MergeFastForward(owner, name, pr.TargetBranch, pr.SourceBranch)
-	if err != nil {
-		writeCode(w, http.StatusConflict, "merge_not_ff", "merge requires fast-forward (no conflicts): "+err.Error())
+	var in struct {
+		Method string `json:"method"` // ""(fast-forward) | merge | squash
+	}
+	if r.ContentLength > 0 {
+		if rerr := readJSON(w, r, &in); rerr != nil {
+			return
+		}
+	}
+	var headSHA string
+	switch in.Method {
+	case "", "fast-forward":
+		h, mErr := gitsvc.MergeFastForward(owner, name, pr.TargetBranch, pr.SourceBranch)
+		if mErr != nil {
+			writeCode(w, http.StatusConflict, "merge_not_ff",
+				"branches diverged; merge with method \"merge\" or \"squash\", or rebase locally: "+mErr.Error())
+			return
+		}
+		headSHA = h
+	case "merge", "squash":
+		msg := fmt.Sprintf("Merge pull request #%d from %s: %s", pr.Number, pr.SourceBranch, pr.Title)
+		h, mErr := gitsvc.MergeNonFF(owner, name, pr.TargetBranch, pr.SourceBranch, msg, userFrom(r), in.Method)
+		if mErr != nil {
+			writeCode(w, http.StatusConflict, "merge_conflict", mErr.Error())
+			return
+		}
+		headSHA = h
+	default:
+		writeCode(w, http.StatusBadRequest, "invalid_merge_method", "method must be 'merge' or 'squash'")
 		return
 	}
 	merged, err := a.store.MarkPullMerged(owner, name, pr.Number, headSHA, userFrom(r))

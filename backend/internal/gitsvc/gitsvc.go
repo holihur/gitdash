@@ -388,3 +388,131 @@ func Commits(owner, name, ref string, limit int) ([]Commit, error) {
 	}
 	return commits, nil
 }
+
+// CommitDiff 返回某提交相对第一父提交（根提交相对空树）的变更。
+func CommitDiff(owner, name, sha string) ([]DiffFile, string, error) {
+	path := RepoPath(owner, name)
+	parent := ""
+	if out, err := gitOut(path, "rev-parse", "--verify", "--quiet", sha+"^1"); err == nil {
+		parent = strings.TrimSpace(out)
+	}
+	if parent != "" {
+		files, err := DiffStats(owner, name, parent, sha)
+		if err != nil {
+			return nil, "", err
+		}
+		patch, err := DiffPatch(owner, name, parent, sha)
+		return files, patch, err
+	}
+	// 根提交：相对空树
+	numstat, err := gitOut(path, "show", "--numstat", "--format=", sha)
+	if err != nil {
+		return nil, "", err
+	}
+	files := []DiffFile{}
+	for _, ln := range strings.Split(strings.TrimSpace(numstat), "\n") {
+		if ln == "" {
+			continue
+		}
+		parts := strings.SplitN(ln, "\t", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		ins, _ := strconv.Atoi(parts[0])
+		del, _ := strconv.Atoi(parts[1])
+		files = append(files, DiffFile{Path: parts[2], Status: "A", Insertions: ins, Deletions: del})
+	}
+	patch, err := gitOut(path, "show", "-U3", "--format=", sha)
+	return files, patch, err
+}
+
+// MergeNonFF 在临时工作区把 source 并入 target（method: merge | squash），
+// 成功后更新目标分支并返回新的目标 tip SHA。冲突时返回错误。
+func MergeNonFF(owner, name, target, source, message, committer, method string) (string, error) {
+	path := RepoPath(owner, name)
+	tmp, err := os.MkdirTemp("", "gitdash-merge-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	if _, err := gitOut("", "clone", "-q", "--no-local", path, tmp); err != nil {
+		return "", err
+	}
+	ident := []string{"-c", "user.name=" + committer, "-c", "user.email=" + committer + "@gitdash"}
+	git := func(args ...string) (string, error) { return gitOut(tmp, args...) }
+	if _, err := git(append([]string{"checkout", "-q", "-B", "_gd_target", "origin/" + target}, nil...)...); err != nil {
+		return "", err
+	}
+	var head string
+	switch method {
+	case "squash":
+		if _, err := git("merge", "--squash", "-q", "origin/"+source); err != nil {
+			return "", fmt.Errorf("merge conflict or error: %w", err)
+		}
+		if _, err := git(append(ident, "commit", "-q", "-m", message)...); err != nil {
+			return "", fmt.Errorf("merge conflict: %w", err)
+		}
+	case "merge":
+		if _, err := git(append(ident, "merge", "--no-ff", "-q", "-m", message, "origin/"+source)...); err != nil {
+			return "", fmt.Errorf("merge conflict or error: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("unsupported merge method %q", method)
+	}
+	out, err := git("rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	head = strings.TrimSpace(out)
+	if _, err := git("push", "-q", "origin", "HEAD:refs/heads/"+target); err != nil {
+		return "", err
+	}
+	return head, nil
+}
+
+// InitReadme 把刚创建的 bare 仓库初始化为默认模版：main 分支 + 以仓库名生成的 README.md。
+func InitReadme(owner, name string) error {
+	bare := RepoPath(owner, name)
+	if fi, err := os.Stat(bare); err != nil || !fi.IsDir() {
+		return fmt.Errorf("repo %s/%s not on disk", owner, name)
+	}
+	tmp, err := os.MkdirTemp("", "gitdash-tpl-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+
+	initBranch := func() error {
+		if _, err := gitOut(tmp, "init", "-q", "--initial-branch=main"); err == nil {
+			return nil
+		}
+		if _, err := gitOut(tmp, "init", "-q"); err != nil {
+			return err
+		}
+		_, err := gitOut(tmp, "checkout", "-q", "-b", "main")
+		return err
+	}
+	if err := initBranch(); err != nil {
+		return err
+	}
+	readme := "# " + name + "\n"
+	if err := os.WriteFile(filepath.Join(tmp, "README.md"), []byte(readme), 0o644); err != nil {
+		return err
+	}
+	if _, err := gitOut(tmp, "config", "user.name", "gitdash"); err != nil {
+		return err
+	}
+	if _, err := gitOut(tmp, "config", "user.email", "noreply@gitdash.local"); err != nil {
+		return err
+	}
+	if _, err := gitOut(tmp, "add", "README.md"); err != nil {
+		return err
+	}
+	if _, err := gitOut(tmp, "commit", "-q", "-m", "Initial commit"); err != nil {
+		return err
+	}
+	if _, err := gitOut(tmp, "push", "-q", bare, "HEAD:refs/heads/main"); err != nil {
+		return err
+	}
+	return nil
+}

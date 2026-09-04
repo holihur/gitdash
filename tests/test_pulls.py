@@ -145,3 +145,87 @@ def test_pr_bad_paths_and_isolation(pr_env, user_factory, anon):
     bob.post(_p(owner, repo), json={"title": "x"}, expect=404)
     anon.get(_p(owner, repo), expect=401)
     anon.post(_p(owner, repo), json={"title": "x"}, expect=401)
+
+
+@pytest.fixture(scope="module")
+def nonff_env(base_url, ssh_port, tmp_path_factory):
+    """独立的“分叉后以 squash 合并”场景。"""
+    from conftest import ApiClient
+
+    c = ApiClient(base_url)
+    owner = f"u-{_uuid.uuid4().hex[:10]}"
+    c.token = c.post("/auth/register", json={"username": owner, "password": "test-pass-123456"}, expect=201).json()["token"]
+    repo = f"nf-{_uuid.uuid4().hex[:8]}"
+    c.post("/repos", json={"name": repo}, expect=201)
+    d = tmp_path_factory.mktemp("nf")
+    key = str(d / "id")
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key], check=True)
+    c.post("/keys", json={"name": "k", "public_key": open(key + ".pub").read().strip()}, expect=201)
+    work = str(d / "w")
+    _git(str(d), key, ["clone", "-q", f"ssh://git@127.0.0.1:{ssh_port}/{repo}.git", "w"])
+
+    def commit(msg):
+        _git(work, key, ["add", "-A"])
+        _git(work, key, ["-c", "user.name=u", "-c", "user.email=u@example.com", "commit", "-q", "-m", msg])
+
+    _git(work, key, ["checkout", "-q", "-b", "main"])
+    open(os.path.join(work, "base.txt"), "w").write("base\n")
+    commit("base")
+    _git(work, key, ["push", "-q", "-u", "origin", "main"])
+    _git(work, key, ["checkout", "-q", "-b", "topic"])
+    open(os.path.join(work, "t.txt"), "w").write("topic change\n")
+    commit("topic")
+    _git(work, key, ["push", "-q", "-u", "origin", "topic"])
+    _git(work, key, ["checkout", "-q", "main"])
+    open(os.path.join(work, "m.txt"), "w").write("main\n")
+    commit("mainline")
+    _git(work, key, ["push", "-q", "origin", "HEAD"])
+    env = {"client": c, "owner": owner, "repo": repo, "work": work, "key": key}
+    yield env
+    try:
+        c.delete(f"/repos/{repo}", expect=204)
+    except Exception:
+        pass
+
+
+def test_pr_squash_merge_and_commit_diff(nonff_env):
+    c = nonff_env["client"]
+    owner, repo = nonff_env["owner"], nonff_env["repo"]
+
+    # 分叉后：无 method → 409；squash → 成功
+    pr = c.post(
+        _p(owner, repo),
+        json={"title": "squash me", "source_branch": "topic", "target_branch": "main"},
+        expect=201,
+    ).json()
+    c.post(_p(owner, repo, f"/{pr['number']}/merge"), expect=409)
+    merged = c.post(_p(owner, repo, f"/{pr['number']}/merge"), json={"method": "squash"}, expect=200).json()
+    assert merged["state"] == "merged"
+
+    # main 已包含 squash 提交，其 diff 含 topic 改动
+    commits = c.get(f"/repos/{repo}/commits?ref=main", expect=200).json()
+    assert commits and commits[0]["message"].startswith("Merge pull request")
+    sha = commits[0]["sha"]
+    d = c.get(f"/users/{owner}/repos/{repo}/commits/{sha}/diff", expect=200).json()
+    assert d["files"] and "+topic change" in d["patch"]
+
+    # 非法 method / 非法 sha
+    _git(nonff_env["work"], nonff_env["key"], ["fetch", "-q", "origin"])
+    _git(nonff_env["work"], nonff_env["key"], ["checkout", "-q", "-B", "main", "origin/main"])
+    _git(nonff_env["work"], nonff_env["key"], ["checkout", "-q", "-b", "t2"])
+    open(os.path.join(nonff_env["work"], "t2.txt"), "w").write("x\n")
+    _git(nonff_env["work"], nonff_env["key"], ["add", "-A"])
+    _git(nonff_env["work"], nonff_env["key"], ["-c", "user.name=u", "-c", "user.email=u@e", "commit", "-q", "-m", "t2"])
+    _git(nonff_env["work"], nonff_env["key"], ["push", "-q", "-u", "origin", "t2"])
+    _git(nonff_env["work"], nonff_env["key"], ["checkout", "-q", "main"])
+    open(os.path.join(nonff_env["work"], "m2.txt"), "w").write("m2\n")
+    _git(nonff_env["work"], nonff_env["key"], ["add", "-A"])
+    _git(nonff_env["work"], nonff_env["key"], ["-c", "user.name=u", "-c", "user.email=u@e", "commit", "-q", "-m", "m2"])
+    _git(nonff_env["work"], nonff_env["key"], ["push", "-q", "origin", "HEAD"])
+    pr2 = c.post(
+        _p(owner, repo),
+        json={"title": "bad method", "source_branch": "t2", "target_branch": "main"},
+        expect=201,
+    ).json()
+    c.post(_p(owner, repo, f"/{pr2['number']}/merge"), json={"method": "rebase"}, expect=400)
+    c.get(f"/users/{owner}/repos/{repo}/commits/not-a-sha/diff", expect=400)

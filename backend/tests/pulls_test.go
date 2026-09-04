@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -168,4 +169,112 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+// TestPullRequestNonFFMergeAndCommitDiff 覆盖 merge/squash 合并与 commit diff 接口。
+func TestPullRequestNonFFMergeAndCommitDiff(t *testing.T) {
+	requireBins(t, "git", "ssh", "ssh-keygen")
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "pr2"}, 201)
+
+	key, pub := genKey(t, env.DataDir, "alice_key")
+	alice.mustStatus("POST", "/keys", map[string]string{"name": "e2e", "public_key": pub}, 201)
+
+	work := t.TempDir()
+	gitDo(t, work, key, "clone", "-q", fmt.Sprintf("ssh://git@127.0.0.1:%s/pr2.git", env.SSHPort), "pr")
+	repo := filepath.Join(work, "pr")
+	comm := func(msg string) {
+		gitDo(t, repo, key, "add", "-A")
+		gitDo(t, repo, key, "-c", "user.name=alice", "-c", "user.email=a@b.c", "commit", "-q", "-m", msg)
+	}
+	write := func(f, body string) {
+		if err := os.WriteFile(filepath.Join(repo, f), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("base.txt", "base")
+	comm("base")
+	gitDo(t, repo, key, "push", "-q", "origin", "HEAD")
+
+	// 分支 a 与 main 分叉
+	gitDo(t, repo, key, "checkout", "-q", "-b", "branch-a")
+	write("a.txt", "change from a")
+	comm("a work")
+	gitDo(t, repo, key, "push", "-q", "-u", "origin", "branch-a")
+	gitDo(t, repo, key, "checkout", "-q", "main")
+	write("m.txt", "main work")
+	comm("main work")
+	gitDo(t, repo, key, "push", "-q", "origin", "HEAD")
+
+	// 无 method：409；squash：成功且目标含改动
+	alice.mustStatus("POST", prPath("alice", "pr2", ""),
+		map[string]string{"title": "sq", "source_branch": "branch-a", "target_branch": "main"}, 201)
+	alice.mustFail("POST", prPath("alice", "pr2", "/1/merge"), nil, 409)
+	m := alice.mustStatus("POST", prPath("alice", "pr2", "/1/merge"),
+		map[string]string{"method": "squash"}, 200)
+	if m["state"] != "merged" {
+		t.Fatalf("squash merge = %v", m)
+	}
+	if !containsStr(rawGet(t, alice, "/repos/pr2/commits?ref=main"), "Merge pull request") {
+		t.Fatal("squash 后应存在 Merge pull request 提交")
+	}
+	gitDo(t, repo, key, "fetch", "-q", "origin")
+	out := runCmd(t, repo, nil, "git", "show", "origin/main:a.txt")
+	if !strings.Contains(out, "change from a") {
+		t.Fatalf("squash 后 main 缺少改动: %q", out)
+	}
+
+	// 新分支再次分叉后用 merge（merge commit）合并
+	gitDo(t, repo, key, "fetch", "-q", "origin")
+	gitDo(t, repo, key, "checkout", "-q", "-B", "main", "origin/main")
+	gitDo(t, repo, key, "checkout", "-q", "-b", "branch-b")
+	write("b.txt", "b content")
+	comm("b work")
+	gitDo(t, repo, key, "push", "-q", "-u", "origin", "branch-b")
+	gitDo(t, repo, key, "checkout", "-q", "main")
+	write("m2.txt", "main again")
+	comm("main again")
+	gitDo(t, repo, key, "push", "-q", "origin", "HEAD")
+	alice.mustStatus("POST", prPath("alice", "pr2", ""),
+		map[string]string{"title": "mc", "source_branch": "branch-b", "target_branch": "main"}, 201)
+	merged := alice.mustStatus("POST", prPath("alice", "pr2", "/2/merge"),
+		map[string]string{"method": "merge"}, 200)
+	if merged["state"] != "merged" {
+		t.Fatalf("merge commit = %v", merged)
+	}
+	// 合并后存在 merge commit（提交数比 squash 场景多）
+	if !containsStr(rawGet(t, alice, "/repos/pr2/commits?ref=main"), "Merge pull request") {
+		t.Fatal("merge commit 缺失")
+	}
+	// 非法 method
+	gitDo(t, repo, key, "fetch", "-q", "origin")
+	gitDo(t, repo, key, "checkout", "-q", "-B", "main", "origin/main")
+	gitDo(t, repo, key, "checkout", "-q", "-b", "branch-c")
+	write("c.txt", "c")
+	comm("c work")
+	gitDo(t, repo, key, "push", "-q", "-u", "origin", "branch-c")
+	gitDo(t, repo, key, "checkout", "-q", "main")
+	write("m3.txt", "m3")
+	comm("m3")
+	gitDo(t, repo, key, "push", "-q", "origin", "HEAD")
+	alice.mustStatus("POST", prPath("alice", "pr2", ""),
+		map[string]string{"title": "bad", "source_branch": "branch-c", "target_branch": "main"}, 201)
+	alice.mustFail("POST", prPath("alice", "pr2", "/3/merge"),
+		map[string]string{"method": "rebase"}, 400)
+
+	// commit diff：取 main 上一个提交，diff 应包含对应文件
+	commitsRaw := rawGet(t, alice, "/repos/pr2/commits?ref=main")
+	var cs []map[string]any
+	if err := json.Unmarshal([]byte(commitsRaw), &cs); err != nil || len(cs) == 0 {
+		t.Fatalf("commits decode: %v (%s)", err, commitsRaw)
+	}
+	sha, _ := cs[0]["sha"].(string)
+	cd := alice.mustStatus("GET", fmt.Sprintf("/users/alice/repos/pr2/commits/%s/diff", sha), nil, 200)
+	if cd["patch"] == nil {
+		t.Fatalf("commit diff = %v", cd)
+	}
+	// 非法 sha
+	alice.mustFail("GET", "/users/alice/repos/pr2/commits/badshadiff/diff", nil, 400)
+	alice.mustFail("GET", fmt.Sprintf("/users/alice/repos/pr2/commits/%s/diff", "zz"+sha[2:]), nil, 400)
 }

@@ -103,3 +103,37 @@ def uuid4hex() -> str:
     import uuid
 
     return uuid.uuid4().hex[:10]
+
+
+def test_repo_create_from_readme_template(user_factory):
+    _, _, c = user_factory()
+    name = f"tpl-{_uuid()}"
+    c.post("/repos", json={"name": name, "template": "readme"}, expect=201)
+
+    branches = c.get(f"/repos/{name}/branches", expect=200).json()
+    assert [b["name"] for b in branches] == ["main"]
+
+    blob = c.get(f"/repos/{name}/blob?ref=main&path=README.md", expect=200).json()
+    assert blob["content"] == f"# {name}\n"
+
+    commits = c.get(f"/repos/{name}/commits?ref=main", expect=200).json()
+    assert commits and commits[0]["message"] == "Initial commit"
+    c.delete(f"/repos/{name}", expect=204)
+
+
+def test_repo_create_template_validation(user_factory):
+    _, _, c = user_factory()
+    # 非法 template → 400 且不留仓库
+    c.post("/repos", json={"name": "bad-1", "template": "nope"}, expect=400)
+    c.get("/repos/bad-1", expect=404)
+    # 默认（不传 template）仍是空仓库
+    name = f"empty-{_uuid()}"
+    c.post("/repos", json={"name": name}, expect=201)
+    assert c.get(f"/repos/{name}/branches", expect=200).json() == []
+    c.delete(f"/repos/{name}", expect=204)
+
+
+def _uuid() -> str:
+    import uuid
+
+    return uuid.uuid4().hex[:10]

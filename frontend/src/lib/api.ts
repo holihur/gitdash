@@ -231,8 +231,11 @@ export const api = {
 
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
   listRepos: () => req<Repo[]>("/repos"),
-  createRepo: (name: string, description: string) =>
-    req<Repo>("/repos", { method: "POST", body: JSON.stringify({ name, description }) }),
+  createRepo: (name: string, description: string, template?: "" | "readme") =>
+    req<Repo>("/repos", {
+      method: "POST",
+      body: JSON.stringify({ name, description, template: template ?? "" }),
+    }),
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
   deleteRepo: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),
@@ -250,6 +253,8 @@ export const api = {
     ),
   commits: (owner: string, name: string, ref: string) =>
     req<Commit[]>(`/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
+  commitDiff: (owner: string, name: string, sha: string) =>
+    req<PullDiff>(`/users/${owner}/repos/${name}/commits/${sha}/diff`),
 
   // issues
   listIssues: (owner: string, name: string) => req<Issue[]>(`/users/${owner}/repos/${name}/issues`),
@@ -307,8 +312,11 @@ export const api = {
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}`),
   pullDiff: (owner: string, name: string, number: number) =>
     req<PullDiff>(`/users/${owner}/repos/${name}/pulls/${number}/diff`),
-  mergePull: (owner: string, name: string, number: number) =>
-    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/merge`, { method: "POST" }),
+  mergePull: (owner: string, name: string, number: number, method?: "merge" | "squash") =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/merge`, {
+      method: "POST",
+      body: JSON.stringify(method ? { method } : {}),
+    }),
   setPullState: (owner: string, name: string, number: number, state: "open" | "closed") =>
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/state`, {
       method: "POST",

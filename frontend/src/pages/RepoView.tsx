@@ -12,7 +12,7 @@ import {
   GitCommitHorizontal,
   MoreVertical,
 } from "lucide-react";
-import { api, cloneCommand, type Blob, type Branch, type Commit, type Repo, type TreeEntry } from "@/lib/api";
+import { api, cloneCommand, type Blob, type Branch, type Commit, type PullDiff, type Repo, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,7 @@ import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MarkdownView, CodeText } from "@/components/markdown";
+import { DiffView, type DiffFileInfo } from "@/components/diff-view";
 import RepoIssues from "@/pages/RepoIssues";
 import RepoPulls from "@/pages/RepoPulls";
 
@@ -132,6 +133,8 @@ export default function RepoView() {
   const [entries, setEntries] = useState<TreeEntry[]>([]);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
+  const [diffSha, setDiffSha] = useState<string | null>(null);
+  const [diffData, setDiffData] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
   const [tab, setTab] = useState("code");
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
@@ -182,6 +185,21 @@ export default function RepoView() {
       .then(setCommits)
       .catch((e) => toast.error(apiErrorMsg(to, e)));
   }, [tab, name, ref]);
+
+  useEffect(() => {
+    if (!diffSha) {
+      setDiffData(null);
+      return;
+    }
+    let alive = true;
+    api
+      .commitDiff(owner, name, diffSha)
+      .then((d: PullDiff) => alive && setDiffData({ files: d.files, patch: d.patch }))
+      .catch(() => alive && setDiffData(null));
+    return () => {
+      alive = false;
+    };
+  }, [diffSha, owner, name]);
 
   const openEntry = async (entry: TreeEntry) => {
     if (entry.type === "tree") {
@@ -463,7 +481,12 @@ export default function RepoView() {
                   {commits.map((c) => (
                     <TableRow key={c.sha}>
                       <TableCell>
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-3 text-left"
+                          onClick={() => setDiffSha(diffSha === c.sha ? null : c.sha)}
+                          title={t("commits.viewDiff")}
+                        >
                           <GitCommitHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
                           <code className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs">
                             {c.sha.slice(0, 7)}
@@ -479,7 +502,13 @@ export default function RepoView() {
                               {c.gpg_verified}
                             </Badge>
                           )}
-                        </div>
+                          <ChevronDown
+                            className={cn(
+                              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+                              diffSha === c.sha && "rotate-180",
+                            )}
+                          />
+                          </button>
                       </TableCell>
                       <TableCell className="text-sm">{c.author}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -490,6 +519,21 @@ export default function RepoView() {
                 </TableBody>
               </Table>
             </div>
+          )}
+
+          {diffSha && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="font-mono text-sm">{diffSha.slice(0, 12)}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {diffData ? (
+                  <DiffView files={diffData.files} patch={diffData.patch} />
+                ) : (
+                  <p className="py-6 text-center text-sm text-muted-foreground">…</p>
+                )}
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
