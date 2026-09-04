@@ -160,11 +160,14 @@ func Branches(owner, name string) ([]Branch, error) {
 }
 
 type Entry struct {
-	Name string `json:"name"`
-	Type string `json:"type"` // blob | tree
-	Mode string `json:"mode"`
-	Size int64  `json:"size"`
-	SHA  string `json:"sha"`
+	Name        string `json:"name"`
+	Type        string `json:"type"` // blob | tree
+	Mode        string `json:"mode"`
+	Size        int64  `json:"size"`
+	SHA         string `json:"sha"`
+	ModifiedAt  string `json:"modified_at,omitempty"`
+	ModifiedBy  string `json:"modified_by,omitempty"`
+	ModifiedMsg string `json:"modified_msg,omitempty"`
 }
 
 func Tree(owner, name, ref, dir string) ([]Entry, error) {
@@ -202,6 +205,27 @@ func Tree(owner, name, ref, dir string) ([]Entry, error) {
 		}
 		size, _ := strconv.ParseInt(fields[3], 10, 64)
 		entries = append(entries, Entry{Name: file, Type: fields[1], Mode: fields[0], Size: size, SHA: fields[2]})
+	}
+	// 每个条目的最后修改信息：最后一次触碰该路径的提交时间/作者/说明
+	for i := range entries {
+		p := entries[i].Name
+		if dir != "" {
+			p = dir + "/" + p
+		}
+		out, err := gitOut(path, "log", "-1", "--pretty=format:%cI%x1f%an%x1f%s", ref, "--", p)
+		if err != nil {
+			continue
+		}
+		parts := strings.SplitN(strings.TrimSpace(out), "\x1f", 3)
+		if len(parts) >= 1 && parts[0] != "" {
+			entries[i].ModifiedAt = parts[0]
+		}
+		if len(parts) >= 2 {
+			entries[i].ModifiedBy = parts[1]
+		}
+		if len(parts) >= 3 {
+			entries[i].ModifiedMsg = parts[2]
+		}
 	}
 	return entries, nil
 }
@@ -573,6 +597,28 @@ func WriteCommit(owner, name, branch, message, author string, changes []FileChan
 	if _, err := gitOut(tmp, "rev-parse", "-q", "--verify", "refs/remotes/origin/"+branch); err == nil {
 		if _, err := gitOut(tmp, "checkout", "-q", "-B", "_gd_work", "origin/"+branch); err != nil {
 			return "", err
+		}
+	}
+
+	// 目录内出现第一个真实文件时，自动移除隐藏占位 .gitkeep
+	if lsOut, err := gitOut(tmp, "ls-files"); err == nil {
+		tracked := map[string]bool{}
+		for _, ln := range strings.Split(strings.TrimSpace(lsOut), "\n") {
+			if ln != "" {
+				tracked[ln] = true
+			}
+		}
+		cleaned := map[string]bool{}
+		for _, c := range changes {
+			if (c.Action == "create" || c.Action == "update") && c.Path != "" {
+				if i := strings.LastIndex(c.Path, "/"); i > 0 {
+					gk := c.Path[:i] + "/.gitkeep"
+					if tracked[gk] && !cleaned[gk] {
+						cleaned[gk] = true
+						changes = append(changes, FileChange{Path: gk, Action: "delete"})
+					}
+				}
+			}
 		}
 	}
 

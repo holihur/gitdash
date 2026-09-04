@@ -72,7 +72,9 @@ export default function FileOpDialog({ open, onOpenChange, owner, repo, branches
       ]);
       toast.success(t("fops.saved", { path: submitPath }));
       onOpenChange(false);
-      onSaved(branch, submitPath);
+      // 提交后回到父目录（避免把文件名当目录加载）
+      const i = submitPath.lastIndexOf("/");
+      onSaved(branch, i > 0 ? submitPath.slice(0, i) : "");
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {

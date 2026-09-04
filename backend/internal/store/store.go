@@ -93,6 +93,29 @@ type PullRequest struct {
 	MergedBy     string  `json:"merged_by"`
 }
 
+// Label 仓库 issue 标签
+type Label struct {
+	ID        int64  `json:"id"`
+	Owner     string `json:"owner"`
+	Repo      string `json:"repo"`
+	Name      string `json:"name"`
+	Color     string `json:"color"`
+	CreatedAt string `json:"created_at"`
+}
+
+// Milestone 仓库里程碑
+type Milestone struct {
+	ID           int64  `json:"id"`
+	Owner        string `json:"owner"`
+	Repo         string `json:"repo"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	State        string `json:"state"` // open | closed
+	OpenIssues   int    `json:"open_issues"`
+	ClosedIssues int    `json:"closed_issues"`
+	CreatedAt    string `json:"created_at"`
+}
+
 type GPGKey struct {
 	ID          int64  `json:"id"`
 	Fingerprint string `json:"fingerprint"`
@@ -187,7 +210,31 @@ CREATE TABLE IF NOT EXISTS issues (
 	created_at TEXT NOT NULL,
 	updated_at TEXT NOT NULL,
 	closed_at  TEXT,
+	milestone_id INTEGER,
 	UNIQUE(owner, repo, number)
+);
+CREATE TABLE IF NOT EXISTS repo_labels (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	name       TEXT NOT NULL,
+	color      TEXT NOT NULL DEFAULT '0366d6',
+	created_at TEXT NOT NULL,
+	UNIQUE(owner, repo, name)
+);
+CREATE TABLE IF NOT EXISTS issue_labels (
+	issue_id INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+	label_id INTEGER NOT NULL REFERENCES repo_labels(id) ON DELETE CASCADE,
+	PRIMARY KEY (issue_id, label_id)
+);
+CREATE TABLE IF NOT EXISTS milestones (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner       TEXT NOT NULL,
+	repo        TEXT NOT NULL,
+	title       TEXT NOT NULL,
+	description TEXT NOT NULL DEFAULT '',
+	state       TEXT NOT NULL DEFAULT 'open',
+	created_at  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS repo_collabs (
 	owner      TEXT NOT NULL,
@@ -239,6 +286,9 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 		return err
 	}
 	if err := ensureColumn(s.db, "users", "mfa_enabled", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := ensureColumn(s.db, "issues", "milestone_id", "INTEGER"); err != nil {
 		return err
 	}
 	return nil
@@ -440,6 +490,11 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	if _, err := tx.Exec(`DELETE FROM issues WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
+	for _, table := range []string{"repo_labels", "milestones"} {
+		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+			return err
+		}
+	}
 	if _, err := tx.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
@@ -448,6 +503,11 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	}
 	if _, err := tx.Exec(`DELETE FROM pull_requests WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
+	}
+	for _, table := range []string{"repo_labels", "milestones"} {
+		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+			return err
+		}
 	}
 	res, err := tx.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
 	if err != nil {
@@ -879,6 +939,11 @@ func (s *Store) CreatePull(owner, repo, author, title, body, source, target, bas
 	return pr, err
 }
 
+// GetPullIssue 按仓库内序号取 issue（供 label/milestone 更新后回读）。
+func (s *Store) GetPullIssue(owner, repo string, number int64) (Issue, error) {
+	return s.getIssue(owner, repo, number)
+}
+
 func (s *Store) GetPull(owner, repo string, number int64) (PullRequest, error) {
 	return s.getPull(owner, repo, number)
 }
@@ -940,4 +1005,271 @@ func (s *Store) MarkPullMerged(owner, repo string, number int64, headSHA, merged
 		return PullRequest{}, ErrNotFound
 	}
 	return s.getPull(owner, repo, number)
+}
+
+// ---- issue labels & milestones ----
+
+func (s *Store) CreateLabel(owner, repo, name, color string) (Label, error) {
+	l := Label{Owner: owner, Repo: repo, Name: name, Color: color, CreatedAt: now()}
+	res, err := s.db.Exec(`INSERT INTO repo_labels (owner, repo, name, color, created_at) VALUES (?,?,?,?,?)`,
+		owner, repo, name, color, l.CreatedAt)
+	if err != nil {
+		if isUniqueErr(err) {
+			return l, ErrExists
+		}
+		return l, err
+	}
+	l.ID, _ = res.LastInsertId()
+	return l, nil
+}
+
+func (s *Store) ListLabels(owner, repo string) ([]Label, error) {
+	rows, err := s.db.Query(`SELECT id, owner, repo, name, color, created_at
+		FROM repo_labels WHERE owner = ? AND repo = ? ORDER BY name`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Label{}
+	for rows.Next() {
+		var l Label
+		if err := rows.Scan(&l.ID, &l.Owner, &l.Repo, &l.Name, &l.Color, &l.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UpdateLabel(owner, repo string, id int64, name, color string) (Label, error) {
+	res, err := s.db.Exec(`UPDATE repo_labels SET name = ?, color = ? WHERE id = ? AND owner = ? AND repo = ?`,
+		name, color, id, owner, repo)
+	if err != nil {
+		return Label{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return Label{}, ErrNotFound
+	}
+	rows, err := s.db.Query(`SELECT id, owner, repo, name, color, created_at FROM repo_labels WHERE id = ?`, id)
+	if err != nil {
+		return Label{}, err
+	}
+	defer rows.Close()
+	var l Label
+	if rows.Next() {
+		_ = rows.Scan(&l.ID, &l.Owner, &l.Repo, &l.Name, &l.Color, &l.CreatedAt)
+	}
+	return l, rows.Err()
+}
+
+func (s *Store) DeleteLabel(owner, repo string, id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM issue_labels WHERE label_id = ? AND issue_id IN
+		(SELECT id FROM issues WHERE owner = ? AND repo = ?)`, id, owner, repo); err != nil {
+		return err
+	}
+	res, err := tx.Exec(`DELETE FROM repo_labels WHERE id = ? AND owner = ? AND repo = ?`, id, owner, repo)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
+// SetIssueLabels 全量替换 issue 标签（校验标签属于该仓库）。
+func (s *Store) SetIssueLabels(owner, repo string, number int64, labelIDs []int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var issueID int64
+	err = tx.QueryRow(`SELECT id FROM issues WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).Scan(&issueID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	for _, id := range labelIDs {
+		var one int
+		if err := tx.QueryRow(`SELECT 1 FROM repo_labels WHERE id = ? AND owner = ? AND repo = ?`, id, owner, repo).Scan(&one); err != nil {
+			return fmt.Errorf("label %d does not belong to this repository", id)
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM issue_labels WHERE issue_id = ?`, issueID); err != nil {
+		return err
+	}
+	for _, id := range labelIDs {
+		if _, err := tx.Exec(`INSERT INTO issue_labels (issue_id, label_id) VALUES (?, ?)`, issueID, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// IssueLabels 返回若干 issue（number）的标签映射。
+func (s *Store) IssueLabels(owner, repo string, numbers []int64) (map[int64][]Label, error) {
+	out := map[int64][]Label{}
+	if len(numbers) == 0 {
+		return out, nil
+	}
+	rows, err := s.db.Query(`SELECT i.number, l.id, l.name, l.color FROM issue_labels il
+		JOIN issues i ON i.id = il.issue_id
+		JOIN repo_labels l ON l.id = il.label_id
+		WHERE i.owner = ? AND i.repo = ?`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var num, id int64
+		var name, color string
+		if err := rows.Scan(&num, &id, &name, &color); err != nil {
+			return nil, err
+		}
+		out[num] = append(out[num], Label{ID: id, Name: name, Color: color})
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateMilestone(owner, repo, title, description string) (Milestone, error) {
+	m := Milestone{Owner: owner, Repo: repo, Title: title, Description: description, State: "open", CreatedAt: now()}
+	res, err := s.db.Exec(`INSERT INTO milestones (owner, repo, title, description, state, created_at) VALUES (?,?,?,?,'open',?)`,
+		owner, repo, title, description, m.CreatedAt)
+	if err != nil {
+		return m, err
+	}
+	m.ID, _ = res.LastInsertId()
+	return m, nil
+}
+
+func (s *Store) ListMilestones(owner, repo string) ([]Milestone, error) {
+	rows, err := s.db.Query(`SELECT m.id, m.owner, m.repo, m.title, m.description, m.state, m.created_at,
+		COALESCE(SUM(CASE WHEN i.state = 'open' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN i.state = 'closed' THEN 1 ELSE 0 END), 0)
+		FROM milestones m LEFT JOIN issues i ON i.milestone_id = m.id AND i.owner = m.owner AND i.repo = m.repo
+		WHERE m.owner = ? AND m.repo = ? GROUP BY m.id ORDER BY m.title`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Milestone{}
+	for rows.Next() {
+		var m Milestone
+		if err := rows.Scan(&m.ID, &m.Owner, &m.Repo, &m.Title, &m.Description, &m.State, &m.CreatedAt,
+			&m.OpenIssues, &m.ClosedIssues); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UpdateMilestone(owner, repo string, id int64, title, description, state string) (Milestone, error) {
+	if title != "" {
+		if _, err := s.db.Exec(`UPDATE milestones SET title = ? WHERE id = ? AND owner = ? AND repo = ?`,
+			title, id, owner, repo); err != nil {
+			return Milestone{}, err
+		}
+	}
+	if description != "" {
+		if _, err := s.db.Exec(`UPDATE milestones SET description = ? WHERE id = ? AND owner = ? AND repo = ?`,
+			description, id, owner, repo); err != nil {
+			return Milestone{}, err
+		}
+	}
+	if state != "" {
+		if _, err := s.db.Exec(`UPDATE milestones SET state = ? WHERE id = ? AND owner = ? AND repo = ?`,
+			state, id, owner, repo); err != nil {
+			return Milestone{}, err
+		}
+	}
+	res, err := s.db.Exec(`UPDATE milestones SET title = title WHERE id = ? AND owner = ? AND repo = ?`, id, owner, repo)
+	if err != nil {
+		return Milestone{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 && title == "" && description == "" && state == "" {
+		return Milestone{}, ErrNotFound
+	}
+	// 重新读取
+	list, err := s.ListMilestones(owner, repo)
+	if err != nil {
+		return Milestone{}, err
+	}
+	for _, m := range list {
+		if m.ID == id {
+			return m, nil
+		}
+	}
+	return Milestone{}, ErrNotFound
+}
+
+func (s *Store) DeleteMilestone(owner, repo string, id int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`UPDATE issues SET milestone_id = NULL WHERE owner = ? AND repo = ? AND milestone_id = ?`,
+		owner, repo, id); err != nil {
+		return err
+	}
+	res, err := tx.Exec(`DELETE FROM milestones WHERE id = ? AND owner = ? AND repo = ?`, id, owner, repo)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
+// SetIssueMilestone 设置/清除 issue 里程碑（返回是否属于仓库校验）。
+func (s *Store) SetIssueMilestone(owner, repo string, number, milestoneID int64) error {
+	var issueID int64
+	err := s.db.QueryRow(`SELECT id FROM issues WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).Scan(&issueID)
+	if err != nil {
+		return ErrNotFound
+	}
+	if milestoneID == 0 {
+		_, err := s.db.Exec(`UPDATE issues SET milestone_id = NULL WHERE id = ?`, issueID)
+		return err
+	}
+	var one int
+	if err := s.db.QueryRow(`SELECT 1 FROM milestones WHERE id = ? AND owner = ? AND repo = ?`, milestoneID, owner, repo).Scan(&one); err != nil {
+		return fmt.Errorf("milestone does not belong to this repository")
+	}
+	_, err = s.db.Exec(`UPDATE issues SET milestone_id = ? WHERE id = ?`, milestoneID, issueID)
+	return err
+}
+
+// IssueMilestones 返回 issue number -> 所属里程碑（精简字段）。
+func (s *Store) IssueMilestones(owner, repo string, numbers []int64) (map[int64]Milestone, error) {
+	out := map[int64]Milestone{}
+	if len(numbers) == 0 {
+		return out, nil
+	}
+	rows, err := s.db.Query(`SELECT i.number, m.id, m.title, m.state FROM issues i
+		JOIN milestones m ON m.id = i.milestone_id
+		WHERE i.owner = ? AND i.repo = ? AND i.milestone_id IS NOT NULL`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var num, id int64
+		var title, state string
+		if err := rows.Scan(&num, &id, &title, &state); err != nil {
+			return nil, err
+		}
+		out[num] = Milestone{ID: id, Title: title, State: state}
+	}
+	return out, rows.Err()
 }

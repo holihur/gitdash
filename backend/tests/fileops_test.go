@@ -72,6 +72,20 @@ func TestWebFileOps(t *testing.T) {
 		"changes": []any{map[string]any{"path": "assets/.gitkeep", "action": "create", "content": ""}},
 	}, 201)
 
+	// 3.1) 目录里出现第一个真实文件时，占位 .gitkeep 被自动移除
+	writeCommit(t, alice, "alice", "ops", map[string]any{
+		"message": "add logo",
+		"changes": []any{map[string]any{"path": "assets/logo.png", "action": "create", "content": "x"}},
+	}, 201)
+	assets := treeRaw(t, alice, "ops", "main", "assets")
+	names := []string{}
+	for _, e := range assets {
+		names = append(names, e["name"].(string))
+	}
+	if len(names) != 1 || names[0] != "logo.png" {
+		t.Fatalf("assets after auto-clean = %v", names)
+	}
+
 	// 4) 递归删除目录
 	writeCommit(t, alice, "alice", "ops", map[string]any{
 		"message": "rm docs",

@@ -84,6 +84,9 @@ export interface TreeEntry {
   mode: string;
   size: number;
   sha: string;
+  modified_at?: string;
+  modified_by?: string;
+  modified_msg?: string;
 }
 
 export interface Blob {

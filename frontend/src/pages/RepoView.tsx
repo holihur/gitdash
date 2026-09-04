@@ -480,10 +480,13 @@ export default function RepoView() {
                     <TableHead>{t("common.name")}</TableHead>
                     <TableHead className="w-24">{t("common.type")}</TableHead>
                     <TableHead className="w-28 text-right">{t("common.size")}</TableHead>
+                    <TableHead className="w-44">{t("fops.lastModified")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map((entry) => {
+                  {entries
+                    .filter((e) => e.name !== ".gitkeep") // 隐藏占位文件
+                    .map((entry) => {
                     const targetPath = currentDir ? currentDir + "/" + entry.name : entry.name;
                     return (
                     <TableRow key={entry.name}>
@@ -539,13 +542,27 @@ export default function RepoView() {
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {entry.type === "blob" ? formatSize(entry.size) : "-"}
                       </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {entry.modified_at ? (
+                          <span
+                            title={
+                              [entry.modified_by, entry.modified_msg].filter(Boolean).join(" · ") ||
+                              entry.modified_at
+                            }
+                          >
+                            {formatDate(entry.modified_at, locale)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                     </TableRow>
                     );
-                  })}
-                  {entries.length === 0 && (
+                    })}
+                  {entries.filter((e) => e.name !== ".gitkeep").length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={3}
+                        colSpan={4}
                         className="py-10 text-center text-sm text-muted-foreground"
                       >
                         {t("repo.emptyDir")}
