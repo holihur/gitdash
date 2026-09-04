@@ -13,7 +13,7 @@
 - **前端**：React + Vite + Tailwind + shadcn/ui 风格组件
 - **后端**：Go 标准库 HTTP + `golang.org/x/crypto/ssh` + SQLite（modernc，纯 Go 无 CGO）
 - **单二进制发布**：GoReleaser 发布时前端已 embed 进二进制，下载即用
-- **自动化测试**：`backend/tests/` 按功能覆盖（auth / repos / keys / browse / ssh git / updater / store / webui）
+- **自动化测试**：`backend/tests/` 按功能覆盖（auth / repos / keys / browse / ssh git / updater / store / webui）；根目录 `tests/` 另有一套与后端完全隔离的黑盒 API 测试（pytest + requests + uv）
 
 ## 一键安装
 
@@ -109,13 +109,26 @@ GITDASH_AUTO_UPDATE=1 gitdash serve
 
 ## 自动化测试
 
+后端集成测试（Go）：
+
 ```bash
 cd backend
 go test ./...          # 单元测试 + backend/tests/ 集成测试
 bash scripts/e2e.sh    # 全链路冒烟（真实二进制：注册登录 -> ssh clone/push -> 浏览 -> 多用户隔离）
 ```
 
-`backend/tests/` 按功能划分：`auth`（注册/登录/会话）、`repos`（仓库 CRUD 与隔离）、`sshkeys`（公钥 CRUD 与绑定）、`browse`（tree/blob/commits）、`sshgit`（真实 SSH clone/push 与权限拒绝）、`updater`（版本比较/校验/解包）、`store`（schema 迁移）、`webui`（静态托管/SPA fallback/路径穿越防护）。CI 中全部自动执行。
+黑盒 API 测试（pytest + requests，依赖用 uv 管理，与后端源码/构建完全隔离）：
+
+```bash
+# 1) 单独构建被测二进制
+(cd backend && go build -o /tmp/gitdash-server .)
+# 2) 运行：夹具在独立临时数据目录 + 随机端口上启动全新实例，结束后销毁
+(cd tests && GITDASH_BIN=/tmp/gitdash-server uv run pytest -v)
+# 或指向一个已运行的实例：GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest
+```
+
+- `backend/tests/` 按功能划分：`auth`（注册/登录/会话）、`repos`（仓库 CRUD 与隔离）、`sshkeys`（公钥 CRUD 与绑定）、`browse`（tree/blob/commits）、`sshgit`（真实 SSH clone/push 与权限拒绝）、`updater`（版本比较/校验/解包）、`store`（schema 迁移）、`webui`（静态托管/SPA fallback/路径穿越防护）。CI 中全部自动执行。
+- `tests/`（仓库根目录）为**独立、隔离**的纯黑盒接口自动化测试：不 import 后端代码、不执行 go 构建；用例随机命名、互不共享状态，覆盖 auth / repos / issues / ssh keys 的 happy path 与 bad path（400/401/404/409…）。详见 `tests/README.md`。
 
 ## API 一览
 

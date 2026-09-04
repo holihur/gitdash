@@ -11,3 +11,9 @@ data/
 *.db
 *.db-shm
 *.db-wal
+
+# python (uv) api tests
+tests/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

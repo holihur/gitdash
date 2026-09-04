@@ -1,0 +1,23 @@
+[project]
+name = "gitdash-api-tests"
+version = "0.1.0"
+description = "Black-box HTTP API tests for gitdash (pytest + requests). Fully isolated from the Go backend: no backend code imports, no go build inside tests."
+requires-python = ">=3.9"
+dependencies = [
+    "pytest>=8.0",
+    "requests>=2.31",
+]
+
+# 纯测试项目：不把自身作为可安装包
+[tool.uv]
+package = false
+
+# 固定官方 PyPI 作为默认索引（不依赖本机/CI 的镜像配置）
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-q"
