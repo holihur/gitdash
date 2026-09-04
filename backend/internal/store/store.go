@@ -35,6 +35,7 @@ type Repo struct {
 	Owner       string `json:"owner"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Private     bool   `json:"private"`
 	CreatedAt   string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
@@ -91,6 +92,21 @@ type PullRequest struct {
 	UpdatedAt    string  `json:"updated_at"`
 	MergedAt     *string `json:"merged_at"`
 	MergedBy     string  `json:"merged_by"`
+}
+
+// Org 组织（命名空间）：成员可把仓库 owner 设为组织名。
+type Org struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Display   string `json:"display"`
+	CreatedAt string `json:"created_at"`
+}
+
+// OrgMember 组织成员（owner 拥有全部管理权，member 可写组织仓库）
+type OrgMember struct {
+	Org      string `json:"org"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 }
 
 // Label 仓库 issue 标签
@@ -188,6 +204,7 @@ CREATE TABLE IF NOT EXISTS repos (
 	owner       TEXT NOT NULL,
 	name        TEXT NOT NULL,
 	description TEXT NOT NULL DEFAULT '',
+	private     INTEGER NOT NULL DEFAULT 1,
 	created_at  TEXT NOT NULL,
 	UNIQUE(owner, name)
 );
@@ -254,6 +271,49 @@ CREATE TABLE IF NOT EXISTS webhooks (
 	created_at TEXT NOT NULL,
 	UNIQUE(owner, repo, url)
 );
+CREATE TABLE IF NOT EXISTS admin_users (
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	username      TEXT NOT NULL UNIQUE,
+	password_hash TEXT NOT NULL,
+	created_at    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_sessions (
+	token      TEXT PRIMARY KEY,
+	admin_id   INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+	created_at TEXT NOT NULL,
+	expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS user_oauth (
+	provider   TEXT NOT NULL,
+	external_id TEXT NOT NULL,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (provider, external_id)
+);
+CREATE TABLE IF NOT EXISTS orgs (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	name       TEXT NOT NULL UNIQUE,
+	display    TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS org_members (
+	org      TEXT NOT NULL,
+	username TEXT NOT NULL,
+	role     TEXT NOT NULL DEFAULT 'member',
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (org, username)
+);
+CREATE TABLE IF NOT EXISTS repo_stars (
+	username   TEXT NOT NULL,
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (username, owner, repo)
+);
 CREATE TABLE IF NOT EXISTS gpg_keys (
 	id          INTEGER PRIMARY KEY AUTOINCREMENT,
 	user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -294,6 +354,9 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 		return err
 	}
 	if err := ensureColumn(s.db, "webhooks", "secret", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := ensureColumn(s.db, "repos", "private", "INTEGER NOT NULL DEFAULT 1"); err != nil {
 		return err
 	}
 	return nil
@@ -452,10 +515,14 @@ func (s *Store) ClearMFA(username string) error {
 
 // ---- repos ----
 
-func (s *Store) CreateRepo(owner, name, description string) (Repo, error) {
-	r := Repo{Owner: owner, Name: name, Description: description, CreatedAt: now()}
-	res, err := s.db.Exec(`INSERT INTO repos (owner, name, description, created_at) VALUES (?, ?, ?, ?)`,
-		r.Owner, r.Name, r.Description, r.CreatedAt)
+func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo, error) {
+	r := Repo{Owner: owner, Name: name, Description: description, Private: private, CreatedAt: now()}
+	pv := 1
+	if !private {
+		pv = 0
+	}
+	res, err := s.db.Exec(`INSERT INTO repos (owner, name, description, private, created_at) VALUES (?, ?, ?, ?, ?)`,
+		r.Owner, r.Name, r.Description, pv, r.CreatedAt)
 	if err != nil {
 		if isUniqueErr(err) {
 			return r, ErrExists
@@ -467,7 +534,7 @@ func (s *Store) CreateRepo(owner, name, description string) (Repo, error) {
 }
 
 func (s *Store) ListRepos(owner string) ([]Repo, error) {
-	rows, err := s.db.Query(`SELECT id, owner, name, description, created_at FROM repos WHERE owner = ? ORDER BY name`, owner)
+	rows, err := s.db.Query(`SELECT id, owner, name, description, private, created_at FROM repos WHERE owner = ? ORDER BY name`, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +542,7 @@ func (s *Store) ListRepos(owner string) ([]Repo, error) {
 	repos := []Repo{}
 	for rows.Next() {
 		var r Repo
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
@@ -483,10 +550,45 @@ func (s *Store) ListRepos(owner string) ([]Repo, error) {
 	return repos, rows.Err()
 }
 
+// ExploreRepos 公开仓库（供发现页使用）。
+func (s *Store) ExploreRepos() ([]Repo, error) {
+	rows, err := s.db.Query(`SELECT id, owner, name, description, private, created_at
+		FROM repos WHERE private = 0 ORDER BY id DESC LIMIT 100`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	repos := []Repo{}
+	for rows.Next() {
+		var r Repo
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		repos = append(repos, r)
+	}
+	return repos, rows.Err()
+}
+
+// SetRepoPrivate 切换可见性（仅 owner 调用）。
+func (s *Store) SetRepoPrivate(owner, name string, private bool) error {
+	pv := 1
+	if !private {
+		pv = 0
+	}
+	res, err := s.db.Exec(`UPDATE repos SET private = ? WHERE owner = ? AND name = ?`, pv, owner, name)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) GetRepo(owner, name string) (Repo, error) {
 	var r Repo
-	err := s.db.QueryRow(`SELECT id, owner, name, description, created_at FROM repos WHERE owner = ? AND name = ?`, owner, name).
-		Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.CreatedAt)
+	err := s.db.QueryRow(`SELECT id, owner, name, description, private, created_at FROM repos WHERE owner = ? AND name = ?`, owner, name).
+		Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -502,10 +604,14 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	if _, err := tx.Exec(`DELETE FROM issues WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
-	for _, table := range []string{"repo_labels", "milestones"} {
-		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE owner = ? AND repo = ?`, owner, name); err != nil {
-			return err
-		}
+	if _, err := tx.Exec(`DELETE FROM repo_labels WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM milestones WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_stars WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
@@ -515,11 +621,6 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	}
 	if _, err := tx.Exec(`DELETE FROM pull_requests WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
-	}
-	for _, table := range []string{"repo_labels", "milestones"} {
-		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE owner = ? AND repo = ?`, owner, name); err != nil {
-			return err
-		}
 	}
 	res, err := tx.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
 	if err != nil {
@@ -645,6 +746,15 @@ func (s *Store) CanRead(owner, repo, username string) bool {
 	if owner == username {
 		return true
 	}
+	if s.IsOrg(owner) {
+		if s.OrgRole(owner, username) != "" {
+			return true
+		}
+		// 组织仓库公开时也放行（读）
+		if r, err := s.GetRepo(owner, repo); err == nil && !r.Private {
+			return true
+		}
+	}
 	var one int
 	err := s.db.QueryRow(`SELECT 1 FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ?`, owner, repo, username).Scan(&one)
 	return err == nil
@@ -654,18 +764,54 @@ func (s *Store) CanWrite(owner, repo, username string) bool {
 	if owner == username {
 		return true
 	}
+	if s.IsOrg(owner) {
+		role := s.OrgRole(owner, username)
+		if role == "owner" || role == "member" {
+			return true
+		}
+	}
 	var one int
 	err := s.db.QueryRow(`SELECT 1 FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ? AND permission = 'write'`, owner, repo, username).Scan(&one)
 	return err == nil
 }
 
+// IsRepoOwner owner 语义：用户本人，或该用户是仓库所属组织的 owner。
+func (s *Store) IsRepoOwner(owner, username string) bool {
+	if owner == username {
+		return true
+	}
+	if s.IsOrg(owner) {
+		return s.OrgRole(owner, username) == "owner"
+	}
+	return false
+}
+
+// QueryOrgRepos 组织的全部仓库。
+func (s *Store) QueryOrgRepos(org string) ([]Repo, error) {
+	rows, err := s.db.Query(`SELECT id, owner, name, description, private, created_at
+		FROM repos WHERE owner = ? ORDER BY name`, org)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Repo{}
+	for rows.Next() {
+		var r Repo
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // AccessibleRepos 返回用户自己拥有的仓库 + 作为协作者可访问的仓库（带 role）。
 func (s *Store) AccessibleRepos(username string) ([]Repo, error) {
 	rows, err := s.db.Query(`
-SELECT r.id, r.owner, r.name, r.description, r.created_at, 'owner' AS role
+SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at, 'owner' AS role
   FROM repos r WHERE r.owner = ?
 UNION ALL
-SELECT r.id, r.owner, r.name, r.description, r.created_at, c.permission AS role
+SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at, c.permission AS role
   FROM repo_collabs c JOIN repos r ON r.owner = c.owner AND r.name = c.repo
  WHERE c.username = ?
 ORDER BY owner, name`, username, username)
@@ -676,7 +822,7 @@ ORDER BY owner, name`, username, username)
 	repos := []Repo{}
 	for rows.Next() {
 		var r Repo
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.CreatedAt, &r.Role); err != nil {
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt, &r.Role); err != nil {
 			return nil, err
 		}
 		repos = append(repos, r)
@@ -1284,4 +1430,273 @@ func (s *Store) IssueMilestones(owner, repo string, numbers []int64) (map[int64]
 		out[num] = Milestone{ID: id, Title: title, State: state}
 	}
 	return out, rows.Err()
+}
+
+// ---- admin & settings & oauth ----
+
+func (s *Store) AdminCount() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM admin_users`).Scan(&n)
+	return n, err
+}
+
+func (s *Store) CreateAdminUser(username, passwordHash string) error {
+	_, err := s.db.Exec(`INSERT INTO admin_users (username, password_hash, created_at) VALUES (?, ?, ?)`,
+		username, passwordHash, now())
+	if err != nil && isUniqueErr(err) {
+		return ErrExists
+	}
+	return err
+}
+
+func (s *Store) AdminAuth(username string) (int64, string, error) {
+	var id int64
+	var hash string
+	err := s.db.QueryRow(`SELECT id, password_hash FROM admin_users WHERE username = ?`, username).Scan(&id, &hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", ErrNotFound
+	}
+	return id, hash, err
+}
+
+func (s *Store) UpdateAdminPassword(username, passwordHash string) error {
+	res, err := s.db.Exec(`UPDATE admin_users SET password_hash = ? WHERE username = ?`, passwordHash, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) CreateAdminSession(token string, adminID int64) error {
+	_, err := s.db.Exec(`INSERT INTO admin_sessions (token, admin_id, created_at, expires_at) VALUES (?, ?, ?, ?)`,
+		token, adminID, now(), time.Now().Add(12*time.Hour).UTC().Format(time.RFC3339))
+	return err
+}
+
+func (s *Store) GetAdminSession(token string) (int64, string, error) {
+	var id int64
+	var username string
+	err := s.db.QueryRow(`SELECT a.id, a.username FROM admin_sessions s
+		JOIN admin_users a ON a.id = s.admin_id
+		WHERE s.token = ? AND s.expires_at > ?`, token, now()).Scan(&id, &username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", ErrNotFound
+	}
+	return id, username, err
+}
+
+func (s *Store) DeleteAdminSession(token string) error {
+	_, err := s.db.Exec(`DELETE FROM admin_sessions WHERE token = ?`, token)
+	return err
+}
+
+func (s *Store) GetSetting(key string) string {
+	var v string
+	_ = s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&v)
+	return v
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	return err
+}
+
+func (s *Store) LinkOAuth(provider, externalID string, userID int64) error {
+	_, err := s.db.Exec(`INSERT INTO user_oauth (provider, external_id, user_id, created_at) VALUES (?, ?, ?, ?)`,
+		provider, externalID, userID, now())
+	if err != nil && isUniqueErr(err) {
+		return ErrExists
+	}
+	return err
+}
+
+// OAuthUser 返回 (userID, username) 或 ErrNotFound。
+func (s *Store) OAuthUser(provider, externalID string) (int64, string, error) {
+	var id int64
+	var username string
+	err := s.db.QueryRow(`SELECT u.id, u.username FROM user_oauth o JOIN users u ON u.id = o.user_id
+		WHERE o.provider = ? AND o.external_id = ?`, provider, externalID).Scan(&id, &username)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", ErrNotFound
+	}
+	return id, username, err
+}
+
+// ---- stars ----
+
+func (s *Store) StarRepo(username, owner, repo string) error {
+	_, err := s.db.Exec(`INSERT INTO repo_stars (username, owner, repo, created_at) VALUES (?, ?, ?, ?)`,
+		username, owner, repo, now())
+	if err != nil && isUniqueErr(err) {
+		return ErrExists
+	}
+	return err
+}
+
+func (s *Store) UnstarRepo(username, owner, repo string) error {
+	_, err := s.db.Exec(`DELETE FROM repo_stars WHERE username = ? AND owner = ? AND repo = ?`, username, owner, repo)
+	return err
+}
+
+func (s *Store) IsStarred(username, owner, repo string) bool {
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM repo_stars WHERE username = ? AND owner = ? AND repo = ?`,
+		username, owner, repo).Scan(&one)
+	return err == nil
+}
+
+// StarCounts 返回若干 (owner,repo) 的 star 数。
+func (s *Store) StarCounts(pairs [][2]string) map[[2]string]int {
+	out := map[[2]string]int{}
+	for _, p := range pairs {
+		var n int
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM repo_stars WHERE owner = ? AND repo = ?`, p[0], p[1]).Scan(&n)
+		out[p] = n
+	}
+	return out
+}
+
+// StarredRepos 我 star 过的公开/可访问仓库。
+func (s *Store) StarredRepos(username string) ([]Repo, error) {
+	rows, err := s.db.Query(`SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at
+		FROM repo_stars st JOIN repos r ON r.owner = st.owner AND r.name = st.repo
+		WHERE st.username = ? ORDER BY st.created_at DESC`, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Repo{}
+	for rows.Next() {
+		var r Repo
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) DeleteRepoStars(owner, repo string) error {
+	_, err := s.db.Exec(`DELETE FROM repo_stars WHERE owner = ? AND repo = ?`, owner, repo)
+	return err
+}
+
+// ---- orgs (namespace) ----
+
+func (s *Store) IsOrg(name string) bool {
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM orgs WHERE name = ?`, name).Scan(&one)
+	return err == nil
+}
+
+func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
+	if _, err := s.GetByUsername(name); err == nil {
+		return Org{}, ErrExists // 用户名占用
+	}
+	o := Org{Name: name, Display: display, CreatedAt: now()}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return o, err
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec(`INSERT INTO orgs (name, display, created_at) VALUES (?, ?, ?)`, name, display, o.CreatedAt)
+	if err != nil {
+		if isUniqueErr(err) {
+			return o, ErrExists
+		}
+		return o, err
+	}
+	o.ID, _ = res.LastInsertId()
+	if _, err := tx.Exec(`INSERT INTO org_members (org, username, role, created_at) VALUES (?, ?, 'owner', ?)`,
+		name, creator, now()); err != nil {
+		return o, err
+	}
+	return o, tx.Commit()
+}
+
+func (s *Store) ListMyOrgs(username string) ([]Org, error) {
+	rows, err := s.db.Query(`SELECT o.id, o.name, o.display, o.created_at FROM orgs o
+		JOIN org_members m ON m.org = o.name WHERE m.username = ? ORDER BY o.name`, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Org{}
+	for rows.Next() {
+		var o Org
+		if err := rows.Scan(&o.ID, &o.Name, &o.Display, &o.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) OrgRole(org, username string) string {
+	var role string
+	err := s.db.QueryRow(`SELECT role FROM org_members WHERE org = ? AND username = ?`, org, username).Scan(&role)
+	if err != nil {
+		return ""
+	}
+	return role
+}
+
+func (s *Store) OrgMembers(org string) ([]OrgMember, error) {
+	rows, err := s.db.Query(`SELECT org, username, role FROM org_members WHERE org = ? ORDER BY username`, org)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []OrgMember{}
+	for rows.Next() {
+		var m OrgMember
+		if err := rows.Scan(&m.Org, &m.Username, &m.Role); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) AddOrgMember(org, username, role string) error {
+	_, err := s.db.Exec(`INSERT INTO org_members (org, username, role, created_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT(org, username) DO UPDATE SET role = excluded.role`, org, username, role, now())
+	return err
+}
+
+func (s *Store) RemoveOrgMember(org, username string) error {
+	res, err := s.db.Exec(`DELETE FROM org_members WHERE org = ? AND username = ?`, org, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteOrg(org string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var cnt int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM repos WHERE owner = ?`, org).Scan(&cnt); err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return errors.New("org not empty")
+	}
+	if _, err := tx.Exec(`DELETE FROM org_members WHERE org = ?`, org); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM orgs WHERE name = ?`, org); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

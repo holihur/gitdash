@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -70,6 +72,25 @@ func run() {
 		interval := autoUpdateInterval()
 		log.Printf("auto-update enabled (interval %s)", interval)
 		go autoUpdateLoop(interval)
+	}
+
+	// Admin 引导（默认关闭）：首次启动时设置 GITDASH_ADMIN_PASSWORD 即启用管理面板
+	adminPW := os.Getenv("GITDASH_ADMIN_PASSWORD")
+	if adminPW != "" {
+		if n, err := st.AdminCount(); err == nil && n == 0 {
+			adminUser := os.Getenv("GITDASH_ADMIN_USER")
+			if adminUser == "" {
+				adminUser = "admin"
+			}
+			hash, err := bcrypt.GenerateFromPassword([]byte(adminPW), bcrypt.DefaultCost)
+			if err != nil {
+				log.Fatalf("admin bootstrap: %v", err)
+			}
+			if err := st.CreateAdminUser(adminUser, string(hash)); err != nil {
+				log.Fatalf("admin bootstrap: %v", err)
+			}
+			log.Printf("admin panel enabled: username %q (GITDASH_ADMIN_PASSWORD)", adminUser)
+		}
 	}
 
 	a := api.New(st, version)

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { GitBranch, ShieldCheck } from "lucide-react";
+import { GitBranch, Github, ShieldCheck } from "lucide-react";
 import { api, setToken } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -25,6 +25,18 @@ export default function Login({ onAuthed }: Props) {
   // MFA 二次验证阶段
   const [mfaToken, setMfaToken] = useState("");
   const [code, setCode] = useState("");
+  const [githubEnabled, setGithubEnabled] = useState(false);
+  const [oidc, setOidc] = useState<{ enabled: boolean; name: string }>({ enabled: false, name: "OIDC" });
+
+  useEffect(() => {
+    fetch("/api/auth/providers", { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((d) => {
+        setGithubEnabled(Boolean(d?.github?.enabled));
+        setOidc({ enabled: Boolean(d?.oidc?.enabled), name: d?.oidc?.name || "OIDC" });
+      })
+      .catch(() => undefined);
+  }, []);
 
   const finish = (r: { token?: string; username?: string }) => {
     if (!r.token || !r.username) return;
@@ -188,6 +200,28 @@ export default function Login({ onAuthed }: Props) {
               </form>
             </Tabs>
             <p className="mt-4 text-center text-xs text-muted-foreground">{t("login.hint")}</p>
+            {(githubEnabled || oidc.enabled) && (
+              <div className="mt-3 space-y-2">
+                {githubEnabled && (
+                  <a
+                    href="/api/auth/github"
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-input py-2 text-sm font-medium transition-colors hover:bg-accent"
+                  >
+                    <Github className="h-4 w-4" />
+                    {t("login.signInWithGithub")}
+                  </a>
+                )}
+                {oidc.enabled && (
+                  <a
+                    href="/api/auth/oidc/start"
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-input py-2 text-sm font-medium transition-colors hover:bg-accent"
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    {t("login.signInWithOIDC", { name: oidc.name })}
+                  </a>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

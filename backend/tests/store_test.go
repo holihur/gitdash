@@ -122,10 +122,10 @@ func TestStoreDataIsolation(t *testing.T) {
 	st.CreateUser("alice", "h")
 	st.CreateUser("bob", "h")
 
-	st.CreateRepo("alice", "demo", "")
-	st.CreateRepo("bob", "demo", "")
+	st.CreateRepo("alice", "demo", "", true)
+	st.CreateRepo("bob", "demo", "", true)
 
-	if _, err := st.CreateRepo("alice", "demo", ""); err != store.ErrExists {
+	if _, err := st.CreateRepo("alice", "demo", "", true); err != store.ErrExists {
 		t.Fatalf("dup repo = %v", err)
 	}
 
