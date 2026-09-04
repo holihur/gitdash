@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { GitBranch } from "lucide-react";
 import { api, setToken } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export default function Login({ onAuthed }: Props) {
-  const { t } = useI18n();
+  const { t, to } = useI18n();
   const nav = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +43,7 @@ export default function Login({ onAuthed }: Props) {
       );
       nav("/");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     } finally {
       setBusy(false);
     }

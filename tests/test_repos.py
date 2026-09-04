@@ -60,12 +60,12 @@ def test_repo_get_missing_404(user_factory):
 
 
 def test_repo_delete_twice(user_factory):
-    """当前契约：重复删除返回 500（后端未做幂等处理）。"""
+    """删除不存在的仓库返回 404。"""
     _, _, client = user_factory()
     name = f"r-{uuid4hex()}"
     client.post("/repos", json={"name": name}, expect=201)
     client.delete(f"/repos/{name}", expect=204)
-    client.delete(f"/repos/{name}", expect=500)
+    client.delete(f"/repos/{name}", expect=404)
 
 
 def test_repo_user_isolation(user_factory):
@@ -77,7 +77,7 @@ def test_repo_user_isolation(user_factory):
 
     # bob 看不到、取不到、删不掉 alice 的仓库
     bob.get(f"/repos/{repo}", expect=404)
-    bob.delete(f"/repos/{repo}", expect=500)
+    bob.delete(f"/repos/{repo}", expect=404)
 
     # 列表隔离
     assert repo not in [r["name"] for r in _list_repos(bob)]

@@ -26,9 +26,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 
 export default function Keys() {
-  const { t, lang } = useI18n();
+  const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [keys, setKeys] = useState<SSHKey[]>([]);
   const [open, setOpen] = useState(false);
@@ -40,7 +41,7 @@ export default function Keys() {
     try {
       setKeys(await api.listKeys());
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     }
   }, []);
 
@@ -58,7 +59,7 @@ export default function Keys() {
       setPublicKey("");
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     } finally {
       setBusy(false);
     }
@@ -71,7 +72,7 @@ export default function Keys() {
       toast.success(t("keys.deleted"));
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     }
   };
 

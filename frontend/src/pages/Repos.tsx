@@ -25,11 +25,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export default function Repos() {
-  const { t, lang } = useI18n();
+  const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
@@ -64,7 +65,7 @@ export default function Repos() {
       setDesc("");
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     } finally {
       setBusy(false);
     }
@@ -77,7 +78,7 @@ export default function Repos() {
       toast.success(t("repos.deleted", { name: repo.name }));
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     }
   };
 

@@ -96,7 +96,7 @@ func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username := a.sessionUser(r)
 		if username == "" {
-			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			writeCode(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxUser{}, username)))
@@ -159,15 +159,15 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.ToLower(strings.TrimSpace(in.Username))
 	if !usernameRe.MatchString(username) {
-		writeErr(w, http.StatusBadRequest, "用户名需 2-32 位小写字母/数字，可含 _ -，字母或数字开头")
+		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}
 	if len(in.Password) < 8 {
-		writeErr(w, http.StatusBadRequest, "密码至少 8 位")
+		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
 		return
 	}
 	if _, err := a.store.GetByUsername(username); err == nil {
-		writeErr(w, http.StatusConflict, "用户名已被注册")
+		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
@@ -176,8 +176,8 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := a.store.CreateUser(username, string(hash))
-	if errors.Is(err, store.ErrExists) {
-		writeErr(w, http.StatusConflict, "用户名已被注册")
+	if errors.Is(err, store.ErrExists) { // 并发注册竞态：唯一约束兜底
+		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
 	if err != nil {
@@ -197,11 +197,11 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	}
 	ua, err := a.store.GetByUsername(strings.ToLower(strings.TrimSpace(in.Username)))
 	if err != nil {
-		writeErr(w, http.StatusUnauthorized, "用户名或密码错误")
+		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(ua.PasswordHash), []byte(in.Password)) != nil {
-		writeErr(w, http.StatusUnauthorized, "用户名或密码错误")
+		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
 	a.startSession(w, http.StatusOK, ua.Username)
@@ -291,11 +291,20 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
+// writeCode 返回带稳定错误码的错误（前端可据此 i18n；message 为英文兜底文案）
+func writeCode(w http.ResponseWriter, status int, code, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
+}
+
+func writeNotFound(w http.ResponseWriter, resource string) {
+	writeCode(w, http.StatusNotFound, "not_found", resource+" not found")
+}
+
 func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(v); err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid json body")
+		writeCode(w, http.StatusBadRequest, "invalid_json_body", "invalid json body")
 		return err
 	}
 	return nil
@@ -323,11 +332,11 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	owner := userFrom(r)
 	in.Name = strings.TrimSpace(in.Name)
 	if !gitsvc.ValidName(in.Name) {
-		writeErr(w, http.StatusBadRequest, "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
+		writeCode(w, http.StatusBadRequest, "repo_name_invalid", "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
 		return
 	}
 	if _, err := a.store.GetRepo(owner, in.Name); err == nil || gitsvc.Exists(owner, in.Name) {
-		writeErr(w, http.StatusConflict, "repo already exists")
+		writeCode(w, http.StatusConflict, "repo_exists", "repo already exists")
 		return
 	}
 	repo, err := a.store.CreateRepo(owner, in.Name, strings.TrimSpace(in.Description))
@@ -346,7 +355,7 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	repo, err := a.store.GetRepo(userFrom(r), r.PathValue("name"))
 	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "repo not found")
+		writeNotFound(w, "repo")
 		return
 	}
 	if err != nil {
@@ -357,7 +366,12 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
-	if err := a.store.DeleteRepo(userFrom(r), r.PathValue("name")); err != nil {
+	err := a.store.DeleteRepo(userFrom(r), r.PathValue("name"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeNotFound(w, "repo")
+		return
+	}
+	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -543,18 +557,18 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 	in.Name = strings.TrimSpace(in.Name)
 	pub := strings.TrimSpace(in.PublicKey)
 	if in.Name == "" || pub == "" {
-		writeErr(w, http.StatusBadRequest, "name and public_key are required")
+		writeCode(w, http.StatusBadRequest, "key_name_required", "name and public_key are required")
 		return
 	}
 	key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(pub))
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid public key: "+err.Error())
+		writeCode(w, http.StatusBadRequest, "key_invalid", "invalid public key: "+err.Error())
 		return
 	}
 	pub = strings.Join(strings.Fields(string(bytes.TrimSpace(ssh.MarshalAuthorizedKey(key)))), " ")
 	k, err := a.store.CreateKey(userFrom(r), in.Name, pub, ssh.FingerprintSHA256(key))
 	if errors.Is(err, store.ErrExists) {
-		writeErr(w, http.StatusConflict, "this key is already registered")
+		writeCode(w, http.StatusConflict, "key_exists", "this key is already registered")
 		return
 	}
 	if err != nil {
@@ -567,11 +581,11 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 func (a *API) deleteKey(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid id")
+		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
 	if errors.Is(a.store.DeleteKey(userFrom(r), id), store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "key not found")
+		writeNotFound(w, "ssh key")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

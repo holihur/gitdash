@@ -1,5 +1,18 @@
 const TOKEN_KEY = "gitdash-token";
 
+/** 带后端错误码的 API 错误（code 供前端 i18n 映射，缺失时用 message 兜底） */
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? "";
 }
@@ -58,7 +71,6 @@ export interface Commit {
   date: string;
   message: string;
 }
-
 export interface Issue {
   id: number;
   number: number;
@@ -70,7 +82,6 @@ export interface Issue {
   updated_at: string;
   closed_at: string | null;
 }
-
 export function cloneUrl(owner: string, name: string): string {
   return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
 }
@@ -96,13 +107,15 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
       window.location.href = "/login";
     }
     let msg = res.statusText;
+    let code: string | undefined;
     try {
       const body = await res.json();
-      if (body?.error) msg = body.error;
+      if (typeof body?.error === "string") msg = body.error;
+      if (typeof body?.code === "string") code = body.code;
     } catch {
       /* ignore */
     }
-    throw new Error(msg);
+    throw new ApiError(res.status, msg, code);
   }
   if (res.status === 204) return null as T;
   return res.json();

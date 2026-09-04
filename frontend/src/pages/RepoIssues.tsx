@@ -17,9 +17,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 
 export default function RepoIssues({ owner, name }: { owner: string; name: string }) {
-  const { t, lang } = useI18n();
+  const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +60,7 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
       setBody("");
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     } finally {
       setCreating(false);
     }
@@ -76,7 +77,7 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
       );
       load();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     } finally {
       setBusyIds((s) => {
         const n = new Set(s);

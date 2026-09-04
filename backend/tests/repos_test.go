@@ -77,7 +77,8 @@ func TestRepoLifecycle(t *testing.T) {
 	if repoExists(env, "alice", "demo") {
 		t.Fatal("repo still on disk after delete")
 	}
-	alice.mustFail("DELETE", "/repos/demo", nil, 500)
+	// 重复删除：现在返回 404（此前 500）
+	alice.mustFail("DELETE", "/repos/demo", nil, 404)
 }
 
 func TestRepoUserIsolation(t *testing.T) {

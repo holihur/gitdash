@@ -34,6 +34,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 import RepoIssues from "@/pages/RepoIssues";
 
 function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
@@ -48,7 +49,7 @@ function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
 }
 
 export default function RepoView() {
-  const { t, lang } = useI18n();
+  const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const { owner = "", name = "" } = useParams();
   const [repo, setRepo] = useState<Repo | null>(null);
@@ -106,7 +107,7 @@ export default function RepoView() {
     api
       .commits(owner, name, ref)
       .then(setCommits)
-      .catch((e) => toast.error(e instanceof Error ? e.message : String(e)));
+      .catch((e) => toast.error(apiErrorMsg(to, e)));
   }, [tab, name, ref]);
 
   const openEntry = async (entry: TreeEntry) => {
@@ -117,7 +118,7 @@ export default function RepoView() {
     try {
       setBlob(await api.blob(owner, name, ref, [...path, entry.name].join("/")));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(apiErrorMsg(to, e));
     }
   };
 

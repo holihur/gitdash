@@ -117,6 +117,22 @@ export const en = {
     noBody: "No description provided.",
     loadFailed: "Failed to load issues: {error}",
   },
+  errors: {
+    unauthorized: "Not signed in or session expired",
+    invalid_credentials: "Invalid username or password",
+    username_invalid:
+      "Username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting with a letter or digit",
+    password_too_short: "Password must be at least 8 characters",
+    username_taken: "This username is already taken",
+    invalid_json_body: "Invalid request body",
+    repo_name_invalid: "Invalid repository name",
+    repo_exists: "A repository with this name already exists",
+    not_found: "Not found",
+    key_name_required: "Name and public key are required",
+    key_invalid: "Invalid public key",
+    key_exists: "This key is already registered",
+    invalid_id: "Invalid id",
+  },
 };
 
 export type Messages = typeof en;

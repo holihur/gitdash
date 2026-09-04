@@ -50,6 +50,8 @@ interface I18nContextValue {
   lang: Lang;
   setLang: (lang: Lang) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  /** 同 t，但 key 不存在时返回 undefined（用于可选翻译，如错误码） */
+  to: (key: string, vars?: Record<string, string | number>) => string | undefined;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -80,7 +82,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [lang],
   );
 
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
+  const to = useCallback(
+    (key: string, vars?: Record<string, string | number>) => {
+      const template = (resolve(MESSAGES[lang], key) ?? resolve(MESSAGES.en, key)) as unknown;
+      if (typeof template !== "string") return undefined;
+      if (!vars) return template;
+      return template.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
+    },
+    [lang],
+  );
+
+  const value = useMemo(() => ({ lang, setLang, t, to }), [lang, setLang, t, to]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
