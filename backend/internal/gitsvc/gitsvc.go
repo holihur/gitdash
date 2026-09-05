@@ -619,7 +619,10 @@ func MergeNonFF(owner, name, target, source, message, committer, method string) 
 
 // InitReadme 把刚创建的 bare 仓库初始化为默认模版：main 分支 + 以仓库名生成的 README.md。
 func InitReadme(owner, name string) error {
-	bare := RepoPath(owner, name)
+	bare, err := filepath.Abs(RepoPath(owner, name))
+	if err != nil {
+		return err
+	}
 	if fi, err := os.Stat(bare); err != nil || !fi.IsDir() {
 		return fmt.Errorf("repo %s/%s not on disk", owner, name)
 	}

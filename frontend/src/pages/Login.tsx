@@ -28,8 +28,15 @@ export default function Login({ onAuthed }: Props) {
   const [code, setCode] = useState("");
   const [githubEnabled, setGithubEnabled] = useState(false);
   const [oidc, setOidc] = useState<{ enabled: boolean; name: string }>({ enabled: false, name: "OIDC" });
+  const [version, setVersion] = useState("");
 
   useEffect(() => {
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.version) setVersion(d.version);
+      })
+      .catch(() => undefined);
     fetch("/api/auth/providers", { credentials: "same-origin" })
       .then((r) => r.json())
       .then((d) => {
@@ -159,7 +166,14 @@ export default function Login({ onAuthed }: Props) {
             <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <GitBranch className="h-6 w-6" />
             </div>
-            <CardTitle>gitdash</CardTitle>
+            <CardTitle className="flex items-center justify-center gap-2">
+              gitdash
+              {version && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono font-normal text-muted-foreground">
+                  {version}
+                </span>
+              )}
+            </CardTitle>
             <CardDescription>{t("login.subtitle")}</CardDescription>
           </CardHeader>
           <CardContent>
