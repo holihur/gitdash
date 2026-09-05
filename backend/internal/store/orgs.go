@@ -1,11 +1,16 @@
 package store
 
-import "errors"
+import (
+	"errors"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
 
 func (s *Store) IsOrg(name string) bool {
-	var one int
-	err := s.db.QueryRow(`SELECT 1 FROM orgs WHERE name = ?`, name).Scan(&one)
-	return err == nil
+	var cnt int64
+	err := s.db.Model(&orgRow{}).Where("name = ?", name).Count(&cnt).Error
+	return err == nil && cnt > 0
 }
 
 func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
@@ -13,105 +18,94 @@ func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 		return Org{}, ErrExists // 用户名占用
 	}
 	o := Org{Name: name, Display: display, CreatedAt: now()}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return o, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	res, err := tx.Exec(`INSERT INTO orgs (name, display, created_at) VALUES (?, ?, ?)`, name, display, o.CreatedAt)
-	if err != nil {
-		if isUniqueErr(err) {
-			return o, ErrExists
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		row := orgRow{Name: name, Display: display, CreatedAt: o.CreatedAt}
+		if err := tx.Create(&row).Error; err != nil {
+			if isUniqueErr(err) {
+				return ErrExists
+			}
+			return err
 		}
+		o.ID = row.ID
+		return tx.Create(&orgMemberRow{Org: name, Username: creator, Role: "owner", CreatedAt: now()}).Error
+	})
+	if err != nil {
 		return o, err
 	}
-	o.ID, _ = res.LastInsertId()
-	if _, err := tx.Exec(`INSERT INTO org_members (org, username, role, created_at) VALUES (?, ?, 'owner', ?)`,
-		name, creator, now()); err != nil {
-		return o, err
-	}
-	return o, tx.Commit()
+	return o, nil
 }
 
 func (s *Store) ListMyOrgs(username string) ([]Org, error) {
-	rows, err := s.db.Query(`SELECT o.id, o.name, o.display, o.created_at FROM orgs o
-		JOIN org_members m ON m.org = o.name WHERE m.username = ? ORDER BY o.name`, username)
+	var rows []orgRow
+	err := s.db.Table("orgs").
+		Select("orgs.*").
+		Joins("JOIN org_members ON org_members.org = orgs.name").
+		Where("org_members.username = ?", username).
+		Order("orgs.name").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []Org{}
-	for rows.Next() {
-		var o Org
-		if err := rows.Scan(&o.ID, &o.Name, &o.Display, &o.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, o)
+	for _, r := range rows {
+		out = append(out, Org(r))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Store) OrgRole(org, username string) string {
-	var role string
-	err := s.db.QueryRow(`SELECT role FROM org_members WHERE org = ? AND username = ?`, org, username).Scan(&role)
+	var row orgMemberRow
+	err := s.db.Where("org = ? AND username = ?", org, username).First(&row).Error
 	if err != nil {
 		return ""
 	}
-	return role
+	return row.Role
 }
 
 func (s *Store) OrgMembers(org string) ([]OrgMember, error) {
-	rows, err := s.db.Query(`SELECT org, username, role FROM org_members WHERE org = ? ORDER BY username`, org)
+	var rows []orgMemberRow
+	err := s.db.Where("org = ?", org).Order("username").Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []OrgMember{}
-	for rows.Next() {
-		var m OrgMember
-		if err := rows.Scan(&m.Org, &m.Username, &m.Role); err != nil {
-			return nil, err
-		}
-		out = append(out, m)
+	for _, r := range rows {
+		out = append(out, OrgMember{Org: r.Org, Username: r.Username, Role: r.Role})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Store) AddOrgMember(org, username, role string) error {
-	_, err := s.db.Exec(`INSERT INTO org_members (org, username, role, created_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT(org, username) DO UPDATE SET role = excluded.role`, org, username, role, now())
-	return err
+	row := orgMemberRow{Org: org, Username: username, Role: role, CreatedAt: now()}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "org"}, {Name: "username"}},
+		DoUpdates: clause.AssignmentColumns([]string{"role"}),
+	}).Create(&row).Error
 }
 
 func (s *Store) RemoveOrgMember(org, username string) error {
-	res, err := s.db.Exec(`DELETE FROM org_members WHERE org = ? AND username = ?`, org, username)
-	if err != nil {
-		return err
+	res := s.db.Where("org = ? AND username = ?", org, username).Delete(&orgMemberRow{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
 
 func (s *Store) DeleteOrg(org string) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	var cnt int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM repos WHERE owner = ?`, org).Scan(&cnt); err != nil {
-		return err
-	}
-	if cnt > 0 {
-		return errors.New("org not empty")
-	}
-	if _, err := tx.Exec(`DELETE FROM org_members WHERE org = ?`, org); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM orgs WHERE name = ?`, org); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var cnt int64
+		if err := tx.Model(&repoRow{}).Where("owner = ?", org).Count(&cnt).Error; err != nil {
+			return err
+		}
+		if cnt > 0 {
+			return errors.New("org not empty")
+		}
+		if err := tx.Where("org = ?", org).Delete(&orgMemberRow{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("name = ?", org).Delete(&orgRow{}).Error
+	})
 }

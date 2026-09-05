@@ -1,19 +1,24 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
+
+	gormsqlite "github.com/glebarez/sqlite" // 纯 Go sqlite GORM dialector
 )
 
 var (
 	ErrNotFound = errors.New("not found")
 	ErrExists   = errors.New("already exists")
 )
+
+// ---- public DTO（保持原有 JSON 形状，api 层无感知） ----
 
 type User struct {
 	ID        int64  `json:"id"`
@@ -88,8 +93,6 @@ type Collab struct {
 	Permission string `json:"permission"` // "read" | "write"
 	CreatedAt  string `json:"created_at"`
 }
-
-// Webhook push 事件回调配置
 
 // PullRequest 仓库内的拉取请求（同仓库分支合并，MVP：仅支持 fast-forward 合并）
 type PullRequest struct {
@@ -174,16 +177,33 @@ type Webhook struct {
 type PublicKeyAuth struct {
 	UserID   int64
 	Username string
-	Line     string
+	Line     string `gorm:"column:public_key"`
 }
+
+// ---- Store ----
 
 type Store struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
+// Open 打开 SQLite 数据库文件（默认后端）。
 func Open(path string) (*Store, error) {
-	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)", path)
-	db, err := sql.Open("sqlite", dsn)
+	return openGorm(gormsqlite.Open(fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)", path)))
+}
+
+// OpenDSN 按连接串选择后端：postgres://... → PostgreSQL；否则视为 SQLite 文件路径。
+func OpenDSN(dsn string) (*Store, error) {
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		return openGorm(postgres.Open(dsn))
+	}
+	return Open(dsn)
+}
+
+func openGorm(dial gorm.Dialector) (*Store, error) {
+	db, err := gorm.Open(dial, &gorm.Config{
+		TranslateError: true, // 唯一约束 → gorm.ErrDuplicatedKey
+		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +214,19 @@ func Open(path string) (*Store, error) {
 	return s, nil
 }
 
+// DB 暴露底层 gorm.DB（供需要原生查询的特殊场景使用）。
+func (s *Store) DB() *gorm.DB { return s.db }
+
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 
 func isUniqueErr(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+	return errors.Is(err, gorm.ErrDuplicatedKey)
+}
+
+// notFoundErr 把 gorm 的查不到错误统一映射为 ErrNotFound。
+func notFoundErr(err error) error {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrNotFound
+	}
+	return err
 }

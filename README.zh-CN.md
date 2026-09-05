@@ -64,7 +64,8 @@ go run .
 | --- | --- | --- |
 | `GITDASH_HTTP_ADDR` | `:8080` | Web / API 监听地址 |
 | `GITDASH_SSH_ADDR` | `:2222` | Git SSH 监听地址 |
-| `GITDASH_DATA` | `./data` | 数据目录（SQLite、仓库、host key） |
+| `GITDASH_DATA` | `./data` | 数据目录（仓库、host key；SQLite 文件默认放这里） |
+| `GITDASH_DB` | `./data/gitdash.db` | 数据库：SQLite 文件路径，或 `postgres://` 连接串切换 PostgreSQL（自动迁移 schema；不迁移已有 SQLite 数据） |
 | `GITDASH_STATIC` | 自动探测 | 前端静态文件目录（开发模式覆盖 embed 资源） |
 | `GITDASH_AUTO_UPDATE` | 关闭 | **自动更新默认关闭**，设为 `1`/`true`/`yes`/`on` 开启 |
 | `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | 自动更新检查间隔（最小 1h） |

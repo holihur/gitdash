@@ -1,46 +1,40 @@
 package store
 
+// CreateWebhook 新建仓库 webhook（同 owner+repo+url 重复返回 ErrExists）。
 func (s *Store) CreateWebhook(owner, repo, url, secret string) (Webhook, error) {
 	w := Webhook{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: now()}
-	res, err := s.db.Exec(`INSERT INTO webhooks (owner, repo, url, secret, created_at) VALUES (?, ?, ?, ?, ?)`,
-		owner, repo, url, secret, w.CreatedAt)
-	if err != nil {
+	row := webhookRow{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: w.CreatedAt}
+	if err := s.db.Create(&row).Error; err != nil {
 		if isUniqueErr(err) {
 			return w, ErrExists
 		}
 		return w, err
 	}
-	w.ID, _ = res.LastInsertId()
+	w.ID = row.ID
 	return w, nil
 }
 
+// ListWebhooks 列出仓库全部 webhook（按 id 升序）。
 func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
-	rows, err := s.db.Query(`SELECT id, owner, repo, url, secret, created_at
-		FROM webhooks WHERE owner = ? AND repo = ? ORDER BY id`, owner, repo)
-	if err != nil {
+	var rows []webhookRow
+	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).Order("id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	ws := []Webhook{}
-	for rows.Next() {
-		var w Webhook
-		if err := rows.Scan(&w.ID, &w.Owner, &w.Repo, &w.URL, &w.Secret, &w.CreatedAt); err != nil {
-			return nil, err
-		}
-		ws = append(ws, w)
+	ws := make([]Webhook, 0, len(rows))
+	for _, r := range rows {
+		ws = append(ws, Webhook(r))
 	}
-	return ws, rows.Err()
+	return ws, nil
 }
 
+// DeleteWebhook 删除指定 webhook（不存在返回 ErrNotFound）。
 func (s *Store) DeleteWebhook(owner, repo string, id int64) error {
-	res, err := s.db.Exec(`DELETE FROM webhooks WHERE owner = ? AND repo = ? AND id = ?`, owner, repo, id)
-	if err != nil {
-		return err
+	res := s.db.Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).Delete(&webhookRow{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
-
-// ---- ssh keys ----

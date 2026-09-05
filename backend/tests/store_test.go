@@ -10,7 +10,7 @@ import (
 
 	"gitdash/backend/internal/store"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/glebarez/go-sqlite"
 )
 
 func TestFreshSchema(t *testing.T) {

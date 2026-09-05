@@ -1,48 +1,57 @@
 package store
 
-import (
-	"database/sql"
-	"errors"
-)
-
-func (s *Store) getPull(owner, repo string, number int64) (PullRequest, error) {
-	var pr PullRequest
-	var ma sql.NullString
-	err := s.db.QueryRow(`SELECT id, owner, repo, number, title, body, source_branch, target_branch,
-		base_sha, head_sha, state, author, created_at, updated_at, merged_at, merged_by
-		FROM pull_requests WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).
-		Scan(&pr.ID, &pr.Owner, &pr.Repo, &pr.Number, &pr.Title, &pr.Body, &pr.SourceBranch,
-			&pr.TargetBranch, &pr.BaseSHA, &pr.HeadSHA, &pr.State, &pr.Author, &pr.CreatedAt,
-			&pr.UpdatedAt, &ma, &pr.MergedBy)
-	if errors.Is(err, sql.ErrNoRows) {
-		return pr, ErrNotFound
+// pullToDTO 把 ORM 行转换为公共 DTO。
+func pullToDTO(r pullRequestRow) PullRequest {
+	pr := PullRequest{
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo, Number: r.Number,
+		Title: r.Title, Body: r.Body,
+		SourceBranch: r.SourceBranch, TargetBranch: r.TargetBranch,
+		BaseSHA: r.BaseSHA, HeadSHA: r.HeadSHA,
+		State: r.State, Author: r.Author,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, MergedBy: r.MergedBy,
 	}
-	if ma.Valid {
-		v := ma.String
+	if r.MergedAt != nil {
+		v := *r.MergedAt
 		pr.MergedAt = &v
 	}
-	return pr, err
+	return pr
+}
+
+func (s *Store) getPull(owner, repo string, number int64) (PullRequest, error) {
+	var r pullRequestRow
+	if err := s.db.Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		First(&r).Error; err != nil {
+		return PullRequest{}, notFoundErr(err)
+	}
+	return pullToDTO(r), nil
 }
 
 func (s *Store) CreatePull(owner, repo, author, title, body, source, target, baseSHA, headSHA string) (PullRequest, error) {
 	var pr PullRequest
 	now := now()
 	var err error
+	// 号码在同一仓库内递增；并发冲突时重试（UNIQUE(owner, repo, number)）
 	for attempt := 0; attempt < 5; attempt++ {
-		res, e := s.db.Exec(`INSERT INTO pull_requests (owner, repo, number, title, body, source_branch,
-			target_branch, base_sha, head_sha, state, author, created_at, updated_at)
-			VALUES (?, ?, (SELECT COALESCE(MAX(number),0)+1 FROM pull_requests WHERE owner=? AND repo=?),
-			?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
-			owner, repo, owner, repo, title, body, source, target, baseSHA, headSHA, author, now, now)
+		var max int64
+		if e := s.db.Raw(`SELECT COALESCE(MAX(number), 0) + 1 FROM pull_requests WHERE owner = ? AND repo = ?`,
+			owner, repo).Scan(&max).Error; e != nil {
+			return pr, e
+		}
+		r := pullRequestRow{
+			Owner: owner, Repo: repo, Number: max,
+			Title: title, Body: body,
+			SourceBranch: source, TargetBranch: target,
+			BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Author: author,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		e := s.db.Create(&r).Error
 		if e == nil {
-			id, _ := res.LastInsertId()
-			pr = PullRequest{ID: id, Owner: owner, Repo: repo, Title: title, Body: body,
-				SourceBranch: source, TargetBranch: target, BaseSHA: baseSHA, HeadSHA: headSHA,
-				State: "open", Author: author, CreatedAt: now, UpdatedAt: now}
-			if err := s.db.QueryRow(`SELECT number FROM pull_requests WHERE id = ?`, id).Scan(&pr.Number); err != nil {
-				return pr, err
-			}
-			return pr, nil
+			return PullRequest{
+				ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
+				Title: title, Body: body, SourceBranch: source, TargetBranch: target,
+				BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Author: author,
+				CreatedAt: now, UpdatedAt: now,
+			}, nil
 		}
 		if !isUniqueErr(e) {
 			return pr, e
@@ -63,50 +72,34 @@ func (s *Store) GetPull(owner, repo string, number int64) (PullRequest, error) {
 
 // ListPulls 分页列出 PR；limit<=0 表示不限制。
 func (s *Store) ListPulls(owner, repo, state string, limit, offset int) ([]PullRequest, error) {
-	q := `SELECT id, owner, repo, number, title, body, source_branch, target_branch,
-		base_sha, head_sha, state, author, created_at, updated_at, merged_at, merged_by
-		FROM pull_requests WHERE owner = ? AND repo = ?`
-	args := []any{owner, repo}
+	q := s.db.Model(&pullRequestRow{}).Where("owner = ? AND repo = ?", owner, repo)
 	if state != "" {
-		q += ` AND state = ?`
-		args = append(args, state)
+		q = q.Where("state = ?", state)
 	}
-	q += ` ORDER BY (state = 'open') DESC, number DESC`
+	q = q.Order("state = 'open' DESC, number DESC")
 	if limit > 0 {
-		q += ` LIMIT ? OFFSET ?`
-		args = append(args, limit, offset)
+		q = q.Limit(limit).Offset(offset)
 	}
-	rows, err := s.db.Query(q, args...)
-	if err != nil {
+	var rows []pullRequestRow
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []PullRequest{}
-	for rows.Next() {
-		var pr PullRequest
-		var ma sql.NullString
-		if err := rows.Scan(&pr.ID, &pr.Owner, &pr.Repo, &pr.Number, &pr.Title, &pr.Body,
-			&pr.SourceBranch, &pr.TargetBranch, &pr.BaseSHA, &pr.HeadSHA, &pr.State, &pr.Author,
-			&pr.CreatedAt, &pr.UpdatedAt, &ma, &pr.MergedBy); err != nil {
-			return nil, err
-		}
-		if ma.Valid {
-			v := ma.String
-			pr.MergedAt = &v
-		}
-		out = append(out, pr)
+	for _, r := range rows {
+		out = append(out, pullToDTO(r))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // SetPullState 关闭/重开（不改变 merged 状态）。
 func (s *Store) SetPullState(owner, repo string, number int64, state string) (PullRequest, error) {
-	res, err := s.db.Exec(`UPDATE pull_requests SET state = ?, updated_at = ? WHERE owner = ? AND repo = ? AND number = ?`,
-		state, now(), owner, repo, number)
-	if err != nil {
-		return PullRequest{}, err
+	res := s.db.Model(&pullRequestRow{}).
+		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		Updates(map[string]any{"state": state, "updated_at": now()})
+	if res.Error != nil {
+		return PullRequest{}, res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return PullRequest{}, ErrNotFound
 	}
 	return s.getPull(owner, repo, number)
@@ -114,15 +107,18 @@ func (s *Store) SetPullState(owner, repo string, number int64, state string) (Pu
 
 // MarkPullMerged 记录合并结果（fast-forward 后 target 指向 headSHA）。
 func (s *Store) MarkPullMerged(owner, repo string, number int64, headSHA, mergedBy string) (PullRequest, error) {
-	res, err := s.db.Exec(`UPDATE pull_requests SET state = 'merged', head_sha = ?, merged_by = ?, merged_at = ?, updated_at = ?
-		WHERE owner = ? AND repo = ? AND number = ?`, headSHA, mergedBy, now(), now(), owner, repo, number)
-	if err != nil {
-		return PullRequest{}, err
+	now := now()
+	res := s.db.Model(&pullRequestRow{}).
+		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		Updates(map[string]any{
+			"state": "merged", "head_sha": headSHA, "merged_by": mergedBy,
+			"merged_at": now, "updated_at": now,
+		})
+	if res.Error != nil {
+		return PullRequest{}, res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return PullRequest{}, ErrNotFound
 	}
 	return s.getPull(owner, repo, number)
 }
-
-// ---- issue labels & milestones ----

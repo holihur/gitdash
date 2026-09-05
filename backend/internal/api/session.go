@@ -7,13 +7,21 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
 	"strings"
 	"time"
 )
 
 func (a *API) rateKey(username, ip string) string { return username + "|" + ip }
 
+// rateLimitDisabled 测试/开发可通过 GITDASH_DISABLE_RATE_LIMIT=1 关闭限流，
+// 避免黑盒测试套件（同 IP 大量注册/登录失败）误触发 429。
+var rateLimitDisabled = os.Getenv("GITDASH_DISABLE_RATE_LIMIT") == "1"
+
 func (a *API) rateBlocked(key string) bool {
+	if rateLimitDisabled {
+		return false
+	}
 	a.rateMu.Lock()
 	defer a.rateMu.Unlock()
 	if len(a.rateFails) > loginRateCutoff { // 防止内存无限增长
@@ -31,6 +39,9 @@ func (a *API) rateBlocked(key string) bool {
 }
 
 func (a *API) rateFail(key string) {
+	if rateLimitDisabled {
+		return
+	}
 	a.rateMu.Lock()
 	defer a.rateMu.Unlock()
 	rec, ok := a.rateFails[key]

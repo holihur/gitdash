@@ -1,37 +1,35 @@
 package store
 
+import (
+	"gorm.io/gorm/clause"
+)
+
 func (s *Store) UpsertCollab(owner, repo, username, permission string) error {
-	_, err := s.db.Exec(`INSERT INTO repo_collabs (owner, repo, username, permission, created_at)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(owner, repo, username) DO UPDATE SET permission = excluded.permission`,
-		owner, repo, username, permission, now())
-	return err
+	row := collabRow{Owner: owner, Repo: repo, Username: username, Permission: permission, CreatedAt: now()}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "owner"}, {Name: "repo"}, {Name: "username"}},
+		DoUpdates: clause.Assignments(map[string]any{"permission": permission}),
+	}).Create(&row).Error
 }
 
 func (s *Store) ListCollabs(owner, repo string) ([]Collab, error) {
-	rows, err := s.db.Query(`SELECT owner, repo, username, permission, created_at
-		FROM repo_collabs WHERE owner = ? AND repo = ? ORDER BY username`, owner, repo)
-	if err != nil {
+	var rows []collabRow
+	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).Order("username").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	collabs := []Collab{}
-	for rows.Next() {
-		var c Collab
-		if err := rows.Scan(&c.Owner, &c.Repo, &c.Username, &c.Permission, &c.CreatedAt); err != nil {
-			return nil, err
-		}
-		collabs = append(collabs, c)
+	for _, r := range rows {
+		collabs = append(collabs, Collab(r))
 	}
-	return collabs, rows.Err()
+	return collabs, nil
 }
 
 func (s *Store) RemoveCollab(owner, repo, username string) error {
-	res, err := s.db.Exec(`DELETE FROM repo_collabs WHERE owner = ? AND repo = ? AND username = ?`, owner, repo, username)
-	if err != nil {
-		return err
+	res := s.db.Where("owner = ? AND repo = ? AND username = ?", owner, repo, username).Delete(&collabRow{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil

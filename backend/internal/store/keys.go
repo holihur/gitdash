@@ -1,75 +1,77 @@
 package store
 
-import (
-	"database/sql"
-	"errors"
-)
+import "gorm.io/gorm"
 
 func (s *Store) UserID(username string) (int64, error) {
-	var id int64
-	err := s.db.QueryRow(`SELECT id FROM users WHERE username = ?`, username).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, ErrNotFound
+	var row userRow
+	err := s.db.Select("id").Where("username = ?", username).First(&row).Error
+	if err != nil {
+		return 0, notFoundErr(err)
 	}
-	return id, err
+	return row.ID, nil
 }
 
 func (s *Store) CreateKey(username, name, publicKey, fingerprint string) (SSHKey, error) {
 	k := SSHKey{Name: name, PublicKey: publicKey, Fingerprint: fingerprint, CreatedAt: now()}
-	res, err := s.db.Exec(`INSERT INTO ssh_keys (user_id, name, public_key, fingerprint, created_at)
-		VALUES ((SELECT id FROM users WHERE username = ?), ?, ?, ?, ?)`,
-		username, k.Name, k.PublicKey, k.Fingerprint, k.CreatedAt)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var u userRow
+		if err := tx.Select("id").Where("username = ?", username).First(&u).Error; err != nil {
+			return notFoundErr(err)
+		}
+		row := sshKeyRow{UserID: u.ID, Name: name, PublicKey: publicKey, Fingerprint: fingerprint, CreatedAt: k.CreatedAt}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		k.ID = row.ID
+		return nil
+	})
 	if err != nil {
 		if isUniqueErr(err) {
 			return k, ErrExists
 		}
 		return k, err
 	}
-	k.ID, _ = res.LastInsertId()
 	return k, nil
 }
 
 func (s *Store) ListKeys(username string) ([]SSHKey, error) {
-	rows, err := s.db.Query(`SELECT k.id, k.name, k.public_key, k.fingerprint, k.created_at
-		FROM ssh_keys k JOIN users u ON u.id = k.user_id WHERE u.username = ? ORDER BY k.id DESC`, username)
+	var rows []sshKeyRow
+	err := s.db.Table("ssh_keys").
+		Select("ssh_keys.*").
+		Joins("JOIN users ON users.id = ssh_keys.user_id").
+		Where("users.username = ?", username).
+		Order("ssh_keys.id DESC").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	keys := []SSHKey{}
-	for rows.Next() {
-		var k SSHKey
-		if err := rows.Scan(&k.ID, &k.Name, &k.PublicKey, &k.Fingerprint, &k.CreatedAt); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
+	for _, r := range rows {
+		keys = append(keys, SSHKey{ID: r.ID, Name: r.Name, PublicKey: r.PublicKey, Fingerprint: r.Fingerprint, CreatedAt: r.CreatedAt})
 	}
-	return keys, rows.Err()
+	return keys, nil
 }
 
 func (s *Store) PublicKeys() ([]PublicKeyAuth, error) {
-	rows, err := s.db.Query(`SELECT k.user_id, u.username, k.public_key FROM ssh_keys k JOIN users u ON u.id = k.user_id`)
+	var out []PublicKeyAuth
+	err := s.db.Table("ssh_keys").
+		Select("ssh_keys.user_id, users.username, ssh_keys.public_key").
+		Joins("JOIN users ON users.id = ssh_keys.user_id").
+		Scan(&out).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	var keys []PublicKeyAuth
-	for rows.Next() {
-		var k PublicKeyAuth
-		if err := rows.Scan(&k.UserID, &k.Username, &k.Line); err != nil {
-			return nil, err
-		}
-		keys = append(keys, k)
-	}
-	return keys, rows.Err()
+	return out, nil
 }
 
 func (s *Store) DeleteKey(username string, id int64) error {
-	res, err := s.db.Exec(`DELETE FROM ssh_keys WHERE id = ? AND user_id = (SELECT id FROM users WHERE username = ?)`, id, username)
-	if err != nil {
-		return err
+	res := s.db.Where("id = ? AND user_id = (?)", id,
+		s.db.Model(&userRow{}).Select("id").Where("username = ?", username)).
+		Delete(&sshKeyRow{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -79,43 +81,53 @@ func (s *Store) DeleteKey(username string, id int64) error {
 
 func (s *Store) AddGPGKey(username, fingerprint, armor string) (GPGKey, error) {
 	k := GPGKey{Fingerprint: fingerprint, CreatedAt: now()}
-	res, err := s.db.Exec(`INSERT INTO gpg_keys (user_id, fingerprint, armor, created_at)
-		VALUES ((SELECT id FROM users WHERE username = ?), ?, ?, ?)`,
-		username, k.Fingerprint, armor, k.CreatedAt)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var u userRow
+		if err := tx.Select("id").Where("username = ?", username).First(&u).Error; err != nil {
+			return notFoundErr(err)
+		}
+		row := gpgKeyRow{UserID: u.ID, Fingerprint: fingerprint, Armor: armor, CreatedAt: k.CreatedAt}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		k.ID = row.ID
+		return nil
+	})
 	if err != nil {
 		if isUniqueErr(err) {
 			return k, ErrExists
 		}
 		return k, err
 	}
-	k.ID, _ = res.LastInsertId()
 	return k, nil
 }
 
 func (s *Store) ListGPGKeys(username string) ([]GPGKey, error) {
-	rows, err := s.db.Query(`SELECT k.id, k.fingerprint, k.created_at
-		FROM gpg_keys k JOIN users u ON u.id = k.user_id WHERE u.username = ? ORDER BY k.id`, username)
+	var rows []gpgKeyRow
+	err := s.db.Table("gpg_keys").
+		Select("gpg_keys.*").
+		Joins("JOIN users ON users.id = gpg_keys.user_id").
+		Where("users.username = ?", username).
+		Order("gpg_keys.id").
+		Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []GPGKey{}
-	for rows.Next() {
-		var k GPGKey
-		if err := rows.Scan(&k.ID, &k.Fingerprint, &k.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, k)
+	for _, r := range rows {
+		out = append(out, GPGKey{ID: r.ID, Fingerprint: r.Fingerprint, CreatedAt: r.CreatedAt})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Store) DeleteGPGKey(username string, id int64) error {
-	res, err := s.db.Exec(`DELETE FROM gpg_keys WHERE id = ? AND user_id = (SELECT id FROM users WHERE username = ?)`, id, username)
-	if err != nil {
-		return err
+	res := s.db.Where("id = ? AND user_id = (?)", id,
+		s.db.Model(&userRow{}).Select("id").Where("username = ?", username)).
+		Delete(&gpgKeyRow{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -123,20 +135,13 @@ func (s *Store) DeleteGPGKey(username string, id int64) error {
 
 // AllGPGKeys 返回全部用户注册的公钥（供提交签名校验使用）。
 func (s *Store) AllGPGKeys() ([]GPGKeyAuth, error) {
-	rows, err := s.db.Query(`SELECT u.username, k.fingerprint, k.armor FROM gpg_keys k JOIN users u ON u.id = k.user_id`)
+	var out []GPGKeyAuth
+	err := s.db.Table("gpg_keys").
+		Select("users.username, gpg_keys.fingerprint, gpg_keys.armor").
+		Joins("JOIN users ON users.id = gpg_keys.user_id").
+		Scan(&out).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	out := []GPGKeyAuth{}
-	for rows.Next() {
-		var k GPGKeyAuth
-		if err := rows.Scan(&k.Username, &k.Fingerprint, &k.Armor); err != nil {
-			return nil, err
-		}
-		out = append(out, k)
-	}
-	return out, rows.Err()
+	return out, nil
 }
-
-// ---- pull requests ----

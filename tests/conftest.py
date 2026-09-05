@@ -91,6 +91,7 @@ def _spawn_server(binary: Path, tmpdir: Path):
     env = dict(os.environ)
     env.update(
         GITDASH_DATA=str(data_dir),
+        GITDASH_DISABLE_RATE_LIMIT="1",
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
     )

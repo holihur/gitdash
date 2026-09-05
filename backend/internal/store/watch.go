@@ -1,41 +1,40 @@
 package store
 
+import (
+	"gorm.io/gorm/clause"
+)
+
 func (s *Store) WatchRepo(username, owner, repo string) error {
-	_, err := s.db.Exec(`INSERT INTO repo_watches (username, owner, repo, created_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT(username, owner, repo) DO NOTHING`, username, owner, repo, now())
-	return err
+	row := watchRow{Username: username, Owner: owner, Repo: repo, CreatedAt: now()}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "username"}, {Name: "owner"}, {Name: "repo"}},
+		DoNothing: true,
+	}).Create(&row).Error
 }
 
 func (s *Store) UnwatchRepo(username, owner, repo string) error {
-	_, err := s.db.Exec(`DELETE FROM repo_watches WHERE username = ? AND owner = ? AND repo = ?`, username, owner, repo)
-	return err
+	return s.db.Where("username = ? AND owner = ? AND repo = ?", username, owner, repo).Delete(&watchRow{}).Error
 }
 
 func (s *Store) IsWatching(username, owner, repo string) bool {
-	var one int
-	err := s.db.QueryRow(`SELECT 1 FROM repo_watches WHERE username = ? AND owner = ? AND repo = ?`,
-		username, owner, repo).Scan(&one)
-	return err == nil
+	var n int64
+	err := s.db.Model(&watchRow{}).Where("username = ? AND owner = ? AND repo = ?", username, owner, repo).
+		Limit(1).Count(&n).Error
+	return err == nil && n > 0
 }
 
 // WatchedRepos 我 watch 过的仓库（可能含已删除仓库的残留——join repos 过滤）。
 func (s *Store) WatchedRepos(username string) ([]Repo, error) {
-	rows, err := s.db.Query(`SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at
-		FROM repo_watches w JOIN repos r ON r.owner = w.owner AND r.name = w.repo
-		WHERE w.username = ? ORDER BY w.created_at DESC`, username)
-	if err != nil {
+	var rows []repoRow
+	if err := s.db.Select("repos.*").Joins("JOIN repo_watches w ON repos.owner = w.owner AND repos.name = w.repo").
+		Where("w.username = ?", username).Order("w.created_at DESC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []Repo{}
-	for rows.Next() {
-		var r Repo
-		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
+	for _, r := range rows {
+		out = append(out, toRepo(r))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // WatchCounts 返回若干 (owner,repo) 的 watch 数（单次 GROUP BY 查询）。
@@ -45,20 +44,15 @@ func (s *Store) WatchCounts(pairs [][2]string) map[[2]string]int {
 
 // WatchingUsers 显式 watch 某仓库的用户（不含仓库所有者/组织成员等隐式订阅者）。
 func (s *Store) WatchingUsers(owner, repo string) ([]string, error) {
-	rows, err := s.db.Query(`SELECT username FROM repo_watches WHERE owner = ? AND repo = ?`, owner, repo)
-	if err != nil {
+	var rows []watchRow
+	if err := s.db.Select("username").Where("owner = ? AND repo = ?", owner, repo).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []string{}
-	for rows.Next() {
-		var u string
-		if err := rows.Scan(&u); err != nil {
-			return nil, err
-		}
-		out = append(out, u)
+	for _, r := range rows {
+		out = append(out, r.Username)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // ---- inbox (notifications) ----

@@ -64,7 +64,8 @@ Environment variables (all optional):
 | --- | --- | --- |
 | `GITDASH_HTTP_ADDR` | `:8080` | Web / API listen address |
 | `GITDASH_SSH_ADDR` | `:2222` | Git SSH listen address |
-| `GITDASH_DATA` | `./data` | Data directory (SQLite, repos, host key) |
+| `GITDASH_DATA` | `./data` | Data directory (repos, host key; SQLite file lives here by default) |
+| `GITDASH_DB` | `./data/gitdash.db` | Database: SQLite file path, or a `postgres://` URL to use PostgreSQL (schema auto-migrated; no data migration from existing SQLite files) |
 | `GITDASH_STATIC` | auto-detect | Frontend static files directory (dev mode overrides embedded assets) |
 | `GITDASH_AUTO_UPDATE` | off | **Auto-update is off by default**; set to `1`/`true`/`yes`/`on` to enable |
 | `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | Auto-update check interval (minimum 1h) |

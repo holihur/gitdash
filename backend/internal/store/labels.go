@@ -1,114 +1,96 @@
 package store
 
 import (
-	"database/sql"
-	"errors"
 	"fmt"
+
+	"gorm.io/gorm"
 )
 
 func (s *Store) CreateLabel(owner, repo, name, color string) (Label, error) {
-	l := Label{Owner: owner, Repo: repo, Name: name, Color: color, CreatedAt: now()}
-	res, err := s.db.Exec(`INSERT INTO repo_labels (owner, repo, name, color, created_at) VALUES (?,?,?,?,?)`,
-		owner, repo, name, color, l.CreatedAt)
-	if err != nil {
+	r := repoLabelRow{Owner: owner, Repo: repo, Name: name, Color: color, CreatedAt: now()}
+	if err := s.db.Create(&r).Error; err != nil {
 		if isUniqueErr(err) {
-			return l, ErrExists
+			return Label{}, ErrExists
 		}
-		return l, err
+		return Label{}, err
 	}
-	l.ID, _ = res.LastInsertId()
-	return l, nil
+	return Label{ID: r.ID, Owner: owner, Repo: repo, Name: name, Color: color, CreatedAt: r.CreatedAt}, nil
 }
 
 func (s *Store) ListLabels(owner, repo string) ([]Label, error) {
-	rows, err := s.db.Query(`SELECT id, owner, repo, name, color, created_at
-		FROM repo_labels WHERE owner = ? AND repo = ? ORDER BY name`, owner, repo)
-	if err != nil {
+	var rows []repoLabelRow
+	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).Order("name").Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	out := []Label{}
-	for rows.Next() {
-		var l Label
-		if err := rows.Scan(&l.ID, &l.Owner, &l.Repo, &l.Name, &l.Color, &l.CreatedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, l)
+	for _, r := range rows {
+		out = append(out, Label(r))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Store) UpdateLabel(owner, repo string, id int64, name, color string) (Label, error) {
-	res, err := s.db.Exec(`UPDATE repo_labels SET name = ?, color = ? WHERE id = ? AND owner = ? AND repo = ?`,
-		name, color, id, owner, repo)
-	if err != nil {
-		return Label{}, err
+	res := s.db.Model(&repoLabelRow{}).Where("id = ? AND owner = ? AND repo = ?", id, owner, repo).
+		Updates(map[string]any{"name": name, "color": color})
+	if res.Error != nil {
+		return Label{}, res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return Label{}, ErrNotFound
 	}
-	rows, err := s.db.Query(`SELECT id, owner, repo, name, color, created_at FROM repo_labels WHERE id = ?`, id)
-	if err != nil {
-		return Label{}, err
+	var r repoLabelRow
+	if err := s.db.First(&r, id).Error; err != nil {
+		return Label{}, notFoundErr(err)
 	}
-	defer func() { _ = rows.Close() }()
-	var l Label
-	if rows.Next() {
-		_ = rows.Scan(&l.ID, &l.Owner, &l.Repo, &l.Name, &l.Color, &l.CreatedAt)
-	}
-	return l, rows.Err()
+	return Label(r), nil
 }
 
 func (s *Store) DeleteLabel(owner, repo string, id int64) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if _, err := tx.Exec(`DELETE FROM issue_labels WHERE label_id = ? AND issue_id IN
-		(SELECT id FROM issues WHERE owner = ? AND repo = ?)`, id, owner, repo); err != nil {
-		return err
-	}
-	res, err := tx.Exec(`DELETE FROM repo_labels WHERE id = ? AND owner = ? AND repo = ?`, id, owner, repo)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrNotFound
-	}
-	return tx.Commit()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("label_id = ? AND issue_id IN (?)", id,
+			tx.Model(&issueRow{}).Select("id").Where("owner = ? AND repo = ?", owner, repo)).
+			Delete(&issueLabelRow{}).Error; err != nil {
+			return err
+		}
+		res := tx.Where("id = ? AND owner = ? AND repo = ?", id, owner, repo).Delete(&repoLabelRow{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
 }
 
 // SetIssueLabels 全量替换 issue 标签（校验标签属于该仓库）。
 func (s *Store) SetIssueLabels(owner, repo string, number int64, labelIDs []int64) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-	var issueID int64
-	err = tx.QueryRow(`SELECT id FROM issues WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).Scan(&issueID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var r issueRow
+		if err := tx.Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+			First(&r).Error; err != nil {
+			return notFoundErr(err)
 		}
-		return err
-	}
-	for _, id := range labelIDs {
-		var one int
-		if err := tx.QueryRow(`SELECT 1 FROM repo_labels WHERE id = ? AND owner = ? AND repo = ?`, id, owner, repo).Scan(&one); err != nil {
-			return fmt.Errorf("label %d does not belong to this repository", id)
+		for _, id := range labelIDs {
+			var cnt int64
+			if err := tx.Model(&repoLabelRow{}).Where("id = ? AND owner = ? AND repo = ?", id, owner, repo).
+				Count(&cnt).Error; err != nil || cnt == 0 {
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf("label %d does not belong to this repository", id)
+			}
 		}
-	}
-	if _, err := tx.Exec(`DELETE FROM issue_labels WHERE issue_id = ?`, issueID); err != nil {
-		return err
-	}
-	for _, id := range labelIDs {
-		if _, err := tx.Exec(`INSERT INTO issue_labels (issue_id, label_id) VALUES (?, ?)`, issueID, id); err != nil {
+		if err := tx.Where("issue_id = ?", r.ID).Delete(&issueLabelRow{}).Error; err != nil {
 			return err
 		}
-	}
-	return tx.Commit()
+		for _, id := range labelIDs {
+			if err := tx.Create(&issueLabelRow{IssueID: r.ID, LabelID: id}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // IssueLabels 返回若干 issue（number）的标签映射。
@@ -117,21 +99,22 @@ func (s *Store) IssueLabels(owner, repo string, numbers []int64) (map[int64][]La
 	if len(numbers) == 0 {
 		return out, nil
 	}
-	rows, err := s.db.Query(`SELECT i.number, l.id, l.name, l.color FROM issue_labels il
+	var rows []struct {
+		Number int64
+		ID     int64
+		Name   string
+		Color  string
+	}
+	err := s.db.Raw(`SELECT i.number AS number, l.id AS id, l.name AS name, l.color AS color
+		FROM issue_labels il
 		JOIN issues i ON i.id = il.issue_id
 		JOIN repo_labels l ON l.id = il.label_id
-		WHERE i.owner = ? AND i.repo = ?`, owner, repo)
+		WHERE i.owner = ? AND i.repo = ?`, owner, repo).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var num, id int64
-		var name, color string
-		if err := rows.Scan(&num, &id, &name, &color); err != nil {
-			return nil, err
-		}
-		out[num] = append(out[num], Label{ID: id, Name: name, Color: color})
+	for _, r := range rows {
+		out[r.Number] = append(out[r.Number], Label{ID: r.ID, Name: r.Name, Color: r.Color})
 	}
-	return out, rows.Err()
+	return out, nil
 }

@@ -1,20 +1,20 @@
 package store
 
 import (
-	"database/sql"
-	"errors"
 	"time"
+
+	"gorm.io/gorm/clause"
 )
 
 func (s *Store) AdminCount() (int, error) {
-	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM admin_users`).Scan(&n)
-	return n, err
+	var n int64
+	err := s.db.Model(&adminUserRow{}).Count(&n).Error
+	return int(n), err
 }
 
 func (s *Store) CreateAdminUser(username, passwordHash string) error {
-	_, err := s.db.Exec(`INSERT INTO admin_users (username, password_hash, created_at) VALUES (?, ?, ?)`,
-		username, passwordHash, now())
+	row := adminUserRow{Username: username, PasswordHash: passwordHash, CreatedAt: now()}
+	err := s.db.Create(&row).Error
 	if err != nil && isUniqueErr(err) {
 		return ErrExists
 	}
@@ -22,57 +22,71 @@ func (s *Store) CreateAdminUser(username, passwordHash string) error {
 }
 
 func (s *Store) AdminAuth(username string) (int64, string, error) {
-	var id int64
-	var hash string
-	err := s.db.QueryRow(`SELECT id, password_hash FROM admin_users WHERE username = ?`, username).Scan(&id, &hash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, "", ErrNotFound
+	var row adminUserRow
+	err := s.db.Where("username = ?", username).First(&row).Error
+	if err != nil {
+		return 0, "", notFoundErr(err)
 	}
-	return id, hash, err
+	return row.ID, row.PasswordHash, nil
 }
 
 func (s *Store) UpdateAdminPassword(username, passwordHash string) error {
-	res, err := s.db.Exec(`UPDATE admin_users SET password_hash = ? WHERE username = ?`, passwordHash, username)
-	if err != nil {
-		return err
+	res := s.db.Model(&adminUserRow{}).Where("username = ?", username).
+		Update("password_hash", passwordHash)
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
 
 func (s *Store) CreateAdminSession(token string, adminID int64) error {
-	_, err := s.db.Exec(`INSERT INTO admin_sessions (token, admin_id, created_at, expires_at) VALUES (?, ?, ?, ?)`,
-		token, adminID, now(), time.Now().Add(12*time.Hour).UTC().Format(time.RFC3339))
-	return err
+	row := adminSessionRow{
+		Token:     token,
+		AdminID:   adminID,
+		CreatedAt: now(),
+		ExpiresAt: time.Now().Add(12 * time.Hour).UTC().Format(time.RFC3339),
+	}
+	return s.db.Create(&row).Error
 }
 
 func (s *Store) GetAdminSession(token string) (int64, string, error) {
-	var id int64
-	var username string
-	err := s.db.QueryRow(`SELECT a.id, a.username FROM admin_sessions s
-		JOIN admin_users a ON a.id = s.admin_id
-		WHERE s.token = ? AND s.expires_at > ?`, token, now()).Scan(&id, &username)
-	if errors.Is(err, sql.ErrNoRows) {
+	var dest struct {
+		ID       int64
+		Username string
+	}
+	err := s.db.Table("admin_sessions").
+		Select("admin_users.id, admin_users.username").
+		Joins("JOIN admin_users ON admin_users.id = admin_sessions.admin_id").
+		Where("admin_sessions.token = ? AND admin_sessions.expires_at > ?", token, now()).
+		Scan(&dest).Error
+	if err != nil {
+		return 0, "", err
+	}
+	if dest.ID == 0 && dest.Username == "" {
 		return 0, "", ErrNotFound
 	}
-	return id, username, err
+	return dest.ID, dest.Username, nil
 }
 
 func (s *Store) DeleteAdminSession(token string) error {
-	_, err := s.db.Exec(`DELETE FROM admin_sessions WHERE token = ?`, token)
-	return err
+	return s.db.Where("token = ?", token).Delete(&adminSessionRow{}).Error
 }
 
 func (s *Store) GetSetting(key string) string {
-	var v string
-	_ = s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&v)
-	return v
+	var row settingRow
+	if err := s.db.Where("\"key\" = ?", key).First(&row).Error; err != nil {
+		return ""
+	}
+	return row.Value
 }
 
 func (s *Store) SetSetting(key, value string) error {
-	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
-	return err
+	row := settingRow{Key: key, Value: value}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoUpdates: clause.AssignmentColumns([]string{"value"}),
+	}).Create(&row).Error
 }

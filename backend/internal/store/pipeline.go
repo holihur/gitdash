@@ -1,8 +1,10 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Pipeline 仓库流水线开关配置（独立表，避免侵入 repos 基础查询）。
@@ -31,15 +33,27 @@ type PipelineRun struct {
 	Log string `json:"log,omitempty"`
 }
 
+// runRowToDTO row → DTO 转换。
+func runRowToDTO(r pipelineRunRow) PipelineRun {
+	return PipelineRun{
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo,
+		SHA: r.SHA, Ref: r.Ref, TriggerBy: r.TriggerBy, Status: r.Status,
+		StepsTotal: r.StepsTotal, StepsDone: r.StepsDone, Error: r.Error,
+		CreatedAt: r.CreatedAt, FinishedAt: r.FinishedAt,
+	}
+}
+
 // GetPipeline 返回仓库流水线配置（未配置时 Enabled=false）。
 func (s *Store) GetPipeline(owner, repo string) (Pipeline, error) {
-	var p Pipeline
-	err := s.db.QueryRow(`SELECT owner, repo, enabled, created_at FROM repo_pipelines WHERE owner = ? AND repo = ?`, owner, repo).
-		Scan(&p.Owner, &p.Repo, &p.Enabled, &p.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
+	var row pipelineCfgRow
+	err := s.db.Where("owner = ? AND repo = ?", owner, repo).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return Pipeline{Owner: owner, Repo: repo}, nil
 	}
-	return p, err
+	if err != nil {
+		return Pipeline{}, err
+	}
+	return Pipeline(row), nil
 }
 
 // IsPipelineEnabled 未配置即视为关闭。
@@ -50,13 +64,11 @@ func (s *Store) IsPipelineEnabled(owner, repo string) bool {
 
 // SetPipeline 设置流水线开关（upsert）。
 func (s *Store) SetPipeline(owner, repo string, enabled bool) error {
-	ev := 0
-	if enabled {
-		ev = 1
-	}
-	_, err := s.db.Exec(`INSERT INTO repo_pipelines (owner, repo, enabled, created_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT(owner, repo) DO UPDATE SET enabled = excluded.enabled`, owner, repo, ev, now())
-	return err
+	row := pipelineCfgRow{Owner: owner, Repo: repo, Enabled: enabled, CreatedAt: now()}
+	return s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "owner"}, {Name: "repo"}},
+		DoUpdates: clause.AssignmentColumns([]string{"enabled"}),
+	}).Create(&row).Error
 }
 
 // CreatePipelineRun 新建一次运行记录（初始 pending）。
@@ -65,34 +77,32 @@ func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy string, steps
 		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy,
 		Status: "pending", StepsTotal: stepsTotal, CreatedAt: now(),
 	}
-	res, err := s.db.Exec(`INSERT INTO pipeline_runs
-		(owner, repo, sha, ref, trigger_by, status, steps_total, steps_done, created_at)
-		VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, ?)`,
-		owner, repo, sha, ref, triggerBy, stepsTotal, r.CreatedAt)
-	if err != nil {
+	row := pipelineRunRow{
+		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy,
+		Status: "pending", StepsTotal: stepsTotal, StepsDone: 0, CreatedAt: r.CreatedAt,
+	}
+	if err := s.db.Create(&row).Error; err != nil {
 		return r, err
 	}
-	r.ID, _ = res.LastInsertId()
+	r.ID = row.ID
 	return r, nil
 }
 
 // StartPipelineRun 标记为 running。
 func (s *Store) StartPipelineRun(id int64) error {
-	_, err := s.db.Exec(`UPDATE pipeline_runs SET status = 'running' WHERE id = ?`, id)
-	return err
+	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).Update("status", "running").Error
 }
 
 // ProgressPipelineRun 更新已完成步骤数。
 func (s *Store) ProgressPipelineRun(id int64, stepsDone int) error {
-	_, err := s.db.Exec(`UPDATE pipeline_runs SET steps_done = ? WHERE id = ?`, stepsDone, id)
-	return err
+	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).Update("steps_done", stepsDone).Error
 }
 
 // FinishPipelineRun 终态：success / failed（带错误信息）。
 func (s *Store) FinishPipelineRun(id int64, status, errMsg string) error {
-	_, err := s.db.Exec(`UPDATE pipeline_runs SET status = ?, error = ?, finished_at = ? WHERE id = ?`,
-		status, errMsg, now(), id)
-	return err
+	ts := now()
+	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).
+		Updates(map[string]any{"status": status, "error": errMsg, "finished_at": ts}).Error
 }
 
 // ListPipelineRuns 最近 limit 条运行记录（新→旧）。
@@ -100,49 +110,33 @@ func (s *Store) ListPipelineRuns(owner, repo string, limit int) ([]PipelineRun, 
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := s.db.Query(`SELECT id, sha, ref, trigger_by, status, steps_total, steps_done, error, created_at, finished_at
-		FROM pipeline_runs WHERE owner = ? AND repo = ? ORDER BY id DESC LIMIT ?`, owner, repo, limit)
-	if err != nil {
+	var rows []pipelineRunRow
+	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).
+		Order("id DESC").Limit(limit).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	runs := []PipelineRun{}
-	for rows.Next() {
-		var r PipelineRun
-		if err := rows.Scan(&r.ID, &r.SHA, &r.Ref, &r.TriggerBy, &r.Status, &r.StepsTotal, &r.StepsDone, &r.Error, &r.CreatedAt, &r.FinishedAt); err != nil {
-			return nil, err
-		}
-		runs = append(runs, r)
+	runs := make([]PipelineRun, 0, len(rows))
+	for _, r := range rows {
+		runs = append(runs, runRowToDTO(r))
 	}
-	return runs, rows.Err()
+	return runs, nil
 }
 
-// GetPipelineRun 单条运行记录。
+// GetPipelineRun 单条运行记录（不存在返回 ErrNotFound）。
 func (s *Store) GetPipelineRun(owner, repo string, id int64) (PipelineRun, error) {
-	var r PipelineRun
-	err := s.db.QueryRow(`SELECT id, sha, ref, trigger_by, status, steps_total, steps_done, error, created_at, finished_at
-		FROM pipeline_runs WHERE owner = ? AND repo = ? AND id = ?`, owner, repo, id).
-		Scan(&r.ID, &r.SHA, &r.Ref, &r.TriggerBy, &r.Status, &r.StepsTotal, &r.StepsDone, &r.Error, &r.CreatedAt, &r.FinishedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return r, ErrNotFound
+	var row pipelineRunRow
+	err := s.db.Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).First(&row).Error
+	if err != nil {
+		return PipelineRun{}, notFoundErr(err)
 	}
-	return r, err
+	return runRowToDTO(row), nil
 }
 
 // RunningPipelineRunIDs 仍在进行中的运行（用于避免同仓库并发排队过多）。
 func (s *Store) RunningPipelineRunIDs(owner, repo string) ([]int64, error) {
-	rows, err := s.db.Query(`SELECT id FROM pipeline_runs WHERE owner = ? AND repo = ? AND status IN ('pending','running')`, owner, repo)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
 	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-	return ids, rows.Err()
+	err := s.db.Model(&pipelineRunRow{}).
+		Where("owner = ? AND repo = ? AND status IN ('pending','running')", owner, repo).
+		Pluck("id", &ids).Error
+	return ids, err
 }

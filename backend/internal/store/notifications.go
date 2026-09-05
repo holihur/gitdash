@@ -1,10 +1,6 @@
 package store
 
-import (
-	"fmt"
-	"strings"
-)
-
+// Notification 用户通知（公开 DTO，字段与 JSON 形状保持不变）。
 type Notification struct {
 	ID        int64  `json:"id"`
 	Kind      string `json:"kind"`   // issue | pull
@@ -18,96 +14,87 @@ type Notification struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// AddNotification 写入单条通知。
 func (s *Store) AddNotification(username, kind, action, owner, repo string, number int64, title, actor string) error {
-	_, err := s.db.Exec(`INSERT INTO notifications (username, kind, action, owner, repo, number, title, actor, read, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`, username, kind, action, owner, repo, number, title, actor, now())
-	return err
+	row := notificationRow{
+		Username: username, Kind: kind, Action: action,
+		Owner: owner, Repo: repo, Number: number, Title: title, Actor: actor,
+		Read: false, CreatedAt: now(),
+	}
+	return s.db.Create(&row).Error
 }
 
-// AddNotifications 单条多行 INSERT 通知多个收件人（O(1) 次往返，避免逐人写入）。
+// AddNotifications 批量写入通知（一次 Create 多行，避免逐人写入）。
 func (s *Store) AddNotifications(usernames []string, kind, action, owner, repo string, number int64, title, actor string) error {
 	if len(usernames) == 0 {
 		return nil
 	}
-	var sb strings.Builder
-	args := make([]any, 0, len(usernames)*9)
-	for i, u := range usernames {
-		if i > 0 {
-			sb.WriteString(",")
-		}
-		sb.WriteString("(?, ?, ?, ?, ?, ?, ?, ?, 0, ?)")
-		args = append(args, u, kind, action, owner, repo, number, title, actor, now())
+	ts := now()
+	rows := make([]notificationRow, 0, len(usernames))
+	for _, u := range usernames {
+		rows = append(rows, notificationRow{
+			Username: u, Kind: kind, Action: action,
+			Owner: owner, Repo: repo, Number: number, Title: title, Actor: actor,
+			Read: false, CreatedAt: ts,
+		})
 	}
-	_, err := s.db.Exec(`INSERT INTO notifications (username, kind, action, owner, repo, number, title, actor, read, created_at)
-		VALUES `+sb.String(), args...)
-	if err != nil && strings.Contains(err.Error(), "too many SQL variables") {
-		// SQLite 变量上限（999）兜底：分批写入
-		for _, u := range usernames {
-			if e := s.AddNotification(u, kind, action, owner, repo, number, title, actor); e != nil {
-				return e
-			}
-		}
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("notify batch: %w", err)
-	}
-	return nil
+	return s.db.Create(&rows).Error
 }
 
 // ListNotifications 返回某用户收件箱（最新在前，最多 200 条）。
 func (s *Store) ListNotifications(username string) ([]Notification, error) {
-	rows, err := s.db.Query(`SELECT id, kind, action, owner, repo, number, title, actor, read, created_at
-		FROM notifications WHERE username = ? ORDER BY id DESC LIMIT 200`, username)
-	if err != nil {
+	var rows []notificationRow
+	if err := s.db.Where("username = ?", username).Order("id DESC").Limit(200).Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	out := []Notification{}
-	for rows.Next() {
-		var n Notification
-		var read int
-		if err := rows.Scan(&n.ID, &n.Kind, &n.Action, &n.Owner, &n.Repo, &n.Number, &n.Title, &n.Actor,
-			&read, &n.CreatedAt); err != nil {
-			return nil, err
-		}
-		n.Read = read != 0
-		out = append(out, n)
+	out := make([]Notification, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Notification{
+			ID: r.ID, Kind: r.Kind, Action: r.Action,
+			Owner: r.Owner, Repo: r.Repo, Number: r.Number,
+			Title: r.Title, Actor: r.Actor, Read: r.Read, CreatedAt: r.CreatedAt,
+		})
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
+// UnreadNotifications 未读通知数。
 func (s *Store) UnreadNotifications(username string) (int, error) {
-	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE username = ? AND read = 0`, username).Scan(&n)
-	return n, err
+	var n int64
+	err := s.db.Model(&notificationRow{}).Where("username = ? AND read = ?", username, false).
+		Count(&n).Error
+	return int(n), err
 }
 
+// MarkNotificationRead 标记单条已读（不存在返回 ErrNotFound）。
 func (s *Store) MarkNotificationRead(username string, id int64) error {
-	res, err := s.db.Exec(`UPDATE notifications SET read = 1 WHERE id = ? AND username = ?`, id, username)
-	if err != nil {
-		return err
+	res := s.db.Model(&notificationRow{}).
+		Where("id = ? AND username = ?", id, username).
+		Update("read", true)
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
 
+// MarkAllNotificationsRead 全部标记已读。
 func (s *Store) MarkAllNotificationsRead(username string) error {
-	_, err := s.db.Exec(`UPDATE notifications SET read = 1 WHERE username = ? AND read = 0`, username)
-	return err
+	return s.db.Model(&notificationRow{}).
+		Where("username = ? AND read = ?", username, false).
+		Update("read", true).Error
 }
 
+// DeleteNotification 删除单条通知（不存在返回 ErrNotFound）。
 func (s *Store) DeleteNotification(username string, id int64) error {
-	res, err := s.db.Exec(`DELETE FROM notifications WHERE id = ? AND username = ?`, id, username)
-	if err != nil {
-		return err
+	res := s.db.Where("id = ? AND username = ?", id, username).Delete(&notificationRow{})
+	if res.Error != nil {
+		return res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
 	return nil
 }
-
-// ---- forks ----

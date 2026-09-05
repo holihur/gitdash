@@ -61,7 +61,15 @@ func run() {
 		log.Fatalf("init pipeline: %v", err)
 	}
 
-	st, err := store.Open(filepath.Join(dataDir, "gitdash.db"))
+	// 数据库：GITDASH_DB 为 postgres:// 连接串时用 PG，否则用 SQLite 文件（默认 data/gitdash.db）
+	dbDSN := os.Getenv("GITDASH_DB")
+	var st *store.Store
+	var err error
+	if dbDSN != "" {
+		st, err = store.OpenDSN(dbDSN)
+	} else {
+		st, err = store.Open(filepath.Join(dataDir, "gitdash.db"))
+	}
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}

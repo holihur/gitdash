@@ -14,6 +14,20 @@ jobs:
   backend:
     name: Backend (go)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gitdash
+          POSTGRES_PASSWORD: pg
+          POSTGRES_DB: gitdash
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U gitdash"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
         with:
@@ -44,6 +58,10 @@ jobs:
         working-directory: backend
         run: go test ./... 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
 
+      - name: Test PostgreSQL (store smoke)
+        working-directory: backend
+        run: GITDASH_DB="postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable" go test ./internal/store/pgsmoketest/ -count=1 -v 2>&1 | tee /tmp/test-pg.log; exit ${PIPESTATUS[0]}
+
       - name: Dump test log to summary
         if: failure()
         run: |
@@ -72,6 +90,20 @@ jobs:
     name: API tests (pytest · uv, black-box)
     runs-on: ubuntu-latest
     needs: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gitdash
+          POSTGRES_PASSWORD: pg
+          POSTGRES_DB: gitdash
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U gitdash"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v5
 
@@ -92,6 +124,13 @@ jobs:
         run: uv run pytest -v
         env:
           GITDASH_BIN: /tmp/gitdash-server
+
+      - name: Run black-box API tests against PostgreSQL
+        working-directory: tests
+        run: uv run pytest -v --tb=short
+        env:
+          GITDASH_BIN: /tmp/gitdash-server
+          GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
 
   docker:
     name: Docker image build

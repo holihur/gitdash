@@ -1,25 +1,30 @@
 package store
 
 import (
-	"database/sql"
 	"errors"
 )
 
-func (s *Store) getIssue(owner, repo string, number int64) (Issue, error) {
-	var it Issue
-	var ca sql.NullString
-	err := s.db.QueryRow(`SELECT id, owner, repo, number, title, body, state, author, created_at, updated_at, closed_at
-		FROM issues WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).
-		Scan(&it.ID, &it.Owner, &it.Repo, &it.Number, &it.Title, &it.Body, &it.State, &it.Author,
-			&it.CreatedAt, &it.UpdatedAt, &ca)
-	if errors.Is(err, sql.ErrNoRows) {
-		return it, ErrNotFound
+// issueToDTO 把 ORM 行转换为公共 DTO。
+func issueToDTO(r issueRow) Issue {
+	it := Issue{
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo, Number: r.Number,
+		Title: r.Title, Body: r.Body, State: r.State, Author: r.Author,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
-	if ca.Valid {
-		v := ca.String
+	if r.ClosedAt != nil {
+		v := *r.ClosedAt
 		it.ClosedAt = &v
 	}
-	return it, err
+	return it
+}
+
+func (s *Store) getIssue(owner, repo string, number int64) (Issue, error) {
+	var r issueRow
+	if err := s.db.Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		First(&r).Error; err != nil {
+		return Issue{}, notFoundErr(err)
+	}
+	return issueToDTO(r), nil
 }
 
 func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, error) {
@@ -28,17 +33,21 @@ func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, err
 	now := now()
 	// 号码在同一仓库内递增；并发冲突时重试（UNIQUE(owner, repo, number)）
 	for attempt := 0; attempt < 5; attempt++ {
-		res, e := s.db.Exec(`INSERT INTO issues (owner, repo, number, title, body, state, author, created_at, updated_at)
-			VALUES (?, ?, (SELECT COALESCE(MAX(number), 0) + 1 FROM issues WHERE owner = ? AND repo = ?), ?, ?, 'open', ?, ?, ?)`,
-			owner, repo, owner, repo, title, body, author, now, now)
+		var max int64
+		if e := s.db.Raw(`SELECT COALESCE(MAX(number), 0) + 1 FROM issues WHERE owner = ? AND repo = ?`,
+			owner, repo).Scan(&max).Error; e != nil {
+			return it, e
+		}
+		r := issueRow{
+			Owner: owner, Repo: repo, Number: max,
+			Title: title, Body: body, State: "open", Author: author,
+			CreatedAt: now, UpdatedAt: now,
+		}
+		e := s.db.Create(&r).Error
 		if e == nil {
-			it.ID, _ = res.LastInsertId()
-			it = Issue{ID: it.ID, Owner: owner, Repo: repo, Title: title, Body: body,
-				State: "open", Author: author, CreatedAt: now, UpdatedAt: now}
-			if err := s.db.QueryRow(`SELECT number FROM issues WHERE id = ?`, it.ID).Scan(&it.Number); err != nil {
-				return it, err
-			}
-			return it, nil
+			return Issue{ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
+				Title: title, Body: body, State: "open", Author: author,
+				CreatedAt: now, UpdatedAt: now}, nil
 		}
 		if !isUniqueErr(e) {
 			return it, e
@@ -50,33 +59,20 @@ func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, err
 
 // ListIssues 分页列出 issue；limit<=0 表示不限制。
 func (s *Store) ListIssues(owner, repo string, limit, offset int) ([]Issue, error) {
-	q := `SELECT id, owner, repo, number, title, body, state, author, created_at, updated_at, closed_at
-		FROM issues WHERE owner = ? AND repo = ? ORDER BY (state = 'open') DESC, number DESC`
-	args := []any{owner, repo}
+	q := s.db.Model(&issueRow{}).Where("owner = ? AND repo = ?", owner, repo).
+		Order("state = 'open' DESC, number DESC")
 	if limit > 0 {
-		q += ` LIMIT ? OFFSET ?`
-		args = append(args, limit, offset)
+		q = q.Limit(limit).Offset(offset)
 	}
-	rows, err := s.db.Query(q, args...)
-	if err != nil {
+	var rows []issueRow
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
 	issues := []Issue{}
-	for rows.Next() {
-		var it Issue
-		var ca sql.NullString
-		if err := rows.Scan(&it.ID, &it.Owner, &it.Repo, &it.Number, &it.Title, &it.Body, &it.State,
-			&it.Author, &it.CreatedAt, &it.UpdatedAt, &ca); err != nil {
-			return nil, err
-		}
-		if ca.Valid {
-			v := ca.String
-			it.ClosedAt = &v
-		}
-		issues = append(issues, it)
+	for _, r := range rows {
+		issues = append(issues, issueToDTO(r))
 	}
-	return issues, rows.Err()
+	return issues, nil
 }
 
 func (s *Store) SetIssueState(owner, repo string, number int64, state string) (Issue, error) {
@@ -88,15 +84,13 @@ func (s *Store) SetIssueState(owner, repo string, number int64, state string) (I
 	if state == "closed" {
 		closedAt = now
 	}
-	res, err := s.db.Exec(`UPDATE issues SET state = ?, updated_at = ?, closed_at = ?
-		WHERE owner = ? AND repo = ? AND number = ?`, state, now, closedAt, owner, repo, number)
-	if err != nil {
-		return Issue{}, err
+	res := s.db.Model(&issueRow{}).Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		Updates(map[string]any{"state": state, "updated_at": now, "closed_at": closedAt})
+	if res.Error != nil {
+		return Issue{}, res.Error
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	if res.RowsAffected == 0 {
 		return Issue{}, ErrNotFound
 	}
 	return s.getIssue(owner, repo, number)
 }
-
-// ---- collaborators ----
