@@ -62,13 +62,14 @@ jobs:
         working-directory: backend
         run: GITDASH_DB="postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable" go test ./internal/store/pgsmoketest/ -count=1 -v 2>&1 | tee /tmp/test-pg.log; exit ${PIPESTATUS[0]}
 
-      - name: Dump test log to summary
+      - name: Report failing tests
         if: failure()
         run: |
+          grep -o -- "--- FAIL: [^ ]*" /tmp/test.log | sed "s/^/::error::/" || true
           {
-            echo "## go test log"
+            echo "## go test tail"
             echo '```'
-            tail -c 40000 /tmp/test.log
+            tail -c 20000 /tmp/test.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
