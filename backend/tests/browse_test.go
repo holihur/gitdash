@@ -112,6 +112,23 @@ func TestCodeBrowsing(t *testing.T) {
 		t.Fatalf("commits = %+v", commits)
 	}
 
+	// blame
+	blame := getJSON[map[string]any](t, alice, "/repos/browsed/blame?ref=main&path=README.md", 200)
+	bl, ok := blame["lines"].([]any)
+	if !ok || len(bl) != 1 {
+		t.Fatalf("blame lines = %v", blame)
+	}
+	line := bl[0].(map[string]any)
+	if line["content"] != "# browsed repo" || line["commit"] == "" {
+		t.Fatalf("blame line = %v", line)
+	}
+	cmts := blame["commits"].(map[string]any)
+	if c := cmts[line["commit"].(string)].(map[string]any); c["author"] == "" || c["message"] == "" {
+		t.Fatalf("blame commit = %v", c)
+	}
+	alice.mustFail("GET", "/repos/browsed/blame?ref=main&path=missing.txt", nil, 400)
+	alice.mustFail("GET", "/repos/browsed/blame?ref=nope&path=README.md", nil, 400)
+
 	// 异常输入
 	alice.mustFail("GET", "/repos/browsed/tree?ref=nope", nil, 400)
 	alice.mustFail("GET", "/repos/browsed/blob?ref=main&path=missing.txt", nil, 400)

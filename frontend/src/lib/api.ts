@@ -107,6 +107,25 @@ export interface Blob {
   content: string;
 }
 
+export interface BlameCommit {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+}
+
+export interface BlameLine {
+  line: number;
+  commit: string;
+  content: string;
+}
+
+export interface Blame {
+  path: string;
+  commits: Record<string, BlameCommit>;
+  lines: BlameLine[];
+}
+
 export interface Commit {
   sha: string;
   author: string;
@@ -388,6 +407,10 @@ export const api = {
     ),
   commits: (owner: string, name: string, ref: string) =>
     req<Commit[]>(`/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
+  blame: (owner: string, name: string, ref: string, path: string) =>
+    req<Blame>(
+      `/users/${owner}/repos/${name}/blame?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
+    ),
   commitDiff: (owner: string, name: string, sha: string) =>
     req<PullDiff>(`/users/${owner}/repos/${name}/commits/${sha}/diff`),
   createCommit: (

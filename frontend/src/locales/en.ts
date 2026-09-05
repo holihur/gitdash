@@ -173,6 +173,8 @@ export const en = {
     binaryFile: "Binary file",
     fileTooLarge: "File too large, showing size only",
     previewNotAvailable: "This file cannot be previewed in the browser.",
+    blame: "Blame",
+    loading: "Loading…",
     emptyDir: "This directory is empty",
     noCommits: "No commits yet",
     commit: "Commit",

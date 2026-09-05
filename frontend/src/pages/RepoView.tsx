@@ -22,7 +22,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { api, cloneCommand, type Blob, type Branch, type Commit, type PullDiff, type Repo, type Tag, type TreeEntry } from "@/lib/api";
+import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type PullDiff, type Repo, type Tag, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,6 +113,7 @@ export default function RepoView() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [entries, setEntries] = useState<TreeEntry[]>([]);
   const [blob, setBlob] = useState<Blob | null>(null);
+  const [blame, setBlame] = useState<Blame | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [diffSha, setDiffSha] = useState<string | null>(null);
   const [diffData, setDiffData] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
@@ -141,6 +142,7 @@ export default function RepoView() {
   const path = pathParam ? pathParam.split("/") : [];
   const currentDir = path.join("/");
   const fileParam = searchParams.get("file") ?? "";
+  const blameParam = searchParams.get("blame") === "1";
   const urlRef = searchParams.get("ref") ?? "";
   const ref =
     urlRef ||
@@ -269,6 +271,28 @@ export default function RepoView() {
       alive = false;
     };
   }, [fileParam, ref, owner, name, setParams, to]);
+
+  // blame 数据跟随 ?blame=1 & ?file= 参数加载
+  useEffect(() => {
+    let alive = true;
+    if (!blameParam || !fileParam || !ref) {
+      setBlame(null);
+      return;
+    }
+    api
+      .blame(owner, name, ref, fileParam)
+      .then((b) => {
+        if (alive) setBlame(b);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setBlame(null);
+        toast.error(apiErrorMsg(to, e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [blameParam, fileParam, ref, owner, name, to]);
 
   // 目录 README：列表底部渲染
   const readmeEntry = entries.find(
@@ -656,6 +680,15 @@ export default function RepoView() {
                         {blob.encoding === "binary" ? t("repo.binaryFile") : t("repo.fileTooLarge")}
                       </Badge>
                     )}
+                    {blob.encoding === "utf-8" && (
+                      <Button
+                        size="sm"
+                        variant={blameParam ? "default" : "outline"}
+                        onClick={() => setParams({ blame: blameParam ? null : "1" })}
+                      >
+                        {t("repo.blame")}
+                      </Button>
+                    )}
                     {blob.encoding === "utf-8" && !isMarkdown(blob.path) && (
                       <>
                         <Button size="sm" variant="outline" className="gap-1.5"
@@ -674,7 +707,40 @@ export default function RepoView() {
                 </div>
               </CardHeader>
               <CardContent>
-                {blob.encoding === "utf-8" ? (
+                {blob.encoding === "utf-8" && blameParam ? (
+                  blame ? (
+                    <div className="max-h-[70vh] overflow-auto rounded-md border">
+                      <table className="w-full border-collapse font-mono text-xs">
+                        <tbody>
+                          {blame.lines.map((l) => {
+                            const c = blame.commits[l.commit];
+                            return (
+                              <tr key={l.line} className="border-b border-border/50 last:border-0">
+                                <td className="w-40 max-w-40 truncate whitespace-nowrap border-r border-border/50 bg-muted/40 px-2 py-0.5 align-top text-muted-foreground">
+                                  <a
+                                    className="block truncate hover:underline"
+                                    href={`/repo/${owner}/${name}?tab=commits`}
+                                    title={c ? `${c.author} · ${c.message}` : l.commit}
+                                  >
+                                    {c ? c.author : l.commit.slice(0, 7)}
+                                  </a>
+                                </td>
+                                <td className="w-10 whitespace-nowrap px-2 py-0.5 align-top text-right text-muted-foreground">
+                                  {l.line}
+                                </td>
+                                <td className="whitespace-pre-wrap break-all px-2 py-0.5 align-top">
+                                  {l.content || " "}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+                  )
+                ) : blob.encoding === "utf-8" ? (
                   isMarkdown(blob.path) ? (
                     <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
                       <MarkdownView text={blob.content} />

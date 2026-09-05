@@ -164,6 +164,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/branches", a.auth(a.branches))
 	mux.HandleFunc("GET /api/repos/{name}/tree", a.auth(a.tree))
 	mux.HandleFunc("GET /api/repos/{name}/blob", a.auth(a.blob))
+	mux.HandleFunc("GET /api/repos/{name}/blame", a.auth(a.blame))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
 	// repos（owner 限定版：供协作者 / 跨用户访问，owner 显式声明）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}", a.auth(a.getRepo))
@@ -171,6 +172,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branches", a.auth(a.branches))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tree", a.auth(a.tree))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.auth(a.blob))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blame", a.auth(a.blame))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
 
 	// star & fork & import

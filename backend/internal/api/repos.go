@@ -589,6 +589,19 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, b)
 }
 
+func (a *API) blame(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	b, err := gitsvc.BlameFile(owner, name, r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, b)
+}
+
 func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
