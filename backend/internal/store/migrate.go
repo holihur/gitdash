@@ -208,7 +208,29 @@ CREATE TABLE IF NOT EXISTS pull_requests (
 	merged_at     TEXT,
 	merged_by     TEXT NOT NULL DEFAULT '',
 	UNIQUE(owner, repo, number)
-);`)
+);
+CREATE TABLE IF NOT EXISTS repo_pipelines (
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	enabled    INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (owner, repo)
+);
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	owner       TEXT NOT NULL,
+	repo        TEXT NOT NULL,
+	sha         TEXT NOT NULL DEFAULT '',
+	ref         TEXT NOT NULL DEFAULT '',
+	trigger_by  TEXT NOT NULL DEFAULT '',
+	status      TEXT NOT NULL DEFAULT 'pending',
+	steps_total INTEGER NOT NULL DEFAULT 0,
+	steps_done  INTEGER NOT NULL DEFAULT 0,
+	error       TEXT NOT NULL DEFAULT '',
+	created_at  TEXT NOT NULL,
+	finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_runs_repo ON pipeline_runs(owner, repo, id);`)
 	if err != nil {
 		return err
 	}

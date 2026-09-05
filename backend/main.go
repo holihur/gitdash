@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 
 	"gitdash/backend/internal/api"
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/pipeline"
+	"gitdash/backend/internal/queue"
 	"gitdash/backend/internal/sshserver"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/updater"
@@ -53,6 +56,9 @@ func run() {
 	}
 	if err := gitsvc.Init(dataDir); err != nil {
 		log.Fatalf("init git service: %v", err)
+	}
+	if err := pipeline.Init(dataDir); err != nil {
+		log.Fatalf("init pipeline: %v", err)
 	}
 
 	st, err := store.Open(filepath.Join(dataDir, "gitdash.db"))
@@ -95,8 +101,23 @@ func run() {
 
 	a := api.New(st, version)
 
-	// webhook 调度：消费 post-receive spool 中的 push 事件
-	go webhooks.Run(gitsvc.SpoolDir(), st, 2*time.Second)
+	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发）
+	go webhooks.Run(gitsvc.SpoolDir(), st, 2*time.Second, pipeline.PushHandler(st))
+
+	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
+	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
+	switch queueMode {
+	case "redis", "asynq":
+		redisAddr := getenv("GITDASH_REDIS_ADDR", "127.0.0.1:6379")
+		redisDB, _ := strconv.Atoi(getenv("GITDASH_REDIS_DB", "0"))
+		concurrency, _ := strconv.Atoi(getenv("GITDASH_QUEUE_CONCURRENCY", "4"))
+		q := queue.NewAsynq(redisAddr, os.Getenv("GITDASH_REDIS_PASSWORD"), redisDB, concurrency)
+		pipeline.Bind(st, q)
+		log.Printf("pipeline queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
+	default:
+		pipeline.Bind(st, nil)
+		log.Printf("pipeline queue: in-process goroutine")
+	}
 
 	if staticDir == "" {
 		staticDir = resolveStaticDir()

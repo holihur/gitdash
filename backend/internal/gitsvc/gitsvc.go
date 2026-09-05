@@ -82,6 +82,9 @@ func gitOut(dir string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+// GitOut 是 gitOut 的导出包装（供 pipeline 等内部包复用）。
+func GitOut(dir string, args ...string) (string, error) { return gitOut(dir, args...) }
+
 // gitOutEnv 与 gitOut 相同，但额外注入环境变量（如导入私有仓库时指定临时 SSH 私钥）。
 func gitOutEnv(env []string, dir string, args ...string) (string, error) {
 	if dir != "" {

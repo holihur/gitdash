@@ -55,7 +55,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { cn, formatDate, formatSize } from "@/lib/utils";
+import { cn, copyText, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MarkdownView } from "@/components/markdown";
@@ -66,6 +66,7 @@ import MirrorDialog from "@/components/mirror-dialog";
 import RefsDialog from "@/components/refs-dialog";
 import RepoIssues from "@/pages/RepoIssues";
 import RepoPulls from "@/pages/RepoPulls";
+import RepoPipeline from "@/pages/RepoPipeline";
 
 // 判断文件名是否需要 Markdown 渲染（README 任意扩展名或 .md/.markdown）
 function isMarkdown(path: string): boolean {
@@ -90,7 +91,7 @@ export default function RepoView() {
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const { owner = "", name = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabs = ["code", "commits", "issues", "pulls"] as const;
+  const tabs = ["code", "commits", "issues", "pulls", "pipeline"] as const;
   type RepoTab = (typeof tabs)[number];
 
   // 把 tab / ref / path / file 写进 URL 查询参数，支持刷新与分享
@@ -159,7 +160,9 @@ export default function RepoView() {
 
   const copy = useCallback(
     (text: string) => {
-      navigator.clipboard.writeText(text).then(() => toast.success(t("common.copied")));
+      copyText(text)
+        .then(() => toast.success(t("common.copied")))
+        .catch(() => toast.error(t("common.copyFailed")));
     },
     [t],
   );
@@ -515,6 +518,9 @@ export default function RepoView() {
           </TabsTrigger>
           <TabsTrigger value="pulls" className="flex-1 sm:flex-none">
             {t("pulls.title")}
+          </TabsTrigger>
+          <TabsTrigger value="pipeline" className="flex-1 sm:flex-none">
+            {t("pipeline.tab")}
           </TabsTrigger>
         </TabsList>
 
@@ -881,6 +887,10 @@ export default function RepoView() {
 
         <TabsContent value="pulls">
           <RepoPulls owner={owner} name={name} />
+        </TabsContent>
+
+        <TabsContent value="pipeline">
+          <RepoPipeline owner={owner} name={name} role={repo?.role} />
         </TabsContent>
       </Tabs>
 

@@ -193,6 +193,23 @@ export interface Webhook {
   created_at: string;
 }
 
+export type PipelineRunStatus = "pending" | "running" | "success" | "failed";
+
+export interface PipelineRun {
+  id: number;
+  sha: string;
+  ref: string;
+  trigger_by: string;
+  status: PipelineRunStatus;
+  steps_total: number;
+  steps_done: number;
+  error?: string;
+  created_at: string;
+  finished_at: string | null;
+  /** 仅详情返回 */
+  log?: string;
+}
+
 export type NotifKind = "issue" | "pull";
 export type NotifAction = "opened" | "closed" | "reopened" | "merged";
 
@@ -459,6 +476,24 @@ export const api = {
     }),
   deleteWebhook: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/webhooks/${id}`, { method: "DELETE" }),
+
+  // pipeline（CI）
+  getPipeline: (owner: string, name: string) =>
+    req<{ enabled: boolean; file: string }>(`/users/${owner}/repos/${name}/pipeline`),
+  setPipeline: (owner: string, name: string, enabled: boolean) =>
+    req<{ enabled: boolean }>(`/users/${owner}/repos/${name}/pipeline`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    }),
+  listPipelineRuns: (owner: string, name: string) =>
+    req<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?limit=50`),
+  getPipelineRun: (owner: string, name: string, id: number) =>
+    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`),
+  triggerPipelineRun: (owner: string, name: string, ref?: string) =>
+    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs`, {
+      method: "POST",
+      body: JSON.stringify(ref ? { ref } : {}),
+    }),
 
   // branches & tags
   listTags: (owner: string, name: string) =>

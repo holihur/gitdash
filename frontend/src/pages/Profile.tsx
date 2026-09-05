@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDate } from "@/lib/utils";
+import { copyText, formatDate } from "@/lib/utils";
 
 interface Profile {
   username: string;
@@ -305,9 +305,9 @@ function MFASection({ mfaEnabled, onChanged }: { mfaEnabled: boolean; onChanged:
                     size="icon"
                     className="h-7 w-7 shrink-0"
                     onClick={() => {
-                      navigator.clipboard
-                        .writeText(enroll?.secret ?? pendingSecret ?? "")
-                        .then(() => toast.success(t("profile.secretCopied")));
+                      copyText(enroll?.secret ?? pendingSecret ?? "")
+                        .then(() => toast.success(t("profile.secretCopied")))
+                        .catch(() => toast.error(t("common.copyFailed")));
                     }}
                     title={t("profile.copySecret")}
                   >

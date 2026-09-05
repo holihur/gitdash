@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
+import { copyText, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import CollaboratorsDialog from "@/components/collabs-dialog";
@@ -144,7 +144,9 @@ export default function Repos() {
   };
 
   const copy = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => toast.success(t("common.copied")));
+    copyText(text)
+      .then(() => toast.success(t("common.copied")))
+      .catch(() => toast.error(t("common.copyFailed")));
   };
 
   return (

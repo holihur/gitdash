@@ -36,18 +36,19 @@ type Event struct {
 var client = &http.Client{Timeout: 10 * time.Second}
 
 // Run 循环扫描 spool 目录并投递（main 中 go 启动）。失败仅记日志并移除文件，避免死循环。
-func Run(spoolDir string, st *store.Store, interval time.Duration) {
+// handlers 为额外的 push 事件消费者（如 pipeline），在删除 spool 文件前依次调用。
+func Run(spoolDir string, st *store.Store, interval time.Duration, handlers ...func(Event)) {
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		drain(spoolDir, st)
+		drain(spoolDir, st, handlers)
 	}
 }
 
-func drain(spoolDir string, st *store.Store) {
+func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 	files, err := filepath.Glob(filepath.Join(spoolDir, "*.json"))
 	if err != nil {
 		return
@@ -72,6 +73,9 @@ func drain(spoolDir string, st *store.Store) {
 		// push mirror 自动同步（异步，避免阻塞 webhook 投递）
 		if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
 			go syncMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey)
+		}
+		for _, h := range handlers {
+			h(ev)
 		}
 		_ = os.Remove(f)
 	}

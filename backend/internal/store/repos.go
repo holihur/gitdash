@@ -130,6 +130,12 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	if _, err := tx.Exec(`DELETE FROM pull_requests WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`DELETE FROM repo_pipelines WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM pipeline_runs WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
 	res, err := tx.Exec(`DELETE FROM repos WHERE owner = ? AND name = ?`, owner, name)
 	if err != nil {
 		return err

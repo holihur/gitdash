@@ -54,6 +54,8 @@ type Env struct {
 	SSHPort  string
 	ReposDir string
 	DataDir  string
+	// Store 服务端使用的同一存储实例（需要直连 store 的用例使用，如 pipeline 队列绑定）
+	Store *store.Store
 }
 
 // start 启动 in-process 的 HTTP + SSH 服务（每测一个独立实例）。
@@ -83,7 +85,15 @@ func start(t *testing.T) *Env {
 	go func() { _ = srv.ServeOn(ln) }()
 
 	_, port, _ := net.SplitHostPort(ln.Addr().String())
-	return &Env{t: t, BaseURL: hs.URL, SSHPort: port, ReposDir: gitsvc.ReposDir(), DataDir: dir}
+	return &Env{t: t, BaseURL: hs.URL, SSHPort: port, ReposDir: gitsvc.ReposDir(), DataDir: dir, Store: st}
+}
+
+// startHTTPOnly 仅启动 HTTP API（无需 SSH 的用例）。
+func startHTTPOnly(t *testing.T, h *api.API) *httptest.Server {
+	t.Helper()
+	hs := httptest.NewServer(h.Handler(""))
+	t.Cleanup(hs.Close)
+	return hs
 }
 
 // Client 是最简单的 API 客户端（带可选 Bearer token）。

@@ -47,6 +47,9 @@ GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest -v
 | `test_pulls.py` | PR 创建/diff/关闭重开/合并、分叉冲突、bad path 与隔离(SSH 场景) |
 | `test_gpg.py` | GPG 公钥增删查、非法/重复(跨用户)校验、401 |
 | `test_watch_inbox.py` | Watch/收件箱：关注/取关、自动关注、通知全状态流、已读/删除、401/404 |
+| `test_star_fork.py` | Star/Fork/导入、fork 来源展示、star/watch 计数、隔离与级联 |
+| `test_mirror.py` | Push 镜像 CRUD、SSRF 防护、立即同步 bad path |
+| `test_pipeline.py` | CI 流水线：开关配置、手动/push 触发、DSL 解析失败、运行记录与日志、权限、级联；队列模式（asynq+redis，需 `GITDASH_BIN` + `redis-server`，缺则跳过） |
 
 > 提示：用户没有删除 API，若对着**常驻实例**反复跑会产生残留用户；
 > 对 CI / 一次性实例（方式一）无影响。

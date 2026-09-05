@@ -9,6 +9,7 @@ English | 简体中文
 
 - **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读管理）
+- **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；任务默认进程内执行，也可走 Redis（asynq）持久化队列
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
 - **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、查看提交历史
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
@@ -68,6 +69,10 @@ go run .
 | `GITDASH_AUTO_UPDATE` | 关闭 | **自动更新默认关闭**，设为 `1`/`true`/`yes`/`on` 开启 |
 | `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | 自动更新检查间隔（最小 1h） |
 | `GITDASH_UPDATE_REPO` | `holihur/gitdash` | 更新源仓库（fork / 测试用） |
+| `GITDASH_QUEUE` | `memory` | 流水线任务队列：`memory`（进程内 goroutine）或 `redis`/`asynq`（Redis 持久化队列） |
+| `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | asynq 队列使用的 Redis 地址 |
+| `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
+| `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
 
 **修改监听地址**：
 
@@ -199,6 +204,34 @@ bash scripts/e2e.sh    # 全链路冒烟（真实二进制：注册登录 -> ssh
 | DELETE | `/api/inbox/{id}` | 删除单条通知 |
 
 > MVP 注意：仓库为 owner-only（仅属主可读写）；HTTP 层请自行加 TLS（或置于反代之后）。
+
+## CI 流水线 (MVP)
+
+在仓库的 **流水线** 页开启（仅 owner）。此后每次 push 分支，gitdash 会读取该提交上的 `.gitdash.yml` 并在 Docker 容器中逐步执行（仓库工作区挂载在 `/workspace`，任一步骤失败即终止），也支持手动触发。运行日志保存在 `<data>/pipelines/{owner}/{repo}/`。
+
+自定义 YAML DSL（受支持子集）：
+
+```yaml
+image: alpine:3.19   # 必填：每步运行所用镜像（需含 POSIX sh）
+timeout: 10m         # 可选：单步超时（默认 10m，上限 1h）
+env:                 # 可选：注入容器的环境变量 KEY=VALUE
+  - CGO_ENABLED=0
+steps:               # 必填：1..20 个步骤
+  - name: build
+    run: go build ./...
+  - name: test
+    run: |
+      go test ./...
+      go vet ./...
+```
+
+流水线 API：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET/PUT | `/api/users/{owner}/repos/{name}/pipeline` | 查询 / 设置开关（PUT 仅 owner） |
+| GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | 运行列表 / 手动触发（`{ref?}`） |
+| GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | 运行详情（含日志） |
 
 ## 升级说明
 

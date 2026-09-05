@@ -52,7 +52,7 @@ func TestDrainDeliversAndCleansSpool(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	drain(spool, st)
+	drain(spool, st, nil)
 
 	for i := 0; i < 2; i++ {
 		select {
@@ -74,7 +74,7 @@ func TestDrainDeliversAndCleansSpool(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(spool, "bob__other.json"), []byte(ev), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	drain(spool, st)
+	drain(spool, st, nil)
 	left, _ = filepath.Glob(filepath.Join(spool, "*.json"))
 	if len(left) != 0 {
 		t.Fatalf("spool files not cleaned for unknown repo: %v", left)
@@ -107,7 +107,7 @@ func TestWebhookSignatureHeader(t *testing.T) {
 	_, _ = st.CreateWebhook("alice", "demo", srv.URL+"/h", "super-secret-key-123")
 	ev := `{"event":"push","owner":"alice","repo":"demo","ref":"refs/heads/main"}`
 	_ = os.WriteFile(filepath.Join(spool, "a.json"), []byte(ev), 0o644)
-	drain(spool, st)
+	drain(spool, st, nil)
 	select {
 	case h := <-got:
 		if !strings.HasPrefix(h, "sha256=") {

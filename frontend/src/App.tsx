@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Link, NavLink, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { Bell, GitBranch, KeyRound, LogOut, FolderGit2, UserRound } from "lucide-react";
-import { api, clearToken, getToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
@@ -22,13 +22,13 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      if (getToken()) {
-        try {
-          const me = await api.me();
-          setUser(me.username);
-        } catch {
-          clearToken();
-        }
+      try {
+        // 会话在 httpOnly cookie 中自动携带：刷新后直接探测 /api/me 恢复登录态
+        const me = await api.me();
+        setUser(me.username);
+      } catch {
+        // 无有效会话（未登录 / 已过期）→ 展示登录页
+        setUser(null);
       }
       setReady(true);
     })();
@@ -40,7 +40,6 @@ export default function App() {
     } catch {
       /* ignore */
     }
-    clearToken();
     setUser(null);
     toast.success(t("app.loggedOut"));
   };
@@ -137,6 +136,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           <Route path="/inbox" element={<Inbox onChanged={refreshUnread} />} />
           <Route path="/keys" element={<Keys />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>

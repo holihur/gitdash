@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/gpgsig"
+	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/store"
 	"net"
 	"net/http"
@@ -124,6 +125,15 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	if iu, err := a.store.ImportSource(owner, name); err == nil {
 		repo.ImportURL = iu
+	}
+	// 当前用户视角的角色（owner/write/read），前端据此控制设置类 UI
+	switch {
+	case a.store.IsRepoOwner(owner, me):
+		repo.Role = "owner"
+	case a.store.CanWrite(owner, name, me):
+		repo.Role = "write"
+	default:
+		repo.Role = "read"
 	}
 	writeJSON(w, http.StatusOK, repo)
 }
@@ -519,6 +529,7 @@ func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = gitsvc.Delete(owner, name)
+	_ = pipeline.DeleteLogs(owner, name)
 	w.WriteHeader(http.StatusNoContent)
 }
 

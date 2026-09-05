@@ -9,6 +9,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 
 - **User system**: register / login (bcrypt + session token, valid for 7 days); repos and SSH keys belong to users
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read management)
+- **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **Code browsing**: browse repos by branch / directory, view file contents and commit history on the web
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
@@ -68,6 +69,10 @@ Environment variables (all optional):
 | `GITDASH_AUTO_UPDATE` | off | **Auto-update is off by default**; set to `1`/`true`/`yes`/`on` to enable |
 | `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | Auto-update check interval (minimum 1h) |
 | `GITDASH_UPDATE_REPO` | `holihur/gitdash` | Source repo for updates (for forks / testing) |
+| `GITDASH_QUEUE` | `memory` | Pipeline job queue: `memory` (in-process goroutines) or `redis`/`asynq` (durable Redis queue) |
+| `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
+| `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
+| `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
 
 **Changing listen addresses**:
 
@@ -199,6 +204,34 @@ Repo social / inbox (watch → subscribe to repo activity in your inbox):
 | DELETE | `/api/inbox/{id}` | Delete one notification |
 
 > MVP note: repos are owner-only (only the owner can read/write); add TLS at the HTTP layer yourself (or place behind a reverse proxy).
+
+## CI Pipeline (MVP)
+
+Enable the pipeline in the repo's **Pipeline** tab (owner only). On every push to a branch, gitdash reads `.gitdash.yml` at the pushed commit and executes the steps in Docker containers (workspace mounted at `/workspace`); steps run in order and the first failure stops the run. Manual runs are available from the tab as well. Run logs are kept under `<data>/pipelines/{owner}/{repo}/`.
+
+Custom YAML DSL (supported subset):
+
+```yaml
+image: alpine:3.19   # required: image for every step (POSIX sh required)
+timeout: 10m         # optional: per-step timeout (default 10m, max 1h)
+env:                 # optional: KEY=VALUE list injected into containers
+  - CGO_ENABLED=0
+steps:               # required: 1..20 steps
+  - name: build
+    run: go build ./...
+  - name: test
+    run: |
+      go test ./...
+      go vet ./...
+```
+
+Pipeline API:
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET/PUT | `/api/users/{owner}/repos/{name}/pipeline` | Get / set enabled (PUT: owner only) |
+| GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | List runs / trigger a manual run (`{ref?}`) |
+| GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | Run detail incl. log |
 
 ## Upgrade Notes
 

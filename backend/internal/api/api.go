@@ -204,6 +204,13 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/webhooks", a.auth(a.createWebhook))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/webhooks/{id}", a.auth(a.deleteWebhook))
 
+	// pipeline（CI）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline", a.auth(a.getPipeline))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/pipeline", a.auth(a.setPipeline))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.listPipelineRuns))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.createPipelineRun))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs/{id}", a.auth(a.getPipelineRun))
+
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))
 	mux.HandleFunc("POST /api/keys", a.auth(a.createKey))
