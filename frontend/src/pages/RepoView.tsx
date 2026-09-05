@@ -91,7 +91,7 @@ export default function RepoView() {
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const { owner = "", name = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabs = ["code", "commits", "issues", "pulls", "pipeline"] as const;
+  const tabs = ["code", "commits", "issues", "pulls", "pipeline", "settings"] as const;
   type RepoTab = (typeof tabs)[number];
 
   // 把 tab / ref / path / file 写进 URL 查询参数，支持刷新与分享
@@ -108,6 +108,48 @@ export default function RepoView() {
     },
     [setSearchParams],
   );
+
+  const [me, setMe] = useState("");
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [deleteRepoOpen, setDeleteRepoOpen] = useState(false);
+  const [deleteRepoBusy, setDeleteRepoBusy] = useState(false);
+  const isOwner = me !== "" && me === owner;
+
+  // 当前登录用户（用于判断仓库归属，决定是否展示设置页）
+  useEffect(() => {
+    api
+      .me()
+      .then((m) => setMe(m.username))
+      .catch(() => setMe(""));
+  }, []);
+
+  const toggleVisibility = async () => {
+    if (!repo) return;
+    setVisibilityBusy(true);
+    try {
+      const r = await api.setRepoVisibility(owner, name, !repo.private);
+      setRepo({ ...repo, private: r.private });
+      toast.success(t(r.private ? "repo.visibilityNowPrivate" : "repo.visibilityNowPublic"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+
+  const doDeleteRepo = async () => {
+    setDeleteRepoBusy(true);
+    try {
+      await api.deleteRepo(owner, name);
+      toast.success(t("repo.repoDeleted"));
+      setDeleteRepoOpen(false);
+      navigate("/repos");
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setDeleteRepoBusy(false);
+    }
+  };
 
   const [repo, setRepo] = useState<Repo | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -546,6 +588,11 @@ export default function RepoView() {
           <TabsTrigger value="pipeline" className="flex-1 sm:flex-none">
             {t("pipeline.tab")}
           </TabsTrigger>
+          {isOwner && (
+            <TabsTrigger value="settings" className="flex-1 sm:flex-none">
+              {t("repo.settings")}
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="code" className="space-y-4">
@@ -974,6 +1021,47 @@ export default function RepoView() {
         <TabsContent value="pipeline">
           <RepoPipeline owner={owner} name={name} role={repo?.role} />
         </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("repo.visibility")}</CardTitle>
+              <CardDescription>{t("repo.visibilityDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-3">
+                <Badge variant={repo?.private ? "secondary" : "outline"}>
+                  {repo?.private ? t("repo.privateRepo") : t("repo.publicRepo")}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={visibilityBusy || !repo}
+                  onClick={toggleVisibility}
+                >
+                  {repo?.private ? t("repo.makePublic") : t("repo.makePrivate")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-destructive/40">
+            <CardHeader>
+              <CardTitle className="text-base text-destructive">{t("repo.dangerZone")}</CardTitle>
+              <CardDescription>{t("repo.deleteRepoDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteRepoOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {t("repo.deleteRepo")}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {fileOp && (
@@ -997,6 +1085,14 @@ export default function RepoView() {
         tags={tags}
         current={ref || branches[0]?.name || "main"}
         onRefresh={refreshRefs}
+      />
+      <ConfirmDialog
+        open={deleteRepoOpen}
+        onOpenChange={setDeleteRepoOpen}
+        title={t("repo.deleteRepo")}
+        description={t("repo.deleteRepoConfirm", { name: `${owner}/${name}` })}
+        onConfirm={doDeleteRepo}
+        busy={deleteRepoBusy}
       />
       <Dialog open={forkOpen} onOpenChange={setForkOpen}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">

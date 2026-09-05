@@ -831,12 +831,16 @@ func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Private bool `json:"private"`
+		Private *bool `json:"private"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if err := a.store.SetRepoPrivate(owner, name, in.Private); err != nil {
+	if in.Private == nil {
+		writeErr(w, http.StatusBadRequest, "missing field: private")
+		return
+	}
+	if err := a.store.SetRepoPrivate(owner, name, *in.Private); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -854,13 +858,11 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// 过滤掉自己仓库，便于发现他人公开项目
+	// 返回所有公开仓库（含自己的，便于确认可见性设置是否生效）
 	me := userFrom(r)
 	out := []store.Repo{}
 	for _, rp := range repos {
-		if rp.Owner != me {
-			out = append(out, rp)
-		}
+		out = append(out, rp)
 	}
 	a.attachStars(out, me)
 	writeJSON(w, http.StatusOK, out)

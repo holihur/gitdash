@@ -23,12 +23,14 @@ var (
 type User struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
+	Email     string `json:"email"`
 	CreatedAt string `json:"created_at"`
 }
 
 type UserAuth struct {
 	ID           int64
 	Username     string
+	Email        string
 	PasswordHash string
 	CreatedAt    string
 	MFASecret    string // 空 = 未启用/无待激活 secret
