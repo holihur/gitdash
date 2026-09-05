@@ -6,6 +6,7 @@ import (
 	"gitdash/backend/internal/store"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -46,16 +47,21 @@ func (a *API) rateReset(key string) {
 	a.rateMu.Unlock()
 }
 
+// clientIP 仅当直连地址是回环/内网（即部署在可信反代之后）时才信任
+// X-Forwarded-For，避免客户端伪造头部绕过限流。
 func clientIP(r *http.Request) string {
-	if h := r.Header.Get("X-Forwarded-For"); h != "" {
-		if i := strings.IndexByte(h, ','); i > 0 {
-			return strings.TrimSpace(h[:i])
-		}
-		return strings.TrimSpace(h)
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		host = r.RemoteAddr
+	}
+	addr, err := netip.ParseAddr(host)
+	if err == nil && (addr.IsLoopback() || addr.IsPrivate()) {
+		if h := r.Header.Get("X-Forwarded-For"); h != "" {
+			if i := strings.IndexByte(h, ','); i > 0 {
+				return strings.TrimSpace(h[:i])
+			}
+			return strings.TrimSpace(h)
+		}
 	}
 	return host
 }

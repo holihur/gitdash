@@ -25,11 +25,14 @@ func (a *API) attachStars(repos []store.Repo, me string) {
 	}
 	counts := a.store.StarCounts(pairs)
 	watchCounts := a.store.WatchCounts(pairs)
+	starredSet := a.store.StarredSet(me)
+	watchingSet := a.store.WatchingSet(me)
 	for i := range repos {
-		repos[i].Stars = counts[[2]string{repos[i].Owner, repos[i].Name}]
-		repos[i].Starred = a.store.IsStarred(me, repos[i].Owner, repos[i].Name)
-		repos[i].Watchers = watchCounts[[2]string{repos[i].Owner, repos[i].Name}]
-		repos[i].Watching = a.store.IsWatching(me, repos[i].Owner, repos[i].Name)
+		pair := [2]string{repos[i].Owner, repos[i].Name}
+		repos[i].Stars = counts[pair]
+		repos[i].Starred = starredSet[pair]
+		repos[i].Watchers = watchCounts[pair]
+		repos[i].Watching = watchingSet[pair]
 	}
 }
 
@@ -597,17 +600,18 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	// GPG 签名校验（对已注册公钥；失败不影响列表展示）
-	keys := []gpgsig.Key{}
-	if gks, err := a.store.AllGPGKeys(); err == nil {
-		for _, k := range gks {
-			keys = append(keys, gpgsig.Key{Username: k.Username, Fingerprint: k.Fingerprint, Armor: k.Armor})
-		}
+	// GPG 签名校验（对已注册公钥；失败不影响列表展示）。公钥走 TTL 缓存，
+	// commit 原文用单次 cat-file --batch 读取，避免逐条 spawn 进程。
+	keys := a.gpgVerifyKeys()
+	shas := make([]string, 0, len(cs))
+	for _, c := range cs {
+		shas = append(shas, c.SHA)
 	}
+	raws := gitsvc.RawCommits(owner, name, shas)
 	out := make([]commitResp, 0, len(cs))
 	for _, c := range cs {
 		r := commitResp{SHA: c.SHA, Author: c.Author, Date: c.Date, Message: c.Message}
-		if raw, err := gitsvc.RawCommit(owner, name, c.SHA); err == nil {
+		if raw, ok := raws[c.SHA]; ok {
 			if user, _, ok := gpgsig.VerifyCommit(raw, keys); ok && user != "" {
 				r.GPGVerified = user
 			}

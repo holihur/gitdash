@@ -28,20 +28,28 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	ipKey := "register|" + clientIP(r)
 	username := strings.ToLower(strings.TrimSpace(in.Username))
+	if a.rateBlocked(ipKey) {
+		writeCode(w, http.StatusTooManyRequests, "too_many_attempts", "too many attempts, try again later")
+		return
+	}
 	if a.store.IsOrg(username) { // 组织占用同名命名空间
 		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
 	if !usernameRe.MatchString(username) {
+		a.rateFail(ipKey)
 		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}
 	if len(in.Password) < 8 {
+		a.rateFail(ipKey)
 		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
 		return
 	}
 	if _, err := a.store.GetByUsername(username); err == nil {
+		a.rateFail(ipKey)
 		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
@@ -52,6 +60,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	}
 	u, err := a.store.CreateUser(username, string(hash))
 	if errors.Is(err, store.ErrExists) { // 并发注册竞态：唯一约束兜底
+		a.rateFail(ipKey)
 		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
@@ -59,6 +68,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.rateReset(ipKey)
 	a.startSession(w, r, http.StatusCreated, u.Username)
 }
 
@@ -356,6 +366,7 @@ func (a *API) addGPGKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	k, err := a.store.AddGPGKey(userFrom(r), fp, armor)
+	a.invalidateGPGKeys()
 	if errors.Is(err, store.ErrExists) {
 		writeCode(w, http.StatusConflict, "gpg_key_exists", "this gpg key is already registered")
 		return
@@ -377,6 +388,7 @@ func (a *API) deleteGPGKey(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusNotFound, "gpg_key_not_found", "gpg key not found")
 		return
 	}
+	a.invalidateGPGKeys()
 	w.WriteHeader(http.StatusNoContent)
 }
 

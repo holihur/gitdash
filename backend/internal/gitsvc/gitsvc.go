@@ -1,9 +1,11 @@
 package gitsvc
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,17 +75,30 @@ func gitOut(dir string, args ...string) (string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
+		return "", gitErr(dir, args, stderr.String(), err)
 	}
 	return stdout.String(), nil
 }
 
 // GitOut 是 gitOut 的导出包装（供 pipeline 等内部包复用）。
 func GitOut(dir string, args ...string) (string, error) { return gitOut(dir, args...) }
+
+// gitErr 构造不含服务器绝对路径的对外错误信息（完整细节记入服务端日志），
+// 避免数据目录结构通过 5xx 响应泄漏给客户端。
+func gitErr(dir string, args []string, stderr string, err error) error {
+	msg := strings.TrimSpace(stderr)
+	if msg == "" {
+		msg = err.Error()
+	}
+	display := strings.Join(args, " ")
+	if reposDir != "" {
+		display = strings.ReplaceAll(display, reposDir+string(os.PathSeparator), "")
+		msg = strings.ReplaceAll(msg, reposDir+string(os.PathSeparator), "")
+		display = strings.ReplaceAll(display, reposDir, "")
+		msg = strings.ReplaceAll(msg, reposDir, "")
+	}
+	return fmt.Errorf("git %s: %s", display, msg)
+}
 
 // gitOutEnv 与 gitOut 相同，但额外注入环境变量（如导入私有仓库时指定临时 SSH 私钥）。
 func gitOutEnv(env []string, dir string, args ...string) (string, error) {
@@ -96,11 +111,7 @@ func gitOutEnv(env []string, dir string, args ...string) (string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
+		return "", gitErr(dir, args, stderr.String(), err)
 	}
 	return stdout.String(), nil
 }
@@ -328,8 +339,56 @@ func Tree(owner, name, ref, dir string) ([]Entry, error) {
 		size, _ := strconv.ParseInt(fields[3], 10, 64)
 		entries = append(entries, Entry{Name: file, Type: fields[1], Mode: fields[0], Size: size, SHA: fields[2]})
 	}
-	// 每个条目的最后变更提交：sha/时间/作者/说明（一次 git log 每项）
+	// 单次 git log 遍历最近 500 条提交，按 --name-only 汇总每个条目的最后变更，
+	// 避免对每个条目各 spawn 一次 git 进程（原实现大目录会 spawn 上千次）。
+	idx := make(map[string]int, len(entries))
 	for i := range entries {
+		idx[entries[i].Name] = i
+	}
+	if len(entries) > 0 {
+		pathSpec := "."
+		if dir != "" {
+			pathSpec = dir
+		}
+		out, err := gitOut(path, "log", "-500", "--name-only", "-z",
+			"--pretty=format:%x1e%H%x1f%cI%x1f%an%x1f%s", ref, "--", pathSpec)
+		if err == nil {
+			for _, rec := range strings.Split(out, "\x1e") {
+				head, files, ok := strings.Cut(strings.TrimPrefix(rec, "\n"), "\n")
+				if !ok {
+					continue
+				}
+				fields := strings.SplitN(head, "\x1f", 4)
+				if len(fields) < 4 {
+					continue
+				}
+				for _, f := range strings.Split(files, "\x00") {
+					f = strings.TrimSpace(f)
+					if f == "" {
+						continue
+					}
+					if dir != "" {
+						if rest, ok := strings.CutPrefix(f, dir+"/"); ok {
+							f = rest
+						} else {
+							continue
+						}
+					}
+					if i, ok := idx[f]; ok && entries[i].LastCommit == "" {
+						entries[i].LastCommit = fields[0]
+						entries[i].ModifiedAt = fields[1]
+						entries[i].ModifiedBy = fields[2]
+						entries[i].ModifiedMsg = fields[3]
+					}
+				}
+			}
+		}
+	}
+	// --name-only 只列文件；目录条目回退到单次 git log（目录数量通常很少）
+	for i := range entries {
+		if entries[i].Type != "tree" || entries[i].LastCommit != "" {
+			continue
+		}
 		p := entries[i].Name
 		if dir != "" {
 			p = dir + "/" + p
@@ -339,17 +398,8 @@ func Tree(owner, name, ref, dir string) ([]Entry, error) {
 			continue
 		}
 		parts := strings.SplitN(strings.TrimSpace(out), "\x1f", 4)
-		if len(parts) >= 1 && parts[0] != "" {
-			entries[i].LastCommit = parts[0]
-		}
-		if len(parts) >= 2 {
-			entries[i].ModifiedAt = parts[1]
-		}
-		if len(parts) >= 3 {
-			entries[i].ModifiedBy = parts[2]
-		}
 		if len(parts) >= 4 {
-			entries[i].ModifiedMsg = parts[3]
+			entries[i].LastCommit, entries[i].ModifiedAt, entries[i].ModifiedBy, entries[i].ModifiedMsg = parts[0], parts[1], parts[2], parts[3]
 		}
 	}
 	return entries, nil
@@ -502,6 +552,57 @@ func RawCommit(owner, name, sha string) ([]byte, error) {
 	path := RepoPath(owner, name)
 	cmd := exec.Command("git", "-C", path, "cat-file", "commit", sha)
 	return cmd.Output()
+}
+
+// RawCommits 用单次 `git cat-file --batch` 进程读取多个 commit 对象。
+// 返回 map[sha]raw；读取失败的 sha 不出现在结果中。
+func RawCommits(owner, name string, shas []string) map[string][]byte {
+	out := map[string][]byte{}
+	if len(shas) == 0 {
+		return out
+	}
+	path := RepoPath(owner, name)
+	cmd := exec.Command("git", "-C", path, "cat-file", "--batch")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return out
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return out
+	}
+	if err := cmd.Start(); err != nil {
+		return out
+	}
+	go func() {
+		for _, sha := range shas {
+			_, _ = io.WriteString(stdin, sha+"\n")
+		}
+		_ = stdin.Close()
+	}()
+	// 逐条读取：<sha> <type> <size>\n<content>\n
+	r := bufio.NewReader(stdout)
+	for range shas {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			break
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			continue // missing object 等
+		}
+		size, err := strconv.ParseInt(fields[2], 10, 64)
+		if err != nil || size < 0 {
+			break
+		}
+		buf := make([]byte, size+1) // 内容 + 结尾换行
+		if _, err := io.ReadFull(r, buf); err != nil {
+			break
+		}
+		out[fields[0]] = buf[:size]
+	}
+	_ = cmd.Wait()
+	return out
 }
 
 type Commit struct {

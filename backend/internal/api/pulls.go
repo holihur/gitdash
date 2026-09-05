@@ -15,7 +15,8 @@ func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	pulls, err := a.store.ListPulls(owner, name, r.URL.Query().Get("state"))
+	limit, offset := pageParams(r)
+	pulls, err := a.store.ListPulls(owner, name, r.URL.Query().Get("state"), limit, offset)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

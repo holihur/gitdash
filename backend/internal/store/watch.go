@@ -38,15 +38,9 @@ func (s *Store) WatchedRepos(username string) ([]Repo, error) {
 	return out, rows.Err()
 }
 
-// WatchCounts 返回若干 (owner,repo) 的 watch 数。
+// WatchCounts 返回若干 (owner,repo) 的 watch 数（单次 GROUP BY 查询）。
 func (s *Store) WatchCounts(pairs [][2]string) map[[2]string]int {
-	out := map[[2]string]int{}
-	for _, p := range pairs {
-		var n int
-		_ = s.db.QueryRow(`SELECT COUNT(*) FROM repo_watches WHERE owner = ? AND repo = ?`, p[0], p[1]).Scan(&n)
-		out[p] = n
-	}
-	return out
+	return s.countPairs("repo_watches", pairs)
 }
 
 // WatchingUsers 显式 watch 某仓库的用户（不含仓库所有者/组织成员等隐式订阅者）。

@@ -1,5 +1,68 @@
 package store
 
+import "strings"
+
+// countPairs 一次 GROUP BY 查询统计多个 (owner,repo) 的计数，避免逐条 COUNT。
+func (s *Store) countPairs(table string, pairs [][2]string) map[[2]string]int {
+	out := map[[2]string]int{}
+	if len(pairs) == 0 {
+		return out
+	}
+	var sb strings.Builder
+	args := make([]any, 0, len(pairs)*2)
+	for i, p := range pairs {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString("(?, ?)")
+		args = append(args, p[0], p[1])
+	}
+	q := `SELECT t.column1, t.column2, COUNT(s.owner) FROM (VALUES ` + sb.String() + `) AS t
+		LEFT JOIN ` + table + ` s ON s.owner = t.column1 AND s.repo = t.column2
+		GROUP BY t.column1, t.column2`
+	rows, err := s.db.Query(q, args...)
+	if err != nil {
+		return out
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var o, r string
+		var n int
+		if err := rows.Scan(&o, &r, &n); err != nil {
+			continue
+		}
+		out[[2]string{o, r}] = n
+	}
+	return out
+}
+
+// StarredSet 我 star 过的 (owner,repo) 集合。
+func (s *Store) StarredSet(username string) map[[2]string]bool {
+	return s.pairSet("repo_stars", username)
+}
+
+// WatchingSet 我 watch 过的 (owner,repo) 集合。
+func (s *Store) WatchingSet(username string) map[[2]string]bool {
+	return s.pairSet("repo_watches", username)
+}
+
+func (s *Store) pairSet(table, username string) map[[2]string]bool {
+	out := map[[2]string]bool{}
+	rows, err := s.db.Query(`SELECT owner, repo FROM `+table+` WHERE username = ?`, username)
+	if err != nil {
+		return out
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var o, r string
+		if err := rows.Scan(&o, &r); err != nil {
+			continue
+		}
+		out[[2]string{o, r}] = true
+	}
+	return out
+}
+
 func (s *Store) StarRepo(username, owner, repo string) error {
 	_, err := s.db.Exec(`INSERT INTO repo_stars (username, owner, repo, created_at) VALUES (?, ?, ?, ?)`,
 		username, owner, repo, now())
@@ -21,15 +84,9 @@ func (s *Store) IsStarred(username, owner, repo string) bool {
 	return err == nil
 }
 
-// StarCounts 返回若干 (owner,repo) 的 star 数。
+// StarCounts 返回若干 (owner,repo) 的 star 数（单次 GROUP BY 查询）。
 func (s *Store) StarCounts(pairs [][2]string) map[[2]string]int {
-	out := map[[2]string]int{}
-	for _, p := range pairs {
-		var n int
-		_ = s.db.QueryRow(`SELECT COUNT(*) FROM repo_stars WHERE owner = ? AND repo = ?`, p[0], p[1]).Scan(&n)
-		out[p] = n
-	}
-	return out
+	return s.countPairs("repo_stars", pairs)
 }
 
 // StarredRepos 我 star 过的公开/可访问仓库。

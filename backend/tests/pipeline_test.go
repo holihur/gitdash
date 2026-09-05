@@ -97,6 +97,8 @@ func waitTerminalRun(t *testing.T, c *Client, owner, repo string, id int64) pipe
 }
 
 func TestPipelineSettingsAndRuns(t *testing.T) {
+	// 缩短单步超时：本用例依赖 docker 对不存在镜像的失败，避免等完整默认 10m/网络超时
+	t.Setenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT", "8s")
 	env := start(t)
 	if err := pipeline.Init(env.DataDir); err != nil {
 		t.Fatalf("pipeline init: %v", err)
@@ -232,6 +234,7 @@ func startRedis(t *testing.T) (string, func()) {
 // TestPipelineAsynqQueue 走 redis(asynq) 队列的完整链路：
 // 手动触发 -> 入队 -> asynq 工人执行 -> docker 失败 -> failed 终态。
 func TestPipelineAsynqQueue(t *testing.T) {
+	t.Setenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT", "8s")
 	redisAddr, stopRedis := startRedis(t)
 	defer stopRedis()
 

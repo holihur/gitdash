@@ -48,9 +48,16 @@ func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, err
 	return it, err
 }
 
-func (s *Store) ListIssues(owner, repo string) ([]Issue, error) {
-	rows, err := s.db.Query(`SELECT id, owner, repo, number, title, body, state, author, created_at, updated_at, closed_at
-		FROM issues WHERE owner = ? AND repo = ? ORDER BY (state = 'open') DESC, number DESC`, owner, repo)
+// ListIssues 分页列出 issue；limit<=0 表示不限制。
+func (s *Store) ListIssues(owner, repo string, limit, offset int) ([]Issue, error) {
+	q := `SELECT id, owner, repo, number, title, body, state, author, created_at, updated_at, closed_at
+		FROM issues WHERE owner = ? AND repo = ? ORDER BY (state = 'open') DESC, number DESC`
+	args := []any{owner, repo}
+	if limit > 0 {
+		q += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}

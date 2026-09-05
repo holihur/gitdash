@@ -61,7 +61,8 @@ func (s *Store) GetPull(owner, repo string, number int64) (PullRequest, error) {
 	return s.getPull(owner, repo, number)
 }
 
-func (s *Store) ListPulls(owner, repo, state string) ([]PullRequest, error) {
+// ListPulls 分页列出 PR；limit<=0 表示不限制。
+func (s *Store) ListPulls(owner, repo, state string, limit, offset int) ([]PullRequest, error) {
 	q := `SELECT id, owner, repo, number, title, body, source_branch, target_branch,
 		base_sha, head_sha, state, author, created_at, updated_at, merged_at, merged_by
 		FROM pull_requests WHERE owner = ? AND repo = ?`
@@ -71,6 +72,10 @@ func (s *Store) ListPulls(owner, repo, state string) ([]PullRequest, error) {
 		args = append(args, state)
 	}
 	q += ` ORDER BY (state = 'open') DESC, number DESC`
+	if limit > 0 {
+		q += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err

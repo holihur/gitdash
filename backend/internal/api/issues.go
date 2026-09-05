@@ -15,7 +15,8 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	issues, err := a.store.ListIssues(owner, name)
+	limit, offset := pageParams(r)
+	issues, err := a.store.ListIssues(owner, name, limit, offset)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

@@ -84,7 +84,10 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
 
   useEffect(() => {
     refreshUnread();
-    const timer = setInterval(refreshUnread, 30_000);
+    const timer = setInterval(() => {
+      // 页面不可见时跳过轮询
+      if (!document.hidden) refreshUnread();
+    }, 30_000);
     return () => clearInterval(timer);
   }, [refreshUnread]);
 

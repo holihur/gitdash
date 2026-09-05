@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webui"
 	"io/fs"
@@ -14,12 +15,29 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 var shaRe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
+
+// pageParams 解析 ?limit / ?offset；默认上限 200，最大 500，防止列表端点全量返回。
+func pageParams(r *http.Request) (limit, offset int) {
+	limit, _ = strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
+}
 
 var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
 
@@ -35,6 +53,36 @@ type API struct {
 
 	oauthMu    sync.Mutex
 	oauthState map[string]oauthPending // github oauth state
+
+	gpgMu       sync.Mutex
+	gpgKeys     []gpgsig.Key
+	gpgKeysAt   time.Time // GPG 公钥 TTL 缓存，避免 commits 页每请求全量加载
+}
+
+const gpgKeysCacheTTL = 30 * time.Second
+
+// gpgVerifyKeys 带 30s TTL 的全量 GPG 公钥缓存；增删公钥时失效。
+func (a *API) gpgVerifyKeys() []gpgsig.Key {
+	a.gpgMu.Lock()
+	defer a.gpgMu.Unlock()
+	if a.gpgKeys != nil && time.Since(a.gpgKeysAt) < gpgKeysCacheTTL {
+		return a.gpgKeys
+	}
+	keys := []gpgsig.Key{}
+	if gks, err := a.store.AllGPGKeys(); err == nil {
+		for _, k := range gks {
+			keys = append(keys, gpgsig.Key{Username: k.Username, Fingerprint: k.Fingerprint, Armor: k.Armor})
+		}
+	}
+	a.gpgKeys = keys
+	a.gpgKeysAt = time.Now()
+	return keys
+}
+
+func (a *API) invalidateGPGKeys() {
+	a.gpgMu.Lock()
+	a.gpgKeys = nil
+	a.gpgMu.Unlock()
 }
 
 type oauthPending struct {

@@ -1,0 +1,124 @@
+version: "3"
+
+vars:
+  BIN: /tmp/gitdash-server
+  PYTEST_BIN: /tmp/gitdash-server-pytest
+
+tasks:
+  default:
+    desc: 显示可用任务
+    cmds:
+      - task --list
+
+  # ---------- 构建 ----------
+  frontend:
+    desc: 构建前端
+    dir: frontend
+    cmds:
+      - pnpm install --frozen-lockfile
+      - pnpm run build
+
+  backend:
+    desc: 构建后端二进制（不内嵌前端）
+    cmds:
+      - go build -o {{.BIN}} .
+    dir: backend
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - /tmp/gitdash-server
+
+  # ---------- 测试 ----------
+  test:go:
+    desc: 后端 Go 测试（含功能测试套件）
+    dir: backend
+    cmds:
+      - go vet ./...
+      - go test ./...
+
+  test:api:
+    desc: 黑盒 API 测试（pytest，需 uv；单独构建被测二进制）
+    deps: [build:pytest-bin]
+    dir: tests
+    cmds:
+      - uv run pytest -q
+    env:
+      GITDASH_BIN: "{{.PYTEST_BIN}}"
+
+  build:pytest-bin:
+    cmds:
+      - go build -o {{.PYTEST_BIN}} .
+    dir: backend
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - /tmp/gitdash-server-pytest
+
+  test:frontend:
+    desc: 前端类型检查 + 构建
+    dir: frontend
+    cmds:
+      - pnpm run build
+
+  test:e2e:
+    desc: E2E 冒烟测试（SSH clone/push + 浏览）
+    cmds:
+      - bash scripts/e2e.sh
+
+  test:
+    desc: 一键全量测试（Go + 前端 + E2E）
+    cmds:
+      - task: test:go
+      - task: test:frontend
+      - task: test:e2e
+
+  test:all:
+    desc: 一键全量测试 + 黑盒 API 测试（含 pytest，较慢）
+    cmds:
+      - task: test
+      - task: test:api
+
+  # ---------- 本地部署 ----------
+  deploy:
+    desc: 一键本地部署（构建前端 + 后端内嵌前端 + 启动，http://localhost:8080，SSH :2222）
+    cmds:
+      - task: frontend
+      - task: build:embed
+      - task: run
+
+  build:embed:
+    desc: 构建内嵌前端的二进制（embed-frontend.sh 已含前端构建）
+    cmds:
+      - bash scripts/embed-frontend.sh
+      - go build -trimpath -o gitdash-server .
+    dir: backend
+
+  run:
+    desc: 启动本地实例（数据目录 .data，端口 8080/2222）
+    cmds:
+      - ./gitdash-server serve
+    env:
+      GITDASH_DATA: "{{.DATA_DIR | default \"./.data\"}}"
+    vars:
+      DATA_DIR: "{{.DATA_DIR | default \"./.data\"}}"
+
+  deploy:docker:
+    desc: 一键 Docker 部署（构建镜像 + docker compose up -d）
+    cmds:
+      - docker compose up -d --build
+
+  deploy:down:
+    desc: 停止 Docker 部署
+    cmds:
+      - docker compose down
+
+  # ---------- 清理 ----------
+  clean:
+    desc: 清理构建产物和本地数据目录
+    cmds:
+      - rm -f gitdash-server /tmp/gitdash-server /tmp/gitdash-server-pytest
+      - rm -rf .data

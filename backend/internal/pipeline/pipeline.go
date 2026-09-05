@@ -79,7 +79,11 @@ func jobHandler(ctx context.Context, job queue.Job) error {
 }
 
 // Init 创建流水线日志目录（main 启动时调用）。
+// 环境变量 GITDASH_PIPELINE_DEFAULT_TIMEOUT 可覆盖单步默认超时（如 "30s"，用于测试）。
 func Init(dataDir string) error {
+	if d, err := time.ParseDuration(os.Getenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT")); err == nil && d > 0 && d <= MaxStepTimeout {
+		DefaultStepTimeout = d
+	}
 	logsDir = filepath.Join(dataDir, "pipelines")
 	return os.MkdirAll(logsDir, 0o755)
 }

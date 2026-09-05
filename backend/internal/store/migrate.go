@@ -230,7 +230,11 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 	created_at  TEXT NOT NULL,
 	finished_at TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_pipeline_runs_repo ON pipeline_runs(owner, repo, id);`)
+CREATE INDEX IF NOT EXISTS idx_pipeline_runs_repo ON pipeline_runs(owner, repo, id);
+CREATE INDEX IF NOT EXISTS idx_repo_stars_owner_repo ON repo_stars(owner, repo);
+CREATE INDEX IF NOT EXISTS idx_repo_watches_owner_repo ON repo_watches(owner, repo);
+CREATE INDEX IF NOT EXISTS idx_issues_owner_repo ON issues(owner, repo, state, number);
+CREATE INDEX IF NOT EXISTS idx_pulls_owner_repo ON pull_requests(owner, repo, state, number);`)
 	if err != nil {
 		return err
 	}
