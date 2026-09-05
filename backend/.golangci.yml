@@ -21,19 +21,18 @@ linters:
     - unused
     - whitespace
 
+  settings:
+    govet:
+      enable:
+        - nilness
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+
 formatters:
   enable:
     - gofmt
     - goimports
-
-linters-settings:
-  govet:
-    enable:
-      - nilness
-      - shadow
-  errcheck:
-    check-type-assertions: false
-    check-blank: false
 
 issues:
   max-issues-per-linter: 0
