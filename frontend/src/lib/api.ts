@@ -303,11 +303,17 @@ export const api = {
 
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
   listRepos: () => req<Repo[]>("/repos"),
-  createRepo: (name: string, description: string, template?: "" | "readme") =>
+  createRepo: (name: string, description: string, template?: "" | "readme", private_?: boolean) =>
     req<Repo>("/repos", {
       method: "POST",
-      body: JSON.stringify({ name, description, template: template ?? "" }),
+      body: JSON.stringify({ name, description, template: template ?? "", private: private_ ?? true }),
     }),
+  setRepoVisibility: (owner: string, name: string, private_: boolean) =>
+    req<Repo>(`/users/${owner}/repos/${name}/visibility`, {
+      method: "POST",
+      body: JSON.stringify({ private: private_ }),
+    }),
+  listExplore: () => req<Repo[]>("/explore/repos"),
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
   deleteRepo: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),

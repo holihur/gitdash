@@ -13,6 +13,7 @@ export const zhCN: Messages = {
   },
   nav: {
     repos: "仓库",
+    explore: "发现",
     inbox: "收件箱",
     keys: "SSH Keys",
   },
@@ -57,6 +58,12 @@ export const zhCN: Messages = {
     back: "返回",
     signInWithGithub: "使用 GitHub 登录",
     signInWithOIDC: "使用 {name} 登录",
+  },
+  explore: {
+    title: "发现",
+    subtitle: "浏览其他人公开的仓库。",
+    empty: "还没有公开仓库",
+    emptyHint: "当其他人创建公开仓库后，会出现在这里。",
   },
   repos: {
     title: "仓库",

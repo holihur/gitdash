@@ -34,7 +34,7 @@ const (
 )
 
 // DefaultStepTimeout 单步默认超时，可被 GITDASH_PIPELINE_DEFAULT_TIMEOUT 覆盖
-//（Init 时读取，便于测试/受限环境缩短）。
+// （Init 时读取，便于测试/受限环境缩短）。
 var DefaultStepTimeout = 10 * time.Minute
 
 // Step 流水线中的一个步骤。

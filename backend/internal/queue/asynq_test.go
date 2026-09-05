@@ -172,5 +172,5 @@ func TestAsynqQueueStartOnce(t *testing.T) {
 	h := func(_ context.Context, _ Job) error { return nil }
 	q.Start(ctx, nil, h)
 	q.Start(ctx, nil, h) // 第二次应为 no-op，不 panic
-	q.Client().Close()
+	_ = q.Client().Close()
 }

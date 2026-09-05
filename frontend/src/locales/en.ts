@@ -11,6 +11,7 @@ export const en = {
   },
   nav: {
     repos: "Repositories",
+    explore: "Explore",
     inbox: "Inbox",
     keys: "SSH Keys",
   },
@@ -55,6 +56,12 @@ export const en = {
     back: "Back",
     signInWithGithub: "Continue with GitHub",
     signInWithOIDC: "Continue with {name}",
+  },
+  explore: {
+    title: "Explore",
+    subtitle: "Discover public repositories shared by others.",
+    empty: "No public repositories yet",
+    emptyHint: "When others create public repositories, they will show up here.",
   },
   repos: {
     title: "Repositories",

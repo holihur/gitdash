@@ -54,9 +54,9 @@ type API struct {
 	oauthMu    sync.Mutex
 	oauthState map[string]oauthPending // github oauth state
 
-	gpgMu       sync.Mutex
-	gpgKeys     []gpgsig.Key
-	gpgKeysAt   time.Time // GPG 公钥 TTL 缓存，避免 commits 页每请求全量加载
+	gpgMu     sync.Mutex
+	gpgKeys   []gpgsig.Key
+	gpgKeysAt time.Time // GPG 公钥 TTL 缓存，避免 commits 页每请求全量加载
 }
 
 const gpgKeysCacheTTL = 30 * time.Second
