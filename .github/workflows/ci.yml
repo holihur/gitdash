@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2 # --new-from-rev=HEAD~1 需要父提交
 
       - uses: actions/setup-go@v6
         with:
