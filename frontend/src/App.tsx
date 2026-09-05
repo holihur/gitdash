@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { Bell, Compass, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, UserRound } from "lucide-react";
+import { Bell, Compass, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, Building2, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
@@ -15,6 +15,7 @@ const RepoView = lazy(() => import("@/pages/RepoView"));
 const Inbox = lazy(() => import("@/pages/Inbox"));
 const Explore = lazy(() => import("@/pages/Explore"));
 const Keys = lazy(() => import("@/pages/Keys"));
+const Orgs = lazy(() => import("@/pages/Orgs"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
 
 function PageLoading() {
@@ -113,6 +114,12 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
                 <span className="hidden sm:inline">{t("nav.explore")}</span>
               </NavLink>
             </Button>
+            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
+              <NavLink to="/orgs" className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                <span className="hidden sm:inline">{t("nav.orgs")}</span>
+              </NavLink>
+            </Button>
             <Button asChild variant="ghost" size="sm" className="relative px-2 sm:px-3">
               <NavLink to="/inbox" className="flex items-center gap-2">
                 <Bell className="h-4 w-4" />
@@ -188,6 +195,14 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             element={
               <Suspense fallback={<PageLoading />}>
                 <Keys />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/orgs/:org?"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <Orgs />
               </Suspense>
             }
           />
