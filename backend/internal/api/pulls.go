@@ -67,6 +67,7 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.notify(owner, name, "pull", "opened", userFrom(r), pr.Number, pr.Title)
 	writeJSON(w, http.StatusCreated, pr)
 }
 
@@ -175,6 +176,7 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.notify(owner, name, "pull", "merged", userFrom(r), merged.Number, merged.Title)
 	writeJSON(w, http.StatusOK, merged)
 }
 
@@ -201,6 +203,14 @@ func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// 状态未变化（如重复 close）不重复发通知
+	if pr.State != updated.State {
+		action := "closed"
+		if updated.State == "open" {
+			action = "reopened"
+		}
+		a.notify(owner, name, "pull", action, userFrom(r), updated.Number, updated.Title)
 	}
 	writeJSON(w, http.StatusOK, updated)
 }

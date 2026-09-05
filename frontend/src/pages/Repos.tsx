@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Copy, Download, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
+import { Copy, Download, Eye, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
 import { api, cloneCommand, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,8 @@ export default function Repos() {
   const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [starred, setStarred] = useState<Repo[]>([]);
-  const [tab, setTab] = useState<"repos" | "starred">("repos");
+  const [watched, setWatched] = useState<Repo[]>([]);
+  const [tab, setTab] = useState<"repos" | "starred" | "watching">("repos");
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -55,9 +56,14 @@ export default function Repos() {
 
   const load = useCallback(async () => {
     try {
-      const [mine, star] = await Promise.all([api.listRepos(), api.listStarred()]);
+      const [mine, star, watch] = await Promise.all([
+        api.listRepos(),
+        api.listStarred(),
+        api.listWatched(),
+      ]);
       setRepos(mine);
       setStarred(star);
+      setWatched(watch);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -68,7 +74,7 @@ export default function Repos() {
     load();
   }, [load]);
 
-  const show = tab === "repos" ? repos : starred;
+  const show = tab === "repos" ? repos : tab === "starred" ? starred : watched;
   const isMine = tab === "repos";
 
   const create = async () => {
@@ -200,10 +206,11 @@ export default function Repos() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "repos" | "starred")}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "repos" | "starred" | "watching")}>
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="repos">{t("social.myRepos")}</TabsTrigger>
           <TabsTrigger value="starred">{t("social.starredRepos")}</TabsTrigger>
+          <TabsTrigger value="watching">{t("social.watchingRepos")}</TabsTrigger>
         </TabsList>
 
         {error && (
@@ -219,10 +226,14 @@ export default function Repos() {
             <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
               <FolderGit2 className="h-10 w-10 text-muted-foreground" />
               <p className="font-medium">
-                {isMine ? t("repos.empty") : t("social.starredEmpty")}
+                {isMine ? t("repos.empty") : tab === "starred" ? t("social.starredEmpty") : t("social.watchingEmpty")}
               </p>
               <p className="text-sm text-muted-foreground">
-                {isMine ? t("repos.emptyHint") : t("social.starredEmptyHint")}
+                {isMine
+                  ? t("repos.emptyHint")
+                  : tab === "starred"
+                    ? t("social.starredEmptyHint")
+                    : t("social.watchingEmptyHint")}
               </p>
             </CardContent>
           </Card>
@@ -298,6 +309,10 @@ export default function Repos() {
                       <Badge variant="secondary" className="gap-1 font-normal">
                         <Star className="h-3 w-3" />
                         {repo.stars ?? 0}
+                      </Badge>
+                      <Badge variant="secondary" className="gap-1 font-normal">
+                        <Eye className="h-3 w-3" />
+                        {repo.watchers ?? 0}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">

@@ -42,6 +42,8 @@ type Repo struct {
 	// 展示字段（由 API 层填充，store 查询不扫描）
 	Stars     int    `json:"stars"`
 	Starred   bool   `json:"starred"`
+	Watchers  int    `json:"watchers"`
+	Watching  bool   `json:"watching"`
 	ForkOwner string `json:"fork_owner,omitempty"`
 	ForkRepo  string `json:"fork_repo,omitempty"`
 	ImportURL string `json:"import_url,omitempty"`
@@ -329,6 +331,27 @@ CREATE TABLE IF NOT EXISTS repo_stars (
 	created_at TEXT NOT NULL,
 	PRIMARY KEY (username, owner, repo)
 );
+CREATE TABLE IF NOT EXISTS repo_watches (
+	username   TEXT NOT NULL,
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	PRIMARY KEY (username, owner, repo)
+);
+CREATE TABLE IF NOT EXISTS notifications (
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	username   TEXT NOT NULL,
+	kind       TEXT NOT NULL,
+	action     TEXT NOT NULL,
+	owner      TEXT NOT NULL,
+	repo       TEXT NOT NULL,
+	number     INTEGER NOT NULL,
+	title      TEXT NOT NULL DEFAULT '',
+	actor      TEXT NOT NULL DEFAULT '',
+	read       INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(username, read);
 CREATE TABLE IF NOT EXISTS repo_forks (
 	owner        TEXT NOT NULL,
 	repo         TEXT NOT NULL,
@@ -649,6 +672,12 @@ func (s *Store) DeleteRepo(owner, name string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_stars WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM repo_watches WHERE owner = ? AND repo = ?`, owner, name); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM notifications WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM repo_forks WHERE owner = ? AND repo = ?`, owner, name); err != nil {
@@ -1633,6 +1662,152 @@ func (s *Store) StarredRepos(username string) ([]Repo, error) {
 func (s *Store) DeleteRepoStars(owner, repo string) error {
 	_, err := s.db.Exec(`DELETE FROM repo_stars WHERE owner = ? AND repo = ?`, owner, repo)
 	return err
+}
+
+// ---- watch ----
+
+func (s *Store) WatchRepo(username, owner, repo string) error {
+	_, err := s.db.Exec(`INSERT INTO repo_watches (username, owner, repo, created_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT(username, owner, repo) DO NOTHING`, username, owner, repo, now())
+	return err
+}
+
+func (s *Store) UnwatchRepo(username, owner, repo string) error {
+	_, err := s.db.Exec(`DELETE FROM repo_watches WHERE username = ? AND owner = ? AND repo = ?`, username, owner, repo)
+	return err
+}
+
+func (s *Store) IsWatching(username, owner, repo string) bool {
+	var one int
+	err := s.db.QueryRow(`SELECT 1 FROM repo_watches WHERE username = ? AND owner = ? AND repo = ?`,
+		username, owner, repo).Scan(&one)
+	return err == nil
+}
+
+// WatchedRepos 我 watch 过的仓库（可能含已删除仓库的残留——join repos 过滤）。
+func (s *Store) WatchedRepos(username string) ([]Repo, error) {
+	rows, err := s.db.Query(`SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at
+		FROM repo_watches w JOIN repos r ON r.owner = w.owner AND r.name = w.repo
+		WHERE w.username = ? ORDER BY w.created_at DESC`, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Repo{}
+	for rows.Next() {
+		var r Repo
+		if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.Description, &r.Private, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// WatchCounts 返回若干 (owner,repo) 的 watch 数。
+func (s *Store) WatchCounts(pairs [][2]string) map[[2]string]int {
+	out := map[[2]string]int{}
+	for _, p := range pairs {
+		var n int
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM repo_watches WHERE owner = ? AND repo = ?`, p[0], p[1]).Scan(&n)
+		out[p] = n
+	}
+	return out
+}
+
+// WatchingUsers 显式 watch 某仓库的用户（不含仓库所有者/组织成员等隐式订阅者）。
+func (s *Store) WatchingUsers(owner, repo string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT username FROM repo_watches WHERE owner = ? AND repo = ?`, owner, repo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// ---- inbox (notifications) ----
+
+// Notification 收件箱条目：关注者收到的 issue / PR 活动通知。
+type Notification struct {
+	ID        int64  `json:"id"`
+	Kind      string `json:"kind"`   // issue | pull
+	Action    string `json:"action"` // opened | closed | reopened | merged
+	Owner     string `json:"owner"`
+	Repo      string `json:"repo"`
+	Number    int64  `json:"number"`
+	Title     string `json:"title"`
+	Actor     string `json:"actor"`
+	Read      bool   `json:"read"`
+	CreatedAt string `json:"created_at"`
+}
+
+func (s *Store) AddNotification(username, kind, action, owner, repo string, number int64, title, actor string) error {
+	_, err := s.db.Exec(`INSERT INTO notifications (username, kind, action, owner, repo, number, title, actor, read, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`, username, kind, action, owner, repo, number, title, actor, now())
+	return err
+}
+
+// ListNotifications 返回某用户收件箱（最新在前，最多 200 条）。
+func (s *Store) ListNotifications(username string) ([]Notification, error) {
+	rows, err := s.db.Query(`SELECT id, kind, action, owner, repo, number, title, actor, read, created_at
+		FROM notifications WHERE username = ? ORDER BY id DESC LIMIT 200`, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Notification{}
+	for rows.Next() {
+		var n Notification
+		var read int
+		if err := rows.Scan(&n.ID, &n.Kind, &n.Action, &n.Owner, &n.Repo, &n.Number, &n.Title, &n.Actor,
+			&read, &n.CreatedAt); err != nil {
+			return nil, err
+		}
+		n.Read = read != 0
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) UnreadNotifications(username string) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM notifications WHERE username = ? AND read = 0`, username).Scan(&n)
+	return n, err
+}
+
+func (s *Store) MarkNotificationRead(username string, id int64) error {
+	res, err := s.db.Exec(`UPDATE notifications SET read = 1 WHERE id = ? AND username = ?`, id, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) MarkAllNotificationsRead(username string) error {
+	_, err := s.db.Exec(`UPDATE notifications SET read = 1 WHERE username = ? AND read = 0`, username)
+	return err
+}
+
+func (s *Store) DeleteNotification(username string, id int64) error {
+	res, err := s.db.Exec(`DELETE FROM notifications WHERE id = ? AND username = ?`, id, username)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ---- forks ----

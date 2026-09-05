@@ -9,6 +9,7 @@
 //	repos_test.go   仓库 CRUD 与用户隔离
 //	collab_test.go  协作者（读写权限 / 管理 / 同名仓库 / 级联）
 //	issues_test.go  Issue CRUD / 状态流转 / 删除级联
+//	watch_inbox_test.go 关注(watch)/收件箱通知（issue & PR 全状态流、已读/删除、权限）
 //	webhook_test.go webhook CRUD + push spool 事件
 //	sshkeys_test.go SSH 公钥 CRUD 与用户绑定
 //	browse_test.go  代码浏览（tree / blob / commits / branches）

@@ -6,6 +6,7 @@
 一个最小的自托管 Git 服务 MVP（类似迷你 Gitea）：
 
 - **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户
+- **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读管理）
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
 - **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、查看提交历史
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
@@ -176,6 +177,17 @@ bash scripts/e2e.sh    # 全链路冒烟（真实二进制：注册登录 -> ssh
 | GET | `/api/repos/{name}/commits?ref=` | 提交历史 |
 | GET/POST | `/api/keys` | 列出 / 添加 SSH 公钥（绑定当前用户） |
 | DELETE | `/api/keys/{id}` | 删除自己的公钥 |
+
+仓库社交 / 收件箱（watch → 订阅仓库动态到收件箱）：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| PUT/DELETE | `/api/users/{owner}/repos/{name}/watch` | 关注 / 取消关注（返回 watch 数与状态） |
+| GET | `/api/watched` | 我关注过的仓库列表 |
+| GET | `/api/inbox` | 收件箱通知（最新在前） |
+| GET | `/api/inbox/unread` | 未读数 |
+| POST | `/api/inbox/read` `/api/inbox/read/{id}` | 全部 / 单条标为已读 |
+| DELETE | `/api/inbox/{id}` | 删除单条通知 |
 
 > MVP 注意：仓库为 owner-only（仅属主可读写）；HTTP 层请自行加 TLS（或置于反代之后）。
 

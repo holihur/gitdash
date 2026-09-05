@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   BadgeCheck,
   ChevronDown,
   ChevronRight,
   Copy,
+  Eye,
   FilePlus2,
   FileText,
   Folder,
@@ -86,6 +87,9 @@ export default function RepoView() {
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const { owner = "", name = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  const tabs = ["code", "commits", "issues", "pulls"] as const;
+  type RepoTab = (typeof tabs)[number];
   const [repo, setRepo] = useState<Repo | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [ref, setRef] = useState("");
@@ -95,7 +99,11 @@ export default function RepoView() {
   const [commits, setCommits] = useState<Commit[]>([]);
   const [diffSha, setDiffSha] = useState<string | null>(null);
   const [diffData, setDiffData] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
-  const [tab, setTab] = useState("code");
+  // 初始 tab 支持 ?tab=issues / ?tab=pulls（收件箱跳转用）
+  const [tab, setTab] = useState<RepoTab>(() => {
+    const q = searchParams.get("tab");
+    return (tabs as readonly string[]).includes(q ?? "") ? (q as RepoTab) : "code";
+  });
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
   const [readmeContent, setReadmeContent] = useState<string | null>(null);
@@ -104,6 +112,7 @@ export default function RepoView() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [refsOpen, setRefsOpen] = useState(false);
   const [starBusy, setStarBusy] = useState(false);
+  const [watchBusy, setWatchBusy] = useState(false);
   const [forkOpen, setForkOpen] = useState(false);
   const [forkName, setForkName] = useState("");
   const [forkBusy, setForkBusy] = useState(false);
@@ -138,6 +147,22 @@ export default function RepoView() {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setStarBusy(false);
+    }
+  };
+
+  const toggleWatch = async () => {
+    if (!repo) return;
+    setWatchBusy(true);
+    try {
+      const s = repo.watching ? await api.unwatch(owner, name) : await api.watch(owner, name);
+      setRepo({ ...repo, watching: s.watching, watchers: s.watchers });
+      toast.success(
+        t(repo.watching ? "social.unwatched" : "social.watched", { name: `${owner}/${name}` }),
+      );
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setWatchBusy(false);
     }
   };
 
@@ -349,6 +374,18 @@ export default function RepoView() {
             variant="outline"
             size="sm"
             className="gap-1.5"
+            disabled={watchBusy}
+            onClick={toggleWatch}
+            title={t("social.watchTitle")}
+          >
+            <Eye className={cn("h-4 w-4", repo?.watching && "fill-current text-blue-500")} />
+            {repo?.watching ? t("social.watchingBtn") : t("social.watch")}
+            <span className="text-muted-foreground">{repo?.watchers ?? 0}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
             disabled={starBusy}
             onClick={toggleStar}
           >
@@ -392,7 +429,7 @@ export default function RepoView() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as RepoTab)}>
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="code" className="flex-1 sm:flex-none">
             {t("repo.code")}

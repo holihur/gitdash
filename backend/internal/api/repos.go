@@ -23,9 +23,12 @@ func (a *API) attachStars(repos []store.Repo, me string) {
 		pairs = append(pairs, [2]string{r.Owner, r.Name})
 	}
 	counts := a.store.StarCounts(pairs)
+	watchCounts := a.store.WatchCounts(pairs)
 	for i := range repos {
 		repos[i].Stars = counts[[2]string{repos[i].Owner, repos[i].Name}]
 		repos[i].Starred = a.store.IsStarred(me, repos[i].Owner, repos[i].Name)
+		repos[i].Watchers = watchCounts[[2]string{repos[i].Owner, repos[i].Name}]
+		repos[i].Watching = a.store.IsWatching(me, repos[i].Owner, repos[i].Name)
 	}
 }
 
@@ -82,6 +85,10 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// 创建者自动 watch 自己的仓库（收件箱订阅）
+	_ = a.store.WatchRepo(userFrom(r), owner, in.Name)
+	repo.Watchers = 1
+	repo.Watching = true
 	if err := gitsvc.CreateBare(owner, in.Name); err != nil {
 		_ = a.store.DeleteRepo(owner, in.Name)
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -225,6 +232,10 @@ func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// fork 者自动 watch 自己的 fork（源仓库不一定可见/可 watch）
+	_ = a.store.WatchRepo(me, targetOwner, targetName)
+	repo.Watchers = 1
+	repo.Watching = true
 	writeJSON(w, http.StatusCreated, repo)
 }
 
@@ -392,6 +403,10 @@ func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// 导入者自动 watch 导入的仓库
+	_ = a.store.WatchRepo(userFrom(r), targetOwner, targetName)
+	repo.Watchers = 1
+	repo.Watching = true
 	if err := gitsvc.ImportRepo(raw, targetOwner, targetName, in.PrivateKey); err != nil {
 		_ = a.store.DeleteRepo(targetOwner, targetName)
 		writeCode(w, http.StatusBadRequest, "import_failed", err.Error())

@@ -61,6 +61,9 @@ export interface Repo {
   /** star 数量与当前用户是否已 star */
   stars?: number;
   starred?: boolean;
+  /** watch 数量与当前用户是否已 watch */
+  watchers?: number;
+  watching?: boolean;
   /** fork 来源（仅 fork 仓库） */
   fork_owner?: string;
   fork_repo?: string;
@@ -171,6 +174,22 @@ export interface Webhook {
   url: string;
   created_at: string;
 }
+
+export type NotifKind = "issue" | "pull";
+export type NotifAction = "opened" | "closed" | "reopened" | "merged";
+
+export interface Notification {
+  id: number;
+  kind: NotifKind;
+  action: NotifAction;
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  actor: string;
+  read: boolean;
+  created_at: string;
+}
 export function cloneUrl(owner: string, name: string): string {
   return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
 }
@@ -265,6 +284,23 @@ export const api = {
     req<{ starred: boolean; stars: number }>(`/users/${owner}/repos/${name}/star`, {
       method: "DELETE",
     }),
+
+  // watch & inbox
+  listWatched: () => req<Repo[]>("/watched"),
+  watch: (owner: string, name: string) =>
+    req<{ watching: boolean; watchers: number }>(`/users/${owner}/repos/${name}/watch`, {
+      method: "PUT",
+    }),
+  unwatch: (owner: string, name: string) =>
+    req<{ watching: boolean; watchers: number }>(`/users/${owner}/repos/${name}/watch`, {
+      method: "DELETE",
+    }),
+  inbox: () => req<Notification[]>("/inbox"),
+  inboxUnread: () => req<{ count: number }>("/inbox/unread"),
+  inboxRead: (id: number) =>
+    req<{ ok: boolean }>(`/inbox/read/${id}`, { method: "POST" }),
+  inboxReadAll: () => req<{ ok: boolean }>("/inbox/read", { method: "POST" }),
+  inboxDelete: (id: number) => req<null>(`/inbox/${id}`, { method: "DELETE" }),
   forkRepo: (owner: string, name: string, opts?: { name?: string; namespace?: string }) =>
     req<Repo>(`/users/${owner}/repos/${name}/fork`, {
       method: "POST",

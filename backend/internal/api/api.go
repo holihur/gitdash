@@ -132,6 +132,16 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/fork", a.auth(a.forkRepo))
 	mux.HandleFunc("POST /api/imports", a.auth(a.importRepo))
 
+	// watch & inbox（关注仓库 + 收件箱通知）
+	mux.HandleFunc("GET /api/watched", a.auth(a.listWatched))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/watch", a.auth(a.watchRepo))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/watch", a.auth(a.unwatchRepo))
+	mux.HandleFunc("GET /api/inbox", a.auth(a.listInbox))
+	mux.HandleFunc("GET /api/inbox/unread", a.auth(a.inboxUnread))
+	mux.HandleFunc("POST /api/inbox/read", a.auth(a.inboxReadAll))
+	mux.HandleFunc("POST /api/inbox/read/{id}", a.auth(a.inboxReadOne))
+	mux.HandleFunc("DELETE /api/inbox/{id}", a.auth(a.deleteInbox))
+
 	// push mirror（同步到第三方）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/mirror", a.auth(a.getMirror))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/mirror", a.auth(a.setMirror))

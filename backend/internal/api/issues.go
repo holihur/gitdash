@@ -54,6 +54,7 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	a.notify(owner, name, "issue", "opened", me, issue.Number, issue.Title)
 	writeJSON(w, http.StatusCreated, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
 
@@ -77,6 +78,16 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_state", "state must be 'open' or 'closed'")
 		return
 	}
+	// 先取当前状态，用于判断状态是否真正变化（重复 close/reopen 不发通知）
+	prev, err := a.store.GetPullIssue(owner, name, number)
+	if errors.Is(err, store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	issue, err := a.store.SetIssueState(owner, name, number, in.State)
 	if errors.Is(err, store.ErrNotFound) {
 		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
@@ -85,6 +96,13 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if prev.State != issue.State {
+		action := "closed"
+		if issue.State == "open" {
+			action = "reopened"
+		}
+		a.notify(owner, name, "issue", action, userFrom(r), issue.Number, issue.Title)
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
