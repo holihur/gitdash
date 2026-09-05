@@ -125,6 +125,24 @@ export interface Issue {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  /** 服务端 enrich：所属标签与里程碑 */
+  labels?: Label[];
+  milestone?: Milestone | null;
+}
+
+export interface Label {
+  id: number;
+  name: string;
+  color: string;
+}
+
+export interface Milestone {
+  id: number;
+  title: string;
+  description: string;
+  state: "open" | "closed";
+  open_issues: number;
+  closed_issues: number;
 }
 
 export interface Collab {
@@ -369,6 +387,52 @@ export const api = {
     req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`, {
       method: "PATCH",
       body: JSON.stringify({ state }),
+    }),
+
+  // issue labels
+  listLabels: (owner: string, name: string) => req<Label[]>(`/users/${owner}/repos/${name}/labels`),
+  createLabel: (owner: string, name: string, labelName: string, color: string) =>
+    req<Label>(`/users/${owner}/repos/${name}/labels`, {
+      method: "POST",
+      body: JSON.stringify({ name: labelName, color }),
+    }),
+  updateLabel: (owner: string, name: string, id: number, labelName: string, color: string) =>
+    req<Label>(`/users/${owner}/repos/${name}/labels/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name: labelName, color }),
+    }),
+  deleteLabel: (owner: string, name: string, id: number) =>
+    req<null>(`/users/${owner}/repos/${name}/labels/${id}`, { method: "DELETE" }),
+  setIssueLabels: (owner: string, name: string, number: number, labelIds: number[]) =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues/${number}/labels`, {
+      method: "POST",
+      body: JSON.stringify({ label_ids: labelIds }),
+    }),
+
+  // milestones
+  listMilestones: (owner: string, name: string) =>
+    req<Milestone[]>(`/users/${owner}/repos/${name}/milestones`),
+  createMilestone: (owner: string, name: string, title: string, description: string) =>
+    req<Milestone>(`/users/${owner}/repos/${name}/milestones`, {
+      method: "POST",
+      body: JSON.stringify({ title, description }),
+    }),
+  updateMilestone: (
+    owner: string,
+    name: string,
+    id: number,
+    fields: { title?: string; description?: string; state?: "open" | "closed" },
+  ) =>
+    req<Milestone>(`/users/${owner}/repos/${name}/milestones/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(fields),
+    }),
+  deleteMilestone: (owner: string, name: string, id: number) =>
+    req<null>(`/users/${owner}/repos/${name}/milestones/${id}`, { method: "DELETE" }),
+  setIssueMilestone: (owner: string, name: string, number: number, milestoneId: number) =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues/${number}/milestone`, {
+      method: "POST",
+      body: JSON.stringify({ milestone_id: milestoneId }),
     }),
 
   // collaborators
