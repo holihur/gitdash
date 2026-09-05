@@ -7,11 +7,21 @@ English | 简体中文
 
 一个最小的自托管 Git 服务 MVP（类似迷你 Gitea）：
 
-- **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户
-- **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读管理）
+- **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户；资料邮箱支持设置，数据库层唯一（空值除外）
+- **组织**：创建组织、管理成员（owner / member 角色）、可将仓库建到组织命名空间下
+- **Issue 与标签**：仓库 issue 支持标签、里程碑；动态推送给关注者
+- **Pull Request**：基于 fork 的 PR，支持 squash 合并
+- **Star 与 Fork**：一键 star / fork 仓库
+- **镜像与导入**：从远端 URL 导入仓库，push 镜像到 GitHub/GitLab 等远端
+- **Webhook**：仓库级 webhook，HMAC 签名推送
+- **GPG Key**：上传 GPG 公钥验证提交签名
+- **OAuth 登录**：GitHub OAuth 与通用 OIDC 登录（管理面板可配置）
+- **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
+- **发现（Explore）**：浏览公开仓库；仓库设置页可切换公开 / 私有
+- **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame
+- **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；任务默认进程内执行，也可走 Redis（asynq）持久化队列
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
-- **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、查看提交历史
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
 - **自更新**：`gitdash update` 手动更新；可选后台自动更新（**默认关闭**）
 - **前端**：React + Vite + Tailwind + shadcn/ui 风格组件
@@ -226,7 +236,7 @@ bash scripts/e2e.sh    # 全链路冒烟（真实二进制：注册登录 -> ssh
 ```
 
 - `backend/tests/` 按功能划分：`auth`（注册/登录/会话）、`repos`（仓库 CRUD 与隔离）、`sshkeys`（公钥 CRUD 与绑定）、`browse`（tree/blob/commits）、`sshgit`（真实 SSH clone/push 与权限拒绝）、`updater`（版本比较/校验/解包）、`store`（schema 迁移）、`webui`（静态托管/SPA fallback/路径穿越防护）。CI 中全部自动执行。
-- `tests/`（仓库根目录）为**独立、隔离**的纯黑盒接口自动化测试：不 import 后端代码、不执行 go 构建；用例随机命名、互不共享状态，覆盖 auth / repos / issues / ssh keys 的 happy path 与 bad path（400/401/404/409…）。详见 `tests/README.md`。
+- `tests/`（仓库根目录）为**独立、隔离**的纯黑盒接口自动化测试：不 import 后端代码、不执行 go 构建；用例随机命名、互不共享状态，覆盖 auth / repos / issues / orgs / pulls / webhooks / visibility / blame / ssh keys 的 happy path 与 bad path（400/401/404/409…）。详见 `tests/README.md`。
 
 ## API 一览
 

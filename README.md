@@ -7,11 +7,21 @@
 
 A minimal self-hosted Git service MVP (like a mini Gitea):
 
-- **User system**: register / login (bcrypt + session token, valid for 7 days); repos and SSH keys belong to users
-- **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read management)
+- **User system**: register / login (bcrypt + session token, valid for 7 days); repos and SSH keys belong to users; profile email with uniqueness enforced (partially, empty allowed)
+- **Organizations**: create orgs, manage members (owner / member roles), host repos under an org namespace
+- **Issues & labels**: per-repo issues with labels & milestones; activity pushes to watchers' inboxes
+- **Pull requests**: fork-based pull requests with squash merge and reviewer flow
+- **Stars & forks**: star repos and fork them with one click
+- **Repo mirroring & import**: import from a remote URL and push-mirror to GitHub/GitLab-like remotes
+- **Webhooks**: per-repo webhooks with HMAC signature delivery
+- **GPG keys**: upload GPG public keys to verify commit signatures
+- **OAuth login**: GitHub OAuth and generic OIDC login (configurable in the admin panel)
+- **Admin panel**: admin users, settings (OAuth providers), password management
+- **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings
+- **Code browsing**: browse repos by branch / directory, view file contents, commit history and blame on the web
+- **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
-- **Code browsing**: browse repos by branch / directory, view file contents and commit history on the web
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
 - **Self-update**: `gitdash update` for manual updates; optional background auto-update (**off by default**)
 - **Frontend**: React + Vite + Tailwind + shadcn/ui-style components
@@ -226,7 +236,7 @@ Black-box API tests (pytest + requests, dependencies managed with uv, fully isol
 ```
 
 - `backend/tests/` is split by feature: `auth` (register/login/session), `repos` (repo CRUD & isolation), `sshkeys` (public key CRUD & binding), `browse` (tree/blob/commits), `sshgit` (real SSH clone/push & permission denial), `updater` (version comparison/verification/extraction), `store` (schema migration), `webui` (static hosting/SPA fallback/path traversal protection). All run automatically in CI.
-- `tests/` (repo root) is an **independent, isolated** pure black-box API test suite: it does not import backend code or run go builds; test cases use random names and share no state, covering happy path and bad path (400/401/404/409…) for auth / repos / issues / ssh keys. See `tests/README.md` for details.
+- `tests/` (repo root) is an **independent, isolated** pure black-box API test suite: it does not import backend code or run go builds; test cases use random names and share no state, covering happy path and bad path (400/401/404/409…) for auth / repos / issues / orgs / pulls / webhooks / visibility / blame / ssh keys. See `tests/README.md` for details.
 
 ## API Overview
 
