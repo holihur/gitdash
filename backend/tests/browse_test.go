@@ -58,7 +58,7 @@ func getJSON[T any](t *testing.T, c *Client, path string, wantStatus int) T {
 	if err != nil {
 		t.Fatalf("GET %s: %v", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != wantStatus {
 		t.Fatalf("GET %s: status %d, want %d", path, resp.StatusCode, wantStatus)
 	}

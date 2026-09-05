@@ -41,7 +41,7 @@ func TestStaticHandler(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		buf := new(strings.Builder)
 		readInto(resp.Body, buf)
 		return resp.StatusCode, buf.String()
@@ -98,7 +98,7 @@ func TestEmbeddedFallbackWhenNoAssets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if embeddedAssetsPresent() {
 		// 构建时 embed 了真实前端 → 期望 SPA fallback 200
 		if resp.StatusCode != 200 {

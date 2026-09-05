@@ -134,19 +134,6 @@ func (a *API) enrichIssues(owner, repo string, issues []store.Issue) []map[strin
 	return out
 }
 
-func (a *API) parseRepoNumber(w http.ResponseWriter, r *http.Request) (string, string, int64, bool) {
-	owner, name, ok := a.requireAccess(w, r, false)
-	if !ok {
-		return "", "", 0, false
-	}
-	n, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
-	if err != nil || n < 1 {
-		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
-		return "", "", 0, false
-	}
-	return owner, name, n, true
-}
-
 func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {

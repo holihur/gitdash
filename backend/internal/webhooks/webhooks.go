@@ -162,7 +162,7 @@ func post(url string, ev Event, secret string) {
 		log.Printf("webhook: deliver %s/%s -> %s: %v", ev.Owner, ev.Repo, url, err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		log.Printf("webhook: deliver %s/%s -> %s: status %d", ev.Owner, ev.Repo, url, resp.StatusCode)
 	}

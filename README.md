@@ -132,6 +132,13 @@ bash scripts/backup.sh ./data ./backups
 
 ## 自动化测试
 
+静态检查（golangci-lint，配置见 `backend/.golangci.yml`，CI 中自动执行）：
+
+```bash
+cd backend
+golangci-lint run     # 安装：go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+```
+
 后端集成测试（Go）：
 
 ```bash

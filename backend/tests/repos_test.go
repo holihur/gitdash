@@ -29,7 +29,7 @@ func listRepos(t *testing.T, c *Client) []Repo {
 	if err != nil {
 		t.Fatalf("list repos: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("list repos: status %d", resp.StatusCode)
 	}

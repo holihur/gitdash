@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
-
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"gitdash/backend/internal/api"
 	"gitdash/backend/internal/gitsvc"
@@ -112,8 +112,8 @@ func main() {
 		run()
 	case os.Args[1] == "update":
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer cancel()
 		newVer, updated, err := updater.SelfUpdate(ctx, version)
+		cancel()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "更新失败:", err)
 			os.Exit(1)

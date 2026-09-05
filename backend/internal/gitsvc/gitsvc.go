@@ -190,7 +190,7 @@ func ImportRepo(url, targetOwner, targetName, privateKey string) error {
 		if err != nil {
 			return err
 		}
-		defer os.Remove(keyPath)
+		defer func() { _ = os.Remove(keyPath) }()
 		env = append(env,
 			"GIT_SSH_COMMAND=ssh -i '"+strings.ReplaceAll(keyPath, "'", "'\\''")+"' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
 		)
@@ -218,7 +218,7 @@ func PushMirror(owner, name, url, privateKey string) error {
 		if err != nil {
 			return err
 		}
-		defer os.Remove(keyPath)
+		defer func() { _ = os.Remove(keyPath) }()
 		env = append(env,
 			"GIT_SSH_COMMAND=ssh -i '"+strings.ReplaceAll(keyPath, "'", "'\\''")+"' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
 		)
@@ -387,7 +387,7 @@ func ReadBlob(owner, name, ref, file string) (*Blob, error) {
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("read blob: %v", err)
+		return nil, fmt.Errorf("read blob: %w", err)
 	}
 	data := stdout.Bytes()
 	if bytes.IndexByte(data, 0) >= 0 {
@@ -581,7 +581,7 @@ func MergeNonFF(owner, name, target, source, message, committer, method string) 
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	if _, err := gitOut("", "clone", "-q", "--no-local", path, tmp); err != nil {
 		return "", err
 	}
@@ -627,7 +627,7 @@ func InitReadme(owner, name string) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	initBranch := func() error {
 		if _, err := gitOut(tmp, "init", "-q", "--initial-branch=main"); err == nil {
@@ -694,7 +694,7 @@ func WriteCommit(owner, name, branch, message, author string, changes []FileChan
 	if err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 
 	init := func() error {
 		if _, err := gitOut(tmp, "init", "-q", "--initial-branch=_gd_work"); err == nil {

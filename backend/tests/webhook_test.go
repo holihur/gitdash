@@ -25,7 +25,7 @@ func listWebhooks(t *testing.T, c *Client, owner, repo string) []Webhook {
 	if err != nil {
 		t.Fatalf("list webhooks: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("list webhooks: status %d", resp.StatusCode)
 	}

@@ -107,7 +107,7 @@ func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
 		log.Printf("ssh handshake from %s: %v", conn.RemoteAddr(), err)
 		return
 	}
-	defer sconn.Close()
+	defer func() { _ = sconn.Close() }()
 	go ssh.DiscardRequests(reqs)
 
 	username := sconn.Permissions.Extensions["username"]
@@ -125,10 +125,9 @@ func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
 }
 
 func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, username string) {
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 
 	var env []string
-	started := false
 	for req := range requests {
 		switch req.Type {
 		case "env":
@@ -139,13 +138,6 @@ func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, use
 				_ = req.Reply(true, nil)
 			}
 		case "exec":
-			if started {
-				if req.WantReply {
-					_ = req.Reply(false, nil)
-				}
-				continue
-			}
-			started = true
 			cmdline := parseCommand(req.Payload)
 			if req.WantReply {
 				_ = req.Reply(true, nil)
@@ -162,7 +154,7 @@ func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, use
 
 func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) {
 	deny := func(msg string) {
-		fmt.Fprintf(ch.Stderr(), "gitdash: %s\n", msg)
+		_, _ = fmt.Fprintf(ch.Stderr(), "gitdash: %s\n", msg)
 		sendExit(ch, 1)
 	}
 	if username == "" {
@@ -231,12 +223,12 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 	cmd.Stdout = stdoutW
 
 	if err := cmd.Start(); err != nil {
-		fmt.Fprintf(ch.Stderr(), "gitdash: %v\n", err)
+		_, _ = fmt.Fprintf(ch.Stderr(), "gitdash: %v\n", err)
 		sendExit(ch, 1)
 		return
 	}
-	stdinR.Close()
-	stdoutW.Close()
+	_ = stdinR.Close()
+	_ = stdoutW.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -253,7 +245,7 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 
 	err = cmd.Wait()
 	wg.Wait()
-	stdoutR.Close()
+	_ = stdoutR.Close()
 
 	code := 0
 	if err != nil {

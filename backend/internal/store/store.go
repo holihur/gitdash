@@ -429,7 +429,7 @@ func ensureColumn(db *sql.DB, table, column, ddl string) error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var cid, notNull, pk int
 		var name, typ string
@@ -450,7 +450,7 @@ func (s *Store) hasLegacyRepos() bool {
 	if err != nil {
 		return false
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var names []string
 	for rows.Next() {
 		var cid, notNull, pk int
@@ -599,7 +599,7 @@ func (s *Store) ListRepos(owner string) ([]Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	repos := []Repo{}
 	for rows.Next() {
 		var r Repo
@@ -618,7 +618,7 @@ func (s *Store) ExploreRepos() ([]Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	repos := []Repo{}
 	for rows.Next() {
 		var r Repo
@@ -661,7 +661,7 @@ func (s *Store) DeleteRepo(owner, name string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`DELETE FROM issues WHERE owner = ? AND repo = ?`, owner, name); err != nil {
 		return err
 	}
@@ -762,7 +762,7 @@ func (s *Store) ListIssues(owner, repo string) ([]Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	issues := []Issue{}
 	for rows.Next() {
 		var it Issue
@@ -872,7 +872,7 @@ func (s *Store) QueryOrgRepos(org string) ([]Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Repo{}
 	for rows.Next() {
 		var r Repo
@@ -897,7 +897,7 @@ ORDER BY owner, name`, username, username)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	repos := []Repo{}
 	for rows.Next() {
 		var r Repo
@@ -923,7 +923,7 @@ func (s *Store) ListCollabs(owner, repo string) ([]Collab, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	collabs := []Collab{}
 	for rows.Next() {
 		var c Collab
@@ -968,7 +968,7 @@ func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	ws := []Webhook{}
 	for rows.Next() {
 		var w Webhook
@@ -1023,7 +1023,7 @@ func (s *Store) ListKeys(username string) ([]SSHKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	keys := []SSHKey{}
 	for rows.Next() {
 		var k SSHKey
@@ -1040,7 +1040,7 @@ func (s *Store) PublicKeys() ([]PublicKeyAuth, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var keys []PublicKeyAuth
 	for rows.Next() {
 		var k PublicKeyAuth
@@ -1086,7 +1086,7 @@ func (s *Store) ListGPGKeys(username string) ([]GPGKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []GPGKey{}
 	for rows.Next() {
 		var k GPGKey
@@ -1115,7 +1115,7 @@ func (s *Store) AllGPGKeys() ([]GPGKeyAuth, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []GPGKeyAuth{}
 	for rows.Next() {
 		var k GPGKeyAuth
@@ -1199,7 +1199,7 @@ func (s *Store) ListPulls(owner, repo, state string) ([]PullRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []PullRequest{}
 	for rows.Next() {
 		var pr PullRequest
@@ -1266,7 +1266,7 @@ func (s *Store) ListLabels(owner, repo string) ([]Label, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Label{}
 	for rows.Next() {
 		var l Label
@@ -1291,7 +1291,7 @@ func (s *Store) UpdateLabel(owner, repo string, id int64, name, color string) (L
 	if err != nil {
 		return Label{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var l Label
 	if rows.Next() {
 		_ = rows.Scan(&l.ID, &l.Owner, &l.Repo, &l.Name, &l.Color, &l.CreatedAt)
@@ -1304,7 +1304,7 @@ func (s *Store) DeleteLabel(owner, repo string, id int64) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`DELETE FROM issue_labels WHERE label_id = ? AND issue_id IN
 		(SELECT id FROM issues WHERE owner = ? AND repo = ?)`, id, owner, repo); err != nil {
 		return err
@@ -1325,7 +1325,7 @@ func (s *Store) SetIssueLabels(owner, repo string, number int64, labelIDs []int6
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var issueID int64
 	err = tx.QueryRow(`SELECT id FROM issues WHERE owner = ? AND repo = ? AND number = ?`, owner, repo, number).Scan(&issueID)
 	if err != nil {
@@ -1364,7 +1364,7 @@ func (s *Store) IssueLabels(owner, repo string, numbers []int64) (map[int64][]La
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var num, id int64
 		var name, color string
@@ -1396,7 +1396,7 @@ func (s *Store) ListMilestones(owner, repo string) ([]Milestone, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Milestone{}
 	for rows.Next() {
 		var m Milestone
@@ -1453,7 +1453,7 @@ func (s *Store) DeleteMilestone(owner, repo string, id int64) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`UPDATE issues SET milestone_id = NULL WHERE owner = ? AND repo = ? AND milestone_id = ?`,
 		owner, repo, id); err != nil {
 		return err
@@ -1499,7 +1499,7 @@ func (s *Store) IssueMilestones(owner, repo string, numbers []int64) (map[int64]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var num, id int64
 		var title, state string
@@ -1647,7 +1647,7 @@ func (s *Store) StarredRepos(username string) ([]Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Repo{}
 	for rows.Next() {
 		var r Repo
@@ -1692,7 +1692,7 @@ func (s *Store) WatchedRepos(username string) ([]Repo, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Repo{}
 	for rows.Next() {
 		var r Repo
@@ -1721,7 +1721,7 @@ func (s *Store) WatchingUsers(owner, repo string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []string{}
 	for rows.Next() {
 		var u string
@@ -1762,7 +1762,7 @@ func (s *Store) ListNotifications(username string) ([]Notification, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Notification{}
 	for rows.Next() {
 		var n Notification
@@ -1898,7 +1898,7 @@ func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 	if err != nil {
 		return o, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	res, err := tx.Exec(`INSERT INTO orgs (name, display, created_at) VALUES (?, ?, ?)`, name, display, o.CreatedAt)
 	if err != nil {
 		if isUniqueErr(err) {
@@ -1920,7 +1920,7 @@ func (s *Store) ListMyOrgs(username string) ([]Org, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Org{}
 	for rows.Next() {
 		var o Org
@@ -1946,7 +1946,7 @@ func (s *Store) OrgMembers(org string) ([]OrgMember, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []OrgMember{}
 	for rows.Next() {
 		var m OrgMember
@@ -1980,7 +1980,7 @@ func (s *Store) DeleteOrg(org string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var cnt int
 	if err := tx.QueryRow(`SELECT COUNT(*) FROM repos WHERE owner = ?`, org).Scan(&cnt); err != nil {
 		return err

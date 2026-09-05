@@ -69,9 +69,8 @@ func TestGPGKeyCRUD(t *testing.T) {
 	alice.mustFail("POST", "/gpg", map[string]string{"armor": ""}, 400)
 
 	// 列表 & 删除
-	got := alice.mustStatus("GET", "/gpg", nil, 200)
-	if got["list"] == nil { // 数组解码为 map 会失败，此处仅验证状态码 200 已足够
-	}
+	// 列表 & 删除（mustStatus 已校验 200）
+	alice.mustStatus("GET", "/gpg", nil, 200)
 	alice.mustStatus("DELETE", fmt.Sprintf("/gpg/%d", id), nil, 204)
 	alice.mustFail("DELETE", fmt.Sprintf("/gpg/%d", id), nil, 404)
 

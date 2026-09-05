@@ -114,7 +114,7 @@ func (c *Client) do(method, path string, body any) (int, map[string]any) {
 	if err != nil {
 		c.env.t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	var m map[string]any
 	_ = json.Unmarshal(raw, &m)

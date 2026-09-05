@@ -28,7 +28,7 @@ func listCollabs(t *testing.T, c *Client, owner, repo string) []Collab {
 	if err != nil {
 		t.Fatalf("list collabs: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("list collabs: status %d", resp.StatusCode)
 	}

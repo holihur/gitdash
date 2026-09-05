@@ -2,6 +2,7 @@ package tests
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func TestFreshSchema(t *testing.T) {
 	}
 
 	// 重复用户名
-	if _, err := st.CreateUser("alice", "h2"); err != store.ErrExists {
+	if _, err := st.CreateUser("alice", "h2"); !errors.Is(err, store.ErrExists) {
 		t.Fatalf("dup user = %v", err)
 	}
 }
@@ -71,7 +72,7 @@ func TestLegacySchemaReset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db2.Close()
+	defer func() { _ = db2.Close() }()
 
 	if !tableHasColumn(t, db2, "repos", "owner") {
 		t.Fatal("repos missing owner column")
@@ -98,7 +99,7 @@ func tableHasColumn(t *testing.T, db *sql.DB, table, column string) bool {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var cid, notNull, pk int
 		var name, typ string
@@ -119,13 +120,13 @@ func TestStoreDataIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st.CreateUser("alice", "h")
-	st.CreateUser("bob", "h")
+	_, _ = st.CreateUser("alice", "h")
+	_, _ = st.CreateUser("bob", "h")
 
-	st.CreateRepo("alice", "demo", "", true)
-	st.CreateRepo("bob", "demo", "", true)
+	_, _ = st.CreateRepo("alice", "demo", "", true)
+	_, _ = st.CreateRepo("bob", "demo", "", true)
 
-	if _, err := st.CreateRepo("alice", "demo", "", true); err != store.ErrExists {
+	if _, err := st.CreateRepo("alice", "demo", "", true); !errors.Is(err, store.ErrExists) {
 		t.Fatalf("dup repo = %v", err)
 	}
 
@@ -136,13 +137,13 @@ func TestStoreDataIsolation(t *testing.T) {
 	if _, err := st.GetRepo("bob", "demo"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.GetRepo("carol", "demo"); err != store.ErrNotFound {
+	if _, err := st.GetRepo("carol", "demo"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("unknown owner = %v", err)
 	}
 
 	// key 按用户隔离
-	st.CreateKey("alice", "k", "pub", "fp1")
-	st.CreateKey("bob", "k2", "pub2", "fp2")
+	_, _ = st.CreateKey("alice", "k", "pub", "fp1")
+	_, _ = st.CreateKey("bob", "k2", "pub2", "fp2")
 	if keys, _ := st.ListKeys("alice"); len(keys) != 1 {
 		t.Fatal("alice should have 1 key")
 	}
@@ -155,7 +156,7 @@ func TestStoreDataIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	// alice 无法删除 bob 的 key（已删，且 owner 不符时也返回 ErrNotFound）
-	if err := st.DeleteKey("alice", bobKeyID); err != store.ErrNotFound {
+	if err := st.DeleteKey("alice", bobKeyID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("alice deleted foreign key: %v", err)
 	}
 	_ = os.Remove(path)

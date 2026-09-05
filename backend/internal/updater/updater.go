@@ -160,7 +160,7 @@ func extractFromTarGz(archive []byte, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
@@ -195,7 +195,7 @@ func extractFromZip(archive []byte, name string) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 			return io.ReadAll(io.LimitReader(rc, maxBinarySize))
 		}
 	}

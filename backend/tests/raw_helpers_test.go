@@ -14,7 +14,7 @@ func rawGet(t *testing.T, c *Client, path string) string {
 	if err != nil {
 		t.Fatalf("get %s: %v", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return string(b)
 }

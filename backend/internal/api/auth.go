@@ -527,7 +527,7 @@ func (a *API) githubCallback(w http.ResponseWriter, r *http.Request) {
 		fail("token exchange failed")
 		return
 	}
-	defer tres.Body.Close()
+	defer func() { _ = tres.Body.Close() }()
 	var tok struct {
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
@@ -545,7 +545,7 @@ func (a *API) githubCallback(w http.ResponseWriter, r *http.Request) {
 		fail("fetch github user failed")
 		return
 	}
-	defer ures.Body.Close()
+	defer func() { _ = ures.Body.Close() }()
 	if ures.StatusCode != http.StatusOK {
 		fail("github user fetch failed")
 		return
@@ -653,7 +653,7 @@ func (a *API) oidcDiscover(issuer string) (*oidcDiscovery, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("oidc discovery failed: %d", res.StatusCode)
 	}
@@ -742,7 +742,7 @@ func (a *API) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("token exchange failed")
 		return
 	}
-	defer tres.Body.Close()
+	defer func() { _ = tres.Body.Close() }()
 	var tok struct {
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
@@ -759,7 +759,7 @@ func (a *API) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("userinfo failed")
 		return
 	}
-	defer ures.Body.Close()
+	defer func() { _ = ures.Body.Close() }()
 	if ures.StatusCode != http.StatusOK {
 		fail("userinfo failed")
 		return

@@ -196,7 +196,7 @@ func TestSecurityHeadersAndWebhookSSRFGuard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.Header.Get("X-Content-Type-Options") != "nosniff" ||
 		resp.Header.Get("X-Frame-Options") != "DENY" ||
 		resp.Header.Get("Referrer-Policy") != "no-referrer" {

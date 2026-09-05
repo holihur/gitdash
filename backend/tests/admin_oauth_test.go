@@ -65,7 +65,7 @@ func TestAdminDisabledByDefault(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		if res.StatusCode != code {
 			t.Fatalf("%s %s = %d, want %d", method, path, res.StatusCode, code)
 		}
@@ -82,7 +82,7 @@ func TestAdminDisabledByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var m struct {
 		Github struct{ Enabled bool } `json:"github"`
 		OIDC   struct{ Enabled bool } `json:"oidc"`
@@ -169,7 +169,7 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 	gs, _ := http.NewRequest("GET", hs.URL+"/api/admin/settings", nil)
 	rs, _ := admin.Do(gs)
 	bs, _ := io.ReadAll(rs.Body)
-	rs.Body.Close()
+	_ = rs.Body.Close()
 	t.Logf("admin settings raw = %s", bs)
 
 	// providers 公开可见（无 cookie）
@@ -178,7 +178,7 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r3.Body.Close()
+	defer func() { _ = r3.Body.Close() }()
 	var prov struct {
 		OIDC struct {
 			Enabled bool   `json:"enabled"`
@@ -222,7 +222,7 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r6.Body.Close()
+	defer func() { _ = r6.Body.Close() }()
 	var who struct {
 		Username string `json:"username"`
 	}
@@ -253,7 +253,7 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r9.Body.Close()
+	defer func() { _ = r9.Body.Close() }()
 	if err := json.NewDecoder(r9.Body).Decode(&who); err != nil {
 		t.Fatal(err)
 	}

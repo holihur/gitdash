@@ -786,15 +786,13 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	label := "read"
-	if role == "owner" {
+	switch role {
+	case "owner":
 		label = "owner"
-	} else if role == "member" {
+	case "member":
 		label = "write"
 	}
-	out := []store.Repo{}
-	for _, rp := range rows {
-		out = append(out, rp)
-	}
+	out := append([]store.Repo{}, rows...)
 	a.attachStars(out, me)
 	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out})
 }

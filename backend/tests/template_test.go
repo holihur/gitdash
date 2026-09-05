@@ -23,7 +23,7 @@ func TestRepoCreateFromReadmeTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var branches []map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&branches); err != nil || len(branches) != 1 {
 		t.Fatalf("branches = %v err=%v", branches, err)
