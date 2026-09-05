@@ -78,7 +78,7 @@ function isMarkdown(path: string): boolean {
 function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
   return (
     <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
-      <code className="flex-1 overflow-x-auto whitespace-pre text-xs">{text}</code>
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre text-xs">{text}</code>
       <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCopy}>
         <Copy className="h-3.5 w-3.5" />
       </Button>
@@ -701,7 +701,7 @@ export default function RepoView() {
                     <TableHead>{t("common.name")}</TableHead>
                     <TableHead className="w-24">{t("common.type")}</TableHead>
                     <TableHead className="w-28 text-right">{t("common.size")}</TableHead>
-                    <TableHead className="w-44">{t("fops.lastModified")}</TableHead>
+                    <TableHead className="w-72">{t("fops.lastCommit")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -764,15 +764,31 @@ export default function RepoView() {
                         {entry.type === "blob" ? formatSize(entry.size) : "-"}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {entry.modified_at ? (
-                          <span
-                            title={
-                              [entry.modified_by, entry.modified_msg].filter(Boolean).join(" · ") ||
-                              entry.modified_at
-                            }
-                          >
-                            {formatDate(entry.modified_at, locale)}
-                          </span>
+                        {entry.modified_at || entry.last_commit ? (
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex min-w-0 items-center gap-2">
+                              {entry.last_commit && (
+                                <code
+                                  className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
+                                  title={entry.last_commit}
+                                >
+                                  {entry.last_commit.slice(0, 7)}
+                                </code>
+                              )}
+                              <span
+                                className="truncate"
+                                title={[entry.modified_by, entry.modified_msg].filter(Boolean).join(" · ")}
+                              >
+                                {entry.modified_msg}
+                              </span>
+                            </div>
+                            <div className="truncate text-xs">
+                              {entry.modified_by && <span>{entry.modified_by}</span>}
+                              <span className={entry.modified_by ? "ml-2" : ""}>
+                                {formatDate(entry.modified_at ?? "", locale)}
+                              </span>
+                            </div>
+                          </div>
                         ) : (
                           "-"
                         )}

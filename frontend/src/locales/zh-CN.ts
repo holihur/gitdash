@@ -371,6 +371,7 @@ export const zhCN: Messages = {
     saved: "已提交：{path}",
     deleted: "已删除：{path}",
     lastModified: "最后修改",
+    lastCommit: "最后提交",
     confirmDeleteFile: "删除文件 {path} 并创建一次提交？",
     confirmDeleteFolder: "删除文件夹 {path} 及其全部内容？",
     msgCreate: "新增 {path}",

@@ -275,7 +275,7 @@ export default function Repos() {
             {show.map((repo) => {
               const isOwner = isMine && (repo.role === undefined || repo.role === "owner");
               return (
-                <Card key={`${repo.owner}/${repo.name}`} className="flex flex-col">
+                <Card key={`${repo.owner}/${repo.name}`} className="flex min-w-0 flex-col">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="min-w-0 text-lg">
@@ -347,7 +347,7 @@ export default function Repos() {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
-                      <code className="flex-1 truncate text-xs text-muted-foreground">
+                      <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                         {cloneCommand(repo.owner, repo.name)}
                       </code>
                       <Button

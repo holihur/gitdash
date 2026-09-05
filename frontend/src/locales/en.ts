@@ -372,6 +372,7 @@ export const en = {
     saved: "Committed: {path}",
     deleted: "Deleted: {path}",
     lastModified: "Last modified",
+    lastCommit: "Last commit",
     confirmDeleteFile: "Delete file {path} and create a commit?",
     confirmDeleteFolder: "Delete folder {path} and everything inside it?",
     msgCreate: "Add {path}",
