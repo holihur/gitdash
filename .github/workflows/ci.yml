@@ -122,13 +122,13 @@ jobs:
 
       - name: Run black-box API tests (happy + bad paths)
         working-directory: tests
-        run: uv run pytest -v
+        run: chmod +x /tmp/gitdash-server && uv run pytest -v
         env:
           GITDASH_BIN: /tmp/gitdash-server
 
       - name: Run black-box API tests against PostgreSQL
         working-directory: tests
-        run: uv run pytest -v --tb=short
+        run: chmod +x /tmp/gitdash-server && uv run pytest -v --tb=short
         env:
           GITDASH_BIN: /tmp/gitdash-server
           GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
