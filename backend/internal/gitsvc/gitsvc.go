@@ -748,8 +748,8 @@ func MergeNonFF(owner, name, target, source, message, committer, method string) 
 	var head string
 	switch method {
 	case "squash":
-		if _, err := git(append(ident, "merge", "--squash", "-q", "origin/"+source)...); err != nil {
-			return "", fmt.Errorf("merge conflict or error: %w", err)
+		if _, merr := git(append(ident, "merge", "--squash", "-q", "origin/"+source)...); merr != nil {
+			return "", fmt.Errorf("merge conflict or error: %w", merr)
 		}
 		if _, err := git(append(ident, "commit", "-q", "-m", message)...); err != nil {
 			return "", fmt.Errorf("merge conflict: %w", err)
