@@ -18,3 +18,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .task/
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo

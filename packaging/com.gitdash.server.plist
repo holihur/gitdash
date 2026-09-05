@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gitdash.server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/gitdash</string>
+        <string>serve</string>
+    </array>
+
+    <!-- Adjust the binary path if installed elsewhere (e.g. ~/.local/bin/gitdash) -->
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Adjust the data directory to something writable by the service user -->
+        <key>GITDASH_DATA</key>
+        <string>/usr/local/var/lib/gitdash</string>
+        <key>GITDASH_HTTP_ADDR</key>
+        <string>:8080</string>
+        <key>GITDASH_SSH_ADDR</key>
+        <string>:2222</string>
+        <!-- Auto-update is off by default; uncomment to enable:
+        <key>GITDASH_AUTO_UPDATE</key>
+        <string>1</string>
+        -->
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/gitdash.log</string>
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/gitdash.log</string>
+</dict>
+</plist>

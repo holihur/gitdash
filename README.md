@@ -29,7 +29,67 @@ gitdash serve
 
 The install script supports environment variables: `GITDASH_VERSION` (pin a version) and `GITDASH_INSTALL_DIR` (install directory).
 
-You can also download a platform archive from [Releases](https://github.com/holihur/gitdash/releases) (frontend embedded), or deploy with systemd via [packaging/gitdash.service](packaging/gitdash.service).
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1 | iex
+gitdash serve
+```
+
+### macOS / Homebrew (macOS & Linux)
+
+```bash
+brew install holihur/tap/gitdash
+```
+
+### Windows / Scoop
+
+```powershell
+scoop bucket add gitdash https://github.com/holihur/scoop-bucket
+scoop install gitdash/gitdash
+```
+
+### Nix
+
+```bash
+nix-env -iA nixpkgs.gitdash   # via holihur/nur-packages (NUR)
+```
+
+### Arch Linux (AUR)
+
+```bash
+yay -S gitdash-bin
+```
+
+### Debian / Ubuntu (apt)
+
+```bash
+# 从 Releases 下载 .deb 后安装
+curl -fsSLO https://github.com/holihur/gitdash/releases/latest/download/gitdash_linux_amd64.deb
+sudo apt install ./gitdash_linux_amd64.deb
+sudo systemctl enable --now gitdash
+```
+
+### RHEL / CentOS / Fedora (yum)
+
+```bash
+curl -fsSLO https://github.com/holihur/gitdash/releases/latest/download/gitdash_linux_amd64.rpm
+sudo yum install ./gitdash_linux_amd64.rpm   # 或 dnf install
+sudo systemctl enable --now gitdash
+```
+
+### Alpine (apk)
+
+```bash
+curl -fsSLO https://github.com/holihur/gitdash/releases/latest/download/gitdash_linux_amd64.apk
+sudo apk add --allow-untrusted ./gitdash_linux_amd64.apk
+```
+
+> deb/rpm/apk 包内含 systemd 服务文件（Alpine 无 systemd，仅装二进制）并依赖系统 `git`。
+
+> Package-manager channels are published automatically on release; the tap/bucket/NUR repositories and the `TAP_GITHUB_TOKEN` / `AUR_SSH_KEY` secrets must exist (otherwise those publishers are skipped).
+
+You can also download a platform archive from [Releases](https://github.com/holihur/gitdash/releases) (frontend embedded), deploy with systemd via [packaging/gitdash.service](packaging/gitdash.service), run as a launchd service on macOS via [packaging/com.gitdash.server.plist](packaging/com.gitdash.server.plist), or as a Windows service via [packaging/gitdash.windows.md](packaging/gitdash.windows.md).
 
 ## Usage
 

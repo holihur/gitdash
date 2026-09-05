@@ -29,7 +29,67 @@ gitdash serve
 
 安装脚本支持环境变量：`GITDASH_VERSION`（指定版本）、`GITDASH_INSTALL_DIR`（安装目录）。
 
-也可以直接到 [Releases](https://github.com/holihur/gitdash/releases) 下载对应平台的压缩包（前端已内嵌），或参考 [packaging/gitdash.service](packaging/gitdash.service) 用 systemd 部署。
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1 | iex
+gitdash serve
+```
+
+### macOS / Homebrew（macOS 与 Linux 均可）
+
+```bash
+brew install holihur/tap/gitdash
+```
+
+### Windows / Scoop
+
+```powershell
+scoop bucket add gitdash https://github.com/holihur/scoop-bucket
+scoop install gitdash/gitdash
+```
+
+### Nix
+
+```bash
+nix-env -iA nixpkgs.gitdash   # 经 holihur/nur-packages（NUR）
+```
+
+### Arch Linux（AUR）
+
+```bash
+yay -S gitdash-bin
+```
+
+### Debian / Ubuntu（apt）
+
+```bash
+# 从 Releases 下载 .deb 后安装
+curl -fsSLO https://github.com/holihur/gitdash/releases/latest/download/gitdash_linux_amd64.deb
+sudo apt install ./gitdash_linux_amd64.deb
+sudo systemctl enable --now gitdash
+```
+
+### RHEL / CentOS / Fedora（yum）
+
+```bash
+curl -fsSLO https://github.com/holihur/gitdash/releases/latest/download/gitdash_linux_amd64.rpm
+sudo yum install ./gitdash_linux_amd64.rpm   # 或 dnf install
+sudo systemctl enable --now gitdash
+```
+
+### Alpine（apk）
+
+```bash
+curl -fsSLO https://github.com/holihur/gitdash/releases/latest/download/gitdash_linux_amd64.apk
+sudo apk add --allow-untrusted ./gitdash_linux_amd64.apk
+```
+
+> deb/rpm/apk 包内含 systemd 服务文件（Alpine 无 systemd，仅装二进制）并依赖系统 `git`。
+
+> 以上包管理器渠道在 release 时自动发布；需要先建好对应仓库（homebrew-tap / scoop-bucket / nur-packages）并配置 `TAP_GITHUB_TOKEN`、`AUR_SSH_KEY` secrets，未配置时 GoReleaser 会自动跳过对应发布。
+
+也可以直接到 [Releases](https://github.com/holihur/gitdash/releases) 下载对应平台的压缩包（前端已内嵌），或参考 [packaging/gitdash.service](packaging/gitdash.service) 用 systemd 部署、[packaging/com.gitdash.server.plist](packaging/com.gitdash.server.plist) 用 launchd 部署（macOS）、[packaging/gitdash.windows.md](packaging/gitdash.windows.md) 部署为 Windows 服务。
 
 ## 使用流程
 

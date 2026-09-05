@@ -36,6 +36,89 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# 系统包（apt / yum / apk 直接安装）
+nfpms:
+  - id: packages
+    package_name: gitdash
+    file_name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    builds:
+      - gitdash
+    formats:
+      - deb
+      - rpm
+      - apk
+    vendor: gitdash
+    homepage: "https://github.com/holihur/gitdash"
+    maintainer: "holihur"
+    description: "A minimal self-hosted Git service (http + ssh + web ui)"
+    license: MIT
+    # 运行依赖 git（SSH 推送/浏览等都调用 git）
+    deb:
+      depends:
+        - git
+    rpm:
+      depends:
+        - git
+    apk:
+      depends:
+        - git
+    contents:
+      # systemd 服务（deb/rpm），安装后 systemctl enable --now gitdash
+      - src: packaging/gitdash.service
+        dst: /usr/lib/systemd/system/gitdash.service
+      - type: dir
+        file_info:
+          mode: 0755
+        dst: /var/lib/gitdash
+    scripts:
+      # rpm 的 post 脚本同样适用于 deb/apk（goreleaser 会按格式使用）
+      postinstall: packaging/postinstall.sh
+
+# 各包管理器发布配置。对应仓库/密钥不存在时自动跳过（不阻塞 Release）：
+#   - Homebrew tap:   仓库 holihur/homebrew-tap + secret TAP_GITHUB_TOKEN
+#   - Scoop bucket:   仓库 holihur/scoop-bucket + secret TAP_GITHUB_TOKEN
+#   - NUR (nix):      仓库 holihur/nur-packages + secret TAP_GITHUB_TOKEN
+#   - AUR:            secret AUR_SSH_KEY（私钥内容，需有 AUR 账号）
+brews:
+  - repository:
+      owner: holihur
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/holihur/gitdash"
+    description: "A minimal self-hosted Git service (http + ssh + web ui)"
+    install: |
+      bin.install "gitdash"
+    skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
+
+scoops:
+  - repository:
+      owner: holihur
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: bucket
+    homepage: "https://github.com/holihur/gitdash"
+    description: "A minimal self-hosted Git service (http + ssh + web ui)"
+    skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
+
+nix:
+  - repository:
+      owner: holihur
+      name: nur-packages
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/holihur/gitdash"
+    description: "A minimal self-hosted Git service (http + ssh + web ui)"
+    skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
+
+aur:
+  - license: MIT
+    homepage: "https://github.com/holihur/gitdash"
+    description: "A minimal self-hosted Git service (http + ssh + web ui)"
+    private_key: "{{ .Env.AUR_SSH_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/gitdash-bin.git"
+    skip_upload: "{{ not (env \"AUR_SSH_KEY\") }}"
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
