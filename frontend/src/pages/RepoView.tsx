@@ -53,6 +53,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -87,23 +89,32 @@ export default function RepoView() {
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const { owner = "", name = "" } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tabs = ["code", "commits", "issues", "pulls"] as const;
   type RepoTab = (typeof tabs)[number];
+
+  // 把 tab / ref / path / file 写进 URL 查询参数，支持刷新与分享
+  const setParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === null) next.delete(k);
+          else next.set(k, v);
+        }
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const [repo, setRepo] = useState<Repo | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [ref, setRef] = useState("");
-  const [path, setPath] = useState<string[]>([]);
   const [entries, setEntries] = useState<TreeEntry[]>([]);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [diffSha, setDiffSha] = useState<string | null>(null);
   const [diffData, setDiffData] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
-  // 初始 tab 支持 ?tab=issues / ?tab=pulls（收件箱跳转用）
-  const [tab, setTab] = useState<RepoTab>(() => {
-    const q = searchParams.get("tab");
-    return (tabs as readonly string[]).includes(q ?? "") ? (q as RepoTab) : "code";
-  });
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
   const [readmeContent, setReadmeContent] = useState<string | null>(null);
@@ -117,8 +128,25 @@ export default function RepoView() {
   const [forkName, setForkName] = useState("");
   const [forkBusy, setForkBusy] = useState(false);
   const [mirrorOpen, setMirrorOpen] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<{ path: string; isDir: boolean } | null>(null);
   const navigate = useNavigate();
+
+  // URL 参数派生：tab / ref / path / file（blob）
+  const tabParam = searchParams.get("tab");
+  const tab: RepoTab = (tabs as readonly string[]).includes(tabParam ?? "")
+    ? (tabParam as RepoTab)
+    : "code";
+  const pathParam = searchParams.get("path") ?? "";
+  const path = pathParam ? pathParam.split("/") : [];
   const currentDir = path.join("/");
+  const fileParam = searchParams.get("file") ?? "";
+  const urlRef = searchParams.get("ref") ?? "";
+  const ref =
+    urlRef ||
+    branches.find((b) => b.is_head)?.name ||
+    branches[0]?.name ||
+    "";
+
   const refreshRefs = useCallback(async () => {
     try {
       const [bs, ts] = await Promise.all([api.branches(owner, name), api.listTags(owner, name)]);
@@ -191,33 +219,53 @@ export default function RepoView() {
         const [r, bs] = await Promise.all([api.getRepo(owner, name), api.branches(owner, name)]);
         setRepo(r);
         setBranches(bs);
-        const head = bs.find((b) => b.is_head) ?? bs[0];
-        if (head) setRef(head.name);
         api.listTags(owner, name).then(setTags).catch(() => undefined);
       } catch (e) {
         setMissing(true);
         setError(e instanceof Error ? e.message : String(e));
       }
     })();
-  }, [name]);
+  }, [name, owner]);
 
   const loadTree = useCallback(async () => {
     void loadTick;
     if (!ref) return;
     try {
-      const dir = path.join("/");
-      const data = await api.tree(owner, name, ref, dir);
+      const data = await api.tree(owner, name, ref, currentDir);
       setEntries(data.entries);
       setBlob(null);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [name, ref, path, loadTick]);
+  }, [name, ref, currentDir, loadTick]);
 
   useEffect(() => {
     loadTree();
   }, [loadTree]);
+
+  // blob 内容跟随 ?file= 参数加载
+  useEffect(() => {
+    let alive = true;
+    if (!fileParam || !ref) {
+      setBlob(null);
+      return;
+    }
+    api
+      .blob(owner, name, ref, fileParam)
+      .then((b) => {
+        if (alive) setBlob(b);
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setBlob(null);
+        setParams({ file: null });
+        toast.error(apiErrorMsg(to, e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [fileParam, ref, owner, name, setParams, to]);
 
   // 目录 README：列表底部渲染
   const readmeEntry = entries.find(
@@ -263,22 +311,18 @@ export default function RepoView() {
     };
   }, [diffSha, owner, name]);
 
-  const openEntry = async (entry: TreeEntry) => {
+  const openEntry = (entry: TreeEntry) => {
     if (entry.type === "tree") {
-      setPath([...path, entry.name]);
+      setParams({ path: [...path, entry.name].join("/") });
       return;
     }
-    try {
-      setBlob(await api.blob(owner, name, ref, [...path, entry.name].join("/")));
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    }
+    setParams({ file: [...path, entry.name].join("/") });
   };
 
   const jumpTo = (depth: number) => {
     // depth = -1 -> root, otherwise index of segment
-    setPath(depth < 0 ? [] : path.slice(0, depth + 1));
-    setBlob(null);
+    const next = depth < 0 ? [] : path.slice(0, depth + 1);
+    setParams({ path: next.length ? next.join("/") : null });
   };
   const openCreateDialog = (kind: "create-file" | "create-dir") => {
     const prefix = currentDir ? currentDir + "/" : "";
@@ -294,19 +338,20 @@ export default function RepoView() {
     setFileOp({ kind: "edit", path: filePath, content, branch: ref });
   };
 
-  const removeEntry = async (targetPath: string, isDir: boolean) => {
-    const ok = window.confirm(
-      isDir
-        ? t("fops.confirmDeleteFolder", { path: targetPath })
-        : t("fops.confirmDeleteFile", { path: targetPath }),
-    );
-    if (!ok) return;
+  const removeEntry = (targetPath: string, isDir: boolean) => {
+    setPendingRemove({ path: targetPath, isDir });
+  };
+
+  const confirmRemove = async () => {
+    if (!pendingRemove) return;
+    const { path: targetPath, isDir } = pendingRemove;
     const branch = ref || branches[0]?.name || "main";
     try {
       await api.createCommit(owner, name, branch, `Delete ${targetPath}`, [
         { path: targetPath, action: isDir ? "delete_tree" : "delete" },
       ]);
       toast.success(t("fops.deleted", { path: targetPath }));
+      setPendingRemove(null);
       afterCommit(branch, isDir ? currentDir : undefined);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -314,10 +359,13 @@ export default function RepoView() {
   };
 
   const afterCommit = async (branch: string, backToDir?: string) => {
-    setBlob(null);
-    if (backToDir !== undefined) setPath(backToDir ? backToDir.split("/") : []);
-    else if (blob) setPath([]);
-    setRef(branch);
+    const nextPath =
+      backToDir !== undefined ? (backToDir ? backToDir.split("/") : []) : blob ? [] : path;
+    setParams({
+      ref: branch,
+      path: nextPath.length ? nextPath.join("/") : null,
+      file: null,
+    });
     setLoadTick((n) => n + 1);
     try {
       setBranches(await api.branches(owner, name));
@@ -346,6 +394,31 @@ export default function RepoView() {
           {t("repo.notFound", { error })}
         </CardContent>
       </Card>
+    );
+  }
+
+  if (!repo) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <Skeleton className="h-8 w-64 max-w-full" />
+            <Skeleton className="h-4 w-96 max-w-full" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-8 w-24" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+        </div>
+        <Skeleton className="h-10 w-full sm:w-96" />
+        <div className="space-y-3 rounded-lg border p-4">
+          <Skeleton className="h-9 w-40" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-6 w-full" />
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -429,7 +502,7 @@ export default function RepoView() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as RepoTab)}>
+      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}>
         <TabsList className="w-full sm:w-auto">
           <TabsTrigger value="code" className="flex-1 sm:flex-none">
             {t("repo.code")}
@@ -470,11 +543,7 @@ export default function RepoView() {
                 {branches.map((b) => (
                   <DropdownMenuItem
                     key={b.name}
-                    onClick={() => {
-                      setRef(b.name);
-                      setPath([]);
-                      setBlob(null);
-                    }}
+                    onClick={() => setParams({ ref: b.name, path: null, file: null })}
                   >
                     <GitBranch className="shrink-0" />
                     <span className="truncate">{b.name}</span>
@@ -492,11 +561,7 @@ export default function RepoView() {
                     {tags.map((tg) => (
                       <DropdownMenuItem
                         key={tg.name}
-                        onClick={() => {
-                          setRef(tg.name);
-                          setPath([]);
-                          setBlob(null);
-                        }}
+                        onClick={() => setParams({ ref: tg.name, path: null, file: null })}
                       >
                         <TagIcon className="shrink-0" />
                         <span className="truncate">{tg.name}</span>
@@ -869,6 +934,16 @@ export default function RepoView() {
         onOpenChange={setMirrorOpen}
         owner={owner}
         repo={name}
+      />
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(o) => !o && setPendingRemove(null)}
+        description={
+          pendingRemove?.isDir
+            ? t("fops.confirmDeleteFolder", { path: pendingRemove.path })
+            : t("fops.confirmDeleteFile", { path: pendingRemove?.path ?? "" })
+        }
+        onConfirm={confirmRemove}
       />
     </div>
   );

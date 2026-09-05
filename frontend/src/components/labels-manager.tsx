@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import LabelChip, { labelTextColor } from "@/components/label-chip";
+import ConfirmDialog from "@/components/confirm-dialog";
 
 const HEX_RE = /^#?[0-9a-fA-F]{6}$/;
 
@@ -68,6 +69,7 @@ export default function LabelsManager({ open, onOpenChange, owner, repo, onChang
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Label | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -140,7 +142,7 @@ export default function LabelsManager({ open, onOpenChange, owner, repo, onChang
   };
 
   const remove = async (l: Label) => {
-    if (!window.confirm(t("labels.confirmDelete", { name: l.name }))) return;
+    setPendingDelete(null);
     setBusy(true);
     try {
       await api.deleteLabel(owner, repo, l.id);
@@ -206,7 +208,7 @@ export default function LabelsManager({ open, onOpenChange, owner, repo, onChang
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => remove(l)}
+                        onClick={() => setPendingDelete(l)}
                         title={t("labels.remove")}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -256,6 +258,14 @@ export default function LabelsManager({ open, onOpenChange, owner, repo, onChang
             {t("labels.add")}
           </Button>
         </DialogFooter>
+
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          onOpenChange={(o) => !o && setPendingDelete(null)}
+          description={t("labels.confirmDelete", { name: pendingDelete?.name ?? "" })}
+          onConfirm={() => pendingDelete && remove(pendingDelete)}
+          busy={busy}
+        />
       </DialogContent>
     </Dialog>
   );

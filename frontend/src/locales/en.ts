@@ -30,6 +30,8 @@ export const en = {
     file: "File",
     save: "Save",
     cancel: "Cancel",
+    delete: "Delete",
+    pleaseConfirm: "Please confirm",
   },
   login: {
     subtitle: "Sign in or register to manage your repositories",

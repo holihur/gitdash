@@ -24,6 +24,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -32,16 +34,21 @@ export default function Keys() {
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [keys, setKeys] = useState<SSHKey[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [publicKey, setPublicKey] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<SSHKey | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       setKeys(await api.listKeys());
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -66,7 +73,7 @@ export default function Keys() {
   };
 
   const remove = async (key: SSHKey) => {
-    if (!window.confirm(t("keys.confirmDelete", { name: key.name }))) return;
+    setPendingDelete(null);
     try {
       await api.deleteKey(key.id);
       toast.success(t("keys.deleted"));
@@ -128,7 +135,13 @@ export default function Keys() {
         </Dialog>
       </div>
 
-      {keys.length === 0 ? (
+      {loading ? (
+        <div className="space-y-3 rounded-lg border p-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-6 w-full" />
+          ))}
+        </div>
+      ) : keys.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 px-4 text-center">
           <KeyRound className="h-10 w-10 text-muted-foreground" />
           <p className="font-medium">{t("keys.empty")}</p>
@@ -162,7 +175,7 @@ export default function Keys() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => remove(key)}
+                      onClick={() => setPendingDelete(key)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -173,6 +186,12 @@ export default function Keys() {
           </Table>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+        description={t("keys.confirmDelete", { name: pendingDelete?.name ?? "" })}
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+      />
     </div>
   );
 }

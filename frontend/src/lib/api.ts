@@ -227,8 +227,11 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     if (res.status === 401 && window.location.pathname !== "/login") {
-      // 会话失效：回登录页（cookie 由服务端在 logout 时清除）
-      window.location.href = "/login";
+      // 会话失效：回登录页并带上回跳地址（cookie 由服务端在 logout 时清除）
+      const redirect = encodeURIComponent(
+        window.location.pathname + window.location.search + window.location.hash,
+      );
+      window.location.href = `/login?redirect=${redirect}`;
     }
     let msg = res.statusText;
     let code: string | undefined;

@@ -25,6 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -40,6 +42,8 @@ export default function Repos() {
   const [watched, setWatched] = useState<Repo[]>([]);
   const [tab, setTab] = useState<"repos" | "starred" | "watching">("repos");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [pendingDelete, setPendingDelete] = useState<Repo | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
@@ -55,6 +59,7 @@ export default function Repos() {
   const [importBusy, setImportBusy] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const [mine, star, watch] = await Promise.all([
         api.listRepos(),
@@ -67,6 +72,8 @@ export default function Repos() {
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -126,7 +133,7 @@ export default function Repos() {
   };
 
   const remove = async (repo: Repo) => {
-    if (!window.confirm(t("repos.confirmDelete", { name: repo.name }))) return;
+    setPendingDelete(null);
     try {
       await api.deleteRepo(repo.owner, repo.name);
       toast.success(t("repos.deleted", { name: repo.name }));
@@ -221,7 +228,29 @@ export default function Repos() {
           </Card>
         )}
 
-        {!error && show.length === 0 && (
+        {loading && !error && (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-3">
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2">
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-5 w-16" />
+                  </div>
+                  <Skeleton className="h-8 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {!loading && !error && show.length === 0 && (
           <Card className="mt-4">
             <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
               <FolderGit2 className="h-10 w-10 text-muted-foreground" />
@@ -239,7 +268,7 @@ export default function Repos() {
           </Card>
         )}
 
-        {show.length > 0 && (
+        {show.length > 0 && !loading && (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {show.map((repo) => {
               const isOwner = isMine && (repo.role === undefined || repo.role === "owner");
@@ -273,7 +302,7 @@ export default function Repos() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
-                              onClick={() => remove(repo)}
+                              onClick={() => setPendingDelete(repo)}
                             >
                               <Trash2 />
                               {t("repos.delete")}
@@ -336,6 +365,12 @@ export default function Repos() {
         )}
       </Tabs>
 
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+        description={t("repos.confirmDelete", { name: pendingDelete?.name ?? "" })}
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+      />
       <CollaboratorsDialog
         open={collabRepo !== null}
         onOpenChange={(o) => {

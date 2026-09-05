@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import ConfirmDialog from "@/components/confirm-dialog";
 
 interface Props {
   open: boolean;
@@ -37,6 +38,7 @@ export default function MilestonesManager({ open, onOpenChange, owner, repo, onC
   const [editId, setEditId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<Milestone | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -112,7 +114,7 @@ export default function MilestonesManager({ open, onOpenChange, owner, repo, onC
   };
 
   const remove = async (m: Milestone) => {
-    if (!window.confirm(t("milestones.confirmDelete", { title: m.title }))) return;
+    setPendingDelete(null);
     setBusy(true);
     try {
       await api.deleteMilestone(owner, repo, m.id);
@@ -218,7 +220,7 @@ export default function MilestonesManager({ open, onOpenChange, owner, repo, onC
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => remove(m)}
+                          onClick={() => setPendingDelete(m)}
                           title={t("milestones.remove")}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -262,6 +264,14 @@ export default function MilestonesManager({ open, onOpenChange, owner, repo, onC
             {t("milestones.add")}
           </Button>
         </DialogFooter>
+
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          onOpenChange={(o) => !o && setPendingDelete(null)}
+          description={t("milestones.confirmDelete", { title: pendingDelete?.title ?? "" })}
+          onConfirm={() => pendingDelete && remove(pendingDelete)}
+          busy={busy}
+        />
       </DialogContent>
     </Dialog>
   );

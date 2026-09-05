@@ -32,6 +32,8 @@ export const zhCN: Messages = {
     file: "文件",
     save: "保存",
     cancel: "取消",
+    delete: "删除",
+    pleaseConfirm: "请确认",
   },
   login: {
     subtitle: "登录或注册以管理你的仓库",

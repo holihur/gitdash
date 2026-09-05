@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Github, ShieldCheck } from "lucide-react";
 import { api, setToken } from "@/lib/api";
@@ -19,6 +19,7 @@ interface Props {
 export default function Login({ onAuthed }: Props) {
   const { t, to } = useI18n();
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,12 +39,18 @@ export default function Login({ onAuthed }: Props) {
       .catch(() => undefined);
   }, []);
 
+  // 仅允许站内相对路径，避免开放重定向
+  const safeRedirect = () => {
+    const rd = searchParams.get("redirect") ?? "";
+    return rd.startsWith("/") && !rd.startsWith("//") ? rd : "/";
+  };
+
   const finish = (r: { token?: string; username?: string }) => {
     if (!r.token || !r.username) return;
     setToken(r.token);
     onAuthed(r.username);
     toast.success(t("login.welcomeBack", { name: r.username }));
-    nav("/");
+    nav(safeRedirect());
   };
 
   const submit = async (mode: "login" | "register") => {
