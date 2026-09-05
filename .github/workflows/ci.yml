@@ -42,7 +42,17 @@ jobs:
 
       - name: Test
         working-directory: backend
-        run: go test ./...
+        run: go test ./... 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
+
+      - name: Dump test log to summary
+        if: failure()
+        run: |
+          {
+            echo "## go test log"
+            echo '```'
+            tail -c 40000 /tmp/test.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build server binary
         working-directory: backend
