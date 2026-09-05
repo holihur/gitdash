@@ -1,18 +1,28 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { Bell, GitBranch, KeyRound, LogOut, FolderGit2, UserRound } from "lucide-react";
+import { Bell, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
-import Repos from "@/pages/Repos";
-import RepoView from "@/pages/RepoView";
-import Inbox from "@/pages/Inbox";
-import Keys from "@/pages/Keys";
 import Login from "@/pages/Login";
-import ProfilePage from "@/pages/Profile";
+
+// 页面按需加载：首屏只需 App 外壳 + 登录页，其余页面路由切换时才拉取
+const Repos = lazy(() => import("@/pages/Repos"));
+const RepoView = lazy(() => import("@/pages/RepoView"));
+const Inbox = lazy(() => import("@/pages/Inbox"));
+const Keys = lazy(() => import("@/pages/Keys"));
+const ProfilePage = lazy(() => import("@/pages/Profile"));
+
+function PageLoading() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin" />
+    </div>
+  );
+}
 
 export default function App() {
   const { t } = useI18n();
@@ -131,11 +141,46 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
       </header>
       <main className="container py-4 sm:py-8">
         <Routes>
-          <Route path="/" element={<Repos />} />
-          <Route path="/repo/:owner/:name" element={<RepoView />} />
-          <Route path="/inbox" element={<Inbox onChanged={refreshUnread} />} />
-          <Route path="/keys" element={<Keys />} />
-          <Route path="/profile" element={<ProfilePage />} />
+          <Route
+            path="/"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <Repos />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/repo/:owner/:name"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <RepoView />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/inbox"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <Inbox onChanged={refreshUnread} />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/keys"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <Keys />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <ProfilePage />
+              </Suspense>
+            }
+          />
           <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

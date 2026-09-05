@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import hljs from "highlight.js";
+// lib/common 只注册常用语言（~40 种），全量包体积约 4 倍于此
+import hljs from "highlight.js/lib/common";
 
 marked.setOptions({ gfm: true, breaks: false });
 

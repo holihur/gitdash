@@ -60,7 +60,7 @@ import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MarkdownView } from "@/components/markdown";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
-import CodeMirrorEditor from "@/components/code-editor";
+import CodeMirrorEditor from "@/components/code-editor-lazy";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import MirrorDialog from "@/components/mirror-dialog";
 import RefsDialog from "@/components/refs-dialog";

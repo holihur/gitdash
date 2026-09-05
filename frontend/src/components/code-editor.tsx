@@ -1,56 +1,60 @@
 import { useEffect, useRef } from "react";
 import { EditorView, basicSetup } from "codemirror";
-import { EditorState, Extension } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { javascript } from "@codemirror/lang-javascript";
-import { python } from "@codemirror/lang-python";
-import { markdown } from "@codemirror/lang-markdown";
-import { json } from "@codemirror/lang-json";
-import { css } from "@codemirror/lang-css";
-import { html } from "@codemirror/lang-html";
-import { java } from "@codemirror/lang-java";
-import { cpp } from "@codemirror/lang-cpp";
-import { rust } from "@codemirror/lang-rust";
-import { sql } from "@codemirror/lang-sql";
-import { php } from "@codemirror/lang-php";
 import { useTheme } from "@/lib/theme";
 
-const LANGUAGE_BY_EXT: Record<string, Extension> = {
-  ts: javascript({ typescript: true }),
-  tsx: javascript({ jsx: true, typescript: true }),
-  js: javascript(),
-  jsx: javascript({ jsx: true }),
-  mjs: javascript(),
-  cjs: javascript(),
-  py: python(),
-  md: markdown(),
-  markdown: markdown(),
-  mkd: markdown(),
-  json: json(),
-  css: css(),
-  scss: css(),
-  less: css(),
-  html: html(),
-  htm: html(),
-  xml: html(),
-  vue: html(),
-  java: java(),
-  c: cpp(),
-  h: cpp(),
-  cpp: cpp(),
-  hpp: cpp(),
-  cc: cpp(),
-  rust: rust(),
-  rs: rust(),
-  sql: sql(),
-  php: php(),
-};
-
-export function languageForPath(path: string): Extension | undefined {
+// 语言包按需动态加载：仅在编辑对应扩展名的文件时才拉取对应 chunk
+async function loadLanguage(path: string): Promise<Extension | undefined> {
   const name = path.split("/").pop() ?? "";
-  const ext = (name.split(".").pop() ?? "").toLowerCase();
   if (name.toLowerCase() === "dockerfile") return undefined;
-  return LANGUAGE_BY_EXT[ext];
+  const ext = (name.split(".").pop() ?? "").toLowerCase();
+  switch (ext) {
+    case "ts":
+      return (await import("@codemirror/lang-javascript")).javascript({ typescript: true });
+    case "tsx":
+      return (await import("@codemirror/lang-javascript")).javascript({ jsx: true, typescript: true });
+    case "jsx":
+      return (await import("@codemirror/lang-javascript")).javascript({ jsx: true });
+    case "js":
+    case "mjs":
+    case "cjs":
+      return (await import("@codemirror/lang-javascript")).javascript();
+    case "py":
+      return (await import("@codemirror/lang-python")).python();
+    case "md":
+    case "markdown":
+    case "mkd":
+      return (await import("@codemirror/lang-markdown")).markdown();
+    case "json":
+      return (await import("@codemirror/lang-json")).json();
+    case "css":
+    case "scss":
+    case "less":
+      return (await import("@codemirror/lang-css")).css();
+    case "html":
+    case "htm":
+    case "xml":
+    case "vue":
+      return (await import("@codemirror/lang-html")).html();
+    case "java":
+      return (await import("@codemirror/lang-java")).java();
+    case "c":
+    case "h":
+    case "cpp":
+    case "hpp":
+    case "cc":
+      return (await import("@codemirror/lang-cpp")).cpp();
+    case "rust":
+    case "rs":
+      return (await import("@codemirror/lang-rust")).rust();
+    case "sql":
+      return (await import("@codemirror/lang-sql")).sql();
+    case "php":
+      return (await import("@codemirror/lang-php")).php();
+    default:
+      return undefined;
+  }
 }
 
 interface Props {
@@ -79,11 +83,13 @@ export default function CodeMirrorEditor({
   useEffect(() => {
     const el = host.current;
     if (!el) return;
+    // 语言用 Compartment 挂载：编辑器先立即可用，语言包异步加载后再注入
+    const langCompartment = new Compartment();
     const view = new EditorView({
       doc: value,
       extensions: [
         basicSetup,
-        (path ? languageForPath(path) : undefined) ?? [],
+        langCompartment.of([]),
         EditorView.theme({
           "&": { height: "100%", fontSize: "13px" },
           ".cm-scroller": { fontFamily: "var(--font-mono), monospace", lineHeight: "1.6" },
@@ -99,7 +105,14 @@ export default function CodeMirrorEditor({
       parent: el,
     });
     viewRef.current = view;
+    let cancelled = false;
+    if (path) {
+      loadLanguage(path).then((lang) => {
+        if (!cancelled) view.dispatch({ effects: langCompartment.reconfigure(lang ?? []) });
+      });
+    }
     return () => {
+      cancelled = true;
       view.destroy();
       viewRef.current = null;
     };

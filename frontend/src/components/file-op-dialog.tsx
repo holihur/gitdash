@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import CodeMirrorEditor from "@/components/code-editor";
+import CodeMirrorEditor from "@/components/code-editor-lazy";
 
 export interface FileOp {
   kind: "create-file" | "create-dir" | "edit";
