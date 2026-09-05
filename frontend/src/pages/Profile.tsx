@@ -13,6 +13,7 @@ import { copyText, formatDate } from "@/lib/utils";
 
 interface Profile {
   username: string;
+  email?: string;
   created_at: string;
   mfa_enabled: boolean;
 }
@@ -45,10 +46,61 @@ export default function ProfilePage() {
         </p>
       </div>
 
+      <EmailSection email={profile.email ?? ""} onChanged={loadProfile} />
       <PasswordSection />
       <MFASection mfaEnabled={profile.mfa_enabled} onChanged={loadProfile} />
       <GPGKeySection />
     </div>
+  );
+}
+
+function EmailSection({ email, onChanged }: { email: string; onChanged: () => void }) {
+  const { t, to } = useI18n();
+  const [value, setValue] = useState(email);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => setValue(email), [email]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.updateProfile(value.trim());
+      toast.success(t("profile.emailSaved"));
+      onChanged();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UserRound className="h-4 w-4" />
+          {t("profile.account")}
+        </CardTitle>
+        <CardDescription>{t("profile.emailHint")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end sm:gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="profile-email">{t("profile.email")}</Label>
+            <Input
+              id="profile-email"
+              type="email"
+              placeholder="me@example.com"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </div>
+          <Button disabled={busy || value.trim() === email} onClick={save}>
+            {t("common.save")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

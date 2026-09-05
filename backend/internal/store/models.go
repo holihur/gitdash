@@ -8,6 +8,7 @@ package store
 type userRow struct {
 	ID           int64  `gorm:"primaryKey;autoIncrement"`
 	Username     string `gorm:"uniqueIndex;size:255;not null"`
+	Email        string `gorm:"size:255"`
 	PasswordHash string `gorm:"not null"`
 	CreatedAt    string `gorm:"not null"`
 	MFASecret    string `gorm:"not null;default:''"`

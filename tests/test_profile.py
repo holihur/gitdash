@@ -33,9 +33,34 @@ def user(user_factory):
 def test_profile_me_fields(user):
     _, _, c = user
     me = c.get("/me", expect=200).json()
-    assert set(me) == {"username", "created_at", "mfa_enabled"}
+    assert set(me) == {"username", "email", "created_at", "mfa_enabled"}
     assert me["mfa_enabled"] is False
     assert me["created_at"]
+
+
+def test_profile_email(user_factory, client_factory):
+    username, _, c = user_factory("p")
+    email = f"{username}@example.com"
+
+    # 设置邮箱
+    resp = c.post("/me/profile", json={"email": email}, expect=200).json()
+    assert resp == {"username": username, "email": email}
+    assert c.get("/me", expect=200).json()["email"] == email
+
+    # 坏路径：缺少字段 / 非法格式
+    c.post("/me/profile", json={}, expect=400)
+    c.post("/me/profile", json={"email": "not-an-email"}, expect=400)
+
+    # 其他用户不能用同一邮箱
+    other = user_factory("pe")
+    other[2].post("/me/profile", json={"email": email}, expect=409)
+
+    # 清除邮箱后可复用
+    c.post("/me/profile", json={"email": ""}, expect=200)
+    other[2].post("/me/profile", json={"email": email}, expect=200)
+
+    # 未登录
+    client_factory(None).post("/me/profile", json={"email": email}, expect=401)
 
 
 def test_password_change_flow(user):

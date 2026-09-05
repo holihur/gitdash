@@ -151,6 +151,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// user profile & mfa
 	mux.HandleFunc("POST /api/me/password", a.auth(a.changePassword))
+	mux.HandleFunc("POST /api/me/profile", a.auth(a.updateProfile))
 	mux.HandleFunc("GET /api/me/mfa", a.auth(a.mfaStatus))
 	mux.HandleFunc("POST /api/me/mfa/enroll", a.auth(a.mfaEnroll))
 	mux.HandleFunc("POST /api/me/mfa/activate", a.auth(a.mfaActivate))

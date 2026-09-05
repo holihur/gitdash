@@ -27,6 +27,7 @@ export function clearToken() {
 
 export interface User {
   username: string;
+  email?: string;
   created_at: string;
   mfa_enabled: boolean;
 }
@@ -73,6 +74,19 @@ export interface GPGKey {
   id: number;
   fingerprint: string;
   created_at: string;
+}
+
+export interface Org {
+  name: string;
+  display: string;
+  created_at: string;
+  role: string;
+}
+
+export interface OrgMember {
+  org: string;
+  username: string;
+  role: string;
 }
 
 export interface SSHKey {
@@ -309,6 +323,11 @@ export const api = {
     req<null>("/me/password", {
       method: "POST",
       body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  updateProfile: (email: string) =>
+    req<{ username: string; email: string }>("/me/profile", {
+      method: "POST",
+      body: JSON.stringify({ email }),
     }),
   mfaStatus: () => req<MFAStatus>("/me/mfa"),
   mfaEnroll: () => req<MFAEnroll>("/me/mfa/enroll", { method: "POST" }),
@@ -574,6 +593,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ state }),
     }),
+
+  // orgs（组织）
+  listOrgs: () => req<Org[]>("/orgs"),
+  createOrg: (name: string, display: string) =>
+    req<Org>("/orgs", { method: "POST", body: JSON.stringify({ name, display }) }),
+  deleteOrg: (name: string) => req<null>(`/orgs/${name}`, { method: "DELETE" }),
+  listOrgMembers: (org: string) => req<OrgMember[]>(`/orgs/${org}/members`),
+  addOrgMember: (org: string, username: string, role: string) =>
+    req<{ org: string; username: string; role: string }>(`/orgs/${org}/members`, {
+      method: "POST",
+      body: JSON.stringify({ username, role }),
+    }),
+  removeOrgMember: (org: string, username: string) =>
+    req<null>(`/orgs/${org}/members/${username}`, { method: "DELETE" }),
+  listOrgRepos: (org: string) => req<{ role: string; repos: Repo[] }>(`/orgs/${org}/repos`),
 
   // ssh keys
   listKeys: () => req<SSHKey[]>("/keys"),

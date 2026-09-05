@@ -65,6 +65,22 @@ func (s *Store) DeleteSessionsExcept(username, keepToken string) error {
 		keepToken).Delete(&sessionRow{}).Error
 }
 
+// SetUserEmail 更新个人资料邮箱（空串表示清除）。
+func (s *Store) SetUserEmail(username, email string) error {
+	res := s.db.Model(&userRow{}).Where("username = ?", username).
+		Update("email", email)
+	if res.Error != nil {
+		if isUniqueErr(res.Error) {
+			return ErrExists
+		}
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ---- user profile & mfa ----
 
 func (s *Store) UpdatePassword(username, passwordHash string) error {

@@ -9,7 +9,7 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
-	return s.db.AutoMigrate(
+	if err := s.db.AutoMigrate(
 		&userRow{},
 		&sessionRow{},
 		&repoRow{},
@@ -36,5 +36,9 @@ func (s *Store) migrate() error {
 		&pullRequestRow{},
 		&pipelineCfgRow{},
 		&pipelineRunRow{},
-	)
+	); err != nil {
+		return err
+	}
+	// 邮箱唯一性（部分唯一索引：空串表示未设置，允许多个）
+	return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email) WHERE email <> ''").Error
 }

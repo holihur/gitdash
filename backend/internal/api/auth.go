@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -165,6 +166,9 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 	a.startSession(w, r, http.StatusOK, ua.Username)
 }
 
+// emailRe 宽松的邮箱格式校验（本地@域名）。
+var emailRe = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	ua, err := a.store.GetByUsername(userFrom(r))
 	if err != nil {
@@ -173,8 +177,46 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username":    ua.Username,
+		"email":       ua.Email,
 		"created_at":  ua.CreatedAt,
 		"mfa_enabled": ua.MFAEnabled,
+	})
+}
+
+// updateProfile 更新个人资料（当前仅邮箱；空串清除）。
+func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
+	me := userFrom(r)
+	var in struct {
+		Email *string `json:"email"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.Email == nil {
+		writeErr(w, http.StatusBadRequest, "missing field: email")
+		return
+	}
+	email := strings.TrimSpace(*in.Email)
+	if email != "" && !emailRe.MatchString(email) {
+		writeErr(w, http.StatusBadRequest, "invalid email address")
+		return
+	}
+	if err := a.store.SetUserEmail(me, email); err != nil {
+		if errors.Is(err, store.ErrExists) {
+			writeErr(w, http.StatusConflict, "email already in use")
+		} else {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+	ua, err := a.store.GetByUsername(me)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"username": ua.Username,
+		"email":    ua.Email,
 	})
 }
 
