@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1
 
 # ---------- 1) 构建前端 ----------
-FROM node:20-bookworm AS frontend
+FROM node:22-bookworm AS frontend
 WORKDIR /src/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN corepack enable pnpm
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY frontend/ ./
-RUN npm run build
+RUN pnpm run build
 
 # ---------- 2) 构建后端（前端已内嵌进二进制） ----------
 FROM golang:1.26-bookworm AS backend

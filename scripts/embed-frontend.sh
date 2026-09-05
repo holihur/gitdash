@@ -4,9 +4,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-command -v npm >/dev/null 2>&1 || { echo "npm is required to build the frontend" >&2; exit 1; }
+command -v pnpm >/dev/null 2>&1 || { echo "pnpm is required to build the frontend" >&2; exit 1; }
 
-(cd "$ROOT/frontend" && npm ci --no-audit --no-fund && npm run build)
+(cd "$ROOT/frontend" && pnpm install --frozen-lockfile && pnpm run build)
 
 rm -rf "$ROOT/backend/internal/webui/dist"
 mkdir -p "$ROOT/backend/internal/webui/dist"

@@ -82,8 +82,8 @@ GITDASH_HTTP_ADDR=:9090 GITDASH_SSH_ADDR=:2322 gitdash serve
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 # 打开 http://localhost:5173，/api 已代理到 :8080
 ```
 

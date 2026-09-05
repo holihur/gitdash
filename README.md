@@ -82,8 +82,8 @@ GITDASH_HTTP_ADDR=:9090 GITDASH_SSH_ADDR=:2322 gitdash serve
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 # Open http://localhost:5173; /api is proxied to :8080
 ```
 
