@@ -3,37 +3,39 @@
 [![CI](https://github.com/holihur/gitdash/actions/workflows/ci.yml/badge.svg)](https://github.com/holihur/gitdash/actions/workflows/ci.yml)
 [![Release](https://github.com/holihur/gitdash/actions/workflows/release.yml/badge.svg)](https://github.com/holihur/gitdash/actions/workflows/release.yml)
 
-一个最小的自托管 Git 服务 MVP（类似迷你 Gitea）：
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-- **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户
-- **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读管理）
-- **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
-- **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、查看提交历史
-- **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
-- **自更新**：`gitdash update` 手动更新；可选后台自动更新（**默认关闭**）
-- **前端**：React + Vite + Tailwind + shadcn/ui 风格组件
-- **后端**：Go 标准库 HTTP + `golang.org/x/crypto/ssh` + SQLite（modernc，纯 Go 无 CGO）
-- **单二进制发布**：GoReleaser 发布时前端已 embed 进二进制，下载即用
-- **自动化测试**：`backend/tests/` 按功能覆盖（auth / repos / keys / browse / ssh git / updater / store / webui）；根目录 `tests/` 另有一套与后端完全隔离的黑盒 API 测试（pytest + requests + uv）
+A minimal self-hosted Git service MVP (like a mini Gitea):
 
-## 一键安装
+- **User system**: register / login (bcrypt + session token, valid for 7 days); repos and SSH keys belong to users
+- **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read management)
+- **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
+- **Code browsing**: browse repos by branch / directory, view file contents and commit history on the web
+- **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
+- **Self-update**: `gitdash update` for manual updates; optional background auto-update (**off by default**)
+- **Frontend**: React + Vite + Tailwind + shadcn/ui-style components
+- **Backend**: Go standard library HTTP + `golang.org/x/crypto/ssh` + SQLite (modernc, pure Go, no CGO)
+- **Single-binary releases**: GoReleaser embeds the frontend into the binary at release time — download and run
+- **Automated tests**: `backend/tests/` covers features (auth / repos / keys / browse / ssh git / updater / store / webui); the root `tests/` directory holds a fully isolated black-box API test suite (pytest + requests + uv)
+
+## One-line Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash
 gitdash serve
-# 打开 http://localhost:8080（SSH :2222）
+# Open http://localhost:8080 (SSH :2222)
 ```
 
-安装脚本支持环境变量：`GITDASH_VERSION`（指定版本）、`GITDASH_INSTALL_DIR`（安装目录）。
+The install script supports environment variables: `GITDASH_VERSION` (pin a version) and `GITDASH_INSTALL_DIR` (install directory).
 
-也可以直接到 [Releases](https://github.com/holihur/gitdash/releases) 下载对应平台的压缩包（前端已内嵌），或参考 [packaging/gitdash.service](packaging/gitdash.service) 用 systemd 部署。
+You can also download a platform archive from [Releases](https://github.com/holihur/gitdash/releases) (frontend embedded), or deploy with systemd via [packaging/gitdash.service](packaging/gitdash.service).
 
-## 使用流程
+## Usage
 
-1. 打开网页 → 注册账号（如 `alice`）
-2. **SSH Keys** → 粘贴公钥（如 `~/.ssh/id_ed25519.pub`）
-3. **仓库** → 新建仓库（如 `demo`，实际地址为 `alice/demo`）
-4. 克隆并推送：
+1. Open the web UI → register an account (e.g. `alice`)
+2. **SSH Keys** → paste a public key (e.g. `~/.ssh/id_ed25519.pub`)
+3. **Repos** → create a repo (e.g. `demo`, actual path `alice/demo`)
+4. Clone and push:
 
 ```bash
 git clone ssh://git@<host>:2222/alice/demo.git
@@ -43,178 +45,178 @@ git add README.md && git commit -m "initial commit"
 git push origin main
 ```
 
-5. 回到网页即可浏览代码与提交历史。clone 地址也支持省略 owner 的单段形式（`ssh://git@<host>:2222/demo.git` 会解析为当前登录用户自己的仓库）。
+5. Return to the web UI to browse code and commit history. The clone URL also accepts a single-segment form without the owner (`ssh://git@<host>:2222/demo.git` resolves to the repo owned by the currently logged-in user).
 
-## 快速开始（开发）
+## Quick Start (Development)
 
-### 1. 启动后端
+### 1. Start the backend
 
 ```bash
 cd backend
 go run .
-# HTTP  :8080   Git SSH :2222   数据目录 ./data
+# HTTP  :8080   Git SSH :2222   data dir ./data
 ```
 
-环境变量（均可选）：
+Environment variables (all optional):
 
-| 变量 | 默认 | 说明 |
+| Variable | Default | Description |
 | --- | --- | --- |
-| `GITDASH_HTTP_ADDR` | `:8080` | Web / API 监听地址 |
-| `GITDASH_SSH_ADDR` | `:2222` | Git SSH 监听地址 |
-| `GITDASH_DATA` | `./data` | 数据目录（SQLite、仓库、host key） |
-| `GITDASH_STATIC` | 自动探测 | 前端静态文件目录（开发模式覆盖 embed 资源） |
-| `GITDASH_AUTO_UPDATE` | 关闭 | **自动更新默认关闭**，设为 `1`/`true`/`yes`/`on` 开启 |
-| `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | 自动更新检查间隔（最小 1h） |
-| `GITDASH_UPDATE_REPO` | `holihur/gitdash` | 更新源仓库（fork / 测试用） |
+| `GITDASH_HTTP_ADDR` | `:8080` | Web / API listen address |
+| `GITDASH_SSH_ADDR` | `:2222` | Git SSH listen address |
+| `GITDASH_DATA` | `./data` | Data directory (SQLite, repos, host key) |
+| `GITDASH_STATIC` | auto-detect | Frontend static files directory (dev mode overrides embedded assets) |
+| `GITDASH_AUTO_UPDATE` | off | **Auto-update is off by default**; set to `1`/`true`/`yes`/`on` to enable |
+| `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | Auto-update check interval (minimum 1h) |
+| `GITDASH_UPDATE_REPO` | `holihur/gitdash` | Source repo for updates (for forks / testing) |
 
-**修改监听地址**：
+**Changing listen addresses**:
 
 ```bash
 GITDASH_HTTP_ADDR=:9090 GITDASH_SSH_ADDR=:2322 gitdash serve
 ```
 
-- systemd 方式：修改 `packaging/gitdash.service` 中对应的 `Environment=` 行后 `systemctl daemon-reload && systemctl restart gitdash`
-- 注意：网页上显示的 clone 地址端口固定为 2222，SSH 端口改动后 clone 命令需手动调整
+- For systemd: edit the corresponding `Environment=` lines in `packaging/gitdash.service`, then `systemctl daemon-reload && systemctl restart gitdash`
+- Note: the clone URL shown in the web UI is hardcoded to port 2222; if you change the SSH port, adjust clone commands manually
 
-### 2. 启动前端（开发）
+### 2. Start the frontend (development)
 
 ```bash
 cd frontend
 npm install
 npm run dev
-# 打开 http://localhost:5173，/api 已代理到 :8080
+# Open http://localhost:5173; /api is proxied to :8080
 ```
 
-### 3. 生产模式（单二进制，内嵌前端）
+### 3. Production mode (single binary with embedded frontend)
 
 ```bash
-bash scripts/embed-frontend.sh   # 构建前端并拷贝到 backend/internal/webui/dist
+bash scripts/embed-frontend.sh   # build the frontend and copy it into backend/internal/webui/dist
 cd backend && go build -o gitdash .
 ./gitdash serve
 ./gitdash version
 ```
 
-未执行 embed 时也能编译，此时走磁盘目录（`GITDASH_STATIC` / `./static` / `../frontend/dist`）。
+It also builds without embedding, in which case it serves from a disk directory (`GITDASH_STATIC` / `./static` / `../frontend/dist`).
 
-## 更新 / 自动更新
+## Update / Auto-update
 
 ```bash
-# 手动更新到最新 release（校验 SHA256 后原子替换当前二进制）
+# Manual update to the latest release (verifies SHA256, then atomically replaces the current binary)
 gitdash update
 
-# 自动更新：默认关闭，需显式开启；建议配合 systemd Restart=always
+# Auto-update: off by default; enable explicitly. Recommended together with systemd Restart=always
 GITDASH_AUTO_UPDATE=1 gitdash serve
 ```
 
-开启后进程会周期性检查 GitHub Releases，发现新版本即下载（校验 checksums.txt）、替换自身二进制并退出，由 systemd（`Restart=always`）拉起新版本。`dev` 编译版本不参与自动更新，但可手动 `gitdash update`。
+When enabled, the process periodically checks GitHub Releases; on a new version it downloads it (verifying checksums.txt), replaces its own binary, and exits so that systemd (`Restart=always`) starts the new version. `dev` builds are excluded from auto-update, but can be updated manually via `gitdash update`.
 
-## Docker 部署
+## Docker Deployment
 
 ```bash
 docker compose up -d --build
-# Web http://localhost:8080 ，Git SSH localhost:2222
+# Web http://localhost:8080, Git SSH localhost:2222
 ```
 
-- 数据（SQLite + bare 仓库 + SSH host key）持久化在 Docker volume `gitdash-data`（容器内 `/data`）。
-- 监听端口 / 自动更新通过 `docker-compose.yml` 的 `environment` 调整。
-- 也可直接构建镜像：`docker build -t gitdash .`，挂载 `-v gitdash-data:/data -p 8080:8080 -p 2222:2222`。
+- Data (SQLite + bare repos + SSH host key) is persisted in the Docker volume `gitdash-data` (`/data` inside the container).
+- Listen ports / auto-update can be adjusted via `environment` in `docker-compose.yml`.
+- You can also build the image directly: `docker build -t gitdash .`, then mount `-v gitdash-data:/data -p 8080:8080 -p 2222:2222`.
 
-## 备份与恢复
+## Backup & Restore
 
 ```bash
-# 在线备份（SQLite 一致性快照 + 仓库打包，保留最近 14 份）
+# Online backup (consistent SQLite snapshot + repo archives, keeps the latest 14)
 bash scripts/backup.sh ./data ./backups
-# KEEP=30 bash scripts/backup.sh   # 保留更多份
+# KEEP=30 bash scripts/backup.sh   # keep more copies
 ```
 
-恢复：停掉服务，把备份解包回数据目录（`tar -xzf gitdash-backup-*.tar.gz -C <数据目录>`），再启动即可。
-若宿主机没有 `sqlite3`，脚本会用直接拷贝兜底（WAL 模式建议先停服保证一致性）；Docker 内亦可 `docker compose exec gitdash bash` 执行同款脚本。
+Restore: stop the service, unpack the backup into the data directory (`tar -xzf gitdash-backup-*.tar.gz -C <data dir>`), then start again.
+If `sqlite3` is not available on the host, the script falls back to a straight file copy (in WAL mode, stop the server first for consistency); inside Docker you can also run the same script via `docker compose exec gitdash bash`.
 
-## 自动化测试
+## Automated Testing
 
-静态检查（golangci-lint，配置见 `backend/.golangci.yml`，CI 中自动执行）：
+Static checks (golangci-lint, config in `backend/.golangci.yml`, runs automatically in CI):
 
 ```bash
 cd backend
-golangci-lint run     # 安装：go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+golangci-lint run     # install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 ```
 
-后端集成测试（Go）：
+Backend integration tests (Go):
 
 ```bash
 cd backend
-go test ./...          # 单元测试 + backend/tests/ 集成测试
-bash scripts/e2e.sh    # 全链路冒烟（真实二进制：注册登录 -> ssh clone/push -> 浏览 -> 多用户隔离）
+go test ./...          # unit tests + backend/tests/ integration tests
+bash scripts/e2e.sh    # full-chain smoke test (real binary: register/login -> ssh clone/push -> browse -> multi-user isolation)
 ```
 
-黑盒 API 测试（pytest + requests，依赖用 uv 管理，与后端源码/构建完全隔离）：
+Black-box API tests (pytest + requests, dependencies managed with uv, fully isolated from backend source/builds):
 
 ```bash
-# 1) 单独构建被测二进制
+# 1) Build the binary under test
 (cd backend && go build -o /tmp/gitdash-server .)
-# 2) 运行：夹具在独立临时数据目录 + 随机端口上启动全新实例，结束后销毁
+# 2) Run: fixtures start a fresh instance on an isolated temp data dir + random port, then destroy it
 (cd tests && GITDASH_BIN=/tmp/gitdash-server uv run pytest -v)
-# 或指向一个已运行的实例：GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest
+# Or point at an already-running instance: GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest
 ```
 
-- `backend/tests/` 按功能划分：`auth`（注册/登录/会话）、`repos`（仓库 CRUD 与隔离）、`sshkeys`（公钥 CRUD 与绑定）、`browse`（tree/blob/commits）、`sshgit`（真实 SSH clone/push 与权限拒绝）、`updater`（版本比较/校验/解包）、`store`（schema 迁移）、`webui`（静态托管/SPA fallback/路径穿越防护）。CI 中全部自动执行。
-- `tests/`（仓库根目录）为**独立、隔离**的纯黑盒接口自动化测试：不 import 后端代码、不执行 go 构建；用例随机命名、互不共享状态，覆盖 auth / repos / issues / ssh keys 的 happy path 与 bad path（400/401/404/409…）。详见 `tests/README.md`。
+- `backend/tests/` is split by feature: `auth` (register/login/session), `repos` (repo CRUD & isolation), `sshkeys` (public key CRUD & binding), `browse` (tree/blob/commits), `sshgit` (real SSH clone/push & permission denial), `updater` (version comparison/verification/extraction), `store` (schema migration), `webui` (static hosting/SPA fallback/path traversal protection). All run automatically in CI.
+- `tests/` (repo root) is an **independent, isolated** pure black-box API test suite: it does not import backend code or run go builds; test cases use random names and share no state, covering happy path and bad path (400/401/404/409…) for auth / repos / issues / ssh keys. See `tests/README.md` for details.
 
-## API 一览
+## API Overview
 
-认证类（公开）：
+Auth (public):
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| POST | `/api/auth/register` | 注册，返回会话 token |
-| POST | `/api/auth/login` | 登录，返回会话 token |
-| POST | `/api/auth/logout` | 登出（作废当前 token） |
-| GET | `/api/me` | 当前用户 |
-| GET | `/api/health` `/api/version` | 健康检查 / 版本 |
+| POST | `/api/auth/register` | Register, returns a session token |
+| POST | `/api/auth/login` | Login, returns a session token |
+| POST | `/api/auth/logout` | Logout (invalidates the current token) |
+| GET | `/api/me` | Current user |
+| GET | `/api/health` `/api/version` | Health check / version |
 
-业务类（需 `Authorization: Bearer <token>`，token 来自注册/登录）：
+Business (requires `Authorization: Bearer <token>`, token from register/login):
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| GET/POST | `/api/repos` | 列出 / 创建自己的仓库 |
-| GET/DELETE | `/api/repos/{name}` | 详情 / 删除 |
-| GET | `/api/repos/{name}/branches` | 分支列表 |
-| GET | `/api/repos/{name}/tree?ref=&path=` | 浏览目录 |
-| GET | `/api/repos/{name}/blob?ref=&path=` | 文件内容 |
-| GET | `/api/repos/{name}/commits?ref=` | 提交历史 |
-| GET/POST | `/api/keys` | 列出 / 添加 SSH 公钥（绑定当前用户） |
-| DELETE | `/api/keys/{id}` | 删除自己的公钥 |
+| GET/POST | `/api/repos` | List / create your own repos |
+| GET/DELETE | `/api/repos/{name}` | Details / delete |
+| GET | `/api/repos/{name}/branches` | Branch list |
+| GET | `/api/repos/{name}/tree?ref=&path=` | Browse directory |
+| GET | `/api/repos/{name}/blob?ref=&path=` | File content |
+| GET | `/api/repos/{name}/commits?ref=` | Commit history |
+| GET/POST | `/api/keys` | List / add SSH public keys (bound to the current user) |
+| DELETE | `/api/keys/{id}` | Delete your own public key |
 
-仓库社交 / 收件箱（watch → 订阅仓库动态到收件箱）：
+Repo social / inbox (watch → subscribe to repo activity in your inbox):
 
-| 方法 | 路径 | 说明 |
+| Method | Path | Description |
 | --- | --- | --- |
-| PUT/DELETE | `/api/users/{owner}/repos/{name}/watch` | 关注 / 取消关注（返回 watch 数与状态） |
-| GET | `/api/watched` | 我关注过的仓库列表 |
-| GET | `/api/inbox` | 收件箱通知（最新在前） |
-| GET | `/api/inbox/unread` | 未读数 |
-| POST | `/api/inbox/read` `/api/inbox/read/{id}` | 全部 / 单条标为已读 |
-| DELETE | `/api/inbox/{id}` | 删除单条通知 |
+| PUT/DELETE | `/api/users/{owner}/repos/{name}/watch` | Watch / unwatch (returns watch count & status) |
+| GET | `/api/watched` | List of repos you watch |
+| GET | `/api/inbox` | Inbox notifications (newest first) |
+| GET | `/api/inbox/unread` | Unread count |
+| POST | `/api/inbox/read` `/api/inbox/read/{id}` | Mark all / one as read |
+| DELETE | `/api/inbox/{id}` | Delete one notification |
 
-> MVP 注意：仓库为 owner-only（仅属主可读写）；HTTP 层请自行加 TLS（或置于反代之后）。
+> MVP note: repos are owner-only (only the owner can read/write); add TLS at the HTTP layer yourself (or place behind a reverse proxy).
 
-## 升级说明
+## Upgrade Notes
 
-v0.2 起数据模型加入用户系统，旧版（≤ v0.1）`data` 目录中的 `repos` / `ssh_keys` 表会在启动时自动重置（磁盘上的 bare 仓库保留但需重新登记 / 迁移到用户名下）。
+Since v0.2 the data model includes a user system; for older versions (≤ v0.1), the `repos` / `ssh_keys` tables in the `data` directory are automatically reset at startup (bare repos on disk are preserved but must be re-registered / migrated under a user).
 
-## CI / 发版
+## CI / Release
 
-- **CI**（`.github/workflows/ci.yml`）：Go build/vet/test + `backend/tests/` 集成测试 + E2E 冒烟，前端 tsc + vite 构建。
-- **发版**（`.github/workflows/release.yml`）：推送 tag 即自动发布：
+- **CI** (`.github/workflows/ci.yml`): Go build/vet/test + `backend/tests/` integration tests + E2E smoke test; frontend tsc + vite build.
+- **Release** (`.github/workflows/release.yml`): pushing a tag triggers an automatic release:
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-GoReleaser 会先构建前端并 embed，然后产出 linux / darwin / windows × amd64 / arm64 的压缩包与校验和，发布到 GitHub Releases。
+GoReleaser first builds and embeds the frontend, then produces archives and checksums for linux / darwin / windows × amd64 / arm64, published to GitHub Releases.
 
-本地验证发布配置：
+Verify the release config locally:
 
 ```bash
 goreleaser check
