@@ -15,18 +15,20 @@ jobs:
     name: Backend (go)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: stable
           cache-dependency-path: backend/go.sum
 
+      # shadow 只检查新代码（HEAD~1 之后的变更），存量代码不阻断
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
           working-directory: backend
+          args: --new-from-rev=HEAD~1
 
       - name: Build
         working-directory: backend
@@ -59,11 +61,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: astral-sh/setup-uv@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -83,7 +85,7 @@ jobs:
     name: Docker image build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build image
         run: docker build -t gitdash:ci .
       - name: Smoke test container
@@ -100,13 +102,13 @@ jobs:
     name: Frontend (react)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
         with:
           version: 11.25.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm

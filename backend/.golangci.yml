@@ -25,6 +25,7 @@ linters:
     govet:
       enable:
         - nilness
+        - shadow
     errcheck:
       check-type-assertions: false
       check-blank: false
