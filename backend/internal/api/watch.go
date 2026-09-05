@@ -79,12 +79,13 @@ func (a *API) notify(owner, repo, kind, action, actor string, number int64, titl
 		seen[owner] = true
 	}
 	delete(seen, actor)
+	users := make([]string, 0, len(seen))
 	for u := range seen {
-		if u == "" {
-			continue
+		if u != "" {
+			users = append(users, u)
 		}
-		if err := a.store.AddNotification(u, kind, action, owner, repo, number, title, actor); err != nil {
-			log.Printf("notify %s/%s -> %s: %v", owner, repo, u, err)
-		}
+	}
+	if err := a.store.AddNotifications(users, kind, action, owner, repo, number, title, actor); err != nil {
+		log.Printf("notify %s/%s: %v", owner, repo, err)
 	}
 }

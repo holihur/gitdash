@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 var (
@@ -164,6 +166,7 @@ done
 }
 
 func Delete(owner, name string) error {
+	InvalidateRefs(owner, name)
 	return os.RemoveAll(RepoPath(owner, name))
 }
 
@@ -276,6 +279,9 @@ func HeadBranch(owner, name string) (string, error) {
 }
 
 func Branches(owner, name string) ([]Branch, error) {
+	if v, ok := refCacheGet("b", owner, name); ok {
+		return v.([]Branch), nil
+	}
 	out, err := gitOut(RepoPath(owner, name), "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
 		return nil, err
@@ -288,7 +294,52 @@ func Branches(owner, name string) ([]Branch, error) {
 		}
 		branches = append(branches, Branch{Name: line, IsHead: line == head})
 	}
+	refCacheSet("b", owner, name, branches)
 	return branches, nil
+}
+
+// ---- 引用（分支/标签）TTL 缓存：RepoView 每次加载都会拉 branches+tags，
+// 各自 spawn 一次 for-each-ref；缓存 15s 并在 push 后失效。----
+
+var (
+	refCacheMu   sync.Mutex
+	refCacheData = map[string]any{}
+	refCacheAt   = map[string]time.Time{}
+)
+
+const refCacheTTL = 15 * time.Second
+
+func refCacheGet(kind, owner, name string) (any, bool) {
+	refCacheMu.Lock()
+	defer refCacheMu.Unlock()
+	key := kind + "|" + owner + "/" + name
+	v, ok := refCacheData[key]
+	if ok && time.Since(refCacheAt[key]) < refCacheTTL {
+		return v, true
+	}
+	return nil, false
+}
+
+func refCacheSet(kind, owner, name string, v any) {
+	refCacheMu.Lock()
+	refCacheData[kind+"|"+owner+"/"+name] = v
+	refCacheAt[kind+"|"+owner+"/"+name] = time.Now()
+	refCacheMu.Unlock()
+}
+
+// InvalidateRefs 失效某仓库（或全部，owner 为空时）的分支/标签缓存；push 后调用。
+func InvalidateRefs(owner, name string) {
+	refCacheMu.Lock()
+	defer refCacheMu.Unlock()
+	if owner == "" {
+		refCacheData = map[string]any{}
+		refCacheAt = map[string]time.Time{}
+		return
+	}
+	for _, kind := range []string{"b", "t"} {
+		delete(refCacheData, kind+"|"+owner+"/"+name)
+		delete(refCacheAt, kind+"|"+owner+"/"+name)
+	}
 }
 
 type Entry struct {
@@ -911,6 +962,9 @@ type Tag struct {
 
 // Tags 列出标签（附注标签取被指提交）。
 func Tags(owner, name string) ([]Tag, error) {
+	if v, ok := refCacheGet("t", owner, name); ok {
+		return v.([]Tag), nil
+	}
 	out, err := gitOut(RepoPath(owner, name),
 		"for-each-ref", "--format=%(refname:short)%1f%(objectname)%1f%(*objectname)%1f%(*subject)",
 		"refs/tags")
@@ -936,11 +990,13 @@ func Tags(owner, name string) ([]Tag, error) {
 		}
 		tags = append(tags, Tag{Name: parts[0], SHA: sha, Message: msg})
 	}
+	refCacheSet("t", owner, name, tags)
 	return tags, nil
 }
 
 // CreateRef 创建分支或标签（lightweight），from 可为任意可解析 rev。
 func CreateRef(owner, name, kind, refName, from string) (string, error) {
+	defer InvalidateRefs(owner, name)
 	full := "refs/heads/" + refName
 	if kind == "tag" {
 		full = "refs/tags/" + refName
@@ -964,6 +1020,7 @@ func CreateRef(owner, name, kind, refName, from string) (string, error) {
 
 // DeleteRef 删除分支或标签；默认分支(HEAD)不可删除。
 func DeleteRef(owner, name, kind, refName string) error {
+	defer InvalidateRefs(owner, name)
 	full := "refs/heads/" + refName
 	if kind == "tag" {
 		full = "refs/tags/" + refName

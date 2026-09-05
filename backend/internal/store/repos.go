@@ -229,16 +229,21 @@ func (s *Store) QueryOrgRepos(org string) ([]Repo, error) {
 	return out, rows.Err()
 }
 
-// AccessibleRepos 返回用户自己拥有的仓库 + 作为协作者可访问的仓库（带 role）。
+// AccessibleRepos 返回用户自己拥有的仓库 + 所在组织的仓库 + 作为协作者可访问的仓库（带 role）。
 func (s *Store) AccessibleRepos(username string) ([]Repo, error) {
 	rows, err := s.db.Query(`
 SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at, 'owner' AS role
   FROM repos r WHERE r.owner = ?
 UNION ALL
+SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at,
+       CASE m.role WHEN 'owner' THEN 'owner' ELSE 'write' END AS role
+  FROM org_members m JOIN repos r ON r.owner = m.org
+ WHERE m.username = ?
+UNION ALL
 SELECT r.id, r.owner, r.name, r.description, r.private, r.created_at, c.permission AS role
   FROM repo_collabs c JOIN repos r ON r.owner = c.owner AND r.name = c.repo
  WHERE c.username = ?
-ORDER BY owner, name`, username, username)
+ORDER BY owner, name`, username, username, username)
 	if err != nil {
 		return nil, err
 	}

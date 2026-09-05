@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
@@ -34,6 +35,35 @@ type Event struct {
 }
 
 var client = &http.Client{Timeout: 10 * time.Second}
+
+// allowHTTP 进程启动时读取一次，避免每次投递都查环境变量。
+var allowHTTP = os.Getenv("GITDASH_WEBHOOK_ALLOW_HTTP") != ""
+
+// dnsCache 主机名 -> IP 列表（60s TTL），避免同一次投递/同一事件重复同步 DNS。
+var (
+	dnsMu     sync.Mutex
+	dnsCache  = map[string][]net.IP{}
+	dnsTime   = map[string]time.Time{}
+	dnsExpire = time.Minute
+)
+
+func lookupIP(host string) ([]net.IP, error) {
+	dnsMu.Lock()
+	if ips, ok := dnsCache[host]; ok && time.Since(dnsTime[host]) < dnsExpire {
+		dnsMu.Unlock()
+		return ips, nil
+	}
+	dnsMu.Unlock()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return nil, err
+	}
+	dnsMu.Lock()
+	dnsCache[host] = ips
+	dnsTime[host] = time.Now()
+	dnsMu.Unlock()
+	return ips, nil
+}
 
 // Run 循环扫描 spool 目录并投递（main 中 go 启动）。失败仅记日志并移除文件，避免死循环。
 // handlers 为额外的 push 事件消费者（如 pipeline），在删除 spool 文件前依次调用。
@@ -65,10 +95,17 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 		}
 		ev.Event = "push"
 		hooks, err := st.ListWebhooks(ev.Owner, ev.Repo)
-		if err == nil {
+		if err == nil && len(hooks) > 0 {
+			// 并行投递：单个慢端点不再阻塞整个 spool 排空与 CI 触发
+			var wg sync.WaitGroup
 			for _, h := range hooks {
-				post(h.URL, ev, h.Secret)
+				wg.Add(1)
+				go func(url, secret string) {
+					defer wg.Done()
+					post(url, ev, secret)
+				}(h.URL, h.Secret)
 			}
+			wg.Wait()
 		}
 		// push mirror 自动同步（异步，避免阻塞 webhook 投递）
 		if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
@@ -93,7 +130,7 @@ func blockedLinkLocal(u *urlpkg.URL) bool {
 	if host == "" {
 		return false
 	}
-	ips, err := net.LookupIP(host)
+	ips, err := lookupIP(host)
 	if err != nil {
 		return true // 无法解析视为不可达，跳过避免误投递
 	}
@@ -118,11 +155,11 @@ func blockedLinkLocal(u *urlpkg.URL) bool {
 
 // httpAllowed: 仅回环地址允许明文 http（其余要求 https，除非显式 GITDASH_WEBHOOK_ALLOW_HTTP=1）。
 func httpAllowed(u *urlpkg.URL) bool {
-	if os.Getenv("GITDASH_WEBHOOK_ALLOW_HTTP") != "" {
+	if allowHTTP {
 		return true
 	}
 	host := u.Hostname()
-	ips, err := net.LookupIP(host)
+	ips, err := lookupIP(host)
 	if err != nil {
 		return false
 	}

@@ -1,5 +1,10 @@
 package store
 
+import (
+	"fmt"
+	"strings"
+)
+
 type Notification struct {
 	ID        int64  `json:"id"`
 	Kind      string `json:"kind"`   // issue | pull
@@ -17,6 +22,37 @@ func (s *Store) AddNotification(username, kind, action, owner, repo string, numb
 	_, err := s.db.Exec(`INSERT INTO notifications (username, kind, action, owner, repo, number, title, actor, read, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`, username, kind, action, owner, repo, number, title, actor, now())
 	return err
+}
+
+// AddNotifications 单条多行 INSERT 通知多个收件人（O(1) 次往返，避免逐人写入）。
+func (s *Store) AddNotifications(usernames []string, kind, action, owner, repo string, number int64, title, actor string) error {
+	if len(usernames) == 0 {
+		return nil
+	}
+	var sb strings.Builder
+	args := make([]any, 0, len(usernames)*9)
+	for i, u := range usernames {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString("(?, ?, ?, ?, ?, ?, ?, ?, 0, ?)")
+		args = append(args, u, kind, action, owner, repo, number, title, actor, now())
+	}
+	_, err := s.db.Exec(`INSERT INTO notifications (username, kind, action, owner, repo, number, title, actor, read, created_at)
+		VALUES `+sb.String(), args...)
+	if err != nil && strings.Contains(err.Error(), "too many SQL variables") {
+		// SQLite 变量上限（999）兜底：分批写入
+		for _, u := range usernames {
+			if e := s.AddNotification(u, kind, action, owner, repo, number, title, actor); e != nil {
+				return e
+			}
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("notify batch: %w", err)
+	}
+	return nil
 }
 
 // ListNotifications 返回某用户收件箱（最新在前，最多 200 条）。

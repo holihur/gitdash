@@ -478,9 +478,14 @@ func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) 
 		writeNotFound(w, "repo")
 		return "", "", false
 	}
-	can := a.store.CanWrite(owner, name, me)
-	if !write {
-		can = a.store.CanRead(owner, name, me) || !repo.Private
+	if me == owner {
+		return owner, name, true
+	}
+	// 读路径跳过 CanWrite（其结果会被覆盖）；公开性已由 repo.Private 判定，
+	// 只对私有仓库走 CanRead（避免 CanWrite/CanRead 的重复 IsOrg/OrgRole 查询）。
+	can := !repo.Private || a.store.CanRead(owner, name, me)
+	if write {
+		can = a.store.CanWrite(owner, name, me)
 	}
 	if !can {
 		writeNotFound(w, "repo")

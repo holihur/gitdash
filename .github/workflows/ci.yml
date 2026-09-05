@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# 同一分支/PR 的连续推送取消旧任务，避免排队浪费
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend (go)
@@ -35,19 +40,26 @@ jobs:
         working-directory: backend
         run: go test ./...
 
+      - name: Build server binary
+        working-directory: backend
+        run: go build -o gitdash-server .
+
       - name: E2E (create repo, ssh clone/push, browsing)
         run: bash scripts/e2e.sh
+
+      - name: Upload server binary (reused by api-tests)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitdash-server
+          path: backend/gitdash-server
+          retention-days: 1
 
   api-tests:
     name: API tests (pytest · uv, black-box)
     runs-on: ubuntu-latest
+    needs: backend
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-          cache-dependency-path: backend/go.sum
 
       - uses: astral-sh/setup-uv@v5
 
@@ -55,9 +67,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build server binary (isolated black-box target)
-        working-directory: backend
-        run: go build -o /tmp/gitdash-server .
+      - name: Download server binary (built by backend job)
+        uses: actions/download-artifact@v4
+        with:
+          name: gitdash-server
+          path: /tmp
 
       - name: Run black-box API tests (happy + bad paths)
         working-directory: tests

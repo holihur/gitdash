@@ -234,7 +234,9 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_runs_repo ON pipeline_runs(owner, repo, 
 CREATE INDEX IF NOT EXISTS idx_repo_stars_owner_repo ON repo_stars(owner, repo);
 CREATE INDEX IF NOT EXISTS idx_repo_watches_owner_repo ON repo_watches(owner, repo);
 CREATE INDEX IF NOT EXISTS idx_issues_owner_repo ON issues(owner, repo, state, number);
-CREATE INDEX IF NOT EXISTS idx_pulls_owner_repo ON pull_requests(owner, repo, state, number);`)
+CREATE INDEX IF NOT EXISTS idx_pulls_owner_repo ON pull_requests(owner, repo, state, number);
+CREATE INDEX IF NOT EXISTS idx_repo_collabs_user ON repo_collabs(username, owner, repo);
+CREATE INDEX IF NOT EXISTS idx_org_members_user ON org_members(username);`)
 	if err != nil {
 		return err
 	}

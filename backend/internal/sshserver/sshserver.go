@@ -20,6 +20,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
 )
 
@@ -246,6 +247,10 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 	err = cmd.Wait()
 	wg.Wait()
 	_ = stdoutR.Close()
+	if sub == "git-receive-pack" {
+		// push 改变了分支/标签集合，失效 15s TTL 缓存
+		gitsvc.InvalidateRefs(owner, name)
+	}
 
 	code := 0
 	if err != nil {
