@@ -33,7 +33,7 @@ def user(user_factory):
 def test_profile_me_fields(user):
     _, _, c = user
     me = c.get("/me", expect=200).json()
-    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "notify_email"}
+    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "notify_email", "email_verified"}
     assert me["mfa_enabled"] is False
     assert me["notify_email"] is False
     assert me["created_at"]
@@ -45,13 +45,14 @@ def test_profile_email(user_factory, client_factory):
 
     # 设置邮箱
     resp = c.post("/me/profile", json={"email": email}, expect=200).json()
-    assert resp == {"username": username, "email": email, "notify_email": False}
+    # SMTP 未配置（测试默认）→ 设置邮箱直接视为已验证
+    assert resp == {"username": username, "email": email, "notify_email": False, "email_verified": True}
     me = c.get("/me", expect=200).json()
     assert me["email"] == email and me["notify_email"] is False
 
     # notify_email 开关
     resp = c.post("/me/profile", json={"notify_email": True}, expect=200).json()
-    assert resp == {"username": username, "email": email, "notify_email": True}
+    assert resp == {"username": username, "email": email, "notify_email": True, "email_verified": True}
 
     # 坏路径：非法格式（空 body 是合法的 no-op 更新）
     c.post("/me/profile", json={}, expect=200)

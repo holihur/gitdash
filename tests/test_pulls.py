@@ -227,5 +227,8 @@ def test_pr_squash_merge_and_commit_diff(nonff_env):
         json={"title": "bad method", "source_branch": "t2", "target_branch": "main"},
         expect=201,
     ).json()
-    c.post(_p(owner, repo, f"/{pr2['number']}/merge"), json={"method": "rebase"}, expect=400)
+    # rebase 合并成功；非法 method 400
+    c.post(_p(owner, repo, f"/{pr2['number']}/merge"), json={"method": "rebase"}, expect=200)
+    c.post(_p(owner, repo), json={"title": "bad method", "source_branch": "t2", "target_branch": "main"}, expect=201)
+    c.post(_p(owner, repo, "/3/merge"), json={"method": "bogus"}, expect=400)
     c.get(f"/users/{owner}/repos/{repo}/commits/not-a-sha/diff", expect=400)
