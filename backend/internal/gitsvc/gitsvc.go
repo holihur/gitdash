@@ -653,6 +653,24 @@ func CanFastForward(owner, name, target, source string) bool {
 	return err == nil
 }
 
+// MergeCheck PR 可合并性预检：mergeable（可合并）与 conflicted（分支分叉且合并冲突）。
+func MergeCheck(owner, name, target, source string) (mergeable, conflicted bool) {
+	if CanFastForward(owner, name, target, source) {
+		return true, false
+	}
+	// merge-tree 干跑（不落盘）：--write-tree 退出码 0 = 干净合并，1 = 冲突
+	base, err := gitOut(RepoPath(owner, name), "merge-base", "refs/heads/"+target, "refs/heads/"+source)
+	if err != nil {
+		return false, false
+	}
+	_, merr := gitOut(RepoPath(owner, name), "merge-tree", "--write-tree",
+		strings.TrimSpace(base), "refs/heads/"+source)
+	if merr == nil {
+		return true, false
+	}
+	return false, true
+}
+
 // MergeFastForward 把 target 分支快进到 source 分支，返回新的 target SHA。
 func MergeFastForward(owner, name, target, source string) (string, error) {
 	sha, err := RevSHA(owner, name, "refs/heads/"+source)
@@ -900,6 +918,37 @@ func MergeNonFF(owner, name, target, source, message, committer, method string) 
 	}
 	head = strings.TrimSpace(out)
 	if _, err := git("push", "-q", "origin", "HEAD:refs/heads/"+target); err != nil {
+		return "", err
+	}
+	return head, nil
+}
+
+// MergeRebase 把 source 的提交逐个变基到 target 之上（rebase and merge），
+// 线性历史；成功后目标分支快进到变基结果并返回新的 tip SHA。冲突时返回错误。
+func MergeRebase(owner, name, target, source, committer string) (string, error) {
+	path := RepoPath(owner, name)
+	tmp, err := os.MkdirTemp("", "gitdash-rebase-*")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	if _, err := gitOut("", "clone", "-q", "--no-local", path, tmp); err != nil {
+		return "", err
+	}
+	ident := []string{"-c", "user.name=" + committer, "-c", "user.email=" + committer + "@gitdash"}
+	if _, err := gitOut(tmp, append(ident, "checkout", "-q", "-B", "_gd_rebase", "origin/"+source)...); err != nil {
+		return "", err
+	}
+	if _, err := gitOut(tmp, append(ident, "rebase", "--quiet", "origin/"+target)...); err != nil {
+		_, _ = gitOut(tmp, "rebase", "--abort")
+		return "", fmt.Errorf("rebase conflict or error: %w", err)
+	}
+	out, err := gitOut(tmp, "rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	head := strings.TrimSpace(out)
+	if _, err := gitOut(tmp, "push", "-q", "origin", "HEAD:refs/heads/"+target); err != nil {
 		return "", err
 	}
 	return head, nil

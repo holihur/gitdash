@@ -118,4 +118,45 @@ func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// listWebhookDeliveries 列出 webhook 最近投递记录（仅 owner）。
+//
+//	@Summary     列出 webhook 投递记录
+//	@Tags        webhooks
+//	@Produce     json
+//	@Param       owner path string  true "仓库所有者"
+//	@Param       name  path string  true "仓库名"
+//	@Param       id    path int     true "webhook ID"
+//	@Param       limit query int    false "返回条数（默认 20，最大 100）"
+//	@Success     200 {array}  object
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/webhooks/{id}/deliveries [get]
+func (a *API) listWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
+		return
+	}
+	limit := int64(0)
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			limit = n
+		}
+	}
+	deliveries, err := a.store.ListDeliveries(owner, name, id, limit)
+	if errors.Is(err, store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "webhook_not_found", "webhook not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, deliveries)
+}
+
 // ---- ssh keys ----

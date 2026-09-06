@@ -259,10 +259,21 @@ func TestPullRequestNonFFMergeAndCommitDiff(t *testing.T) {
 	comm("m3")
 	gitDo(t, repo, key, "push", "-q", "origin", "HEAD")
 	alice.mustStatus("POST", prPath("alice", "pr2", ""),
-		map[string]string{"title": "bad", "source_branch": "branch-c", "target_branch": "main"}, 201)
+		map[string]string{"title": "rb", "source_branch": "branch-c", "target_branch": "main"}, 201)
+	// 真非法 method
 	alice.mustFail("POST", prPath("alice", "pr2", "/3/merge"),
-		map[string]string{"method": "rebase"}, 400)
-
+		map[string]string{"method": "bogus"}, 400)
+	// rebase 合并：成功且 main 含 c 改动
+	rb := alice.mustStatus("POST", prPath("alice", "pr2", "/3/merge"),
+		map[string]string{"method": "rebase"}, 200)
+	if rb["state"] != "merged" {
+		t.Fatalf("rebase merge = %v", rb)
+	}
+	gitDo(t, repo, key, "fetch", "-q", "origin")
+	outC := runCmd(t, repo, nil, "git", "show", "origin/main:c.txt")
+	if !strings.Contains(outC, "c") {
+		t.Fatalf("rebase 后 main 缺少 c.txt: %q", outC)
+	}
 	// commit diff：取 main 上一个提交，diff 应包含对应文件
 	commitsRaw := rawGet(t, alice, "/repos/pr2/commits?ref=main")
 	var cs []map[string]any

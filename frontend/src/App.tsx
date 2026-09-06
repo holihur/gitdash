@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 import Login from "@/pages/Login";
 
 // 页面按需加载：首屏只需 App 外壳 + 登录页，其余页面路由切换时才拉取
@@ -34,6 +35,20 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      // 邮箱验证链接（验证邮件中的 ?verify_email=token）
+      const params = new URLSearchParams(window.location.search);
+      const vtoken = params.get("verify_email");
+      if (vtoken) {
+        try {
+          await api.verifyEmail(vtoken);
+          toast.success(t("profile.emailVerified"));
+        } catch (e) {
+          toast.error(apiErrorMsg(t, e));
+        }
+        params.delete("verify_email");
+        const qs = params.toString();
+        window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
+      }
       try {
         // 会话在 httpOnly cookie 中自动携带：刷新后直接探测 /api/me 恢复登录态
         const me = await api.me();

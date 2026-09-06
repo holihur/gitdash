@@ -4,6 +4,9 @@ import App from "./App";
 import "./index.css";
 import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider } from "@/lib/i18n";
+import { loadInstanceInfo } from "@/lib/api";
+
+void loadInstanceInfo();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

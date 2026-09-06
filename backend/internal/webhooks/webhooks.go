@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	urlpkg "net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -73,7 +75,8 @@ func lookupIP(host string) ([]net.IP, error) {
 	return ips, nil
 }
 
-// Run 循环扫描 spool 目录并投递（main 中 go 启动）。失败仅记日志并移除文件，避免死循环。
+// Run 循环扫描 spool 目录并投递（main 中 go 启动）。
+// 投递失败落 webhook_deliveries 记录并按退避策略自动重试（最多 5 次）。
 // handlers 为额外的 push 事件消费者（如 pipeline），在删除 spool 文件前依次调用。
 func Run(spoolDir string, st *store.Store, interval time.Duration, handlers ...func(Event)) {
 	if interval <= 0 {
@@ -87,6 +90,7 @@ func Run(spoolDir string, st *store.Store, interval time.Duration, handlers ...f
 }
 
 func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
+	processRetries(st)
 	files, err := filepath.Glob(filepath.Join(spoolDir, "*.json"))
 	if err != nil {
 		return
@@ -110,10 +114,10 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 			var wg sync.WaitGroup
 			for _, h := range hooks {
 				wg.Add(1)
-				go func(url, secret string) {
+				go func(h store.Webhook) {
 					defer wg.Done()
-					post(url, ev, secret)
-				}(h.URL, h.Secret)
+					deliverAndRecord(st, h, ev, 0)
+				}(h)
 			}
 			wg.Wait()
 		}
@@ -180,24 +184,113 @@ func httpAllowed(u *urlpkg.URL) bool {
 	return false
 }
 
-func post(url string, ev Event, secret string) {
+// 投递重试策略：失败后退避重试，最多 maxAttempts 次（含首次），间隔 30s * 2^n。
+const (
+	maxAttempts = 5
+	baseBackoff = 30 * time.Second
+)
+
+// deliverAndRecord 投递一次并落记录；deliverID>0 表示是重试（更新既有记录而非新建）。
+func deliverAndRecord(st *store.Store, hook store.Webhook, ev Event, deliveryID int64) {
 	body, err := json.Marshal(ev)
 	if err != nil {
 		return
 	}
+	code, derr := deliver(hook.URL, body, hook.Secret)
+	if derr == nil && code >= 200 && code < 300 {
+		if deliveryID > 0 {
+			_ = st.UpdateDelivery(deliveryID, "success", code, "", "")
+		} else {
+			_, _ = st.RecordDelivery(hook.ID, ev.Event, string(body), "success", code, "", "")
+		}
+		return
+	}
+	errMsg := "status " + strconv.Itoa(code)
+	if derr != nil {
+		errMsg = derr.Error()
+	}
+	next, giveUp := backoff(1)
+	status := "retry"
+	if giveUp {
+		status = "failed"
+		next = ""
+	}
+	if deliveryID > 0 {
+		_ = st.UpdateDelivery(deliveryID, status, code, errMsg, next)
+		return
+	}
+	_, _ = st.RecordDelivery(hook.ID, ev.Event, string(body), status, code, errMsg, next)
+}
+
+// backoff 根据 attempts（已完成次数）计算下次重试时间；次数达上限时放弃。
+func backoff(attempts int) (string, bool) {
+	nextAttempts := attempts + 1
+	if nextAttempts >= maxAttempts {
+		return "", true
+	}
+	t := time.Now().UTC().Add(baseBackoff << uint(nextAttempts-1)).Format(time.RFC3339)
+	return t, false
+}
+
+// processRetries 处理到期的重试投递（每轮 drain 最多 50 条）。
+func processRetries(st *store.Store) {
+	due, err := st.DueRetries(time.Now().UTC().Format(time.RFC3339), 50)
+	if err != nil {
+		return
+	}
+	for _, d := range due {
+		hook, ok, err := st.GetWebhookByID(d.HookID)
+		if err != nil {
+			continue
+		}
+		if !ok {
+			_ = st.UpdateDelivery(d.ID, "failed", 0, "webhook deleted", "")
+			continue
+		}
+		payload, err := st.GetDeliveryPayload(d.ID)
+		if err != nil || payload == "" {
+			_ = st.UpdateDelivery(d.ID, "failed", 0, "payload missing", "")
+			continue
+		}
+		var ev Event
+		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
+			_ = st.UpdateDelivery(d.ID, "failed", 0, "payload invalid", "")
+			continue
+		}
+		code, derr := deliver(hook.URL, []byte(payload), hook.Secret)
+		if derr == nil && code >= 200 && code < 300 {
+			_ = st.UpdateDelivery(d.ID, "success", code, "", "")
+			continue
+		}
+		errMsg := "status " + strconv.Itoa(code)
+		if derr != nil {
+			errMsg = derr.Error()
+		}
+		next, giveUp := backoff(d.Attempts)
+		status := "retry"
+		if giveUp {
+			status = "failed"
+			next = ""
+		}
+		_ = st.UpdateDelivery(d.ID, status, code, errMsg, next)
+	}
+}
+
+// deliver 发送一次投递，返回 HTTP 状态码与错误；SSRF/协议校验失败视为不可重试（code=0）。
+func deliver(url string, body []byte, secret string) (int, error) {
 	u, perr := urlpkg.Parse(url)
 	if perr != nil || blockedLinkLocal(u) {
 		log.Printf("webhook: blocked delivery to %q (ssrf guard)", url)
-		return
+		return 0, errors.New("blocked by ssrf guard")
 	}
 	if u.Scheme != "https" && !httpAllowed(u) {
 		log.Printf("webhook: rejected plaintext delivery to %q (use https or GITDASH_WEBHOOK_ALLOW_HTTP=1)", url)
-		return
+		return 0, errors.New("plaintext http not allowed")
 	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		log.Printf("webhook: invalid url %q: %v", url, err)
-		return
+		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "gitdash-webhook")
@@ -208,11 +301,9 @@ func post(url string, ev Event, secret string) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("webhook: deliver %s/%s -> %s: %v", ev.Owner, ev.Repo, url, err)
-		return
+		log.Printf("webhook: deliver failed: %v", err)
+		return 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode >= 300 {
-		log.Printf("webhook: deliver %s/%s -> %s: status %d", ev.Owner, ev.Repo, url, resp.StatusCode)
-	}
+	return resp.StatusCode, nil
 }

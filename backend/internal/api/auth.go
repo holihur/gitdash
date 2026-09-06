@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -225,8 +226,9 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		"username":     ua.Username,
 		"email":        ua.Email,
 		"created_at":   ua.CreatedAt,
-		"mfa_enabled":  ua.MFAEnabled,
-		"notify_email": ua.NotifyEmail,
+		"mfa_enabled":    ua.MFAEnabled,
+		"notify_email":   ua.NotifyEmail,
+		"email_verified": ua.EmailVerified,
 	})
 }
 
@@ -256,13 +258,28 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "invalid email address")
 			return
 		}
-		if err := a.store.SetUserEmail(me, email); err != nil {
+		// 邮箱验证流程：生成 24h 令牌；SMTP 未配置时无验证途径，直接视为已验证
+		verified := a.emailSender == nil
+		token := ""
+		if !verified && email != "" {
+			var err error
+			if token, err = newSessionToken(); err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		if err := a.store.SetUserEmailWithToken(me, email, token, time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339)); err != nil {
 			if errors.Is(err, store.ErrExists) {
 				writeErr(w, http.StatusConflict, "email already in use")
 			} else {
 				writeErr(w, http.StatusInternalServerError, err.Error())
 			}
 			return
+		}
+		if verified {
+			_ = a.store.MarkEmailVerifiedByUsername(me)
+		} else if email != "" {
+			a.sendEmailVerification(me, email, token, reqBase(r))
 		}
 	}
 	if in.NotifyEmail != nil {
@@ -277,10 +294,94 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username":     ua.Username,
-		"email":        ua.Email,
-		"notify_email": ua.NotifyEmail,
+		"username":       ua.Username,
+		"email":          ua.Email,
+		"notify_email":   ua.NotifyEmail,
+		"email_verified": ua.EmailVerified,
 	})
+}
+
+// sendEmailVerification 发送验证邮件（失败仅记日志，不影响邮箱保存）。
+func (a *API) sendEmailVerification(username, email, token, base string) {
+	link := base + "/?verify_email=" + url.QueryEscape(token)
+	subject := "gitdash: verify your email / 邮箱验证"
+	body := fmt.Sprintf("Hi %s,\n\nPlease verify your email address:\n%s\n\nThis link expires in 24 hours.\n\n-- gitdash", username, link)
+	if err := a.emailSender.Send(email, subject, body); err != nil {
+		log.Printf("email verification to %s: %v", email, err)
+	}
+}
+
+// verifyEmail 验证邮箱（令牌一次性，24h 有效）。
+//
+//	@Summary     验证邮箱
+//	@Description 用验证令牌完成邮箱验证（令牌来自验证邮件链接）。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body map[string]string true "token"
+//	@Success     200 {object} map[string]any
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /me/email/verify [post]
+func (a *API) verifyEmail(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Token string `json:"token"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.Token = strings.TrimSpace(in.Token)
+	if in.Token == "" {
+		writeCode(w, http.StatusBadRequest, "token_required", "token is required")
+		return
+	}
+	username, err := a.store.MarkEmailVerified(in.Token)
+	if errors.Is(err, store.ErrNotFound) {
+		writeCode(w, http.StatusBadRequest, "invalid_token", "token is invalid or expired")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"username": username, "email_verified": true})
+}
+
+// resendEmailVerification 重发验证邮件（未验证邮箱才可重发）。
+//
+//	@Summary     重发验证邮件
+//	@Tags        users
+//	@Produce     json
+//	@Success     200 {object} map[string]any
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /me/email/resend [post]
+func (a *API) resendEmailVerification(w http.ResponseWriter, r *http.Request) {
+	me := userFrom(r)
+	ua, err := a.store.GetByUsername(me)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if a.emailSender == nil {
+		writeCode(w, http.StatusBadRequest, "smtp_not_configured", "SMTP is not configured")
+		return
+	}
+	if ua.Email == "" || ua.EmailVerified {
+		writeCode(w, http.StatusBadRequest, "nothing_to_verify", "email is empty or already verified")
+		return
+	}
+	token, err := newSessionToken()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := a.store.ResendEmailToken(me, token, time.Now().Add(24*time.Hour).UTC().Format(time.RFC3339)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.sendEmailVerification(me, ua.Email, token, reqBase(r))
+	writeJSON(w, http.StatusOK, map[string]any{"sent": true})
 }
 
 // ---- user profile & mfa ----
@@ -711,9 +812,10 @@ func (a *API) githubStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.oauthMu.Lock()
-	a.oauthState[state] = oauthPending{expires: time.Now().Add(10 * time.Minute)}
-	a.oauthMu.Unlock()
+	if err := a.saveOAuthState(state); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	q := url.Values{}
 	q.Set("client_id", id)
 	q.Set("scope", "read:user user:email")
@@ -737,13 +839,7 @@ func (a *API) githubCallback(w http.ResponseWriter, r *http.Request) {
 		fail("invalid oauth response")
 		return
 	}
-	a.oauthMu.Lock()
-	pending, ok := a.oauthState[state]
-	if ok {
-		delete(a.oauthState, state)
-	}
-	a.oauthMu.Unlock()
-	if !ok || time.Now().After(pending.expires) {
+	if !a.checkOAuthState(state) {
 		fail("oauth state expired, try again")
 		return
 	}
@@ -918,9 +1014,10 @@ func (a *API) oidcStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.oauthMu.Lock()
-	a.oauthState[state] = oauthPending{expires: time.Now().Add(10 * time.Minute)}
-	a.oauthMu.Unlock()
+	if err := a.saveOAuthState(state); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	q := url.Values{}
 	q.Set("client_id", id)
 	q.Set("response_type", "code")
@@ -946,13 +1043,7 @@ func (a *API) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("invalid oidc response")
 		return
 	}
-	a.oauthMu.Lock()
-	pending, ok := a.oauthState[state]
-	if ok {
-		delete(a.oauthState, state)
-	}
-	a.oauthMu.Unlock()
-	if !ok || time.Now().After(pending.expires) {
+	if !a.checkOAuthState(state) {
 		fail("oauth state expired, try again")
 		return
 	}

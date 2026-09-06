@@ -378,6 +378,19 @@ export default function Repos() {
                         <Eye className="h-3 w-3" />
                         {repo.watchers ?? 0}
                       </Badge>
+                      {repo.import_status && repo.import_status !== "synced" && (
+                        <Badge
+                          variant="outline"
+                          className={
+                            repo.import_status === "failed"
+                              ? "font-normal text-destructive"
+                              : "font-normal text-amber-600 dark:text-amber-400"
+                          }
+                          title={repo.import_error || undefined}
+                        >
+                          {t(`imports.status.${repo.import_status}`)}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
                       <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">

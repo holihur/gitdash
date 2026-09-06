@@ -140,3 +140,30 @@ func (s *Store) RunningPipelineRunIDs(owner, repo string) ([]int64, error) {
 		Pluck("id", &ids).Error
 	return ids, err
 }
+
+// LatestPipelineRunForSHA 某提交最近一次流水线运行（PR 视图展示 CI 状态用）；无则返回 false。
+func (s *Store) LatestPipelineRunForSHA(owner, repo, sha string) (PipelineRun, bool, error) {
+	var row pipelineRunRow
+	err := s.db.Where("owner = ? AND repo = ? AND sha = ?", owner, repo, sha).
+		Order("id DESC").First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return PipelineRun{}, false, nil
+	}
+	if err != nil {
+		return PipelineRun{}, false, err
+	}
+	return runRowToDTO(row), true, nil
+}
+
+// FailStalePipelineRuns 孤儿 run 回收：把早于 cutoff 仍停在 pending/running 的运行
+// 标记为 failed（进程重启后 memory 队列不会再执行它们）。返回受影响行数。
+func (s *Store) FailStalePipelineRuns(cutoff string) (int64, error) {
+	res := s.db.Model(&pipelineRunRow{}).
+		Where("status IN ('pending','running') AND created_at < ?", cutoff).
+		Updates(map[string]any{
+			"status":      "failed",
+			"error":       "interrupted: server restarted",
+			"finished_at": now(),
+		})
+	return res.RowsAffected, res.Error
+}

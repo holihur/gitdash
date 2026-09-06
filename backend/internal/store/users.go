@@ -65,7 +65,7 @@ func (s *Store) DeleteSessionsExcept(username, keepToken string) error {
 		keepToken).Delete(&sessionRow{}).Error
 }
 
-// SetUserEmail 更新个人资料邮箱（空串表示清除）。
+// SetUserEmail 更新个人资料邮箱（空串表示清除；不改变验证状态，仅供旧调用）。
 func (s *Store) SetUserEmail(username, email string) error {
 	res := s.db.Model(&userRow{}).Where("username = ?", username).
 		Update("email", email)
@@ -79,6 +79,70 @@ func (s *Store) SetUserEmail(username, email string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetUserEmailWithToken 更新邮箱并重置验证状态，写入验证令牌（expires 为 RFC3339）。
+func (s *Store) SetUserEmailWithToken(username, email, token, expires string) error {
+	res := s.db.Model(&userRow{}).Where("username = ?", username).
+		Updates(map[string]any{
+			"email":           email,
+			"email_verified":  email == "", // 清空邮箱视为无需验证
+			"email_token":     token,
+			"email_token_exp": expires,
+		})
+	if res.Error != nil {
+		if isUniqueErr(res.Error) {
+			return ErrExists
+		}
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ResendEmailToken 覆写当前邮箱的验证令牌。
+func (s *Store) ResendEmailToken(username, token, expires string) error {
+	res := s.db.Model(&userRow{}).Where("username = ? AND email <> '' AND email_verified = ?", username, false).
+		Updates(map[string]any{"email_token": token, "email_token_exp": expires})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkEmailVerifiedByUsername 直接标记已验证（SMTP 未配置时无验证途径，降级使用）。
+func (s *Store) MarkEmailVerifiedByUsername(username string) error {
+	res := s.db.Model(&userRow{}).Where("username = ? AND email <> ''", username).
+		Updates(map[string]any{"email_verified": true, "email_token": "", "email_token_exp": ""})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkEmailVerified 用令牌完成邮箱验证（令牌匹配且未过期）；成功返回用户名。
+func (s *Store) MarkEmailVerified(token string) (string, error) {
+	var row userRow
+	if err := s.db.Where("email_token = ? AND email <> '' AND email_verified = ?", token, false).
+		First(&row).Error; err != nil {
+		return "", notFoundErr(err)
+	}
+	if row.EmailTokenExp != "" && row.EmailTokenExp < now() {
+		return "", ErrNotFound
+	}
+	if err := s.db.Model(&userRow{}).Where("id = ?", row.ID).
+		Updates(map[string]any{"email_verified": true, "email_token": "", "email_token_exp": ""}).Error; err != nil {
+		return "", err
+	}
+	return row.Username, nil
 }
 
 // SetNotifyEmail 设置用户邮件通知开关。

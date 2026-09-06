@@ -16,6 +16,7 @@ interface Profile {
   email?: string;
   created_at: string;
   mfa_enabled: boolean;
+  email_verified?: boolean;
 }
 
 export default function ProfilePage() {
@@ -46,7 +47,11 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      <EmailSection email={profile.email ?? ""} onChanged={loadProfile} />
+      <EmailSection
+        email={profile.email ?? ""}
+        verified={profile.email_verified ?? false}
+        onChanged={loadProfile}
+      />
       <PasswordSection />
       <MFASection mfaEnabled={profile.mfa_enabled} onChanged={loadProfile} />
       <GPGKeySection />
@@ -54,12 +59,32 @@ export default function ProfilePage() {
   );
 }
 
-function EmailSection({ email, onChanged }: { email: string; onChanged: () => void }) {
+function EmailSection({
+  email,
+  verified,
+  onChanged,
+}: {
+  email: string;
+  verified: boolean;
+  onChanged: () => void;
+}) {
   const { t, to } = useI18n();
   const [value, setValue] = useState(email);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => setValue(email), [email]);
+
+  const resend = async () => {
+    setBusy(true);
+    try {
+      await api.resendEmailVerification();
+      toast.success(t("profile.verificationSent"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -99,6 +124,31 @@ function EmailSection({ email, onChanged }: { email: string; onChanged: () => vo
             {t("common.save")}
           </Button>
         </div>
+        {email && (
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            {verified ? (
+              <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                <BadgeCheck className="h-3.5 w-3.5" />
+                {t("profile.emailVerifiedBadge")}
+              </span>
+            ) : (
+              <>
+                <span className="text-amber-600 dark:text-amber-400">
+                  {t("profile.emailUnverified")}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 text-xs"
+                  disabled={busy}
+                  onClick={resend}
+                >
+                  {t("profile.resendVerification")}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

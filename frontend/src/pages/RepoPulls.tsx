@@ -316,19 +316,42 @@ export default function RepoPulls({
                     <div className="flex flex-wrap items-center gap-2">
                       {pr.state === "open" && (
                         <>
+                          {pr.ci && (
+                            <Badge
+                              variant="outline"
+                              className={
+                                pr.ci.status === "success"
+                                  ? "gap-1 font-normal text-green-600 dark:text-green-400"
+                                  : pr.ci.status === "failed"
+                                    ? "gap-1 font-normal text-destructive"
+                                    : "gap-1 font-normal text-amber-600 dark:text-amber-400"
+                              }
+                            >
+                              {t(`pulls.ci.${pr.ci.status}`)}
+                            </Badge>
+                          )}
+                          {pr.conflicted && (
+                            <Badge variant="outline" className="font-normal text-destructive">
+                              {t("pulls.conflict")}
+                            </Badge>
+                          )}
                           <MergeGateBadge
                             owner={owner}
                             name={name}
                             number={pr.number}
                             refreshKey={busy.has(pr.id) ? 1 : 0}
                           />
-                          <Button size="sm" variant="outline" disabled={busyId}
+                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted}
                             onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "squash"), "pulls.squashMerged")}>
                             {t("pulls.squashMerge")}
                           </Button>
-                          <Button size="sm" variant="outline" disabled={busyId}
+                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted}
                             onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "merge"), "pulls.mergeCommitted")}>
                             {t("pulls.mergeCommit")}
+                          </Button>
+                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted}
+                            onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "rebase"), "pulls.rebaseMerged")}>
+                            {t("pulls.rebaseMerge")}
                           </Button>
                         </>
                       )}

@@ -25,6 +25,7 @@ func (s *Store) migrate() error {
 		&orgRow{},
 		&orgMemberRow{},
 		&webhookRow{},
+		&webhookDeliveryRow{},
 		&adminUserRow{},
 		&adminSessionRow{},
 		&settingRow{},

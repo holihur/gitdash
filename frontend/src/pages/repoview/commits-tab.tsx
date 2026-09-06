@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BadgeCheck, ChevronDown, GitCommitHorizontal } from "lucide-react";
+import { BadgeCheck, ChevronDown, GitCommitHorizontal , ShieldAlert, ShieldQuestion } from "lucide-react";
 import { api, type Commit, type PullDiff } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,6 +91,26 @@ export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsT
                         >
                           <BadgeCheck className="h-3 w-3" />
                           {c.gpg_verified}
+                        </Badge>
+                      )}
+                      {!c.gpg_verified && c.gpg_status === "unknown_key" && (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 text-amber-600 dark:text-amber-400"
+                          title={t("commits.gpgUnknownKey")}
+                        >
+                          <ShieldQuestion className="h-3 w-3" />
+                          {t("commits.gpgUnknownKeyShort")}
+                        </Badge>
+                      )}
+                      {!c.gpg_verified && c.gpg_status === "invalid" && (
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 gap-1 border-destructive/40 text-destructive"
+                          title={t("commits.gpgInvalid")}
+                        >
+                          <ShieldAlert className="h-3 w-3" />
+                          {t("commits.gpgInvalidShort")}
                         </Badge>
                       )}
                       <ChevronDown

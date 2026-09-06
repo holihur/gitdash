@@ -41,7 +41,23 @@ func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setTotal(w, total)
+	for i := range pulls {
+		a.enrichPull(owner, name, &pulls[i])
+	}
 	writeJSON(w, http.StatusOK, pulls)
+}
+
+// enrichPull 为 open PR 附加实时信息：可合并性预检（mergeable/conflicted）与 head 提交的 CI 状态。
+func (a *API) enrichPull(owner, name string, pr *store.PullRequest) {
+	if pr.State != "open" {
+		return
+	}
+	m, c := gitsvc.MergeCheck(owner, name, "refs/heads/"+pr.TargetBranch, "refs/heads/"+pr.SourceBranch)
+	pr.Mergeable = &m
+	pr.Conflicted = c
+	if run, ok, err := a.store.LatestPipelineRunForSHA(owner, name, pr.HeadSHA); err == nil && ok {
+		pr.CI = &store.PipelineCIStatus{RunID: run.ID, Status: run.Status}
+	}
 }
 
 // createPull 创建 pull request。
@@ -124,7 +140,7 @@ func (a *API) getPull(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	// 实时状态：base 是否仍可快进到 head（对 open 有意义）
+	a.enrichPull(owner, name, &pr)
 	writeJSON(w, http.StatusOK, pr)
 }
 
@@ -192,7 +208,7 @@ func (a *API) pullDiff(w http.ResponseWriter, r *http.Request) {
 //	@Param       owner  path string true "仓库所有者"
 //	@Param       name   path string true "仓库名"
 //	@Param       number path int    true "PR 编号"
-//	@Param       body   body mergePullReq true "合并方式（fast-forward/merge/squash）"
+//	@Param       body   body mergePullReq true "合并方式（fast-forward/merge/squash/rebase）"
 //	@Success     200 {object} store.PullRequest
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/merge [post]
@@ -211,7 +227,7 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 	}
 	// 合并门禁：目标分支保护规则要求的最少 approve 数。
 	// 有效 approve = reviewer 最新状态为 approve、reviewer 非 PR 作者、针对当前 head（head 前进后过期失效）。
-	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && prot.MinApprovals > 0 {
+	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && (prot.MinApprovals > 0 || prot.Branch != "") {
 		head := pr.HeadSHA
 		if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
 			head = h
@@ -228,10 +244,19 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		valid := 0
+		blocked := false
 		for _, rv := range latest {
-			if rv.State == "approve" && rv.Reviewer != pr.Author && rv.CommitSHA == head {
+			switch {
+			case rv.State == "approve" && rv.Reviewer != pr.Author && rv.CommitSHA == head:
 				valid++
+			case rv.State == "request_changes" && rv.Reviewer != pr.Author && rv.CommitSHA == head:
+				blocked = true
 			}
+		}
+		if blocked {
+			writeCode(w, http.StatusConflict, "changes_requested",
+				"merge blocked: a reviewer requested changes (a new approve or a new head commit clears it)")
+			return
 		}
 		if valid < prot.MinApprovals {
 			writeCode(w, http.StatusConflict, "review_required",
@@ -254,7 +279,7 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		h, mErr := gitsvc.MergeFastForward(owner, name, pr.TargetBranch, pr.SourceBranch)
 		if mErr != nil {
 			writeCode(w, http.StatusConflict, "merge_not_ff",
-				"branches diverged; merge with method \"merge\" or \"squash\", or rebase locally: "+mErr.Error())
+				"branches diverged; merge with method \"merge\", \"squash\" or \"rebase\", or merge locally: "+mErr.Error())
 			return
 		}
 		headSHA = h
@@ -266,8 +291,15 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		headSHA = h
+	case "rebase":
+		h, mErr := gitsvc.MergeRebase(owner, name, pr.TargetBranch, pr.SourceBranch, userFrom(r))
+		if mErr != nil {
+			writeCode(w, http.StatusConflict, "merge_conflict", mErr.Error())
+			return
+		}
+		headSHA = h
 	default:
-		writeCode(w, http.StatusBadRequest, "invalid_merge_method", "method must be 'merge' or 'squash'")
+		writeCode(w, http.StatusBadRequest, "invalid_merge_method", "method must be 'fast-forward', 'merge', 'squash' or 'rebase'")
 		return
 	}
 	merged, err := a.store.MarkPullMerged(owner, name, pr.Number, headSHA, userFrom(r))

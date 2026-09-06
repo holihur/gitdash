@@ -36,6 +36,10 @@ type UserAuth struct {
 	MFASecret    string // 空 = 未启用/无待激活 secret
 	MFAEnabled   bool
 	NotifyEmail  bool // 邮件通知开关（默认关）
+	// 邮箱验证状态（仅对非空邮箱有意义）
+	EmailVerified bool
+	EmailToken    string
+	EmailTokenExp string
 }
 
 type Repo struct {
@@ -57,6 +61,7 @@ type Repo struct {
 	ImportURL string `json:"import_url,omitempty"`
 	// 导入任务状态（queued/running/synced/failed），非导入仓库为空
 	ImportStatus string `json:"import_status,omitempty"`
+	ImportError  string `json:"import_error,omitempty"`
 }
 
 // Mirror 仓库 push 镜像目标（同步到 GitHub/GitLab 等第三方）。
@@ -66,6 +71,7 @@ type Mirror struct {
 	URL        string `json:"url"`
 	PrivateKey string `json:"-"` // 认证私钥，不回传
 	Status     string `json:"status,omitempty"`
+	Error      string `json:"error,omitempty"`
 	CreatedAt  string `json:"created_at"`
 }
 
@@ -155,6 +161,16 @@ type PullRequest struct {
 	UpdatedAt    string  `json:"updated_at"`
 	MergedAt     *string `json:"merged_at"`
 	MergedBy     string  `json:"merged_by"`
+	// API enrich（仅 open PR / 详情接口填充）
+	Mergeable  *bool             `json:"mergeable,omitempty"`  // 可合并（fast-forward 或干净合并）
+	Conflicted bool              `json:"conflicted,omitempty"` // 分支分叉且存在合并冲突
+	CI         *PipelineCIStatus `json:"ci,omitempty"`         // head 提交的流水线状态
+}
+
+// PipelineCIStatus PR head 提交的 CI 概要。
+type PipelineCIStatus struct {
+	RunID  int64  `json:"run_id"`
+	Status string `json:"status"` // pending | running | success | failed
 }
 
 // Org 组织（命名空间）：成员可把仓库 owner 设为组织名。
@@ -213,6 +229,19 @@ type Webhook struct {
 	Repo      string `json:"repo"`
 	URL       string `json:"url"`
 	Secret    string `json:"-"` // 签名密钥，不回传
+	CreatedAt string `json:"created_at"`
+}
+
+// WebhookDelivery webhook 投递记录（含重试状态）。
+type WebhookDelivery struct {
+	ID        int64  `json:"id"`
+	HookID    int64  `json:"hook_id"`
+	Event     string `json:"event"`
+	Status    string `json:"status"` // success | retry | failed
+	Code      int    `json:"code"`
+	Error     string `json:"error,omitempty"`
+	Attempts  int    `json:"attempts"`
+	NextRetry string `json:"next_retry,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
 

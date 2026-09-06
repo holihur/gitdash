@@ -90,3 +90,27 @@ func (s *Store) SetSetting(key, value string) error {
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
 	}).Create(&row).Error
 }
+
+// PutOAuthState 持久化 OAuth/OIDC state（重启 / 多实例下登录回调仍可校验）。
+func (s *Store) PutOAuthState(state, expiresAt string) error {
+	return s.SetSetting("oauth_state:"+state, expiresAt)
+}
+
+// TakeOAuthState 取出并删除 state（一次性）；不存在或已过期返回 false。
+func (s *Store) TakeOAuthState(state, nowStr string) (bool, error) {
+	key := "oauth_state:" + state
+	v := s.GetSetting(key)
+	if v == "" {
+		return false, nil
+	}
+	if err := s.db.Where("\"key\" = ?", key).Delete(&settingRow{}).Error; err != nil {
+		return false, err
+	}
+	return v > nowStr, nil
+}
+
+// PruneOAuthStates 删除已过期的 OAuth state，返回清理条数。
+func (s *Store) PruneOAuthStates(nowStr string) (int64, error) {
+	res := s.db.Where("\"key\" LIKE 'oauth_state:%' AND value < ?", nowStr).Delete(&settingRow{})
+	return res.RowsAffected, res.Error
+}

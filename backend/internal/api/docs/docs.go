@@ -1181,6 +1181,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/instance": {
+            "get": {
+                "description": "返回版本与 SSH 端口（前端 clone 地址展示用）。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "misc"
+                ],
+                "summary": "实例信息",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
         "/keys": {
             "get": {
                 "security": [
@@ -1383,6 +1403,92 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/me/email/resend": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "重发验证邮件",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/me/email/verify": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "用验证令牌完成邮箱验证（令牌来自验证邮件链接）。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "验证邮箱",
+                "parameters": [
+                    {
+                        "description": "token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -3362,6 +3468,55 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "按 q 模糊搜索公开仓库、issue（公开仓库 + 自己仓库）与用户/组织，返回 {repos, issues, users}。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "search"
+                ],
+                "summary": "全局搜索",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索字符串",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每类返回条数上限（默认 20，最大 50）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
                         }
                     },
                     "400": {
@@ -6233,7 +6388,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "合并方式（fast-forward/merge/squash）",
+                        "description": "合并方式（fast-forward/merge/squash/rebase）",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -7706,6 +7861,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{owner}/repos/{name}/webhooks/{id}/deliveries": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "列出 webhook 投递记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "webhook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数（默认 20，最大 100）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/watched": {
             "get": {
                 "security": [
@@ -7857,6 +8077,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "date": {
+                    "type": "string"
+                },
+                "gpg_status": {
+                    "description": "GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省，与旧行为兼容）",
                     "type": "string"
                 },
                 "gpg_verified": {
@@ -8717,6 +8941,18 @@ const docTemplate = `{
                 }
             }
         },
+        "store.PipelineCIStatus": {
+            "type": "object",
+            "properties": {
+                "run_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "description": "pending | running | success | failed",
+                    "type": "string"
+                }
+            }
+        },
         "store.PullRequest": {
             "type": "object",
             "properties": {
@@ -8729,6 +8965,18 @@ const docTemplate = `{
                 "body": {
                     "type": "string"
                 },
+                "ci": {
+                    "description": "head 提交的流水线状态",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/store.PipelineCIStatus"
+                        }
+                    ]
+                },
+                "conflicted": {
+                    "description": "分支分叉且存在合并冲突",
+                    "type": "boolean"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -8737,6 +8985,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "mergeable": {
+                    "description": "API enrich（仅 open PR / 详情接口填充）",
+                    "type": "boolean"
                 },
                 "merged_at": {
                     "type": "string"
@@ -8858,6 +9110,9 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "import_error": {
+                    "type": "string"
                 },
                 "import_status": {
                     "description": "导入任务状态（queued/running/synced/failed），非导入仓库为空",

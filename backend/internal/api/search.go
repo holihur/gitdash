@@ -4,6 +4,7 @@ import (
 	"gitdash/backend/internal/gitsvc"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // search 在仓库指定 ref 上做代码搜索。
@@ -40,4 +41,41 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, hits)
+}
+
+// globalSearch 全局搜索（跨仓库）。
+//
+//	@Summary     全局搜索
+//	@Description 按 q 模糊搜索公开仓库、issue（公开仓库 + 自己仓库）与用户/组织，返回 {repos, issues, users}。
+//	@Tags        search
+//	@Produce     json
+//	@Param       q     query string true  "搜索字符串"
+//	@Param       limit query int    false "每类返回条数上限（默认 20，最大 50）"
+//	@Success     200 {object} object
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /search [get]
+func (a *API) globalSearch(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeCode(w, http.StatusBadRequest, "query_required", "query parameter q is required")
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	repos, err := a.store.SearchRepos(q, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	issues, err := a.store.SearchIssues(q, userFrom(r), limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	users, err := a.store.SearchUsers(q, limit)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"repos": repos, "issues": issues, "users": users})
 }

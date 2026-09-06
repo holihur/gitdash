@@ -6,11 +6,13 @@ import (
 	"errors"
 	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/gpgsig"
+	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 	"gitdash/backend/internal/webui"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -54,14 +56,18 @@ type API struct {
 	store   *store.Store
 	version string
 
+	// sshPort SSH 服务端口（clone 地址展示用；main 启动时注入，默认 2222）
+	sshPort string
+
 	// Publish 由 main 注入：把 issue/pull/评论事件写入 API 侧 webhook spool
 	Publish func(webhooks.Event)
 
+	// EmailSender 由 main 注入（nil = SMTP 未配置，邮箱验证降级为直接视为已验证）
+	emailSender *notify.Sender
+
 	mu         sync.Mutex
 	mfaPending map[string]mfaChallenge // mfa_token -> 待二次验证的登录
-
-	oauthMu    sync.Mutex
-	oauthState map[string]oauthPending // github oauth state
+	// OAuth/OIDC state 存 settings 表（PutOAuthState/TakeOAuthState），重启与多实例下均有效
 
 	gpgMu     sync.Mutex
 	gpgKeys   []gpgsig.Key
@@ -94,8 +100,15 @@ func (a *API) invalidateGPGKeys() {
 	a.gpgMu.Unlock()
 }
 
-type oauthPending struct {
-	expires time.Time
+// saveOAuthState 写入新的 state（10 分钟有效）。
+func (a *API) saveOAuthState(state string) error {
+	return a.store.PutOAuthState(state, time.Now().Add(10*time.Minute).UTC().Format(time.RFC3339))
+}
+
+// checkOAuthState 一次性校验并消费 state；不存在或已过期返回 false。
+func (a *API) checkOAuthState(state string) bool {
+	ok, err := a.store.TakeOAuthState(state, time.Now().UTC().Format(time.RFC3339))
+	return err == nil && ok
 }
 
 // 登录限速：15 分钟窗口内最多 5 次失败
@@ -115,9 +128,31 @@ func New(s *store.Store, version string) *API {
 	return &API{
 		store:      s,
 		version:    version,
+		sshPort:    "2222",
 		mfaPending: map[string]mfaChallenge{},
-		oauthState: map[string]oauthPending{},
 	}
+}
+
+// SetEmailSender 注入 SMTP 发送器（nil = 未配置）。
+func (a *API) SetEmailSender(s *notify.Sender) { a.emailSender = s }
+
+// SetSSHPort 注入 SSH 监听端口（clone 地址展示用）。
+func (a *API) SetSSHPort(addr string) {
+	if _, port, err := net.SplitHostPort(addr); err == nil && port != "" {
+		a.sshPort = port
+	}
+}
+
+// instance 公开实例信息（clone 地址需要真实 SSH 端口）。
+//
+//	@Summary     实例信息
+//	@Description 返回版本与 SSH 端口（前端 clone 地址展示用）。
+//	@Tags        misc
+//	@Produce     json
+//	@Success     200 {object} object
+//	@Router      /instance [get]
+func (a *API) instance(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"version": a.version, "ssh_port": a.sshPort})
 }
 
 type ctxUser struct{}
@@ -133,6 +168,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// auth providers (public) & github oauth
 	mux.HandleFunc("GET /api/auth/providers", a.providers)
+	mux.HandleFunc("GET /api/instance", a.instance)
+	mux.HandleFunc("POST /api/me/email/verify", a.auth(a.verifyEmail))
+	mux.HandleFunc("POST /api/me/email/resend", a.auth(a.resendEmailVerification))
 	mux.HandleFunc("GET /api/auth/github", a.githubStart)
 	mux.HandleFunc("GET /api/auth/github/callback", a.githubCallback)
 	mux.HandleFunc("GET /api/auth/oidc/start", a.oidcStart)
@@ -278,6 +316,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// collaborators
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/visibility", a.auth(a.setRepoVisibility))
 	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
+	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))
 
 	// orgs (namespace)
 	mux.HandleFunc("POST /api/orgs", a.auth(a.createOrg))
@@ -296,6 +335,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/webhooks", a.auth(a.listWebhooks))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/webhooks", a.auth(a.createWebhook))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/webhooks/{id}", a.auth(a.deleteWebhook))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/webhooks/{id}/deliveries", a.auth(a.listWebhookDeliveries))
 
 	// pipeline（CI）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline", a.auth(a.getPipeline))

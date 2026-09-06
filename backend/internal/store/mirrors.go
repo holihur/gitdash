@@ -55,10 +55,10 @@ func (s *Store) ImportSource(owner, repo string) (string, error) {
 	return row.SourceURL, nil
 }
 
-// SetImportStatus 更新导入任务状态。
-func (s *Store) SetImportStatus(owner, repo, status string) error {
+// SetImportStatus 更新导入任务状态；errMsg 仅 failed 时非空。
+func (s *Store) SetImportStatus(owner, repo, status, errMsg string) error {
 	res := s.db.Model(&importRow{}).Where("owner = ? AND repo = ?", owner, repo).
-		Update("status", status)
+		Updates(map[string]any{"status": status, "error": errMsg})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -68,17 +68,17 @@ func (s *Store) SetImportStatus(owner, repo, status string) error {
 	return nil
 }
 
-// ImportStatus 返回导入任务状态；非导入仓库返回空串。
-func (s *Store) ImportStatus(owner, repo string) (string, error) {
+// ImportStatus 返回导入任务状态与最近失败原因；非导入仓库返回空串。
+func (s *Store) ImportStatus(owner, repo string) (string, string, error) {
 	var row importRow
-	err := s.db.Select("status").Where("owner = ? AND repo = ?", owner, repo).First(&row).Error
+	err := s.db.Select("status", "\"error\"").Where("owner = ? AND repo = ?", owner, repo).First(&row).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", nil
+			return "", "", nil
 		}
-		return "", err
+		return "", "", err
 	}
-	return row.Status, nil
+	return row.Status, row.Error, nil
 }
 
 // ---- mirrors ----
@@ -113,10 +113,10 @@ func (s *Store) DeleteMirror(owner, repo string) error {
 	return s.db.Where("owner = ? AND repo = ?", owner, repo).Delete(&mirrorRow{}).Error
 }
 
-// SetMirrorStatus 更新镜像同步任务状态。
-func (s *Store) SetMirrorStatus(owner, repo, status string) error {
+// SetMirrorStatus 更新镜像同步任务状态；errMsg 仅 failed 时非空。
+func (s *Store) SetMirrorStatus(owner, repo, status, errMsg string) error {
 	res := s.db.Model(&mirrorRow{}).Where("owner = ? AND repo = ?", owner, repo).
-		Update("status", status)
+		Updates(map[string]any{"status": status, "error": errMsg})
 	if res.Error != nil {
 		return res.Error
 	}

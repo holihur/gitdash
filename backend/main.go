@@ -117,6 +117,16 @@ func run() {
 			} else if n > 0 {
 				log.Printf("login-fails cleanup: removed %d expired rows", n)
 			}
+			if n, err := st.PruneDeliveries(time.Now().UTC().Add(-7 * 24 * time.Hour).Format(time.RFC3339)); err != nil {
+				log.Printf("webhook-deliveries cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("webhook-deliveries cleanup: removed %d old rows", n)
+			}
+			if n, err := st.PruneOAuthStates(time.Now().UTC().Format(time.RFC3339)); err != nil {
+				log.Printf("oauth-state cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("oauth-state cleanup: removed %d expired states", n)
+			}
 			time.Sleep(time.Hour)
 		}
 	}()
@@ -155,6 +165,9 @@ func run() {
 	}
 
 	a := api.New(st, version)
+	a.SetSSHPort(sshAddr)
+	sender := notify.NewSender()
+	a.SetEmailSender(sender)
 
 	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发）
 	go webhooks.Run(gitsvc.SpoolDir(), st, 2*time.Second, pipeline.PushHandler(st))
@@ -165,7 +178,7 @@ func run() {
 		log.Fatalf("create api spool dir: %v", err)
 	}
 	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
-	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, notify.NewSender()))
+	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, sender))
 
 	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
 	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
@@ -185,6 +198,18 @@ func run() {
 	}
 	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
 	jobs.RequeuePending()
+
+	// 孤儿 pipeline run 回收：memory 队列重启后 pending/running 不会再执行，标记 failed；
+	// asynq（redis）模式任务持久化，只回收明显超时（>1h）的残留。
+	orphanCutoff := time.Now().UTC().Add(-time.Hour)
+	if queueMode == "memory" {
+		orphanCutoff = time.Now().UTC().Add(time.Minute)
+	}
+	if n, err := st.FailStalePipelineRuns(orphanCutoff.Format(time.RFC3339)); err != nil {
+		log.Printf("pipeline orphan recovery: %v", err)
+	} else if n > 0 {
+		log.Printf("pipeline orphan recovery: marked %d stale runs as failed", n)
+	}
 
 	if staticDir == "" {
 		staticDir = resolveStaticDir()

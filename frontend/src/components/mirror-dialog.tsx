@@ -95,7 +95,8 @@ export default function MirrorDialog({ open, onOpenChange, owner, repo }: Props)
             toast.success(t("mirror.synced"));
           } else if (m.status === "failed" || Date.now() > deadline) {
             clearInterval(poll);
-            if (m.status === "failed") toast.error(t("mirror.syncFailed"));
+            if (m.status === "failed")
+              toast.error(`${t("mirror.syncFailed")}${m.error ? `: ${m.error}` : ""}`);
           }
         } catch {
           clearInterval(poll);

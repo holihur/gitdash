@@ -172,8 +172,9 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	if iu, err := a.store.ImportSource(owner, name); err == nil {
 		repo.ImportURL = iu
 	}
-	if is, err := a.store.ImportStatus(owner, name); err == nil {
+	if is, ie, err := a.store.ImportStatus(owner, name); err == nil {
 		repo.ImportStatus = is
+		repo.ImportError = ie
 	}
 	// 当前用户视角的角色（owner/write/read），前端据此控制设置类 UI
 	switch {
@@ -529,12 +530,12 @@ func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 异步导入：任务队列排队，前端轮询 import_status
-	if err := a.store.SetImportStatus(targetOwner, targetName, jobs.StatusQueued); err != nil {
+	if err := a.store.SetImportStatus(targetOwner, targetName, jobs.StatusQueued, ""); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if err := jobs.EnqueueImport(targetOwner, targetName, raw, in.PrivateKey); err != nil {
-		_ = a.store.SetImportStatus(targetOwner, targetName, jobs.StatusFailed)
+		_ = a.store.SetImportStatus(targetOwner, targetName, jobs.StatusFailed, "enqueue: "+err.Error())
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -604,7 +605,7 @@ func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = a.store.SetMirrorStatus(owner, name, "") // 换目标后重置状态
+	_ = a.store.SetMirrorStatus(owner, name, "", "") // 换目标后重置状态
 	m, err := a.store.GetMirror(owner, name)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
@@ -665,12 +666,12 @@ func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 异步同步：排队后立即返回，通过 GET mirror 的 status 轮询进度
-	if err := a.store.SetMirrorStatus(owner, name, jobs.StatusQueued); err != nil {
+	if err := a.store.SetMirrorStatus(owner, name, jobs.StatusQueued, ""); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if err := jobs.EnqueueMirror(owner, name, m.URL, m.PrivateKey); err != nil {
-		_ = a.store.SetMirrorStatus(owner, name, jobs.StatusFailed)
+		_ = a.store.SetMirrorStatus(owner, name, jobs.StatusFailed, "enqueue: "+err.Error())
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -870,8 +871,11 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 	for _, c := range cs {
 		r := commitResp{SHA: c.SHA, Author: c.Author, Date: c.Date, Message: c.Message}
 		if raw, ok := raws[c.SHA]; ok {
-			if user, _, ok := gpgsig.VerifyCommit(raw, keys); ok && user != "" {
-				r.GPGVerified = user
+			if user, _, status := gpgsig.VerifyCommit(raw, keys); status != gpgsig.StatusUnsigned {
+				r.GPGStatus = status
+				if status == gpgsig.StatusVerified {
+					r.GPGVerified = user
+				}
 			}
 		}
 		out = append(out, r)
@@ -885,6 +889,8 @@ type commitResp struct {
 	Date        string `json:"date"`
 	Message     string `json:"message"`
 	GPGVerified string `json:"gpg_verified,omitempty"`
+	// GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省，与旧行为兼容）
+	GPGStatus string `json:"gpg_status,omitempty"`
 }
 
 // ---- issues ----

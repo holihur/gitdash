@@ -14,6 +14,10 @@ type userRow struct {
 	MFASecret    string `gorm:"not null;default:''"`
 	MFAEnabled   bool   `gorm:"not null;default:false"`
 	NotifyEmail  bool   `gorm:"not null;default:false"`
+	// 邮箱验证：仅对非空邮箱生效；token 24h 有效
+	EmailVerified bool   `gorm:"not null;default:false"`
+	EmailToken    string `gorm:"not null;default:'';size:255"`
+	EmailTokenExp string `gorm:"not null;default:''"`
 }
 
 func (userRow) TableName() string { return "users" }
@@ -194,6 +198,23 @@ type webhookRow struct {
 
 func (webhookRow) TableName() string { return "webhooks" }
 
+// webhookDeliveryRow webhook 投递记录：每次投递（含重试）落一行，失败可重试。
+// status: success | retry（待重试）| failed（超过次数上限，不再重试）
+type webhookDeliveryRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	HookID    int64  `gorm:"not null;index"`
+	Event     string `gorm:"not null;size:32"`
+	Payload   string `gorm:"not null"` // 完整事件 JSON，重试时原样重发
+	Status    string `gorm:"not null;size:16;index"`
+	Code      int    `gorm:"not null;default:0"` // 最后一次 HTTP 状态码
+	Error     string `gorm:"not null;default:''"`
+	Attempts  int    `gorm:"not null;default:1"`
+	NextRetry string `gorm:"not null;default:'';index"` // RFC3339，仅 retry 状态使用
+	CreatedAt string `gorm:"not null"`
+}
+
+func (webhookDeliveryRow) TableName() string { return "webhook_deliveries" }
+
 type adminUserRow struct {
 	ID           int64  `gorm:"primaryKey;autoIncrement"`
 	Username     string `gorm:"not null;uniqueIndex;size:255"`
@@ -279,6 +300,7 @@ type importRow struct {
 	Repo      string `gorm:"primaryKey;size:255"`
 	SourceURL string `gorm:"not null"`
 	Status    string `gorm:"not null;default:''"` // queued/running/synced/failed；空 = 旧数据已导入
+	Error     string `gorm:"not null;default:''"` // 最近一次失败原因
 	CreatedAt string `gorm:"not null"`
 }
 
@@ -290,6 +312,7 @@ type mirrorRow struct {
 	URL        string `gorm:"not null"`
 	PrivateKey string `gorm:"not null;default:''"`
 	Status     string `gorm:"not null;default:''"` // queued/running/synced/failed
+	Error      string `gorm:"not null;default:''"` // 最近一次失败原因
 	CreatedAt  string `gorm:"not null"`
 }
 

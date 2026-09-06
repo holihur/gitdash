@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Copy, FolderGit2, Star } from "lucide-react";
-import { api, cloneCommand, type Repo } from "@/lib/api";
+import { CircleDot, Copy, FolderGit2, Search, Star, User } from "lucide-react";
+import { api, cloneCommand, type GlobalSearchResult, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import { copyText, formatDate } from "@/lib/utils";
@@ -20,6 +21,9 @@ export default function Explore() {
   const [pageSize, setPageSize] = useState(20);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<GlobalSearchResult | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -36,8 +40,27 @@ export default function Explore() {
   }, [page, pageSize]);
 
   useEffect(() => {
+    if (query.trim()) return;
+    setResults(null);
     load();
-  }, [load]);
+  }, [load, query]);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        setResults(await api.globalSearch(q));
+        setError("");
+      } catch (e) {
+        toast.error(apiErrorMsg(to, e));
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, to]);
 
   const onPageChange = (p: number) => setPage(p);
   const onPageSizeChange = (s: number) => {
@@ -71,6 +94,87 @@ export default function Explore() {
         <p className="text-sm text-muted-foreground">{t("explore.subtitle")}</p>
       </div>
 
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="pl-9"
+          placeholder={t("explore.searchPlaceholder")}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      {searching && <Skeleton className="h-10 w-full" />}
+
+      {results && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {t("explore.searchResults", {
+              repos: results.repos.length,
+              issues: results.issues.length,
+              users: results.users.length,
+            })}
+          </h2>
+          {results.repos.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase text-muted-foreground">
+                {t("explore.sectionRepos")}
+              </p>
+              {results.repos.map((r) => (
+                <Link
+                  key={`${r.owner}/${r.name}`}
+                  to={`/repo/${r.owner}/${r.name}`}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="font-medium">{r.owner}/{r.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                    {r.description}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+          {results.issues.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase text-muted-foreground">
+                {t("explore.sectionIssues")}
+              </p>
+              {results.issues.map((i) => (
+                <Link
+                  key={`${i.owner}/${i.repo}#${i.number}`}
+                  to={`/repo/${i.owner}/${i.repo}?tab=issues`}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <CircleDot
+                    className={`h-4 w-4 shrink-0 ${i.state === "open" ? "text-green-600" : "text-purple-600"}`}
+                  />
+                  <span className="font-medium">{i.title}</span>
+                  <span className="text-muted-foreground">
+                    {i.owner}/{i.repo}#{i.number}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+          {results.users.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase text-muted-foreground">
+                {t("explore.sectionUsers")}
+              </p>
+              {results.users.map((u) => (
+                <div key={`${u.kind}:${u.name}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="font-medium">{u.name}</span>
+                  {u.kind === "org" && <Badge variant="secondary" className="font-normal">{t("explore.org")}</Badge>}
+                  {u.display && <span className="text-muted-foreground">{u.display}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <Card className="border-destructive">
           <CardContent className="pt-6 text-sm text-destructive">
@@ -79,7 +183,7 @@ export default function Explore() {
         </Card>
       )}
 
-      {loading && !error && (
+      {!results && loading && !error && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i}>
@@ -100,7 +204,7 @@ export default function Explore() {
         </div>
       )}
 
-      {!loading && !error && repos.length === 0 && (
+      {!results && !loading && !error && repos.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <FolderGit2 className="h-10 w-10 text-muted-foreground" />
@@ -110,7 +214,7 @@ export default function Explore() {
         </Card>
       )}
 
-      {!loading && !error && repos.length > 0 && (
+      {!results && !loading && !error && repos.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {repos.map((repo) => (
             <Card key={`${repo.owner}/${repo.name}`} className="flex min-w-0 flex-col">
@@ -160,7 +264,7 @@ export default function Explore() {
         </div>
       )}
 
-      {!loading && !error && total > 0 && (
+      {!results && !loading && !error && total > 0 && (
         <Pagination
           page={page}
           pageSize={pageSize}

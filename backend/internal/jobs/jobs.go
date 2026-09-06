@@ -101,21 +101,21 @@ func handle(_ context.Context, j queue.Job) error {
 	}
 	switch j.Kind {
 	case KindImport:
-		_ = boundStore.SetImportStatus(p.Owner, p.Repo, StatusRunning)
+		_ = boundStore.SetImportStatus(p.Owner, p.Repo, StatusRunning, "")
 		if err := gitsvc.ImportRepo(p.URL, p.Owner, p.Repo, p.PrivateKey); err != nil {
 			log.Printf("jobs: import %s/%s: %v", p.Owner, p.Repo, err)
-			_ = boundStore.SetImportStatus(p.Owner, p.Repo, StatusFailed)
+			_ = boundStore.SetImportStatus(p.Owner, p.Repo, StatusFailed, err.Error())
 			return nil
 		}
-		_ = boundStore.SetImportStatus(p.Owner, p.Repo, StatusSynced)
+		_ = boundStore.SetImportStatus(p.Owner, p.Repo, StatusSynced, "")
 	case KindMirror:
-		_ = boundStore.SetMirrorStatus(p.Owner, p.Repo, StatusRunning)
+		_ = boundStore.SetMirrorStatus(p.Owner, p.Repo, StatusRunning, "")
 		if err := gitsvc.PushMirror(p.Owner, p.Repo, p.URL, p.PrivateKey); err != nil {
 			log.Printf("jobs: mirror %s/%s -> %s: %v", p.Owner, p.Repo, p.URL, err)
-			_ = boundStore.SetMirrorStatus(p.Owner, p.Repo, StatusFailed)
+			_ = boundStore.SetMirrorStatus(p.Owner, p.Repo, StatusFailed, err.Error())
 			return nil
 		}
-		_ = boundStore.SetMirrorStatus(p.Owner, p.Repo, StatusSynced)
+		_ = boundStore.SetMirrorStatus(p.Owner, p.Repo, StatusSynced, "")
 	}
 	return nil
 }

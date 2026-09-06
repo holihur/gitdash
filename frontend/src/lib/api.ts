@@ -30,6 +30,7 @@ export interface User {
   email?: string;
   created_at: string;
   mfa_enabled: boolean;
+  email_verified?: boolean;
 }
 
 export interface LoginResult {
@@ -70,6 +71,8 @@ export interface Repo {
   fork_repo?: string;
   /** 导入任务状态（queued/running/synced/failed），非导入仓库为空 */
   import_status?: "queued" | "running" | "synced" | "failed";
+  /** 最近一次导入失败原因 */
+  import_error?: string;
 }
 
 export interface GPGKey {
@@ -161,6 +164,8 @@ export interface Commit {
   message: string;
   /** 经已注册 GPG 公钥验证的提交所属用户 */
   gpg_verified?: string;
+  /** GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省） */
+  gpg_status?: "verified" | "unknown_key" | "invalid";
 }
 export interface Issue {
   id: number;
@@ -276,6 +281,10 @@ export interface PullRequest {
   updated_at: string;
   merged_at: string | null;
   merged_by: string;
+  /** API enrich（open PR）：可合并性预检与 head 提交 CI 状态 */
+  mergeable?: boolean;
+  conflicted?: boolean;
+  ci?: { run_id: number; status: "pending" | "running" | "success" | "failed" };
 }
 
 export interface Tag {
@@ -296,6 +305,24 @@ export interface Webhook {
   owner: string;
   repo: string;
   url: string;
+  created_at: string;
+}
+
+export interface GlobalSearchResult {
+  repos: Repo[];
+  issues: (Omit<Issue, "labels" | "milestone"> & { owner: string; repo: string })[];
+  users: { kind: "user" | "org"; name: string; display?: string; created_at: string }[];
+}
+
+export interface WebhookDelivery {
+  id: number;
+  hook_id: number;
+  event: string;
+  status: "success" | "retry" | "failed";
+  code: number;
+  error?: string;
+  attempts: number;
+  next_retry?: string;
   created_at: string;
 }
 
@@ -331,8 +358,20 @@ export interface Notification {
   read: boolean;
   created_at: string;
 }
+let sshPort = "2222";
+
+/** 启动时调用：拉取实例信息（真实 SSH 端口），失败保持默认 2222。 */
+export async function loadInstanceInfo(): Promise<void> {
+  try {
+    const r = await req<{ version: string; ssh_port: string }>("/instance");
+    if (r.ssh_port) sshPort = r.ssh_port;
+  } catch {
+    /* ignore：回退默认端口 */
+  }
+}
+
 export function cloneUrl(owner: string, name: string): string {
-  return `ssh://git@${window.location.hostname}:2222/${owner}/${name}.git`;
+  return `ssh://git@${window.location.hostname}:${sshPort}/${owner}/${name}.git`;
 }
 
 export function cloneCommand(owner: string, name: string): string {
@@ -432,6 +471,13 @@ export const api = {
     }),
   logout: () => req<null>("/auth/logout", { method: "POST" }),
   me: () => req<User>("/me"),
+  verifyEmail: (token: string) =>
+    req<{ username: string; email_verified: boolean }>("/me/email/verify", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  resendEmailVerification: () =>
+    req<{ sent: boolean }>("/me/email/resend", { method: "POST" }),
 
   // profile
   changePassword: (currentPassword: string, newPassword: string) =>
@@ -481,6 +527,8 @@ export const api = {
     }),
   listExplore: (limit?: number, offset?: number) =>
     reqPage<Repo[]>(`/explore/repos${pageQuery(limit, offset)}`),
+  globalSearch: (q: string) =>
+    req<GlobalSearchResult>(`/search?q=${encodeURIComponent(q)}`),
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
   deleteRepo: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),
@@ -532,11 +580,11 @@ export const api = {
 
   // push mirror（同步到第三方）
   getMirror: (owner: string, name: string) =>
-    req<{ url: string; created_at: string; status?: string }>(
+    req<{ url: string; created_at: string; status?: string; error?: string }>(
       `/users/${owner}/repos/${name}/mirror`,
     ),
   setMirror: (owner: string, name: string, url: string, privateKey?: string) =>
-    req<{ url: string; created_at: string; status?: string }>(
+    req<{ url: string; created_at: string; status?: string; error?: string }>(
       `/users/${owner}/repos/${name}/mirror`,
       {
         method: "PUT",
@@ -682,6 +730,8 @@ export const api = {
     }),
   deleteWebhook: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/webhooks/${id}`, { method: "DELETE" }),
+  listWebhookDeliveries: (owner: string, name: string, id: number) =>
+    req<WebhookDelivery[]>(`/users/${owner}/repos/${name}/webhooks/${id}/deliveries?limit=20`),
 
   // pipeline（CI）
   getPipeline: (owner: string, name: string) =>
@@ -763,7 +813,7 @@ export const api = {
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}`),
   pullDiff: (owner: string, name: string, number: number) =>
     req<PullDiff>(`/users/${owner}/repos/${name}/pulls/${number}/diff`),
-  mergePull: (owner: string, name: string, number: number, method?: "merge" | "squash") =>
+  mergePull: (owner: string, name: string, number: number, method?: "merge" | "squash" | "rebase") =>
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/merge`, {
       method: "POST",
       body: JSON.stringify(method ? { method } : {}),
