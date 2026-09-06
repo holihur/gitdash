@@ -37,8 +37,11 @@ func (s *Store) migrate() error {
 		&importRow{},
 		&mirrorRow{},
 		&pullRequestRow{},
+		&pullReviewRow{},
 		&pipelineCfgRow{},
 		&pipelineRunRow{},
+		&releaseRow{},
+		&releaseAssetRow{},
 	); err != nil {
 		return err
 	}

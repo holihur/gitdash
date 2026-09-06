@@ -278,6 +278,252 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/users": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "管理端用户列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户名模糊过滤",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.User"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "管理端创建用户",
+                "parameters": [
+                    {
+                        "description": "用户名、密码与可选邮箱",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.adminCreateUserReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.User"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{username}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "级联删除用户的会话/密钥/PAT/OAuth/仓库等归属数据。返回 204。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "管理端删除用户",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户名",
+                        "name": "username",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{username}/reset_password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "管理端重置用户密码",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户名",
+                        "name": "username",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新密码",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.adminResetPasswordReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "返回会话 token；若启用 MFA 则返回 mfa_required 与临时 mfa_token。",
@@ -507,6 +753,20 @@ const docTemplate = `{
                     "repos"
                 ],
                 "summary": "探索公开仓库",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -704,7 +964,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "支持 http(s)/ssh/git 地址；导入失败返回 400。创建成功返回 201。",
+                "description": "支持 http(s)/ssh/git 地址；URL 校验失败返回 400。导入异步执行，成功返回 202，通过 GET repo 的 import_status 轮询进度。",
                 "consumes": [
                     "application/json"
                 ],
@@ -727,8 +987,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Created",
+                    "202": {
+                        "description": "Accepted",
                         "schema": {
                             "$ref": "#/definitions/store.Repo"
                         }
@@ -786,6 +1046,20 @@ const docTemplate = `{
                     "inbox"
                 ],
                 "summary": "列出收件箱通知",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 50，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1403,7 +1677,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "更新当前用户邮箱；空串表示清除。返回 200 与更新后的资料。",
+                "description": "更新当前用户邮箱与邮件通知开关；邮箱空串表示清除。返回 200 与更新后的资料。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1416,7 +1690,7 @@ const docTemplate = `{
                 "summary": "更新个人资料",
                 "parameters": [
                     {
-                        "description": "邮箱（可为空串）",
+                        "description": "邮箱（可为空串）与 notify_email",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -1870,6 +2144,20 @@ const docTemplate = `{
                     "repos"
                 ],
                 "summary": "列出可访问仓库",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1877,15 +2165,6 @@ const docTemplate = `{
                             "type": "array",
                             "items": {
                                 "$ref": "#/definitions/store.Repo"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
                             }
                         }
                     }
@@ -2728,6 +3007,310 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/repos/{name}/releases": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "列出 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Release"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "tag 必须已存在（不存在返回 400 tag_not_found）；同 tag 重复创建返回 409。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "创建 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "tag_name、name（可选）与 body（可选，markdown）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.createReleaseReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.Release"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/repos/{name}/releases/{tag}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "读取 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Release"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "删除 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/repos/{name}/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "代码搜索",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索字符串",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "分支/标签/commit（默认默认分支）",
+                        "name": "ref",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数上限（默认 50，最大 200）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/gitsvc.SearchHit"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -4707,7 +5290,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "url 与 created_at",
+                        "description": "url、status 与 created_at",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -4809,8 +5392,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "ok",
+                    "202": {
+                        "description": "status=queued",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -4818,15 +5401,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -5521,6 +6095,129 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{owner}/repos/{name}/pulls/{number}/reviews": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "列出 PR reviews",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "PR 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "reviews 数组与 summary {approvals, request_changes}",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "需要仓库写权限；同一 reviewer 重复提交插入新行（保留历史）。成功返回 201 并向关注者推送通知与 webhook 事件。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "提交 PR review",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "PR 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "review 状态与说明",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.createReviewReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.PullReview"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{owner}/repos/{name}/pulls/{number}/state": {
             "post": {
                 "security": [
@@ -5721,6 +6418,639 @@ const docTemplate = `{
                     },
                     "409": {
                         "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/releases": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "列出 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（简写路由时省略）",
+                        "name": "owner",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Release"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "tag 必须已存在（不存在返回 400 tag_not_found）；同 tag 重复创建返回 409。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "创建 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（简写路由时省略）",
+                        "name": "owner",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "tag_name、name（可选）与 body（可选，markdown）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.createReleaseReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.Release"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/releases/{tag}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "读取 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（简写路由时省略）",
+                        "name": "owner",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Release"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "删除 release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（简写路由时省略）",
+                        "name": "owner",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/releases/{tag}/assets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "列出 release 附件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.ReleaseAsset"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "单文件最大 10MB，每个 release 最多 10 个附件；同 release 内文件名重复返回 409。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "上传 release 附件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "附件文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.ReleaseAsset"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "下载 release 附件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "附件文件名",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "删除 release 附件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "tag 名",
+                        "name": "tag",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "附件文件名",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/search": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "代码搜索",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（简写路由时省略）",
+                        "name": "owner",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索字符串",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "分支/标签/commit（默认默认分支）",
+                        "name": "ref",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数上限（默认 50，最大 200）",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/gitsvc.SearchHit"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -6267,6 +7597,16 @@ const docTemplate = `{
                 "body": {
                     "description": "评论正文（最多 10000 字符）",
                     "type": "string"
+                },
+                "file_path": {
+                    "description": "可选：行内评论的文件路径（仅 PR；填写时 line 必填，line_side 为 old/new）",
+                    "type": "string"
+                },
+                "line": {
+                    "type": "integer"
+                },
+                "line_side": {
+                    "type": "string"
                 }
             }
         },
@@ -6305,6 +7645,20 @@ const docTemplate = `{
                 }
             }
         },
+        "api.adminCreateUserReq": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "api.adminLoginReq": {
             "type": "object",
             "properties": {
@@ -6314,6 +7668,14 @@ const docTemplate = `{
                 },
                 "username": {
                     "description": "管理员用户名",
+                    "type": "string"
+                }
+            }
+        },
+        "api.adminResetPasswordReq": {
+            "type": "object",
+            "properties": {
+                "password": {
                     "type": "string"
                 }
             }
@@ -6479,6 +7841,20 @@ const docTemplate = `{
                 }
             }
         },
+        "api.createReleaseReq": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tag_name": {
+                    "type": "string"
+                }
+            }
+        },
         "api.createRepoReq": {
             "type": "object",
             "properties": {
@@ -6500,6 +7876,23 @@ const docTemplate = `{
                 },
                 "template": {
                     "description": "模板：空 = 空仓库；\"readme\" = 默认模版（README.md）",
+                    "type": "string"
+                }
+            }
+        },
+        "api.createReviewReq": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "description": "review 说明",
+                    "type": "string"
+                },
+                "commit_sha": {
+                    "description": "可选：针对的提交 SHA",
+                    "type": "string"
+                },
+                "state": {
+                    "description": "approve | request_changes | comment",
                     "type": "string"
                 }
             }
@@ -6731,6 +8124,10 @@ const docTemplate = `{
                 "email": {
                     "description": "邮箱；空串表示清除",
                     "type": "string"
+                },
+                "notify_email": {
+                    "description": "邮件通知开关（可选）",
+                    "type": "boolean"
                 }
             }
         },
@@ -6848,6 +8245,20 @@ const docTemplate = `{
                 }
             }
         },
+        "gitsvc.SearchHit": {
+            "type": "object",
+            "properties": {
+                "line": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                }
+            }
+        },
         "gitsvc.Tag": {
             "type": "object",
             "properties": {
@@ -6895,8 +8306,18 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "file_path": {
+                    "description": "行内评论（仅 PR；FilePath 为 nil 表示普通评论）",
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
+                },
+                "line": {
+                    "type": "integer"
+                },
+                "line_side": {
+                    "type": "string"
                 },
                 "number": {
                     "type": "integer"
@@ -7144,6 +8565,82 @@ const docTemplate = `{
                 }
             }
         },
+        "store.PullReview": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "commit_sha": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "reviewer": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.Release": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "body": {
+                    "description": "markdown",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                },
+                "tag_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ReleaseAsset": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "release_id": {
+                    "type": "integer"
+                },
+                "size": {
+                    "type": "integer"
+                }
+            }
+        },
         "store.Repo": {
             "type": "object",
             "properties": {
@@ -7161,6 +8658,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "import_status": {
+                    "description": "导入任务状态（queued/running/synced/failed），非导入仓库为空",
+                    "type": "string"
                 },
                 "import_url": {
                     "type": "string"
@@ -7209,6 +8710,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "public_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.User": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "username": {
                     "type": "string"
                 }
             }

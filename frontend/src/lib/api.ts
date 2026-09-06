@@ -199,6 +199,41 @@ export interface IssueComment {
   body: string;
   created_at: string;
   updated_at: string;
+  /** PR 行内评论才有值 */
+  file_path?: string | null;
+  line?: number | null;
+  line_side?: "old" | "new" | null;
+}
+
+export type ReviewState = "approve" | "request_changes" | "comment";
+
+export interface PullReview {
+  id: number;
+  reviewer: string;
+  state: ReviewState;
+  body: string;
+  commit_sha: string;
+  created_at: string;
+}
+
+export interface SearchResult {
+  path: string;
+  line: number;
+  text: string;
+}
+
+export interface ReleaseAsset {
+  filename: string;
+  size: number;
+  created_at: string;
+}
+
+export interface Release {
+  tag_name: string;
+  name: string;
+  body: string;
+  created_at: string;
+  assets: ReleaseAsset[];
 }
 
 export interface Collab {
@@ -324,6 +359,22 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await send(path, opts);
   if (res.status === 204) return null as T;
   return res.json();
+}
+
+/** multipart 上传：不设 Content-Type（由浏览器带 boundary） */
+async function sendForm<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: "POST", credentials: "same-origin", body: form });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      const body = await res.json();
+      if (typeof body?.error === "string") msg = body.error;
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  return res.json() as Promise<T>;
 }
 
 // 分页列表请求：数组 JSON + X-Total-Count 响应头
@@ -540,10 +591,11 @@ export const api = {
     number: number,
     body: string,
     kind: "issues" | "pulls" = "issues",
+    loc?: { file_path: string; line: number; line_side: "old" | "new" },
   ) =>
     req<IssueComment>(`/users/${owner}/repos/${name}/${kind}/${number}/comments`, {
       method: "POST",
-      body: JSON.stringify({ body }),
+      body: JSON.stringify(loc ? { body, ...loc } : { body }),
     }),
   deleteComment: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/comments/${id}`, { method: "DELETE" }),
@@ -688,6 +740,54 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ state }),
     }),
+
+  // PR reviews
+  listPullReviews: (owner: string, name: string, number: number) =>
+    req<{ reviews: PullReview[]; summary: { approvals: number; request_changes: number } }>(
+      `/users/${owner}/repos/${name}/pulls/${number}/reviews`,
+    ),
+  createPullReview: (owner: string, name: string, number: number, state: ReviewState, body?: string) =>
+    req<PullReview>(`/users/${owner}/repos/${name}/pulls/${number}/reviews`, {
+      method: "POST",
+      body: JSON.stringify({ state, body: body?.trim() ? body.trim() : undefined }),
+    }),
+
+  // 代码搜索
+  searchRepo: (owner: string, name: string, q: string, ref?: string, limit = 50) => {
+    const p = new URLSearchParams({ q, limit: String(limit) });
+    if (ref) p.set("ref", ref);
+    return req<SearchResult[]>(
+      `/users/${owner}/repos/${name}/search?${p.toString()}`,
+    );
+  },
+
+  // releases
+  listReleases: (owner: string, name: string) =>
+    req<Release[]>(`/users/${owner}/repos/${name}/releases`),
+  createRelease: (owner: string, name: string, tagName: string, title?: string, body?: string) =>
+    req<Release>(`/users/${owner}/repos/${name}/releases`, {
+      method: "POST",
+      body: JSON.stringify({ tag_name: tagName, name: title, body }),
+    }),
+  deleteRelease: (owner: string, name: string, tag: string) =>
+    req<null>(`/users/${owner}/repos/${name}/releases/${encodeURIComponent(tag)}`, {
+      method: "DELETE",
+    }),
+  uploadReleaseAsset: (owner: string, name: string, tag: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return sendForm(
+      `/users/${owner}/repos/${name}/releases/${encodeURIComponent(tag)}/assets`,
+      form,
+    );
+  },
+  deleteReleaseAsset: (owner: string, name: string, tag: string, filename: string) =>
+    req<null>(
+      `/users/${owner}/repos/${name}/releases/${encodeURIComponent(tag)}/assets/${encodeURIComponent(filename)}`,
+      { method: "DELETE" },
+    ),
+  releaseAssetUrl: (owner: string, name: string, tag: string, filename: string) =>
+    `/api/users/${owner}/repos/${name}/releases/${encodeURIComponent(tag)}/assets/${encodeURIComponent(filename)}`,
 
   // orgs（组织）
   listOrgs: () => req<Org[]>("/orgs"),

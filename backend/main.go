@@ -99,6 +99,23 @@ func run() {
 		log.Fatalf("open store: %v", err)
 	}
 
+	// 后台定期清理过期的登录失败限流行，防止表无限增长
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("login-fails cleanup panic: %v", r)
+			}
+		}()
+		for {
+			if n, err := st.CleanupLoginFails(24 * time.Hour); err != nil {
+				log.Printf("login-fails cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("login-fails cleanup: removed %d expired rows", n)
+			}
+			time.Sleep(time.Hour)
+		}
+	}()
+
 	go func() {
 		log.Printf("git ssh server listening on %s", sshAddr)
 		if err := sshserver.Serve(sshAddr, st, gitsvc.ReposDir(), dataDir); err != nil {

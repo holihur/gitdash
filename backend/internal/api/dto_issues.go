@@ -68,4 +68,15 @@ type setPullStateReq struct {
 type addCommentReq struct {
 	// 评论正文（最多 10000 字符）
 	Body string `json:"body"`
+	// 可选：行内评论的文件路径（仅 PR；填写时 line 必填，line_side 为 old/new）
+	FilePath string `json:"file_path"`
+	Line     int64  `json:"line"`
+	LineSide string `json:"line_side"`
+}
+
+// createReviewReq 提交 PR review 请求体。
+type createReviewReq struct {
+	State     string `json:"state"`      // approve | request_changes | comment
+	Body      string `json:"body"`       // review 说明
+	CommitSHA string `json:"commit_sha"` // 可选：针对的提交 SHA
 }

@@ -112,6 +112,11 @@ type commentRow struct {
 	Body      string `gorm:"not null"`
 	CreatedAt string `gorm:"not null"`
 	UpdatedAt string `gorm:"not null"`
+
+	// 行内评论（仅 PR，nil 表示普通评论）
+	FilePath *string `gorm:"size:255"`
+	Line     *int64
+	LineSide string `gorm:"not null;default:'';size:8"`
 }
 
 func (commentRow) TableName() string { return "issue_comments" }
@@ -313,6 +318,22 @@ type pullRequestRow struct {
 
 func (pullRequestRow) TableName() string { return "pull_requests" }
 
+// pullReviewRow PR review（approve/request_changes/comment）。
+// 同一 reviewer 重复提交插入新行，保留历史；当前状态取每个 reviewer 最新一条。
+type pullReviewRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Owner     string `gorm:"not null;index:idx_review_host,priority:1;size:255"`
+	Repo      string `gorm:"not null;index:idx_review_host,priority:2;size:255"`
+	Number    int64  `gorm:"not null;index:idx_review_host,priority:3"`
+	Reviewer  string `gorm:"not null;index:idx_review_host,priority:4;size:255"`
+	State     string `gorm:"not null;size:16"`
+	Body      string `gorm:"not null;default:''"`
+	CommitSHA string `gorm:"not null;default:'';size:64"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (pullReviewRow) TableName() string { return "pull_reviews" }
+
 // ---- pipelines ----
 
 type pipelineCfgRow struct {
@@ -340,3 +361,31 @@ type pipelineRunRow struct {
 }
 
 func (pipelineRunRow) TableName() string { return "pipeline_runs" }
+
+// ---- releases / release assets ----
+
+type releaseRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Owner     string `gorm:"not null;uniqueIndex:uq_release;size:255"`
+	Repo      string `gorm:"not null;uniqueIndex:uq_release;size:255"`
+	TagName   string `gorm:"column:tag_name;not null;uniqueIndex:uq_release;size:255"`
+	Name      string `gorm:"not null;default:''"`
+	Body      string `gorm:"not null;default:''"`
+	Author    string `gorm:"not null;size:255"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (releaseRow) TableName() string { return "releases" }
+
+type releaseAssetRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Owner     string `gorm:"not null;index:idx_release_assets;size:255"`
+	Repo      string `gorm:"not null;index:idx_release_assets;size:255"`
+	ReleaseID int64  `gorm:"column:release_id;not null;uniqueIndex:uq_release_asset;index:idx_release_assets"`
+	Filename  string `gorm:"not null;uniqueIndex:uq_release_asset;size:255"`
+	Size      int64  `gorm:"not null;default:0"`
+	Content   []byte `gorm:"not null"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (releaseAssetRow) TableName() string { return "release_assets" }

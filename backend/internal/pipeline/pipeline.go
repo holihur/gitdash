@@ -230,6 +230,10 @@ func executeRun(st *store.Store, job RunJob) {
 	}
 	cfg, perr := Parse([]byte(blob.Content))
 	if perr != nil {
+		// 拒绝运行（如挂载 docker socket）记审计日志
+		if strings.Contains(perr.Error(), dockerSockPath) {
+			log.Printf("pipeline audit: REJECTED docker socket mount repo=%s/%s time=%s", owner, repo, time.Now().UTC().Format(time.RFC3339))
+		}
 		fail("invalid %s: %v", FileName, perr)
 		return
 	}
@@ -277,13 +281,18 @@ func runStep(workdir string, cfg *Config, step Step, owner, repo, ref, sha strin
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
 	defer cancel()
 
+	// 网络开关：默认 none（沙箱）；GITDASH_PIPELINE_NETWORK 显式指定时用该值
+	network := strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_NETWORK"))
+	if network == "" {
+		network = "none"
+	}
 	args := []string{
 		"run", "--rm",
 		"--workdir", "/workspace",
 		"-v", workdir + ":/workspace",
-		// 沙箱加固：禁外网（依赖拉取需镜像内预装或镜像自身可达源）、
+		// 沙箱加固：默认禁外网（依赖拉取需镜像内预装或镜像自身可达源）、
 		// 限制资源、禁止提权、丢弃 capabilities，防止流水线脚本攻击宿主或同级容器。
-		"--network", "none",
+		"--network", network,
 		"--memory", "512m",
 		"--memory-swap", "512m",
 		"--cpus", "1.0",
@@ -299,8 +308,14 @@ func runStep(workdir string, cfg *Config, step Step, owner, repo, ref, sha strin
 	for _, e := range cfg.Env {
 		args = append(args, "-e", e)
 	}
+	for _, m := range cfg.Volumes { // DSL 声明的额外挂载卷（docker.sock 已在 validate 拒绝）
+		args = append(args, "-v", m)
+	}
 	args = append(args, cfg.Image, "sh", "-ec", step.Run)
 
+	// 镜像拉取/运行审计日志
+	log.Printf("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
+		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile

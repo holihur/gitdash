@@ -1,6 +1,7 @@
 package api
 
 import (
+	"gitdash/backend/internal/store"
 	"net/http"
 	"strconv"
 	"strings"
@@ -105,7 +106,16 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 		return
 	}
 	me := userFrom(r)
-	comment, err := a.store.CreateComment(owner, name, kind, number, me, body)
+	var inline *store.InlineRef
+	if kind == "pull" && strings.TrimSpace(in.FilePath) != "" {
+		fp := strings.TrimSpace(in.FilePath)
+		if in.Line < 1 || (in.LineSide != "old" && in.LineSide != "new") {
+			writeCode(w, http.StatusBadRequest, "invalid_inline", "inline comment requires line >= 1 and line_side of old/new")
+			return
+		}
+		inline = &store.InlineRef{FilePath: fp, Line: in.Line, LineSide: in.LineSide}
+	}
+	comment, err := a.store.CreateComment(owner, name, kind, number, me, body, inline)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

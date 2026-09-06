@@ -42,6 +42,14 @@ func (s *Store) RateFail(key string, window time.Duration) error {
 	return s.db.Save(&r).Error
 }
 
+// CleanupLoginFails 清理过期（Until 已超 olderThan 窗口）的限流行，返回删除行数。
+// Until 以 RFC3339 UTC 字符串存储，字典序比较与 SQLite/PG 文本排序一致。
+func (s *Store) CleanupLoginFails(olderThan time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-olderThan).UTC().Format(time.RFC3339)
+	res := s.db.Where("until < ?", cutoff).Delete(&loginFailRow{})
+	return res.RowsAffected, res.Error
+}
+
 // RateReset 成功登录后清除失败记录。
 func (s *Store) RateReset(key string) error {
 	return s.db.Where("`key` = ?", key).Delete(&loginFailRow{}).Error

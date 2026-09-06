@@ -91,6 +91,25 @@ type Issue struct {
 	ClosedAt  *string `json:"closed_at"`
 }
 
+// PullReview PR review 状态（approve | request_changes | comment）。
+type PullReview struct {
+	ID        int64  `json:"id"`
+	Owner     string `json:"-"`
+	Repo      string `json:"-"`
+	Number    int64  `json:"number"`
+	Reviewer  string `json:"reviewer"`
+	State     string `json:"state"`
+	Body      string `json:"body"`
+	CommitSHA string `json:"commit_sha"`
+	CreatedAt string `json:"created_at"`
+}
+
+// ReviewSummary 每个 reviewer 最新 review 的汇总统计。
+type ReviewSummary struct {
+	Approvals      int `json:"approvals"`
+	RequestChanges int `json:"request_changes"`
+}
+
 // Comment issue/PR 下的评论（Kind: "issue" | "pull"）。
 type Comment struct {
 	ID        int64  `json:"id"`
@@ -102,6 +121,11 @@ type Comment struct {
 	Body      string `json:"body"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+
+	// 行内评论（仅 PR；FilePath 为 nil 表示普通评论）
+	FilePath *string `json:"file_path"`
+	Line     *int64  `json:"line"`
+	LineSide string  `json:"line_side"`
 }
 
 // Collab 仓库协作者（read=可克隆/浏览，write=可 push）

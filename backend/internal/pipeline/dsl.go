@@ -48,8 +48,12 @@ type Config struct {
 	Image   string
 	Timeout time.Duration
 	Env     []string
+	Volumes []string // 额外挂载卷（host:container），沙箱会校验禁止挂载 docker socket
 	Steps   []Step
 }
+
+// dockerSockPath 宿主 docker socket 路径（禁止挂载进流水线容器）。
+const dockerSockPath = "/var/run/docker.sock"
 
 var (
 	imageRe    = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._:/-]{0,127}$`)
@@ -115,6 +119,18 @@ func Parse(data []byte) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "volumes":
+			var err error
+			i, err = readListItems(lines, i+1, func(item string, lineNo int) error {
+				if len(item) > 4096 || strings.Count(item, ":") < 1 {
+					return fmt.Errorf("line %d: volume entries must be host:container[:mode]", lineNo)
+				}
+				cfg.Volumes = append(cfg.Volumes, item)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
 		case "steps":
 			var err error
 			i, cfg.Steps, err = readSteps(lines, i+1)
@@ -122,7 +138,7 @@ func Parse(data []byte) (*Config, error) {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, env, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, env, volumes, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -150,6 +166,12 @@ func (c *Config) validate() error {
 		}
 		if len(s.Run) > MaxRunLength {
 			return fmt.Errorf("step %d (%s): run script too long", i+1, s.Name)
+		}
+	}
+	for i, v := range c.Volumes {
+		// 沙箱硬性限制：禁止把宿主 docker socket 挂进容器（等于交出宿主 root）
+		if strings.Contains(v, dockerSockPath) {
+			return fmt.Errorf("volume %d: mounting %s is not allowed", i+1, dockerSockPath)
 		}
 	}
 	return nil

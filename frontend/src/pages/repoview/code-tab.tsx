@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -9,11 +10,12 @@ import {
   GitBranch,
   GitBranchPlus,
   Pencil,
+  Search,
   Tag as TagIcon,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Blame, type Blob, type Branch, type Tag, type TreeEntry } from "@/lib/api";
+import { api, type Blame, type Blob, type Branch, type SearchResult, type Tag, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +38,7 @@ import {
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import { MarkdownView } from "@/components/markdown";
+import { MarkdownWithToc } from "@/components/markdown";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
 
 function isMarkdown(path: string): boolean {
@@ -52,6 +54,124 @@ function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
       <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCopy}>
         <Copy className="h-3.5 w-3.5" />
       </Button>
+    </div>
+  );
+}
+
+/** 高亮命中子串（大小写不敏感，只高亮第一处） */
+function HighlightText({ text, q }: { text: string; q: string }) {
+  if (!q) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="rounded-sm bg-yellow-200/80 text-inherit dark:bg-yellow-500/30">
+        {text.slice(idx, idx + q.length)}
+      </mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
+/** 代码搜索：防抖 300ms，Enter 立即搜索 */
+function CodeSearch({
+  owner,
+  name,
+  refName,
+  setParams,
+}: {
+  owner: string;
+  name: string;
+  refName: string;
+  setParams: (patch: Record<string, string | null>) => void;
+}) {
+  const { t } = useI18n();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const run = useMemo(
+    () => async (query: string) => {
+      const trimmed = query.trim();
+      if (!trimmed) {
+        setResults(null);
+        return;
+      }
+      setLoading(true);
+      try {
+        setResults(await api.searchRepo(owner, name, trimmed, refName || undefined));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e));
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [owner, name, refName],
+  );
+
+  const onChange = (value: string) => {
+    setQ(value);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => run(value), 300);
+  };
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (timer.current) clearTimeout(timer.current);
+              run(q);
+            }
+          }}
+          placeholder={t("search.placeholder")}
+          className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      {results !== null && (
+        <div className="rounded-lg border bg-card">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 border-b px-3 py-2 text-xs text-muted-foreground"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {loading ? "…" : t("search.count", { count: results.length })}
+            <span className="ml-auto">{expanded ? "▾" : "▸"}</span>
+          </button>
+          {expanded && (
+            <div className="max-h-72 overflow-auto p-1">
+              {results.length === 0 && !loading && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">{t("search.empty")}</p>
+              )}
+              {results.map((r, i) => (
+                <button
+                  key={`${r.path}:${r.line}:${i}`}
+                  className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted"
+                  onClick={() => setParams({ file: r.path, line: String(r.line) })}
+                  title={`${r.path}:${r.line}`}
+                >
+                  <span className="mr-2 font-mono font-medium">{r.path}:{r.line}</span>
+                  <span className="font-mono text-muted-foreground">
+                    <HighlightText text={r.text} q={q.trim()} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -73,6 +193,7 @@ export interface CodeTabProps {
   readmeContent: string | null;
   readmeEntryName: string | null;
   blameParam: boolean;
+  lineParam: number | null;
   setParams: (patch: Record<string, string | null>) => void;
   commands: string[];
   openRefs: () => void;
@@ -99,6 +220,7 @@ export default function CodeTab({
   readmeContent,
   readmeEntryName,
   blameParam,
+  lineParam,
   setParams,
   commands,
   openRefs,
@@ -124,8 +246,28 @@ export default function CodeTab({
 
   const readmeEntry = readmeEntryName ? { name: readmeEntryName } : null;
 
+  // 搜索结果带行号跳转：滚动到目标行并短暂高亮
+  const codeHostRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (lineParam == null || !codeHostRef.current) return;
+    const el = codeHostRef.current.querySelector<HTMLElement>(
+      `.cm-line:nth-of-type(${lineParam})`,
+    );
+    if (el) {
+      el.scrollIntoView({ block: "center" });
+      el.style.backgroundColor = "rgb(250 204 21 / 0.35)";
+      const t = setTimeout(() => {
+        el.style.backgroundColor = "";
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [lineParam, blob]);
+
   return (
     <div className="space-y-4">
+      {!emptyRepo && (
+        <CodeSearch owner={owner} name={name} refName={refName} setParams={setParams} />
+      )}
       <div className="flex items-center justify-end gap-2">
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
           <FilePlus2 className="h-4 w-4" />
@@ -319,11 +461,11 @@ export default function CodeTab({
             ) : blob.encoding === "utf-8" ? (
               isMarkdown(blob.path) ? (
                 <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
-                  <MarkdownView text={blob.content} />
+                  <MarkdownWithToc text={blob.content} />
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-md border">
-                  <div className="h-[65vh] overflow-auto bg-background/60">
+                  <div ref={codeHostRef} className="h-[65vh] overflow-auto bg-background/60">
                     <CodeMirrorEditor value={blob.content} path={blob.path} readOnly />
                   </div>
                 </div>
@@ -460,7 +602,7 @@ export default function CodeTab({
             <span className="text-xs font-medium text-muted-foreground">{readmeEntry.name}</span>
           </div>
           <div className="max-h-[60vh] overflow-auto p-4">
-            <MarkdownView text={readmeContent} />
+            <MarkdownWithToc text={readmeContent} />
           </div>
         </div>
       )}

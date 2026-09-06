@@ -2,12 +2,29 @@ package store
 
 import "errors"
 
-func commentToDTO(r commentRow) Comment {
-	return Comment(r)
+// InlineRef PR 行内评论的定位信息（nil 表示普通评论）。
+type InlineRef struct {
+	FilePath string
+	Line     int64
+	LineSide string // "old" | "new"
 }
 
-// CreateComment 在 issue/PR（kind: "issue"|"pull"）下新增一条评论。
-func (s *Store) CreateComment(owner, repo, kind string, number int64, author, body string) (Comment, error) {
+func commentToDTO(r commentRow) Comment {
+	c := Comment(r)
+	if r.FilePath != nil {
+		v := *r.FilePath
+		c.FilePath = &v
+	}
+	if r.Line != nil {
+		v := *r.Line
+		c.Line = &v
+	}
+	return c
+}
+
+// CreateComment 在 issue/PR（kind: "issue"|"pull"）下新增一条评论；
+// inline 非 nil 时存为行内评论（仅对 PR 有意义，由调用方校验）。
+func (s *Store) CreateComment(owner, repo, kind string, number int64, author, body string, inline *InlineRef) (Comment, error) {
 	if kind != "issue" && kind != "pull" {
 		return Comment{}, errors.New("invalid kind")
 	}
@@ -18,6 +35,13 @@ func (s *Store) CreateComment(owner, repo, kind string, number int64, author, bo
 		Owner: owner, Repo: repo, Kind: kind, Number: number,
 		Author: author, Body: body,
 		CreatedAt: now(), UpdatedAt: now(),
+	}
+	if inline != nil {
+		fp := inline.FilePath
+		line := inline.Line
+		r.FilePath = &fp
+		r.Line = &line
+		r.LineSide = inline.LineSide
 	}
 	if err := s.db.Create(&r).Error; err != nil {
 		return Comment{}, err

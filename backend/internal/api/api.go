@@ -144,6 +144,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/settings", a.adminAuth(a.adminSettings))
 	mux.HandleFunc("POST /api/admin/settings", a.adminAuth(a.adminSaveSettings))
 	mux.HandleFunc("POST /api/admin/password", a.adminAuth(a.adminChangePassword))
+	// 用户管理
+	mux.HandleFunc("GET /api/admin/users", a.adminAuth(a.adminListUsers))
+	mux.HandleFunc("POST /api/admin/users", a.adminAuth(a.adminCreateUser))
+	mux.HandleFunc("POST /api/admin/users/{username}/reset_password", a.adminAuth(a.adminResetPassword))
+	mux.HandleFunc("DELETE /api/admin/users/{username}", a.adminAuth(a.adminDeleteUser))
 	// auth
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
@@ -169,6 +174,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/repos/{name}/blame", a.auth(a.blame))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
+	mux.HandleFunc("GET /api/repos/{name}/search", a.auth(a.search))
 	// repos（owner 限定版：供协作者 / 跨用户访问，owner 显式声明）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}", a.auth(a.getRepo))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}", a.auth(a.deleteRepo))
@@ -177,6 +183,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.auth(a.blob))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blame", a.auth(a.blame))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/search", a.auth(a.search))
 
 	// star & fork & import
 	mux.HandleFunc("GET /api/starred", a.auth(a.listStarred))
@@ -238,6 +245,20 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/refs", a.auth(a.createRef))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/refs/{kind}/{refname}", a.auth(a.deleteRef))
 
+	// releases & assets
+	mux.HandleFunc("GET /api/repos/{name}/releases", a.auth(a.listReleases))
+	mux.HandleFunc("POST /api/repos/{name}/releases", a.auth(a.createRelease))
+	mux.HandleFunc("GET /api/repos/{name}/releases/{tag}", a.auth(a.getRelease))
+	mux.HandleFunc("DELETE /api/repos/{name}/releases/{tag}", a.auth(a.deleteRelease))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases", a.auth(a.listReleases))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/releases", a.auth(a.createRelease))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}", a.auth(a.getRelease))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/releases/{tag}", a.auth(a.deleteRelease))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/releases/{tag}/assets", a.auth(a.uploadAsset))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}/assets", a.auth(a.listAssets))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}", a.auth(a.downloadAsset))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}", a.auth(a.deleteAsset))
+
 	// pull requests
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.auth(a.listPulls))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls", a.auth(a.createPull))
@@ -245,6 +266,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/diff", a.auth(a.pullDiff))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/merge", a.auth(a.mergePull))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/state", a.auth(a.setPullState))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.auth(a.listReviews))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.auth(a.createReview))
 
 	// collaborators
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/visibility", a.auth(a.setRepoVisibility))

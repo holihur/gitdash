@@ -8,8 +8,9 @@ import {
   Plus,
 } from "lucide-react";
 import { api, type PullDiff, type PullRequest } from "@/lib/api";
-import { DiffView } from "@/components/diff-view";
+import { PullDiffView as InlinePullDiffView } from "@/components/diff-view";
 import CommentSection from "@/components/comment-section";
+import PullReviewSection from "@/components/pull-review";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,16 @@ import { Textarea } from "@/components/ui/textarea";
 import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 
-export default function RepoPulls({ owner, name }: { owner: string; name: string }) {
+export default function RepoPulls({
+  owner,
+  name,
+  role,
+}: {
+  owner: string;
+  name: string;
+  role?: "owner" | "read" | "write";
+}) {
+  const canWrite = role === "owner" || role === "write";
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [pulls, setPulls] = useState<PullRequest[]>([]);
@@ -315,7 +325,13 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
                         </>
                       )}
                     </div>
-                    <PullDiffView owner={owner} name={name} number={pr.number} />
+                    <PullDiffView
+                      owner={owner}
+                      name={name}
+                      number={pr.number}
+                      canWrite={canWrite}
+                    />
+                    <PullReviewSection owner={owner} name={name} number={pr.number} canWrite={canWrite} />
                     <CommentSection owner={owner} name={name} number={pr.number} kind="pulls" />
                   </div>
                 )}
@@ -341,7 +357,17 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
   );
 }
 
-function PullDiffView({ owner, name, number }: { owner: string; name: string; number: number }) {
+function PullDiffView({
+  owner,
+  name,
+  number,
+  canWrite,
+}: {
+  owner: string;
+  name: string;
+  number: number;
+  canWrite: boolean;
+}) {
   const [diff, setDiff] = useState<PullDiff | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => {
@@ -356,5 +382,14 @@ function PullDiffView({ owner, name, number }: { owner: string; name: string; nu
   }, [owner, name, number]);
   if (err) return <p className="text-xs text-destructive">{err}</p>;
   if (!diff) return <p className="py-4 text-center text-xs text-muted-foreground">…</p>;
-  return <DiffView files={diff.files} patch={diff.patch} />;
+  return (
+    <InlinePullDiffView
+      owner={owner}
+      name={name}
+      number={number}
+      files={diff.files}
+      patch={diff.patch}
+      canWrite={canWrite}
+    />
+  );
 }

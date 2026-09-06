@@ -46,9 +46,10 @@ const CommitsTab = lazy(() => import("./repoview/commits-tab"));
 const IssuesTab = lazy(() => import("./repoview/issues-tab"));
 const PullsTab = lazy(() => import("./repoview/pulls-tab"));
 const PipelineTab = lazy(() => import("./repoview/pipeline-tab"));
+const ReleasesTab = lazy(() => import("./repoview/releases-tab"));
 const SettingsTab = lazy(() => import("./repoview/settings-tab"));
 
-const tabs = ["code", "commits", "issues", "pulls", "pipeline", "settings"] as const;
+const tabs = ["code", "commits", "issues", "pulls", "pipeline", "releases", "settings"] as const;
 type RepoTab = (typeof tabs)[number];
 
 export default function RepoView() {
@@ -115,6 +116,7 @@ export default function RepoView() {
   const fileParam = searchParams.get("file") ?? "";
   const blameParam = searchParams.get("blame") === "1";
   const urlRef = searchParams.get("ref") ?? "";
+  const lineParam = Number(searchParams.get("line")) || null;
   const ref =
     urlRef ||
     branches.find((b) => b.is_head)?.name ||
@@ -481,6 +483,9 @@ export default function RepoView() {
           <TabsTrigger value="pipeline" className="flex-1 sm:flex-none">
             {t("pipeline.tab")}
           </TabsTrigger>
+          <TabsTrigger value="releases" className="flex-1 sm:flex-none">
+            {t("releases.tab")}
+          </TabsTrigger>
           {isOwner && (
             <TabsTrigger value="settings" className="flex-1 sm:flex-none">
               {t("repo.settings")}
@@ -507,6 +512,7 @@ export default function RepoView() {
               readmeContent={readmeContent}
               readmeEntryName={readmeEntry?.name ?? null}
               blameParam={blameParam}
+              lineParam={lineParam}
               setParams={setParams}
               commands={commands}
               openRefs={() => setRefsOpen(true)}
@@ -530,17 +536,23 @@ export default function RepoView() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="pulls">
-          <Suspense fallback={<TabFallback />}>
-            <PullsTab owner={owner} name={name} />
-          </Suspense>
-        </TabsContent>
+          <TabsContent value="pulls">
+            <Suspense fallback={<TabFallback />}>
+              <PullsTab owner={owner} name={name} role={repo?.role} />
+            </Suspense>
+          </TabsContent>
 
-        <TabsContent value="pipeline">
-          <Suspense fallback={<TabFallback />}>
-            <PipelineTab owner={owner} name={name} role={repo?.role} />
-          </Suspense>
-        </TabsContent>
+          <TabsContent value="pipeline">
+            <Suspense fallback={<TabFallback />}>
+              <PipelineTab owner={owner} name={name} role={repo?.role} />
+            </Suspense>
+          </TabsContent>
+
+          <TabsContent value="releases">
+            <Suspense fallback={<TabFallback />}>
+              <ReleasesTab owner={owner} name={name} role={repo?.role} />
+            </Suspense>
+          </TabsContent>
 
         {isOwner && (
           <TabsContent value="settings">

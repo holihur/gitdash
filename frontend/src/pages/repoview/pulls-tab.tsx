@@ -1,5 +1,11 @@
 import RepoPulls from "@/pages/RepoPulls";
 
-export default function PullsTab({ owner, name }: { owner: string; name: string }) {
-  return <RepoPulls owner={owner} name={name} />;
+export interface PullsTabProps {
+  owner: string;
+  name: string;
+  role?: "owner" | "read" | "write";
+}
+
+export default function PullsTab({ owner, name, role }: PullsTabProps) {
+  return <RepoPulls owner={owner} name={name} role={role} />;
 }
