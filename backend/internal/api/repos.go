@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/gpgsig"
+	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/store"
 	"net"
@@ -42,17 +43,26 @@ func (a *API) attachStars(repos []store.Repo, me string) {
 //	@Description 返回当前用户可访问的全部仓库（含 star/watch 状态）。
 //	@Tags        repos
 //	@Produce     json
+//	@Param       limit  query int false "每页数量（默认 200，最大 500）"
+//	@Param       offset query int false "偏移量"
 //	@Success     200 {array} store.Repo
-//	@Failure     500 {object} map[string]string
+//	@SuccessHeader X-Total-Count int "可访问仓库总数"
 //	@Security    BearerAuth
 //	@Router      /repos [get]
 func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
-	repos, err := a.store.AccessibleRepos(me)
+	limit, offset := pageParams(r)
+	repos, err := a.store.AccessibleRepos(me, limit, offset)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := a.store.CountAccessibleRepos(me)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	setTotal(w, total)
 	a.attachStars(repos, me)
 	writeJSON(w, http.StatusOK, repos)
 }
@@ -161,6 +171,9 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	if iu, err := a.store.ImportSource(owner, name); err == nil {
 		repo.ImportURL = iu
+	}
+	if is, err := a.store.ImportStatus(owner, name); err == nil {
+		repo.ImportStatus = is
 	}
 	// 当前用户视角的角色（owner/write/read），前端据此控制设置类 UI
 	switch {
@@ -453,12 +466,12 @@ func repoNameFromURL(raw string) string {
 // importRepo 从外部 URL 导入仓库。
 //
 //	@Summary     导入仓库
-//	@Description 支持 http(s)/ssh/git 地址；导入失败返回 400。创建成功返回 201。
+//	@Description 支持 http(s)/ssh/git 地址；URL 校验失败返回 400。导入异步执行，成功返回 202，通过 GET repo 的 import_status 轮询进度。
 //	@Tags        repos
 //	@Accept      json
 //	@Produce     json
 //	@Param       body body importRepoReq true "url、name（可选）、namespace（可选）、private（可选）、private_key（可选）"
-//	@Success     201 {object} store.Repo
+//	@Success     202 {object} store.Repo
 //	@Failure     400 {object} map[string]string
 //	@Failure     403 {object} map[string]string
 //	@Failure     409 {object} map[string]string
@@ -509,18 +522,24 @@ func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
 	_ = a.store.WatchRepo(userFrom(r), targetOwner, targetName)
 	repo.Watchers = 1
 	repo.Watching = true
-	if err := gitsvc.ImportRepo(raw, targetOwner, targetName, in.PrivateKey); err != nil {
-		_ = a.store.DeleteRepo(targetOwner, targetName)
-		writeCode(w, http.StatusBadRequest, "import_failed", err.Error())
-		return
-	}
 	if err := a.store.SetImportSource(targetOwner, targetName, raw); err != nil {
 		_ = a.store.DeleteRepo(targetOwner, targetName)
 		_ = gitsvc.Delete(targetOwner, targetName)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, repo)
+	// 异步导入：任务队列排队，前端轮询 import_status
+	if err := a.store.SetImportStatus(targetOwner, targetName, jobs.StatusQueued); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := jobs.EnqueueImport(targetOwner, targetName, raw, in.PrivateKey); err != nil {
+		_ = a.store.SetImportStatus(targetOwner, targetName, jobs.StatusFailed)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	repo.ImportStatus = jobs.StatusQueued
+	writeJSON(w, http.StatusAccepted, repo)
 }
 
 // ---- push mirror ----
@@ -548,6 +567,7 @@ func (a *API) getMirror(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"url":        m.URL,
+		"status":     m.Status,
 		"created_at": m.CreatedAt,
 	})
 }
@@ -561,7 +581,7 @@ func (a *API) getMirror(w http.ResponseWriter, r *http.Request) {
 //	@Param       owner path string true "仓库所有者"
 //	@Param       name  path string true "仓库名"
 //	@Param       body  body setMirrorReq true "url 与 private_key（可选）"
-//	@Success     200 {object} map[string]any "url 与 created_at"
+//	@Success     200 {object} map[string]any "url、status 与 created_at"
 //	@Failure     400 {object} map[string]string
 //	@Failure     500 {object} map[string]string
 //	@Security    BearerAuth
@@ -584,12 +604,17 @@ func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	_ = a.store.SetMirrorStatus(owner, name, "") // 换目标后重置状态
 	m, err := a.store.GetMirror(owner, name)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"url": m.URL, "created_at": m.CreatedAt})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"url":        m.URL,
+		"status":     m.Status,
+		"created_at": m.CreatedAt,
+	})
 }
 
 // deleteMirror 删除推送镜像配置。
@@ -614,16 +639,15 @@ func (a *API) deleteMirror(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// syncMirror 立即触发一次镜像推送。
+// syncMirror 立即触发一次镜像推送（异步队列）。
 //
 //	@Summary     同步镜像
 //	@Tags        repos
 //	@Produce     json
 //	@Param       owner path string true "仓库所有者"
 //	@Param       name  path string true "仓库名"
-//	@Success     200 {object} map[string]any "ok"
+//	@Success     202 {object} map[string]any "status=queued"
 //	@Failure     400 {object} map[string]string
-//	@Failure     502 {object} map[string]string
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/mirror/sync [post]
 func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
@@ -640,11 +664,17 @@ func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "mirror_not_configured", "no mirror target configured")
 		return
 	}
-	if err := gitsvc.PushMirror(owner, name, m.URL, m.PrivateKey); err != nil {
-		writeCode(w, http.StatusBadGateway, "mirror_sync_failed", err.Error())
+	// 异步同步：排队后立即返回，通过 GET mirror 的 status 轮询进度
+	if err := a.store.SetMirrorStatus(owner, name, jobs.StatusQueued); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	if err := jobs.EnqueueMirror(owner, name, m.URL, m.PrivateKey); err != nil {
+		_ = a.store.SetMirrorStatus(owner, name, jobs.StatusFailed)
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"status": jobs.StatusQueued})
 }
 
 // deleteRepo 删除仓库。
@@ -1156,16 +1186,26 @@ func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 //	@Summary     探索公开仓库
 //	@Tags        repos
 //	@Produce     json
+//	@Param       limit  query int false "每页数量（默认 200，最大 500）"
+//	@Param       offset query int false "偏移量"
 //	@Success     200 {array} store.Repo
+//	@SuccessHeader X-Total-Count int "公开仓库总数"
 //	@Failure     500 {object} map[string]string
 //	@Security    BearerAuth
 //	@Router      /explore/repos [get]
 func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := a.store.ExploreRepos()
+	limit, offset := pageParams(r)
+	repos, err := a.store.ExploreRepos(limit, offset)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := a.store.CountExploreRepos()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	setTotal(w, total)
 	// 返回所有公开仓库（含自己的，便于确认可见性设置是否生效）
 	me := userFrom(r)
 	out := []store.Repo{}

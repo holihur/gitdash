@@ -115,11 +115,6 @@ func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	return "", nil, false
 }
 
-func (a *API) sessionUser(r *http.Request) string {
-	username, _, _ := a.resolveUser(r)
-	return username
-}
-
 func newSessionToken() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

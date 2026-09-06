@@ -34,6 +34,12 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := a.store.CountIssues(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, issues))
 }
 
@@ -81,7 +87,7 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.notify(owner, name, "issue", "opened", me, issue.Number, issue.Title)
+	a.notify(owner, name, "issue", "opened", me, issue.Number, issue.Title, "")
 	writeJSON(w, http.StatusCreated, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
 
@@ -143,7 +149,7 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		if issue.State == "open" {
 			action = "reopened"
 		}
-		a.notify(owner, name, "issue", action, userFrom(r), issue.Number, issue.Title)
+		a.notify(owner, name, "issue", action, userFrom(r), issue.Number, issue.Title, "")
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }

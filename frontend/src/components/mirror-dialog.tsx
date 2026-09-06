@@ -84,7 +84,23 @@ export default function MirrorDialog({ open, onOpenChange, owner, repo }: Props)
     setBusy(true);
     try {
       await api.syncMirror(owner, repo);
-      toast.success(t("mirror.synced"));
+      toast.success(t("mirror.syncQueued"));
+      // 轮询任务状态直到 synced/failed（导入与镜像同步走异步队列）
+      const deadline = Date.now() + 60_000;
+      const poll = setInterval(async () => {
+        try {
+          const m = await api.getMirror(owner, repo);
+          if (m.status === "synced") {
+            clearInterval(poll);
+            toast.success(t("mirror.synced"));
+          } else if (m.status === "failed" || Date.now() > deadline) {
+            clearInterval(poll);
+            if (m.status === "failed") toast.error(t("mirror.syncFailed"));
+          }
+        } catch {
+          clearInterval(poll);
+        }
+      }, 1500);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,6 +16,8 @@ import (
 
 	"gitdash/backend/internal/api"
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/queue"
 	"gitdash/backend/internal/sshserver"
@@ -43,6 +46,28 @@ func resolveStaticDir() string {
 		}
 	}
 	return ""
+}
+
+// spoolWrite 原子写一个事件 JSON 到 spool 目录（临时文件 + rename）。
+func spoolWrite(dir string, ev webhooks.Event) {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	name := fmt.Sprintf("%s__%s-%d-%d.json", ev.Owner, ev.Repo, os.Getpid(), time.Now().UnixNano())
+	tmp, err := os.CreateTemp(dir, name+".tmp")
+	if err != nil {
+		return
+	}
+	if _, err := tmp.Write(b); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return
+	}
+	_ = tmp.Close()
+	if err := os.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
+		_ = os.Remove(tmp.Name())
+	}
 }
 
 func run() {
@@ -112,20 +137,32 @@ func run() {
 	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发）
 	go webhooks.Run(gitsvc.SpoolDir(), st, 2*time.Second, pipeline.PushHandler(st))
 
+	// API 侧事件 spool：issue/pull/评论事件（webhook 投递 + 邮件通知）
+	apiSpool := filepath.Join(dataDir, "webhooks-spool-api")
+	if err := os.MkdirAll(apiSpool, 0o755); err != nil {
+		log.Fatalf("create api spool dir: %v", err)
+	}
+	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
+	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, notify.NewSender()))
+
 	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
 	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
-	switch queueMode {
-	case "redis", "asynq":
+	if queueMode == "redis" || queueMode == "asynq" {
 		redisAddr := getenv("GITDASH_REDIS_ADDR", "127.0.0.1:6379")
 		redisDB, _ := strconv.Atoi(getenv("GITDASH_REDIS_DB", "0"))
+		password := os.Getenv("GITDASH_REDIS_PASSWORD")
 		concurrency, _ := strconv.Atoi(getenv("GITDASH_QUEUE_CONCURRENCY", "4"))
-		q := queue.NewAsynq(redisAddr, os.Getenv("GITDASH_REDIS_PASSWORD"), redisDB, concurrency)
-		pipeline.Bind(st, q)
-		log.Printf("pipeline queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
-	default:
+		pipeline.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, concurrency))
+		// 导入 / mirror 任务独立 asynq 实例（Start 一次性注册 kinds，不能与 pipeline 共用）
+		jobs.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, 2))
+		log.Printf("task queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
+	} else {
 		pipeline.Bind(st, nil)
-		log.Printf("pipeline queue: in-process goroutine")
+		jobs.Bind(st, queue.NewMemory(256, 2)) // 并发的 git 网络操作限 2
+		log.Printf("task queue: in-process")
 	}
+	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
+	jobs.RequeuePending()
 
 	if staticDir == "" {
 		staticDir = resolveStaticDir()

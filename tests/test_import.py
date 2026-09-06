@@ -58,15 +58,28 @@ def _uuid() -> str:
     return uuid.uuid4().hex[:10]
 
 
+def _wait_import(c, name, timeout=30):
+    """轮询 import_status 直到 synced/failed（导入为异步任务队列）。"""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        repo = c.get(f"/repos/{name}", expect=200).json()
+        if repo.get("import_status") in ("synced", "failed"):
+            return repo["import_status"]
+        time.sleep(0.3)
+    raise AssertionError(f"import {name} not finished in {timeout}s")
+
+
 def test_import_public_repo(user_factory, git_daemon):
     username, _, c = user_factory()
     name = f"imp-{_uuid()}"
-    r = c.post("/imports", json={"url": git_daemon, "name": name}, expect=201).json()
+    r = c.post("/imports", json={"url": git_daemon, "name": name}, expect=202).json()
     assert r["owner"] == username and r["name"] == name
+    assert r["import_status"] == "queued"
 
-    # 来源已记录
+    # 来源已记录；异步导入完成后分支与内容一致
     repo = c.get(f"/repos/{name}", expect=200).json()
     assert repo["import_url"] == git_daemon
+    assert _wait_import(c, name) == "synced"
 
     # 分支与内容一致
     branches = c.get(f"/repos/{name}/branches", expect=200).json()
@@ -79,7 +92,7 @@ def test_import_public_repo(user_factory, git_daemon):
 def test_import_infers_name_and_conflict(user_factory, git_daemon):
     _, _, c = user_factory()
     # 名称从 URL 推断（upstream）
-    r = c.post("/imports", json={"url": git_daemon}, expect=201).json()
+    r = c.post("/imports", json={"url": git_daemon}, expect=202).json()
     assert r["name"] == "upstream"
 
     # 同名再次导入冲突

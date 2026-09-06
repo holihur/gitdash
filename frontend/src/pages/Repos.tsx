@@ -26,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import Pagination from "@/components/ui/pagination";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { copyText, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -38,6 +39,9 @@ const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export default function Repos() {
   const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [repoTotal, setRepoTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [starred, setStarred] = useState<Repo[]>([]);
   const [watched, setWatched] = useState<Repo[]>([]);
   const [tab, setTab] = useState<"repos" | "starred" | "watching">("repos");
@@ -64,11 +68,12 @@ export default function Repos() {
     setLoading(true);
     try {
       const [mine, star, watch] = await Promise.all([
-        api.listRepos(),
+        api.listRepos(pageSize, (page - 1) * pageSize),
         api.listStarred(),
         api.listWatched(),
       ]);
-      setRepos(mine);
+      setRepos(mine.items);
+      setRepoTotal(mine.total);
       setStarred(star);
       setWatched(watch);
       setError("");
@@ -77,7 +82,7 @@ export default function Repos() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     load();
@@ -86,6 +91,12 @@ export default function Repos() {
 
   const show = tab === "repos" ? repos : tab === "starred" ? starred : watched;
   const isMine = tab === "repos";
+
+  const onPageChange = (p: number) => setPage(p);
+  const onPageSizeChange = (s: number) => {
+    setPageSize(s);
+    setPage(1);
+  };
 
   const create = async () => {
     if (!NAME_RE.test(name.trim())) {
@@ -122,7 +133,7 @@ export default function Repos() {
         private: importPrivate,
         private_key: importKey.trim() || undefined,
       });
-      toast.success(t("imports.imported", { name: repo.name }));
+      toast.success(t("imports.queued", { name: repo.name }));
       setImportOpen(false);
       setImportUrl("");
       setImportName("");
@@ -386,6 +397,17 @@ export default function Repos() {
               );
             })}
           </div>
+        )}
+
+        {isMine && !loading && !error && repoTotal > 0 && (
+          <Pagination
+            className="mt-4"
+            page={page}
+            pageSize={pageSize}
+            total={repoTotal}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+          />
         )}
       </Tabs>
 

@@ -28,7 +28,8 @@ type changePasswordReq struct {
 
 // updateProfileReq 更新个人资料请求体。
 type updateProfileReq struct {
-	Email *string `json:"email"` // 邮箱；空串表示清除
+	Email       *string `json:"email"`        // 邮箱；空串表示清除
+	NotifyEmail *bool   `json:"notify_email"` // 邮件通知开关（可选）
 }
 
 // mfaActivateReq 激活 MFA 请求体。

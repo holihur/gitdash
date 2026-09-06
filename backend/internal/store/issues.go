@@ -75,6 +75,13 @@ func (s *Store) ListIssues(owner, repo string, limit, offset int) ([]Issue, erro
 	return issues, nil
 }
 
+// CountIssues 仓库 issue 总数（与列表口径一致，不含 state 过滤）。
+func (s *Store) CountIssues(owner, repo string) (int, error) {
+	var n int64
+	err := s.db.Model(&issueRow{}).Where("owner = ? AND repo = ?", owner, repo).Count(&n).Error
+	return int(n), err
+}
+
 func (s *Store) SetIssueState(owner, repo string, number int64, state string) (Issue, error) {
 	if state != "open" && state != "closed" {
 		return Issue{}, errors.New("invalid state")

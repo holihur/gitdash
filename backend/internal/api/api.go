@@ -7,6 +7,7 @@ import (
 	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webhooks"
 	"gitdash/backend/internal/webui"
 	"github.com/swaggo/http-swagger"
 	"io/fs"
@@ -41,11 +42,19 @@ func pageParams(r *http.Request) (limit, offset int) {
 	return limit, offset
 }
 
+// setTotal 写入 X-Total-Count 响应头（列表分页的总数）。
+func setTotal(w http.ResponseWriter, n int) {
+	w.Header().Set("X-Total-Count", strconv.Itoa(n))
+}
+
 var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
 
 type API struct {
 	store   *store.Store
 	version string
+
+	// Publish 由 main 注入：把 issue/pull/评论事件写入 API 侧 webhook spool
+	Publish func(webhooks.Event)
 
 	mu         sync.Mutex
 	mfaPending map[string]mfaChallenge // mfa_token -> 待二次验证的登录
@@ -385,11 +394,6 @@ func patAllowed(path string, scopes []string) bool {
 		}
 	}
 	return false
-}
-
-func patScopesFrom(r *http.Request) []string {
-	v, _ := r.Context().Value(ctxPatScopes{}).([]string)
-	return v
 }
 
 func logMiddleware(next http.Handler) http.Handler {

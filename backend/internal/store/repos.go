@@ -50,10 +50,14 @@ func (s *Store) ListRepos(owner string) ([]Repo, error) {
 	return repos, nil
 }
 
-// ExploreRepos 公开仓库（供发现页使用）。
-func (s *Store) ExploreRepos() ([]Repo, error) {
+// ExploreRepos 分页列出公开仓库（供发现页使用）；limit<=0 表示不限制。
+func (s *Store) ExploreRepos(limit, offset int) ([]Repo, error) {
+	q := s.db.Where("private = ?", false).Order("id DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
 	var rows []repoRow
-	if err := s.db.Where("private = ?", false).Order("id DESC").Limit(100).Find(&rows).Error; err != nil {
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	repos := []Repo{}
@@ -196,8 +200,18 @@ func (s *Store) QueryOrgRepos(org string) ([]Repo, error) {
 	return s.ListRepos(org)
 }
 
+// CountExploreRepos 公开仓库总数。
+func (s *Store) CountExploreRepos() (int, error) {
+	var n int64
+	if err := s.db.Model(&repoRow{}).Where("private = ?", false).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
 // AccessibleRepos 返回用户自己拥有的仓库 + 所在组织的仓库 + 作为协作者可访问的仓库（带 role）。
-func (s *Store) AccessibleRepos(username string) ([]Repo, error) {
+// limit<=0 表示不限制（三段来源在内存合并后按 owner,name 排序，再分页切片）。
+func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, error) {
 	// 三段来源分别查询后在内存合并（与原 UNION ALL + CASE 语义一致），按 owner,name 排序
 	var owned, orgRows []repoRow
 	if err := s.db.Where("owner = ?", username).Find(&owned).Error; err != nil {
@@ -259,5 +273,34 @@ func (s *Store) AccessibleRepos(username string) ([]Repo, error) {
 		}
 		return repos[i].Name < repos[j].Name
 	})
+	if limit > 0 {
+		if offset < 0 {
+			offset = 0
+		}
+		if offset >= len(repos) {
+			return []Repo{}, nil
+		}
+		repos = repos[offset:]
+		if limit < len(repos) {
+			repos = repos[:limit]
+		}
+	}
 	return repos, nil
+}
+
+// CountAccessibleRepos 可访问仓库总数（三段来源计数之和，与列表口径一致）。
+func (s *Store) CountAccessibleRepos(username string) (int, error) {
+	var ownedN, orgN, collabN int64
+	if err := s.db.Model(&repoRow{}).Where("owner = ?", username).Count(&ownedN).Error; err != nil {
+		return 0, err
+	}
+	if err := s.db.Model(&repoRow{}).Joins("JOIN org_members m ON repos.owner = m.org").
+		Where("m.username = ?", username).Count(&orgN).Error; err != nil {
+		return 0, err
+	}
+	if err := s.db.Table("repo_collabs").Joins("JOIN repos ON repos.owner = repo_collabs.owner AND repos.name = repo_collabs.repo").
+		Where("repo_collabs.username = ?", username).Count(&collabN).Error; err != nil {
+		return 0, err
+	}
+	return int(ownedN + orgN + collabN), nil
 }

@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -39,6 +40,9 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [issueTotal, setIssueTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [labels, setLabels] = useState<Label[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,11 +68,12 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
     setLoading(true);
     try {
       const [is, ls, ms] = await Promise.all([
-        api.listIssues(owner, name),
+        api.listIssues(owner, name, pageSize, (page - 1) * pageSize),
         api.listLabels(owner, name),
         api.listMilestones(owner, name),
       ]);
-      setIssues(is);
+      setIssues(is.items);
+      setIssueTotal(is.total);
       setLabels(ls);
       setMilestones(ms);
       setError("");
@@ -77,7 +82,7 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
     } finally {
       setLoading(false);
     }
-  }, [owner, name]);
+  }, [owner, name, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -436,6 +441,19 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
             );
           })}
         </div>
+      )}
+
+      {!loading && !error && issueTotal > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={issueTotal}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => {
+            setPageSize(s);
+            setPage(1);
+          }}
+        />
       )}
 
       <LabelsManager

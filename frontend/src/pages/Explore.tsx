@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import Pagination from "@/components/ui/pagination";
 import { copyText, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -14,24 +15,35 @@ import { apiErrorMsg } from "@/lib/errors";
 export default function Explore() {
   const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRepos(await api.listExplore());
+      const r = await api.listExplore(pageSize, (page - 1) * pageSize);
+      setRepos(r.items);
+      setTotal(r.total);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const onPageChange = (p: number) => setPage(p);
+  const onPageSizeChange = (s: number) => {
+    setPageSize(s);
+    setPage(1);
+  };
 
   const toggleStar = async (repo: Repo) => {
     try {
@@ -146,6 +158,16 @@ export default function Explore() {
             </Card>
           ))}
         </div>
+      )}
+
+      {!loading && !error && total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
       )}
     </div>
   );

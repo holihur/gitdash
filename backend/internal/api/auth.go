@@ -222,22 +222,23 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username":    ua.Username,
-		"email":       ua.Email,
-		"created_at":  ua.CreatedAt,
-		"mfa_enabled": ua.MFAEnabled,
+		"username":     ua.Username,
+		"email":        ua.Email,
+		"created_at":   ua.CreatedAt,
+		"mfa_enabled":  ua.MFAEnabled,
+		"notify_email": ua.NotifyEmail,
 	})
 }
 
-// updateProfile 更新个人资料（当前仅邮箱；空串清除）。
+// updateProfile 更新个人资料（邮箱与邮件通知开关；邮箱空串清除）。
 //
 //	@Summary     更新个人资料
-//	@Description 更新当前用户邮箱；空串表示清除。返回 200 与更新后的资料。
+//	@Description 更新当前用户邮箱与邮件通知开关；邮箱空串表示清除。返回 200 与更新后的资料。
 //	@Tags        users
 //	@Accept      json
 //	@Produce     json
 //	@Security    BearerAuth
-//	@Param       body body updateProfileReq true "邮箱（可为空串）"
+//	@Param       body body updateProfileReq true "邮箱（可为空串）与 notify_email"
 //	@Success     200 {object} map[string]any
 //	@Failure     400 {object} map[string]string
 //	@Failure     401 {object} map[string]string
@@ -245,28 +246,30 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 //	@Router      /me/profile [post]
 func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
-	var in struct {
-		Email *string `json:"email"`
-	}
+	var in updateProfileReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if in.Email == nil {
-		writeErr(w, http.StatusBadRequest, "missing field: email")
-		return
-	}
-	email := strings.TrimSpace(*in.Email)
-	if email != "" && !emailRe.MatchString(email) {
-		writeErr(w, http.StatusBadRequest, "invalid email address")
-		return
-	}
-	if err := a.store.SetUserEmail(me, email); err != nil {
-		if errors.Is(err, store.ErrExists) {
-			writeErr(w, http.StatusConflict, "email already in use")
-		} else {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+	if in.Email != nil {
+		email := strings.TrimSpace(*in.Email)
+		if email != "" && !emailRe.MatchString(email) {
+			writeErr(w, http.StatusBadRequest, "invalid email address")
+			return
 		}
-		return
+		if err := a.store.SetUserEmail(me, email); err != nil {
+			if errors.Is(err, store.ErrExists) {
+				writeErr(w, http.StatusConflict, "email already in use")
+			} else {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+			}
+			return
+		}
+	}
+	if in.NotifyEmail != nil {
+		if err := a.store.SetNotifyEmail(me, *in.NotifyEmail); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	ua, err := a.store.GetByUsername(me)
 	if err != nil {
@@ -274,8 +277,9 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username": ua.Username,
-		"email":    ua.Email,
+		"username":     ua.Username,
+		"email":        ua.Email,
+		"notify_email": ua.NotifyEmail,
 	})
 }
 

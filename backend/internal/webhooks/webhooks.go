@@ -18,11 +18,12 @@ import (
 	"sync"
 	"time"
 
-	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/store"
 )
 
-// Event 与 post-receive hook 写入的 JSON 行对应。
+// Event 与 post-receive hook / API 侧 publisher 写入的 JSON 行对应。
+// push 事件只使用前 8 个字段；issue/pull/评论事件使用后 6 个扩展字段（向后兼容）。
 type Event struct {
 	Event     string `json:"event"`
 	Owner     string `json:"owner"`
@@ -32,6 +33,13 @@ type Event struct {
 	Ref       string `json:"ref"`
 	User      string `json:"user"`
 	CreatedAt string `json:"created_at"`
+	// API 侧扩展字段
+	Kind    string `json:"kind,omitempty"`   // issue | pull
+	Action  string `json:"action,omitempty"` // opened | closed | commented | ...
+	Number  int64  `json:"number,omitempty"` // issue/PR 编号
+	Title   string `json:"title,omitempty"`
+	Actor   string `json:"actor,omitempty"`
+	Comment string `json:"comment,omitempty"` // 评论内容摘要（截断）
 }
 
 var client = &http.Client{Timeout: 10 * time.Second}
@@ -93,7 +101,9 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 			_ = os.Remove(f)
 			continue
 		}
-		ev.Event = "push"
+		if ev.Event == "" {
+			ev.Event = "push"
+		}
 		hooks, err := st.ListWebhooks(ev.Owner, ev.Repo)
 		if err == nil && len(hooks) > 0 {
 			// 并行投递：单个慢端点不再阻塞整个 spool 排空与 CI 触发
@@ -107,20 +117,18 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 			}
 			wg.Wait()
 		}
-		// push mirror 自动同步（异步，避免阻塞 webhook 投递）
-		if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
-			go syncMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey)
+		// push mirror 自动同步（仅 push 事件，走异步任务队列，避免无界 goroutine）
+		if ev.Event == "push" {
+			if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
+				if err := jobs.EnqueueMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey); err != nil {
+					log.Printf("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, m.URL, err)
+				}
+			}
 		}
 		for _, h := range handlers {
 			h(ev)
 		}
 		_ = os.Remove(f)
-	}
-}
-
-func syncMirror(owner, repo, url, privateKey string) {
-	if err := gitsvc.PushMirror(owner, repo, url, privateKey); err != nil {
-		log.Printf("mirror: sync %s/%s -> %s: %v", owner, repo, url, err)
 	}
 }
 

@@ -3,6 +3,9 @@ package api
 import (
 	"log"
 	"net/http"
+	"time"
+
+	"gitdash/backend/internal/webhooks"
 )
 
 func (a *API) writeWatchState(w http.ResponseWriter, owner, name, me string) {
@@ -71,36 +74,35 @@ func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repos)
 }
 
-// notify 向某仓库的关注者推送一条收件箱通知：
-//   - 显式 watch 该仓库的用户
-//   - 个人仓库的所有者 / 组织仓库的全部成员（始终订阅自己仓库的动态）
-//   - 不通知 actor 本人
-//
+// notify 向某仓库的关注者推送一条收件箱通知，并异步发布 API 侧 webhook 事件
+// （issues/pulls/comment，由 main 注入的 publisher 写入 dataDir/webhooks-spool-api）。
 // 通知写入失败不影响主操作（best-effort，仅记日志）。
-func (a *API) notify(owner, repo, kind, action, actor string, number int64, title string) {
-	seen := map[string]bool{}
-	if watchers, err := a.store.WatchingUsers(owner, repo); err == nil {
-		for _, u := range watchers {
-			seen[u] = true
-		}
-	}
-	if a.store.IsOrg(owner) {
-		if members, err := a.store.OrgMembers(owner); err == nil {
-			for _, m := range members {
-				seen[m.Username] = true
-			}
-		}
-	} else if owner != "" {
-		seen[owner] = true
-	}
-	delete(seen, actor)
-	users := make([]string, 0, len(seen))
-	for u := range seen {
-		if u != "" {
-			users = append(users, u)
-		}
-	}
+func (a *API) notify(owner, repo, kind, action, actor string, number int64, title, comment string) {
+	users := a.store.NotifyRecipients(owner, repo, actor)
 	if err := a.store.AddNotifications(users, kind, action, owner, repo, number, title, actor); err != nil {
 		log.Printf("notify %s/%s: %v", owner, repo, err)
 	}
+	if a.Publish == nil {
+		return
+	}
+	ev := webhooks.Event{
+		Event:     "issues",
+		Owner:     owner,
+		Repo:      repo,
+		Kind:      kind,
+		Action:    action,
+		Number:    number,
+		Title:     title,
+		Actor:     actor,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if kind == "pull" {
+		ev.Event = "pulls"
+	}
+	if comment != "" {
+		ev.Event = "comment"
+		ev.Comment = comment
+	}
+	// 异步写 spool，不阻塞请求
+	go a.Publish(ev)
 }

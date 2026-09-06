@@ -14,16 +14,29 @@ import (
 //	@Summary     列出收件箱通知
 //	@Tags        inbox
 //	@Produce     json
+//	@Param       limit  query int false "每页数量（默认 50，最大 500）"
+//	@Param       offset query int false "偏移量"
 //	@Success     200 {array} store.Notification
+//	@SuccessHeader X-Total-Count int "通知总数"
 //	@Security    BearerAuth
 //	@Router      /inbox [get]
 func (a *API) listInbox(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
-	items, err := a.store.ListNotifications(me)
+	limit, offset := pageParams(r)
+	if !r.URL.Query().Has("limit") {
+		limit = 50
+	}
+	items, err := a.store.ListNotifications(me, limit, offset)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := a.store.CountNotifications(me)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, items)
 }
 

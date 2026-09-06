@@ -13,6 +13,7 @@ type userRow struct {
 	CreatedAt    string `gorm:"not null"`
 	MFASecret    string `gorm:"not null;default:''"`
 	MFAEnabled   bool   `gorm:"not null;default:false"`
+	NotifyEmail  bool   `gorm:"not null;default:false"`
 }
 
 func (userRow) TableName() string { return "users" }
@@ -78,7 +79,7 @@ func (patRow) TableName() string { return "pats" }
 
 type CreatedPAT struct {
 	Token string `json:"token"` // 明文 token，仅创建响应中出现一次
-	PAT            // 内联平铺
+	PAT          // 内联平铺
 }
 
 // ---- issues / labels / milestones ----
@@ -272,6 +273,7 @@ type importRow struct {
 	Owner     string `gorm:"primaryKey;size:255"`
 	Repo      string `gorm:"primaryKey;size:255"`
 	SourceURL string `gorm:"not null"`
+	Status    string `gorm:"not null;default:''"` // queued/running/synced/failed；空 = 旧数据已导入
 	CreatedAt string `gorm:"not null"`
 }
 
@@ -282,6 +284,7 @@ type mirrorRow struct {
 	Repo       string `gorm:"primaryKey;size:255"`
 	URL        string `gorm:"not null"`
 	PrivateKey string `gorm:"not null;default:''"`
+	Status     string `gorm:"not null;default:''"` // queued/running/synced/failed
 	CreatedAt  string `gorm:"not null"`
 }
 

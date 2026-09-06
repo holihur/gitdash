@@ -81,6 +81,19 @@ func (s *Store) SetUserEmail(username, email string) error {
 	return nil
 }
 
+// SetNotifyEmail 设置用户邮件通知开关。
+func (s *Store) SetNotifyEmail(username string, on bool) error {
+	res := s.db.Model(&userRow{}).Where("username = ?", username).
+		Update("notify_email", on)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ---- user profile & mfa ----
 
 func (s *Store) UpdatePassword(username, passwordHash string) error {

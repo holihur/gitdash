@@ -17,6 +17,7 @@ import {
 import { api, type Notification } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -51,20 +52,25 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
     try {
-      setItems(await api.inbox());
+      const r = await api.inbox(pageSize, (page - 1) * pageSize);
+      setItems(r.items);
+      setTotal(r.total);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     load();
@@ -118,6 +124,8 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
     try {
       await api.inboxDelete(n.id);
       setItems((xs) => xs.filter((x) => x.id !== n.id));
+      setTotal((x) => Math.max(0, x - 1));
+      if (items.length === 1 && page > 1) setPage(page - 1);
       if (!n.read) onChanged?.();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -239,6 +247,19 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
             );
           })}
         </div>
+      )}
+
+      {!loading && !error && total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => {
+            setPageSize(s);
+            setPage(1);
+          }}
+        />
       )}
     </div>
   );

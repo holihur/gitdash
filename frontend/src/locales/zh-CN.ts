@@ -60,6 +60,12 @@ export const zhCN: Messages = {
     signInWithGithub: "使用 GitHub 登录",
     signInWithOIDC: "使用 {name} 登录",
   },
+  pagination: {
+    prev: "上一页",
+    next: "下一页",
+    perPage: "每页",
+    total: "共 {n} 条",
+  },
   explore: {
     title: "发现",
     subtitle: "浏览其他人公开的仓库。",
@@ -144,6 +150,8 @@ export const zhCN: Messages = {
     keyHint: "私有仓库：先在 GitHub/GitLab 把对应公钥添加为只读 Deploy Key，再把私钥粘贴到这里。私钥仅用于本次导入，不会保存。",
     urlRequired: "请输入仓库地址",
     imported: "仓库 {name} 已导入",
+    queued: "已加入导入队列：{name}，完成后可在仓库页查看",
+    importFailed: "导入失败：{name}",
   },
   mirror: {
     title: "同步到远程",
@@ -159,6 +167,8 @@ export const zhCN: Messages = {
     removed: "镜像目标已移除",
     syncNow: "立即同步",
     synced: "已同步到远程",
+    syncQueued: "同步已加入队列，完成后通知",
+    syncFailed: "镜像同步失败，请检查目标地址",
   },
   commits: {
     gpgSigned: "{user} 的 GPG 签名已验证",

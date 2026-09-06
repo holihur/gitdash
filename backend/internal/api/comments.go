@@ -81,18 +81,18 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 	}
 	// 宿主必须存在
 	if kind == "issue" {
-		if _, err := a.store.GetIssue(owner, name, number); err != nil {
+		if _, e := a.store.GetIssue(owner, name, number); e != nil {
 			writeNotFound(w, "issue")
 			return
 		}
 	} else {
-		if _, err := a.store.GetPull(owner, name, number); err != nil {
+		if _, e := a.store.GetPull(owner, name, number); e != nil {
 			writeNotFound(w, "pull")
 			return
 		}
 	}
 	var in addCommentReq
-	if err := readJSON(w, r, &in); err != nil {
+	if e := readJSON(w, r, &in); e != nil {
 		return
 	}
 	body := strings.TrimSpace(in.Body)
@@ -110,9 +110,13 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// 通知关注者（issue/PR 作者与 watcher），不通知评论者本人
+	// 通知关注者（issue/PR 作者与 watcher），不通知评论者本人；评论摘要截断到 200 字符
 	if it, err := a.store.GetIssue(owner, name, number); err == nil {
-		a.notify(owner, name, kind, "commented", me, number, it.Title)
+		summary := []rune(body)
+		if len(summary) > 200 {
+			summary = summary[:200]
+		}
+		a.notify(owner, name, kind, "commented", me, number, it.Title, string(summary))
 	}
 	writeJSON(w, http.StatusCreated, comment)
 }

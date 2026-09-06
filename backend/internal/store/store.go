@@ -35,6 +35,7 @@ type UserAuth struct {
 	CreatedAt    string
 	MFASecret    string // 空 = 未启用/无待激活 secret
 	MFAEnabled   bool
+	NotifyEmail  bool // 邮件通知开关（默认关）
 }
 
 type Repo struct {
@@ -54,6 +55,8 @@ type Repo struct {
 	ForkOwner string `json:"fork_owner,omitempty"`
 	ForkRepo  string `json:"fork_repo,omitempty"`
 	ImportURL string `json:"import_url,omitempty"`
+	// 导入任务状态（queued/running/synced/failed），非导入仓库为空
+	ImportStatus string `json:"import_status,omitempty"`
 }
 
 // Mirror 仓库 push 镜像目标（同步到 GitHub/GitLab 等第三方）。
@@ -62,6 +65,7 @@ type Mirror struct {
 	Repo       string `json:"repo"`
 	URL        string `json:"url"`
 	PrivateKey string `json:"-"` // 认证私钥，不回传
+	Status     string `json:"status,omitempty"`
 	CreatedAt  string `json:"created_at"`
 }
 

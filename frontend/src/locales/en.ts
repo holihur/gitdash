@@ -58,6 +58,12 @@ export const en = {
     signInWithGithub: "Continue with GitHub",
     signInWithOIDC: "Continue with {name}",
   },
+  pagination: {
+    prev: "Prev",
+    next: "Next",
+    perPage: "Per page",
+    total: "{n} items",
+  },
   explore: {
     title: "Explore",
     subtitle: "Discover public repositories shared by others.",
@@ -144,6 +150,8 @@ export const en = {
     keyHint: "For private repos: add the matching public key as a read-only Deploy Key on GitHub/GitLab, then paste the private key here. It is only used for this import and never stored.",
     urlRequired: "Please enter a repository URL",
     imported: "Repository {name} imported",
+    queued: "Import queued for {name}; check status on the repo page",
+    importFailed: "Import failed: {name}",
   },
   mirror: {
     title: "Sync to remote",
@@ -159,6 +167,8 @@ export const en = {
     removed: "Mirror target removed",
     syncNow: "Sync now",
     synced: "Synced to remote",
+    syncQueued: "Sync queued; you will be notified when done",
+    syncFailed: "Mirror sync failed, check the target URL",
   },
   commits: {
     gpgSigned: "GPG signature verified for {user}",

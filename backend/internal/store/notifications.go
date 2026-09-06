@@ -41,10 +41,14 @@ func (s *Store) AddNotifications(usernames []string, kind, action, owner, repo s
 	return s.db.Create(&rows).Error
 }
 
-// ListNotifications 返回某用户收件箱（最新在前，最多 200 条）。
-func (s *Store) ListNotifications(username string) ([]Notification, error) {
+// ListNotifications 分页返回某用户收件箱（最新在前）；limit<=0 表示不限制。
+func (s *Store) ListNotifications(username string, limit, offset int) ([]Notification, error) {
+	q := s.db.Where("username = ?", username).Order("id DESC")
+	if limit > 0 {
+		q = q.Limit(limit).Offset(offset)
+	}
 	var rows []notificationRow
-	if err := s.db.Where("username = ?", username).Order("id DESC").Limit(200).Find(&rows).Error; err != nil {
+	if err := q.Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]Notification, 0, len(rows))
@@ -56,6 +60,13 @@ func (s *Store) ListNotifications(username string) ([]Notification, error) {
 		})
 	}
 	return out, nil
+}
+
+// CountNotifications 某用户收件箱通知总数。
+func (s *Store) CountNotifications(username string) (int, error) {
+	var n int64
+	err := s.db.Model(&notificationRow{}).Where("username = ?", username).Count(&n).Error
+	return int(n), err
 }
 
 // UnreadNotifications 未读通知数。
@@ -97,4 +108,59 @@ func (s *Store) DeleteNotification(username string, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ---- 通知接收者计算（站内通知与邮件通知共用） ----
+
+// EmailTarget 开启邮件通知的用户（接收者计算结果的投影）。
+type EmailTarget struct {
+	Username string
+	Email    string
+}
+
+// NotifyRecipients 计算某仓库动态的通知接收者：
+//   - 显式 watch 该仓库的用户
+//   - 个人仓库的所有者 / 组织仓库的全部成员
+//   - 不包含 actor 本人
+func (s *Store) NotifyRecipients(owner, repo, actor string) []string {
+	seen := map[string]bool{}
+	if watchers, err := s.WatchingUsers(owner, repo); err == nil {
+		for _, u := range watchers {
+			seen[u] = true
+		}
+	}
+	if s.IsOrg(owner) {
+		if members, err := s.OrgMembers(owner); err == nil {
+			for _, m := range members {
+				seen[m.Username] = true
+			}
+		}
+	} else if owner != "" {
+		seen[owner] = true
+	}
+	delete(seen, actor)
+	users := make([]string, 0, len(seen))
+	for u := range seen {
+		if u != "" {
+			users = append(users, u)
+		}
+	}
+	return users
+}
+
+// EmailTargets 返回已开启邮件通知且邮箱非空的用户。
+func (s *Store) EmailTargets(usernames []string) []EmailTarget {
+	if len(usernames) == 0 {
+		return nil
+	}
+	var rows []userRow
+	if err := s.db.Where("username IN ? AND email <> '' AND notify_email = ?", usernames, true).
+		Find(&rows).Error; err != nil {
+		return nil
+	}
+	out := make([]EmailTarget, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, EmailTarget{Username: r.Username, Email: r.Email})
+	}
+	return out
 }

@@ -68,6 +68,8 @@ export interface Repo {
   /** fork 来源（仅 fork 仓库） */
   fork_owner?: string;
   fork_repo?: string;
+  /** 导入任务状态（queued/running/synced/failed），非导入仓库为空 */
+  import_status?: "queued" | "running" | "synced" | "failed";
 }
 
 export interface GPGKey {
@@ -287,7 +289,7 @@ export function cloneCommand(owner: string, name: string): string {
   return `git clone ${cloneUrl(owner, name)}`;
 }
 
-async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+async function send(path: string, opts: RequestInit = {}): Promise<Response> {
   const res = await fetch(`/api${path}`, {
     ...opts,
     credentials: "same-origin", // 携带 httpOnly cookie
@@ -315,8 +317,34 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(res.status, msg, code);
   }
+  return res;
+}
+
+async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+  const res = await send(path, opts);
   if (res.status === 204) return null as T;
   return res.json();
+}
+
+// 分页列表请求：数组 JSON + X-Total-Count 响应头
+export interface Paged<T> {
+  items: T;
+  total: number;
+}
+
+async function reqPage<T>(path: string, opts: RequestInit = {}): Promise<Paged<T>> {
+  const res = await send(path, opts);
+  const items = (await res.json()) as T;
+  const total = Number(res.headers.get("X-Total-Count") ?? 0);
+  return { items, total: Number.isNaN(total) ? 0 : total };
+}
+
+function pageQuery(limit?: number, offset?: number): string {
+  const p = new URLSearchParams();
+  if (limit != null) p.set("limit", String(limit));
+  if (offset != null) p.set("offset", String(offset));
+  const q = p.toString();
+  return q ? `?${q}` : "";
 }
 
 export const api = {
@@ -361,7 +389,8 @@ export const api = {
     }),
 
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
-  listRepos: () => req<Repo[]>("/repos"),
+  listRepos: (limit?: number, offset?: number) =>
+    reqPage<Repo[]>(`/repos${pageQuery(limit, offset)}`),
   createRepo: (
     name: string,
     description: string,
@@ -384,7 +413,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ private: private_ }),
     }),
-  listExplore: () => req<Repo[]>("/explore/repos"),
+  listExplore: (limit?: number, offset?: number) =>
+    reqPage<Repo[]>(`/explore/repos${pageQuery(limit, offset)}`),
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
   deleteRepo: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),
@@ -410,7 +440,8 @@ export const api = {
     req<{ watching: boolean; watchers: number }>(`/users/${owner}/repos/${name}/watch`, {
       method: "DELETE",
     }),
-  inbox: () => req<Notification[]>("/inbox"),
+  inbox: (limit?: number, offset?: number) =>
+    reqPage<Notification[]>(`/inbox${pageQuery(limit, offset)}`),
   inboxUnread: () => req<{ count: number }>("/inbox/unread"),
   inboxRead: (id: number) =>
     req<{ ok: boolean }>(`/inbox/read/${id}`, { method: "POST" }),
@@ -435,16 +466,21 @@ export const api = {
 
   // push mirror（同步到第三方）
   getMirror: (owner: string, name: string) =>
-    req<{ url: string; created_at: string }>(`/users/${owner}/repos/${name}/mirror`),
+    req<{ url: string; created_at: string; status?: string }>(
+      `/users/${owner}/repos/${name}/mirror`,
+    ),
   setMirror: (owner: string, name: string, url: string, privateKey?: string) =>
-    req<{ url: string; created_at: string }>(`/users/${owner}/repos/${name}/mirror`, {
-      method: "PUT",
-      body: JSON.stringify({ url, private_key: privateKey ?? "" }),
-    }),
+    req<{ url: string; created_at: string; status?: string }>(
+      `/users/${owner}/repos/${name}/mirror`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ url, private_key: privateKey ?? "" }),
+      },
+    ),
   deleteMirror: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}/mirror`, { method: "DELETE" }),
   syncMirror: (owner: string, name: string) =>
-    req<{ ok: boolean }>(`/users/${owner}/repos/${name}/mirror/sync`, { method: "POST" }),
+    req<{ status: string }>(`/users/${owner}/repos/${name}/mirror/sync`, { method: "POST" }),
 
   // git browsing
   branches: (owner: string, name: string) =>
@@ -478,7 +514,8 @@ export const api = {
     ),
 
   // issues
-  listIssues: (owner: string, name: string) => req<Issue[]>(`/users/${owner}/repos/${name}/issues`),
+  listIssues: (owner: string, name: string, limit?: number, offset?: number) =>
+    reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${pageQuery(limit, offset)}`),
   createIssue: (owner: string, name: string, title: string, body: string) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues`, {
       method: "POST",
@@ -617,10 +654,14 @@ export const api = {
     }),
 
   // pull requests
-  listPulls: (owner: string, name: string, state?: PullState) =>
-    req<PullRequest[]>(
-      `/users/${owner}/repos/${name}/pulls${state ? `?state=${state}` : ""}`,
-    ),
+  listPulls: (owner: string, name: string, state?: PullState, limit?: number, offset?: number) => {
+    const p = new URLSearchParams();
+    if (limit != null) p.set("limit", String(limit));
+    if (offset != null) p.set("offset", String(offset));
+    if (state) p.set("state", state);
+    const q = p.toString();
+    return reqPage<PullRequest[]>(`/users/${owner}/repos/${name}/pulls${q ? `?${q}` : ""}`);
+  },
   createPull: (
     owner: string,
     name: string,

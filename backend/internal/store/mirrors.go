@@ -55,6 +55,32 @@ func (s *Store) ImportSource(owner, repo string) (string, error) {
 	return row.SourceURL, nil
 }
 
+// SetImportStatus 更新导入任务状态。
+func (s *Store) SetImportStatus(owner, repo, status string) error {
+	res := s.db.Model(&importRow{}).Where("owner = ? AND repo = ?", owner, repo).
+		Update("status", status)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ImportStatus 返回导入任务状态；非导入仓库返回空串。
+func (s *Store) ImportStatus(owner, repo string) (string, error) {
+	var row importRow
+	err := s.db.Select("status").Where("owner = ? AND repo = ?", owner, repo).First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", nil
+		}
+		return "", err
+	}
+	return row.Status, nil
+}
+
 // ---- mirrors ----
 
 // SetMirror 配置仓库的 push 镜像目标（覆盖式）。
@@ -85,6 +111,33 @@ func (s *Store) GetMirror(owner, repo string) (Mirror, error) {
 // DeleteMirror 移除镜像配置。
 func (s *Store) DeleteMirror(owner, repo string) error {
 	return s.db.Where("owner = ? AND repo = ?", owner, repo).Delete(&mirrorRow{}).Error
+}
+
+// SetMirrorStatus 更新镜像同步任务状态。
+func (s *Store) SetMirrorStatus(owner, repo, status string) error {
+	res := s.db.Model(&mirrorRow{}).Where("owner = ? AND repo = ?", owner, repo).
+		Update("status", status)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// PendingImports 返回卡在 queued/running 的导入任务（启动续跑用）。
+func (s *Store) PendingImports() ([]importRow, error) {
+	var rows []importRow
+	err := s.db.Where("status IN ?", []string{"queued", "running"}).Find(&rows).Error
+	return rows, err
+}
+
+// PendingMirrors 返回卡在 queued/running 的镜像同步任务（启动续跑用）。
+func (s *Store) PendingMirrors() ([]mirrorRow, error) {
+	var rows []mirrorRow
+	err := s.db.Where("status IN ?", []string{"queued", "running"}).Find(&rows).Error
+	return rows, err
 }
 
 // ---- orgs (namespace) ----

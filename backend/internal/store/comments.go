@@ -3,11 +3,7 @@ package store
 import "errors"
 
 func commentToDTO(r commentRow) Comment {
-	return Comment{
-		ID: r.ID, Owner: r.Owner, Repo: r.Repo, Kind: r.Kind, Number: r.Number,
-		Author: r.Author, Body: r.Body,
-		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
-	}
+	return Comment(r)
 }
 
 // CreateComment 在 issue/PR（kind: "issue"|"pull"）下新增一条评论。

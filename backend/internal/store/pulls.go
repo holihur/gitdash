@@ -91,6 +91,17 @@ func (s *Store) ListPulls(owner, repo, state string, limit, offset int) ([]PullR
 	return out, nil
 }
 
+// CountPulls 仓库 PR 总数（state 为空时统计全部）。
+func (s *Store) CountPulls(owner, repo, state string) (int, error) {
+	q := s.db.Model(&pullRequestRow{}).Where("owner = ? AND repo = ?", owner, repo)
+	if state != "" {
+		q = q.Where("state = ?", state)
+	}
+	var n int64
+	err := q.Count(&n).Error
+	return int(n), err
+}
+
 // SetPullState 关闭/重开（不改变 merged 状态）。
 func (s *Store) SetPullState(owner, repo string, number int64, state string) (PullRequest, error) {
 	res := s.db.Model(&pullRequestRow{}).

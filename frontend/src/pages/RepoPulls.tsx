@@ -25,12 +25,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 
 export default function RepoPulls({ owner, name }: { owner: string; name: string }) {
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [pulls, setPulls] = useState<PullRequest[]>([]);
+  const [pullTotal, setPullTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -47,10 +51,11 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
     setLoading(true);
     try {
       const [ps, bs] = await Promise.all([
-        api.listPulls(owner, name),
+        api.listPulls(owner, name, undefined, pageSize, (page - 1) * pageSize),
         api.branches(owner, name),
       ]);
-      setPulls(ps);
+      setPulls(ps.items);
+      setPullTotal(ps.total);
       setBranches(bs.map((b) => b.name));
       setError("");
     } catch (e) {
@@ -58,7 +63,7 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
     } finally {
       setLoading(false);
     }
-  }, [owner, name]);
+  }, [owner, name, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -318,6 +323,19 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
             );
           })}
         </div>
+      )}
+
+      {!loading && !error && pullTotal > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={pullTotal}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => {
+            setPageSize(s);
+            setPage(1);
+          }}
+        />
       )}
     </div>
   );

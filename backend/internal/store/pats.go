@@ -92,7 +92,6 @@ func NormalizePATScopes(scopes []string) (string, bool) {
 	return normalizeScopes(scopes)
 }
 
-
 func (s *Store) ListPATs(userID int64) ([]PAT, error) {
 	var rows []patRow
 	err := s.db.Where("user_id = ?", userID).Order("id DESC").Find(&rows).Error

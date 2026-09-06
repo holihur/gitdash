@@ -29,11 +29,18 @@ func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pageParams(r)
-	pulls, err := a.store.ListPulls(owner, name, r.URL.Query().Get("state"), limit, offset)
+	state := r.URL.Query().Get("state")
+	pulls, err := a.store.ListPulls(owner, name, state, limit, offset)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	total, err := a.store.CountPulls(owner, name, state)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, pulls)
 }
 
@@ -93,7 +100,7 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.notify(owner, name, "pull", "opened", userFrom(r), pr.Number, pr.Title)
+	a.notify(owner, name, "pull", "opened", userFrom(r), pr.Number, pr.Title, "")
 	writeJSON(w, http.StatusCreated, pr)
 }
 
@@ -237,7 +244,7 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	a.notify(owner, name, "pull", "merged", userFrom(r), merged.Number, merged.Title)
+	a.notify(owner, name, "pull", "merged", userFrom(r), merged.Number, merged.Title, "")
 	writeJSON(w, http.StatusOK, merged)
 }
 
@@ -284,7 +291,7 @@ func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
 		if updated.State == "open" {
 			action = "reopened"
 		}
-		a.notify(owner, name, "pull", action, userFrom(r), updated.Number, updated.Title)
+		a.notify(owner, name, "pull", action, userFrom(r), updated.Number, updated.Title, "")
 	}
 	writeJSON(w, http.StatusOK, updated)
 }

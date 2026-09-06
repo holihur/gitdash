@@ -15,9 +15,8 @@ func (loginFailRow) TableName() string { return "login_fails" }
 // RateBlocked 判断 key 是否已被限流（窗口内失败次数 >= maxFails）。
 func (s *Store) RateBlocked(key string, maxFails int) (bool, error) {
 	var r loginFailRow
-	err := s.db.Where("`key` = ?", key).First(&r).Error
-	if err != nil {
-		return false, nil // 无记录 = 未限流
+	if err := s.db.Where("`key` = ?", key).First(&r).Error; err != nil {
+		return false, nil //nolint:nilerr // 无记录 = 未限流，查询失败按未限流处理
 	}
 	if until, e := time.Parse(time.RFC3339, r.Until); e == nil && time.Now().After(until) {
 		_ = s.db.Delete(&loginFailRow{}, r.Key).Error // 窗口已过，惰性清理

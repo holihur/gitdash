@@ -63,8 +63,18 @@ def test_mirror_set_get_sync(user_factory, git_daemon_push):
     assert r["url"] == url
     assert c.get(_p(username, repo, "/mirror"), expect=200).json()["url"] == url
 
-    # 手动同步：目标 bare 仓库收到 main 分支
-    c.post(_p(username, repo, "/mirror/sync"), expect=200)
+    # 手动同步（异步队列）：排队后轮询 status，目标 bare 仓库收到 main 分支
+    r = c.post(_p(username, repo, "/mirror/sync"), expect=202).json()
+    assert r["status"] == "queued"
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        st = c.get(_p(username, repo, "/mirror"), expect=200).json()["status"]
+        if st == "synced":
+            break
+        assert st != "failed", "mirror sync failed"
+        time.sleep(0.3)
+    else:
+        raise AssertionError("mirror sync not finished in 30s")
     refs = subprocess.run(
         ["git", "--git-dir", mirror_bare, "for-each-ref", "--format=%(refname:short)"],
         check=True, capture_output=True, text=True,
