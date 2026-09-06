@@ -79,6 +79,8 @@ export const zhCN: Messages = {
     empty: "还没有仓库",
     emptyHint: "点击右上角「新建仓库」创建第一个仓库。",
     templateLabel: "模版",
+    namespaceLabel: "归属",
+    namespacePersonal: "个人",
     templateNone: "空仓库",
     templateReadme: "默认模版：以仓库名生成 README.md",
     loadFailed: "加载失败：{error}",

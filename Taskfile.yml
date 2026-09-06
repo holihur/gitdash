@@ -18,8 +18,19 @@ tasks:
       - pnpm install --frozen-lockfile
       - pnpm run build
 
+  swagger:
+    desc: 重新生成 OpenAPI 文档（修改 API 注解后运行）
+    dir: backend
+    cmds:
+      - go run github.com/swaggo/swag/cmd/swag init -g internal/api/doc.go -o internal/api/docs
+    sources:
+      - internal/api/**/*.go
+    generates:
+      - internal/api/docs/docs.go
+
   backend:
     desc: 构建后端二进制（不内嵌前端）
+    deps: [swagger]
     cmds:
       - go build -o {{.BIN}} .
     dir: backend
@@ -48,6 +59,7 @@ tasks:
       GITDASH_BIN: "{{.PYTEST_BIN}}"
 
   build:pytest-bin:
+    deps: [swagger]
     cmds:
       - go build -o {{.PYTEST_BIN}} .
     dir: backend

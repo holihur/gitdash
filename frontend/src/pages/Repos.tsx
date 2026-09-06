@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Copy, Download, Eye, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
-import { api, cloneCommand, type Repo } from "@/lib/api";
+import { api, cloneCommand, type Org, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +48,8 @@ export default function Repos() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [template, setTemplate] = useState<"" | "readme">("");
+  const [namespace, setNamespace] = useState("");
+  const [orgs, setOrgs] = useState<Org[]>([]);
   const [busy, setBusy] = useState(false);
   const [collabRepo, setCollabRepo] = useState<Repo | null>(null);
   const [hookRepo, setHookRepo] = useState<Repo | null>(null);
@@ -79,6 +81,7 @@ export default function Repos() {
 
   useEffect(() => {
     load();
+    api.listOrgs().then(setOrgs).catch(() => setOrgs([]));
   }, [load]);
 
   const show = tab === "repos" ? repos : tab === "starred" ? starred : watched;
@@ -91,12 +94,13 @@ export default function Repos() {
     }
     setBusy(true);
     try {
-      await api.createRepo(name.trim(), desc.trim(), template);
-      toast.success(t("repos.created", { name: name.trim() }));
+      await api.createRepo(name.trim(), desc.trim(), template, undefined, namespace || undefined);
+      toast.success(t("repos.created", { name: namespace ? `${namespace}/${name.trim()}` : name.trim() }));
       setOpen(false);
       setName("");
       setDesc("");
       setTemplate("");
+      setNamespace("");
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -192,6 +196,24 @@ export default function Repos() {
                   onChange={(e) => setDesc(e.target.value)}
                 />
               </div>
+              {orgs.length > 0 && (
+                <div className="grid gap-2">
+                  <Label htmlFor="repo-namespace">{t("repos.namespaceLabel")}</Label>
+                  <select
+                    id="repo-namespace"
+                    value={namespace}
+                    onChange={(e) => setNamespace(e.target.value)}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">{t("repos.namespacePersonal")}</option>
+                    {orgs.map((o) => (
+                      <option key={o.name} value={o.name}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="repo-template">{t("repos.templateLabel")}</Label>
                 <select

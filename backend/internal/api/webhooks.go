@@ -14,6 +14,16 @@ func validWebhookURL(raw string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
+// listWebhooks 列出仓库的 webhook。
+//
+//	@Summary     列出 webhook
+//	@Tags        webhooks
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {array}  object
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/webhooks [get]
 func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
@@ -27,6 +37,20 @@ func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hooks)
 }
 
+// createWebhook 创建 webhook（仅 owner）。
+//
+//	@Summary     创建 webhook
+//	@Tags        webhooks
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createWebhookReq true "url 与可选 secret（至少 16 字符）"
+//	@Success     201 {object} object
+//	@Failure     400 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/webhooks [post]
 func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
@@ -65,6 +89,18 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, hk)
 }
 
+// deleteWebhook 删除 webhook（仅 owner）。
+//
+//	@Summary     删除 webhook
+//	@Tags        webhooks
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "webhook ID"
+//	@Success     204 {object} nil
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/webhooks/{id} [delete]
 func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {

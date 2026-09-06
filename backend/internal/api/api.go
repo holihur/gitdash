@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webui"
+	"github.com/swaggo/http-swagger"
 	"io/fs"
 	"log"
 	"net/http"
@@ -271,6 +273,16 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/gpg", a.auth(a.listGPGKeys))
 	mux.HandleFunc("POST /api/gpg", a.auth(a.addGPGKey))
 	mux.HandleFunc("DELETE /api/gpg/{id}", a.auth(a.deleteGPGKey))
+
+	// swagger（OpenAPI 文档 + 内置 Swagger UI）
+	docs.SwaggerInfo.BasePath = "/api"
+	docs.SwaggerInfo.Host = ""
+	mux.HandleFunc("GET /api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(docs.SwaggerInfo.ReadDoc()))
+	})
+	mux.Handle("GET /api/swagger", http.RedirectHandler("/api/swagger/", http.StatusMovedPermanently))
+	mux.Handle("GET /api/swagger/", httpSwagger.WrapHandler)
 
 	// public
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {

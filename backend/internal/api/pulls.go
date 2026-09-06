@@ -10,6 +10,19 @@ import (
 	"strings"
 )
 
+// listPulls 列出仓库的 pull request 列表。
+//
+//	@Summary     列出 PR
+//	@Tags        pulls
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       state  query string false "状态过滤（open/closed/merged）"
+//	@Param       limit  query int    false "每页数量"
+//	@Param       offset query int    false "偏移量"
+//	@Success     200 {array} store.PullRequest
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls [get]
 func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -24,6 +37,18 @@ func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pulls)
 }
 
+// createPull 创建 pull request。
+//
+//	@Summary     创建 PR
+//	@Tags        pulls
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createPullReq true "标题、正文、源分支与目标分支"
+//	@Success     201 {object} store.PullRequest
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls [post]
 func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -72,6 +97,17 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, pr)
 }
 
+// getPull 获取单个 pull request。
+//
+//	@Summary     获取 PR
+//	@Tags        pulls
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Success     200 {object} store.PullRequest
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number} [get]
 func (a *API) getPull(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -103,6 +139,17 @@ func (a *API) getPullOr404(w http.ResponseWriter, owner, name, num string) (stor
 	return pr, nil
 }
 
+// pullDiff 获取 pull request 的 diff（文件统计与补丁）。
+//
+//	@Summary     获取 PR diff
+//	@Tags        pulls
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Success     200 {object} object "files、patch、base_sha、head_sha"
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number}/diff [get]
 func (a *API) pullDiff(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -129,6 +176,19 @@ func (a *API) pullDiff(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"files": files, "patch": patch, "base_sha": base, "head_sha": head})
 }
 
+// mergePull 合并 pull request。
+//
+//	@Summary     合并 PR
+//	@Tags        pulls
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Param       body   body mergePullReq true "合并方式（fast-forward/merge/squash）"
+//	@Success     200 {object} store.PullRequest
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number}/merge [post]
 func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -181,6 +241,19 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, merged)
 }
 
+// setPullState 修改 pull request 状态（open/closed）。
+//
+//	@Summary     修改 PR 状态
+//	@Tags        pulls
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Param       body   body setPullStateReq true "状态（open/closed）"
+//	@Success     200 {object} store.PullRequest
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number}/state [post]
 func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {

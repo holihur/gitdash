@@ -9,7 +9,16 @@ import (
 	"strings"
 )
 
-// GET /api/users/{owner}/repos/{name}/pipeline
+// getPipeline 获取仓库流水线开关状态。
+//
+//	@Summary     获取流水线配置
+//	@Tags        pipeline
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {object} map[string]any
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline [get]
 func (a *API) getPipeline(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -26,7 +35,18 @@ func (a *API) getPipeline(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PUT /api/users/{owner}/repos/{name}/pipeline
+// setPipeline 启用/禁用流水线（仅 owner）。
+//
+//	@Summary     设置流水线开关
+//	@Tags        pipeline
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setPipelineReq true "{enabled: bool}"
+//	@Success     200 {object} map[string]any
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline [put]
 func (a *API) setPipeline(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
@@ -45,7 +65,17 @@ func (a *API) setPipeline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": in.Enabled})
 }
 
-// GET /api/users/{owner}/repos/{name}/pipeline/runs
+// listPipelineRuns 列出流水线运行记录（?limit 限制数量）。
+//
+//	@Summary     列出流水线运行
+//	@Tags        pipeline
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       limit query int false "数量上限"
+//	@Success     200 {array}  object
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline/runs [get]
 func (a *API) listPipelineRuns(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -60,7 +90,19 @@ func (a *API) listPipelineRuns(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, runs)
 }
 
-// GET /api/users/{owner}/repos/{name}/pipeline/runs/{id}
+// getPipelineRun 获取单次流水线运行详情（含日志）。
+//
+//	@Summary     获取流水线运行详情
+//	@Tags        pipeline
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "运行 ID"
+//	@Success     200 {object} object
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline/runs/{id} [get]
 func (a *API) getPipelineRun(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -80,7 +122,20 @@ func (a *API) getPipelineRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
-// POST /api/users/{owner}/repos/{name}/pipeline/runs  手动触发（body: {ref?: branch}）
+// createPipelineRun 手动触发流水线（body: {ref?: branch}）。
+//
+//	@Summary     手动触发流水线
+//	@Tags        pipeline
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createPipelineRunReq false "可选分支 ref，默认取默认分支"
+//	@Success     201 {object} object
+//	@Failure     400 {object} map[string]string
+//	@Failure     429 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline/runs [post]
 func (a *API) createPipelineRun(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {

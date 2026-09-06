@@ -11,6 +11,17 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// listKeys 列出当前用户的 SSH 公钥。
+//
+//	@Summary     列出 SSH 公钥
+//	@Description 返回当前用户注册的所有 SSH 公钥。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     200 {array}  store.SSHKey
+//	@Failure     401 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Router      /keys [get]
 func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
 	keys, err := a.store.ListKeys(userFrom(r))
 	if err != nil {
@@ -20,6 +31,20 @@ func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, keys)
 }
 
+// createKey 添加 SSH 公钥。
+//
+//	@Summary     添加 SSH 公钥
+//	@Description 校验并规范化公钥后注册。返回 201 与新键。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       body body createKeyReq true "名称与公钥内容"
+//	@Success     201 {object} store.SSHKey
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Router      /keys [post]
 func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name      string `json:"name"`
@@ -52,6 +77,19 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, k)
 }
 
+// deleteKey 删除指定 SSH 公钥。
+//
+//	@Summary     删除 SSH 公钥
+//	@Description 按 id 删除当前用户的 SSH 公钥。返回 204。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       id path int true "SSH key id"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Router      /keys/{id} [delete]
 func (a *API) deleteKey(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {

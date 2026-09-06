@@ -7,6 +7,18 @@ import (
 	"strings"
 )
 
+// createOrg 创建组织。
+//
+//	@Summary     创建组织
+//	@Tags        orgs
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body createOrgReq true "组织名与显示名"
+//	@Success     201 {object} map[string]string
+//	@Failure     400 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs [post]
 func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name    string `json:"name"`
@@ -32,6 +44,14 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, o)
 }
 
+// listOrgs 列出当前用户的组织。
+//
+//	@Summary     列出我的组织
+//	@Tags        orgs
+//	@Produce     json
+//	@Success     200 {array}  object
+//	@Security    BearerAuth
+//	@Router      /orgs [get]
 func (a *API) listOrgs(w http.ResponseWriter, r *http.Request) {
 	orgs, err := a.store.ListMyOrgs(userFrom(r))
 	if err != nil {
@@ -48,6 +68,16 @@ func (a *API) listOrgs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// getOrg 获取组织及当前用户角色。
+//
+//	@Summary     获取组织
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org} [get]
 func (a *API) getOrg(w http.ResponseWriter, r *http.Request) {
 	org := r.PathValue("org")
 	role := a.store.OrgRole(org, userFrom(r))
@@ -58,6 +88,17 @@ func (a *API) getOrg(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"name": org, "role": role})
 }
 
+// deleteOrg 删除组织（仅 owner；组织内仍有仓库时返回 409）。
+//
+//	@Summary     删除组织
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     204 {object} nil
+//	@Failure     404 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org} [delete]
 func (a *API) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	org := r.PathValue("org")
 	if a.store.OrgRole(org, userFrom(r)) != "owner" {
@@ -75,6 +116,16 @@ func (a *API) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// listOrgMembers 列出组织成员。
+//
+//	@Summary     列出组织成员
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {array}  object
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/members [get]
 func (a *API) listOrgMembers(w http.ResponseWriter, r *http.Request) {
 	org := r.PathValue("org")
 	if a.store.OrgRole(org, userFrom(r)) == "" {
@@ -89,6 +140,19 @@ func (a *API) listOrgMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, members)
 }
 
+// addOrgMember 添加组织成员（仅 owner）。
+//
+//	@Summary     添加组织成员
+//	@Tags        orgs
+//	@Accept      json
+//	@Produce     json
+//	@Param       org  path string true "组织名"
+//	@Param       body body addOrgMemberReq true "用户名与角色（member/owner）"
+//	@Success     200 {object} map[string]string
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/members [post]
 func (a *API) addOrgMember(w http.ResponseWriter, r *http.Request) {
 	org := r.PathValue("org")
 	if a.store.OrgRole(org, userFrom(r)) != "owner" {
@@ -121,6 +185,18 @@ func (a *API) addOrgMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"org": org, "username": in.Username, "role": in.Role})
 }
 
+// removeOrgMember 移除组织成员（仅 owner；不能移除自己，须保留至少一个 owner）。
+//
+//	@Summary     移除组织成员
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org      path string true "组织名"
+//	@Param       username path string true "成员用户名"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/members/{username} [delete]
 func (a *API) removeOrgMember(w http.ResponseWriter, r *http.Request) {
 	org := r.PathValue("org")
 	me := userFrom(r)

@@ -79,6 +79,8 @@ export const en = {
     empty: "No repositories yet",
     emptyHint: 'Click "New repository" in the top right to create your first repository.',
     templateLabel: "Template",
+    namespaceLabel: "Owner",
+    namespacePersonal: "Personal",
     templateNone: "Empty repository",
     templateReadme: "Default template: README.md (named after the repository)",
     loadFailed: "Failed to load: {error}",

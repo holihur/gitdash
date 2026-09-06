@@ -9,6 +9,14 @@ import (
 
 // ---- inbox（收件箱通知）----
 
+// listInbox 列出我的收件箱通知。
+//
+//	@Summary     列出收件箱通知
+//	@Tags        inbox
+//	@Produce     json
+//	@Success     200 {array} store.Notification
+//	@Security    BearerAuth
+//	@Router      /inbox [get]
 func (a *API) listInbox(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	items, err := a.store.ListNotifications(me)
@@ -19,6 +27,14 @@ func (a *API) listInbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+// inboxUnread 未读通知数量。
+//
+//	@Summary     未读通知数量
+//	@Tags        inbox
+//	@Produce     json
+//	@Success     200 {object} object "count"
+//	@Security    BearerAuth
+//	@Router      /inbox/unread [get]
 func (a *API) inboxUnread(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	n, err := a.store.UnreadNotifications(me)
@@ -29,6 +45,15 @@ func (a *API) inboxUnread(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int{"count": n})
 }
 
+// inboxReadOne 标记单条通知为已读。
+//
+//	@Summary     标记通知已读
+//	@Tags        inbox
+//	@Produce     json
+//	@Param       id path int true "通知 ID"
+//	@Success     200 {object} object "ok"
+//	@Security    BearerAuth
+//	@Router      /inbox/read/{id} [post]
 func (a *API) inboxReadOne(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -47,6 +72,14 @@ func (a *API) inboxReadOne(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// inboxReadAll 标记全部通知为已读。
+//
+//	@Summary     全部标记已读
+//	@Tags        inbox
+//	@Produce     json
+//	@Success     200 {object} object "ok"
+//	@Security    BearerAuth
+//	@Router      /inbox/read [post]
 func (a *API) inboxReadAll(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	if err := a.store.MarkAllNotificationsRead(me); err != nil {
@@ -56,6 +89,14 @@ func (a *API) inboxReadAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// deleteInbox 删除一条通知。
+//
+//	@Summary     删除通知
+//	@Tags        inbox
+//	@Param       id path int true "通知 ID"
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /inbox/{id} [delete]
 func (a *API) deleteInbox(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)

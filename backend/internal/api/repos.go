@@ -36,6 +36,16 @@ func (a *API) attachStars(repos []store.Repo, me string) {
 	}
 }
 
+// listRepos 列出当前用户可访问的仓库。
+//
+//	@Summary     列出可访问仓库
+//	@Description 返回当前用户可访问的全部仓库（含 star/watch 状态）。
+//	@Tags        repos
+//	@Produce     json
+//	@Success     200 {array} store.Repo
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos [get]
 func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	repos, err := a.store.AccessibleRepos(me)
@@ -47,14 +57,23 @@ func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repos)
 }
 
+// createRepo 创建仓库。
+//
+//	@Summary     创建仓库
+//	@Description 创建成功返回 201。namespace 可选，指定组织名可将仓库建到组织下。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body createRepoReq true "仓库名、描述、模板（readme）、是否私有、组织命名空间"
+//	@Success     201 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     403 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos [post]
 func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Template    string `json:"template"`  // "" = 空仓库；"readme" = 默认模版（README.md）
-		Private     *bool  `json:"private"`   // 默认 true（私有）
-		Namespace   string `json:"namespace"` // 可选：组织名（成员可把仓库建到组织下）
-	}
+	var in createRepoReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -109,6 +128,20 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, repo)
 }
 
+// getRepo 获取仓库详情。
+//
+//	@Summary     获取仓库
+//	@Description 返回仓库信息（含 fork/导入来源、star/watch 状态与当前用户角色）。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Success     200 {object} store.Repo
+//	@Failure     404 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name} [get]
+//	@Router      /users/{owner}/repos/{name} [get]
 func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -151,6 +184,18 @@ func (a *API) writeStarState(w http.ResponseWriter, owner, name, me string) {
 	})
 }
 
+// starRepo 收藏仓库。
+//
+//	@Summary     收藏仓库
+//	@Description 幂等；返回当前收藏状态与 star 数。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {object} map[string]any "starred 与 stars"
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/star [put]
 func (a *API) starRepo(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -166,6 +211,18 @@ func (a *API) starRepo(w http.ResponseWriter, r *http.Request) {
 	a.writeStarState(w, owner, name, me)
 }
 
+// unstarRepo 取消收藏仓库。
+//
+//	@Summary     取消收藏
+//	@Description 返回当前收藏状态与 star 数。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {object} map[string]any "starred 与 stars"
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/star [delete]
 func (a *API) unstarRepo(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -179,6 +236,15 @@ func (a *API) unstarRepo(w http.ResponseWriter, r *http.Request) {
 	a.writeStarState(w, owner, name, me)
 }
 
+// listStarred 列出当前用户收藏的仓库。
+//
+//	@Summary     列出收藏仓库
+//	@Tags        repos
+//	@Produce     json
+//	@Success     200 {array} store.Repo
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /starred [get]
 func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	repos, err := a.store.StarredRepos(me)
@@ -190,15 +256,29 @@ func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repos)
 }
 
+// forkRepo fork 仓库。
+//
+//	@Summary     fork 仓库
+//	@Description fork 保持源仓库可见性，创建成功返回 201。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "源仓库所有者"
+//	@Param       name  path string true "源仓库名"
+//	@Param       body  body forkRepoReq true "目标名称与组织命名空间（可选）"
+//	@Success     201 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     403 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/fork [post]
 func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
 	srcOwner, srcName, ok := a.requireAccess(w, r, false)
 	if !ok {
 		return
 	}
-	var in struct {
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
-	}
+	var in forkRepoReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -370,14 +450,23 @@ func repoNameFromURL(raw string) string {
 	return s
 }
 
+// importRepo 从外部 URL 导入仓库。
+//
+//	@Summary     导入仓库
+//	@Description 支持 http(s)/ssh/git 地址；导入失败返回 400。创建成功返回 201。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body importRepoReq true "url、name（可选）、namespace（可选）、private（可选）、private_key（可选）"
+//	@Success     201 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     403 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /imports [post]
 func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		URL        string `json:"url"`
-		Name       string `json:"name"`
-		Namespace  string `json:"namespace"`
-		Private    *bool  `json:"private"`
-		PrivateKey string `json:"private_key"`
-	}
+	var in importRepoReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -436,6 +525,17 @@ func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
 
 // ---- push mirror ----
 
+// getMirror 查看仓库推送镜像配置。
+//
+//	@Summary     查看镜像配置
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {object} map[string]any "url 与 created_at"
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/mirror [get]
 func (a *API) getMirror(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -452,15 +552,26 @@ func (a *API) getMirror(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// setMirror 设置推送镜像目标。
+//
+//	@Summary     设置镜像
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setMirrorReq true "url 与 private_key（可选）"
+//	@Success     200 {object} map[string]any "url 与 created_at"
+//	@Failure     400 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/mirror [put]
 func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
 		return
 	}
-	var in struct {
-		URL        string `json:"url"`
-		PrivateKey string `json:"private_key"`
-	}
+	var in setMirrorReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -481,6 +592,16 @@ func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"url": m.URL, "created_at": m.CreatedAt})
 }
 
+// deleteMirror 删除推送镜像配置。
+//
+//	@Summary     删除镜像
+//	@Tags        repos
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     204 {string} string ""
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/mirror [delete]
 func (a *API) deleteMirror(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
@@ -493,6 +614,18 @@ func (a *API) deleteMirror(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// syncMirror 立即触发一次镜像推送。
+//
+//	@Summary     同步镜像
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {object} map[string]any "ok"
+//	@Failure     400 {object} map[string]string
+//	@Failure     502 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/mirror/sync [post]
 func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
@@ -514,6 +647,19 @@ func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// deleteRepo 删除仓库。
+//
+//	@Summary     删除仓库
+//	@Description 仅仓库所有者可删除。
+//	@Tags        repos
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Success     204 {string} string ""
+//	@Failure     404 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name} [delete]
+//	@Router      /users/{owner}/repos/{name} [delete]
 func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -538,6 +684,18 @@ func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
 
 // ---- git browsing ----
 
+// branches 列出仓库分支。
+//
+//	@Summary     列出分支
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Success     200 {array} gitsvc.Branch
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name}/branches [get]
+//	@Router      /users/{owner}/repos/{name}/branches [get]
 func (a *API) branches(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -551,6 +709,20 @@ func (a *API) branches(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, bs)
 }
 
+// tree 列出目录内容。
+//
+//	@Summary     浏览目录树
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Param       ref   query string false "分支/标签/commit（默认默认分支）"
+//	@Param       path  query string false "目录路径（默认根目录）"
+//	@Success     200 {object} map[string]any "path、entries 与 truncated"
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name}/tree [get]
+//	@Router      /users/{owner}/repos/{name}/tree [get]
 func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -576,6 +748,20 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"path": dir, "entries": entries, "truncated": truncated})
 }
 
+// blob 读取文件内容。
+//
+//	@Summary     读取文件
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Param       ref   query string false "分支/标签/commit"
+//	@Param       path  query string true  "文件路径"
+//	@Success     200 {object} gitsvc.Blob
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name}/blob [get]
+//	@Router      /users/{owner}/repos/{name}/blob [get]
 func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -589,6 +775,20 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, b)
 }
 
+// blame 查看文件逐行归属。
+//
+//	@Summary     文件 blame
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Param       ref   query string false "分支/标签/commit"
+//	@Param       path  query string true  "文件路径"
+//	@Success     200 {object} gitsvc.Blame
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name}/blame [get]
+//	@Router      /users/{owner}/repos/{name}/blame [get]
 func (a *API) blame(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -602,6 +802,21 @@ func (a *API) blame(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, b)
 }
 
+// commits 列出提交历史。
+//
+//	@Summary     提交历史
+//	@Description 返回提交列表，含 GPG 验证结果（对已注册公钥）。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Param       ref   query string false "分支/标签/commit"
+//	@Param       limit query int    false "返回条数上限"
+//	@Success     200 {array} api.commitResp
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name}/commits [get]
+//	@Router      /users/{owner}/repos/{name}/commits [get]
 func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -644,6 +859,17 @@ type commitResp struct {
 
 // ---- issues ----
 
+// listTags 列出仓库标签。
+//
+//	@Summary     列出标签
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {array} gitsvc.Tag
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/tags [get]
 func (a *API) listTags(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -657,16 +883,27 @@ func (a *API) listTags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tags)
 }
 
+// createRef 创建分支或标签。
+//
+//	@Summary     创建分支/标签
+//	@Description type 必须为 branch 或 tag；from 缺省为 HEAD。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createRefReq true "type、name、from（可选）"
+//	@Success     201 {object} map[string]any "type、name 与 sha"
+//	@Failure     400 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/refs [post]
 func (a *API) createRef(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
 		return
 	}
-	var in struct {
-		Type string `json:"type"`
-		Name string `json:"name"`
-		From string `json:"from"`
-	}
+	var in createRefReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -695,6 +932,21 @@ func (a *API) createRef(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"type": in.Type, "name": in.Name, "sha": sha})
 }
 
+// deleteRef 删除分支或标签。
+//
+//	@Summary     删除分支/标签
+//	@Description 不能删除默认（HEAD）分支。
+//	@Tags        repos
+//	@Param       owner   path string true "仓库所有者"
+//	@Param       name    path string true "仓库名"
+//	@Param       kind    path string true "类型：branches 或 tags"
+//	@Param       refname path string true "分支/标签名"
+//	@Success     204 {string} string ""
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/refs/{kind}/{refname} [delete]
 func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -718,16 +970,26 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// writeCommit 写入一次提交。
+//
+//	@Summary     创建提交
+//	@Description 支持批量文件变更（create/update/delete/delete_tree），总内容不超过 2MB。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body writeCommitReq true "branch（默认 main）、message 与 changes"
+//	@Success     201 {object} map[string]any "sha、branch 与 message"
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/commits [post]
 func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
 		return
 	}
-	var in struct {
-		Branch  string              `json:"branch"`
-		Message string              `json:"message"`
-		Changes []gitsvc.FileChange `json:"changes"`
-	}
+	var in writeCommitReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -780,6 +1042,18 @@ func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"sha": sha, "branch": in.Branch, "message": in.Message})
 }
 
+// commitDiff 查看提交差异。
+//
+//	@Summary     提交 diff
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       sha   path string true "commit SHA"
+//	@Success     200 {object} map[string]any "files 与 patch"
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/commits/{sha}/diff [get]
 func (a *API) commitDiff(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -800,6 +1074,18 @@ func (a *API) commitDiff(w http.ResponseWriter, r *http.Request) {
 
 // ---- pull requests ----
 
+// listOrgRepos 列出组织仓库。
+//
+//	@Summary     组织仓库列表
+//	@Description 返回组织仓库列表与当前用户在组织中的角色。
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {object} map[string]any "role 与 repos"
+//	@Failure     404 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/repos [get]
 func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 	org := r.PathValue("org")
 	me := userFrom(r)
@@ -825,14 +1111,27 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out})
 }
 
+// setRepoVisibility 设置仓库可见性。
+//
+//	@Summary     设置仓库可见性
+//	@Description 仅仓库所有者可设置。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setRepoVisibilityReq true "private"
+//	@Success     200 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/visibility [post]
 func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
 		return
 	}
-	var in struct {
-		Private *bool `json:"private"`
-	}
+	var in setRepoVisibilityReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -852,6 +1151,15 @@ func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repo)
 }
 
+// exploreRepos 列出所有公开仓库。
+//
+//	@Summary     探索公开仓库
+//	@Tags        repos
+//	@Produce     json
+//	@Success     200 {array} store.Repo
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /explore/repos [get]
 func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 	repos, err := a.store.ExploreRepos()
 	if err != nil {
@@ -868,6 +1176,18 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// listCollabs 列出仓库协作者。
+//
+//	@Summary     列出协作者
+//	@Description 仅仓库所有者可查看。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {array} store.Collab
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/collabs [get]
 func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
@@ -881,15 +1201,28 @@ func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, collabs)
 }
 
+// addCollab 添加或更新协作者。
+//
+//	@Summary     添加协作者
+//	@Description permission 为 read 或 write；仅仓库所有者可操作。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body addCollabReq true "username 与 permission"
+//	@Success     200 {object} store.Collab
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/collabs [post]
 func (a *API) addCollab(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {
 		return
 	}
-	var in struct {
-		Username   string `json:"username"`
-		Permission string `json:"permission"`
-	}
+	var in addCollabReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -928,6 +1261,18 @@ func (a *API) addCollab(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"username": in.Username, "permission": in.Permission})
 }
 
+// removeCollab 移除协作者。
+//
+//	@Summary     移除协作者
+//	@Tags        repos
+//	@Param       owner    path string true "仓库所有者"
+//	@Param       name     path string true "仓库名"
+//	@Param       username path string true "协作者用户名"
+//	@Success     204 {string} string ""
+//	@Failure     404 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/collabs/{username} [delete]
 func (a *API) removeCollab(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireOwner(w, r)
 	if !ok {

@@ -7,6 +7,8 @@ backend/static/
 backend/internal/webui/dist/*
 !backend/internal/webui/dist/.gitkeep
 data/
+backend/internal/api/docs/swagger.json
+backend/internal/api/docs/swagger.yaml
 *.log
 *.db
 *.db-shm

@@ -21,6 +21,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// register 用户注册。
+//
+//	@Summary     注册新用户
+//	@Description 注册成功返回 201 与会话 token。
+//	@Tags        auth
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body registerReq true "用户名与密码"
+//	@Success     201 {object} map[string]string
+//	@Failure     400 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Failure     429 {object} map[string]string
+//	@Router      /auth/register [post]
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Username string `json:"username"`
@@ -73,6 +86,18 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	a.startSession(w, r, http.StatusCreated, u.Username)
 }
 
+// login 用户登录。
+//
+//	@Summary     登录
+//	@Description 返回会话 token；若启用 MFA 则返回 mfa_required 与临时 mfa_token。
+//	@Tags        auth
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body loginReq true "用户名与密码"
+//	@Success     200 {object} map[string]any "会话 token 或 MFA 挑战"
+//	@Failure     401 {object} map[string]string
+//	@Failure     429 {object} map[string]string
+//	@Router      /auth/login [post]
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Username string `json:"username"`
@@ -118,7 +143,17 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 }
 
 // mfaVerify 完成 MFA 二次验证并签发正式会话。
-
+//
+//	@Summary     MFA 二次验证
+//	@Description 校验 TOTP 代码后签发正式会话 token。
+//	@Tags        auth
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body mfaVerifyReq true "mfa_token 与 TOTP code"
+//	@Success     200 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     429 {object} map[string]string
+//	@Router      /auth/mfa-verify [post]
 func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		MFAToken string `json:"mfa_token"`
@@ -169,6 +204,17 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 // emailRe 宽松的邮箱格式校验（本地@域名）。
 var emailRe = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
+// me 获取当前登录用户信息。
+//
+//	@Summary     当前用户信息
+//	@Description 返回当前会话用户的用户名、邮箱、创建时间与 MFA 状态。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     200 {object} map[string]any
+//	@Failure     401 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Router      /me [get]
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	ua, err := a.store.GetByUsername(userFrom(r))
 	if err != nil {
@@ -184,6 +230,19 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateProfile 更新个人资料（当前仅邮箱；空串清除）。
+//
+//	@Summary     更新个人资料
+//	@Description 更新当前用户邮箱；空串表示清除。返回 200 与更新后的资料。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       body body updateProfileReq true "邮箱（可为空串）"
+//	@Success     200 {object} map[string]any
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Router      /me/profile [post]
 func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	var in struct {
@@ -222,6 +281,19 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 
 // ---- user profile & mfa ----
 
+// changePassword 修改当前用户密码。
+//
+//	@Summary     修改密码
+//	@Description 校验当前密码后更新，并撤销其它会话（仅保留当前会话）。返回 204。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       body body changePasswordReq true "当前密码与新密码"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Router      /me/password [post]
 func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Current string `json:"current_password"`
@@ -259,6 +331,17 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// mfaStatus 查询当前用户 MFA 状态。
+//
+//	@Summary     MFA 状态
+//	@Description 返回是否已启用；若存在待激活的 secret，则附带 pending_secret 与 otpauth_url。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     200 {object} map[string]any
+//	@Failure     401 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Router      /me/mfa [get]
 func (a *API) mfaStatus(w http.ResponseWriter, r *http.Request) {
 	ua, err := a.store.GetByUsername(userFrom(r))
 	if err != nil {
@@ -273,6 +356,18 @@ func (a *API) mfaStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// mfaEnroll 开始 MFA 绑定，生成（或复用）secret。
+//
+//	@Summary     开始 MFA 绑定
+//	@Description 返回 secret 与 otpauth URL，供认证器扫码；尚未激活。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     200 {object} map[string]any
+//	@Failure     401 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Router      /me/mfa/enroll [post]
 func (a *API) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 	username := userFrom(r)
 	ua, err := a.store.GetByUsername(username)
@@ -302,6 +397,20 @@ func (a *API) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// mfaActivate 激活 MFA。
+//
+//	@Summary     激活 MFA
+//	@Description 校验 TOTP 代码后启用 MFA。返回 204。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       body body mfaActivateReq true "TOTP code"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Router      /me/mfa/activate [post]
 func (a *API) mfaActivate(w http.ResponseWriter, r *http.Request) {
 	username := userFrom(r)
 	ua, err := a.store.GetByUsername(username)
@@ -334,6 +443,20 @@ func (a *API) mfaActivate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// mfaDisable 关闭 MFA。
+//
+//	@Summary     关闭 MFA
+//	@Description 需提供当前密码与有效 TOTP 代码。返回 204。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       body body mfaDisableReq true "当前密码与 TOTP code"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Router      /me/mfa/disable [post]
 func (a *API) mfaDisable(w http.ResponseWriter, r *http.Request) {
 	username := userFrom(r)
 	ua, err := a.store.GetByUsername(username)
@@ -367,6 +490,15 @@ func (a *API) mfaDisable(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// logout 登出并作废当前会话。
+//
+//	@Summary     登出
+//	@Description 作废当前 token（或 cookie 会话）并清除 cookie。返回 204。
+//	@Tags        auth
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     204 {object} nil
+//	@Router      /auth/logout [post]
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	tok := bearerToken(r)
 	if tok == "" {
@@ -381,6 +513,17 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// listGPGKeys 列出当前用户的 GPG 公钥。
+//
+//	@Summary     列出 GPG 公钥
+//	@Description 返回当前用户注册的所有 GPG 公钥。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     200 {array}  store.GPGKey
+//	@Failure     401 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Router      /gpg [get]
 func (a *API) listGPGKeys(w http.ResponseWriter, r *http.Request) {
 	keys, err := a.store.ListGPGKeys(userFrom(r))
 	if err != nil {
@@ -390,6 +533,20 @@ func (a *API) listGPGKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, keys)
 }
 
+// addGPGKey 添加 GPG 公钥。
+//
+//	@Summary     添加 GPG 公钥
+//	@Description 解析 armored 公钥并注册。返回 201 与新键。
+//	@Tags        users
+//	@Accept      json
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       body body addGPGKeyReq true "armored 公钥"
+//	@Success     201 {object} store.GPGKey
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Router      /gpg [post]
 func (a *API) addGPGKey(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Armor string `json:"armor"`
@@ -420,6 +577,19 @@ func (a *API) addGPGKey(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, k)
 }
 
+// deleteGPGKey 删除指定 GPG 公钥。
+//
+//	@Summary     删除 GPG 公钥
+//	@Description 按 id 删除当前用户的 GPG 公钥。返回 204。
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Param       id path int true "GPG key id"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Router      /gpg/{id} [delete]
 func (a *API) deleteGPGKey(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -482,7 +652,13 @@ func (a *API) oauthSettings() (enabled bool, clientID, clientSecret string) {
 }
 
 // providers 公开列出可用的第三方登录（未启用不暴露配置）。
-
+//
+//	@Summary     列出第三方登录方式
+//	@Description 返回 github 与 oidc 的启用状态及授权 URL（未启用不暴露配置）。
+//	@Tags        auth
+//	@Produce     json
+//	@Success     200 {object} map[string]any
+//	@Router      /auth/providers [get]
 func (a *API) providers(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"github": map[string]any{"enabled": false},
@@ -869,6 +1045,18 @@ func (a *API) adminAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// adminLogin 管理端登录（需先启用管理面板）。
+//
+//	@Summary     管理端登录
+//	@Tags        admin
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body adminLoginReq true "管理员用户名与密码"
+//	@Success     200 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Failure     429 {object} map[string]string
+//	@Router      /admin/login [post]
 func (a *API) adminLogin(w http.ResponseWriter, r *http.Request) {
 	if !a.adminEnabled() {
 		writeCode(w, http.StatusNotFound, "admin_disabled", "admin panel is disabled (set GITDASH_ADMIN_PASSWORD on first boot)")
@@ -906,6 +1094,14 @@ func (a *API) adminLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"username": in.Username})
 }
 
+// adminLogout 管理端登出。
+//
+//	@Summary     管理端登出
+//	@Tags        admin
+//	@Produce     json
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /admin/logout [post]
 func (a *API) adminLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(adminCookie); err == nil {
 		_ = a.store.DeleteAdminSession(c.Value)
@@ -914,10 +1110,28 @@ func (a *API) adminLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// adminMe 获取当前管理员用户名。
+//
+//	@Summary     当前管理员
+//	@Tags        admin
+//	@Produce     json
+//	@Success     200 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /admin/me [get]
 func (a *API) adminMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"username": userFrom(r)})
 }
 
+// adminSettings 获取管理端系统设置（OAuth/OIDC 配置）。
+//
+//	@Summary     获取系统设置
+//	@Tags        admin
+//	@Produce     json
+//	@Success     200 {object} map[string]any
+//	@Failure     401 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /admin/settings [get]
 func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 	enabled, id, _ := a.oauthSettings()
 	oidcOn := a.store.GetSetting("oidc_enabled") == "1"
@@ -933,6 +1147,18 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// adminSaveSettings 保存管理端系统设置。
+//
+//	@Summary     保存系统设置
+//	@Tags        admin
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body map[string]any true "设置项（github/oidc 开关与配置）"
+//	@Success     200 {object} map[string]any
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /admin/settings [post]
 func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	var in map[string]any
 	if err := readJSON(w, r, &in); err != nil {
@@ -967,6 +1193,18 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// adminChangePassword 修改管理员密码。
+//
+//	@Summary     修改管理员密码
+//	@Tags        admin
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body adminChangePasswordReq true "当前密码与新密码"
+//	@Success     204 {object} nil
+//	@Failure     400 {object} map[string]string
+//	@Failure     401 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /admin/password [post]
 func (a *API) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Current string `json:"current_password"`

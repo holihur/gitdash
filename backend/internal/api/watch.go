@@ -5,9 +5,6 @@ import (
 	"net/http"
 )
 
-// watchRepo / unwatchRepo：关注 / 取消关注仓库（收件箱通知订阅）。
-// 返回当前 watch 状态与该仓库的 watch 数。
-
 func (a *API) writeWatchState(w http.ResponseWriter, owner, name, me string) {
 	counts := a.store.WatchCounts([][2]string{{owner, name}})
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -16,6 +13,17 @@ func (a *API) writeWatchState(w http.ResponseWriter, owner, name, me string) {
 	})
 }
 
+// watchRepo 关注仓库（收件箱通知订阅）。
+// 返回当前 watch 状态与该仓库的 watch 数。
+//
+//	@Summary     关注仓库
+//	@Tags        watch
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {object} object "watching 与 watchers"
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/watch [put]
 func (a *API) watchRepo(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -45,6 +53,13 @@ func (a *API) unwatchRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 // listWatched 我 watch 过的仓库（含公开仓库与我有权访问的仓库）。
+//
+//	@Summary     列出我关注的仓库
+//	@Tags        watch
+//	@Produce     json
+//	@Success     200 {array} store.Repo
+//	@Security    BearerAuth
+//	@Router      /watched [get]
 func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	repos, err := a.store.WatchedRepos(me)

@@ -10,6 +10,19 @@ import (
 	"strings"
 )
 
+// listIssues 列出仓库的 issue 列表。
+//
+//	@Summary     列出 Issue
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者（owner 路由时）"
+//	@Param       name   path string true "仓库名"
+//	@Param       limit  query int false "每页数量"
+//	@Param       offset query int false "偏移量"
+//	@Success     200 {array} store.Issue
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues [get]
+//	@Router      /repos/{name}/issues [get]
 func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -24,6 +37,19 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, issues))
 }
 
+// createIssue 创建 issue。
+//
+//	@Summary     创建 Issue
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者（owner 路由时）"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createIssueReq true "标题与正文"
+//	@Success     201 {object} store.Issue
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues [post]
+//	@Router      /repos/{name}/issues [post]
 func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -59,6 +85,20 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
 
+// setIssueState 修改 issue 状态（open/closed）。
+//
+//	@Summary     修改 Issue 状态
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者（owner 路由时）"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Param       body   body setIssueStateReq true "状态（open/closed）"
+//	@Success     200 {object} store.Issue
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number} [patch]
+//	@Router      /repos/{name}/issues/{number} [patch]
 func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -135,6 +175,19 @@ func (a *API) enrichIssues(owner, repo string, issues []store.Issue) []map[strin
 	return out
 }
 
+// setIssueLabels 设置 issue 的标签。
+//
+//	@Summary     设置 Issue 标签
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string   true "仓库所有者"
+//	@Param       name   path string   true "仓库名"
+//	@Param       number path int      true "Issue 编号"
+//	@Param       body   body setIssueLabelsReq   true "标签 ID 列表"
+//	@Success     200 {object} store.Issue
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number}/labels [post]
 func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -168,6 +221,19 @@ func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
 
+// setIssueMilestone 设置 issue 的里程碑。
+//
+//	@Summary     设置 Issue 里程碑
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Param       body  body setIssueMilestoneReq true "里程碑 ID（0 = 清除）"
+//	@Success     200 {object} store.Issue
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number}/milestone [post]
 func (a *API) setIssueMilestone(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -201,6 +267,16 @@ func (a *API) setIssueMilestone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
 
+// listLabels 列出仓库的标签。
+//
+//	@Summary     列出标签
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {array} store.Label
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/labels [get]
 func (a *API) listLabels(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -216,6 +292,18 @@ func (a *API) listLabels(w http.ResponseWriter, r *http.Request) {
 
 var labelColorRe = regexp.MustCompile(`^#?[0-9a-fA-F]{6}$`)
 
+// createLabel 创建标签。
+//
+//	@Summary     创建标签
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createLabelReq true "名称与颜色"
+//	@Success     201 {object} store.Label
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/labels [post]
 func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -257,6 +345,19 @@ func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, l)
 }
 
+// updateLabel 更新标签。
+//
+//	@Summary     更新标签
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "标签 ID"
+//	@Param       body  body updateLabelReq true "名称与颜色"
+//	@Success     200 {object} store.Label
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/labels/{id} [patch]
 func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -322,6 +423,16 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, upd)
 }
 
+// deleteLabel 删除标签。
+//
+//	@Summary     删除标签
+//	@Tags        issues
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "标签 ID"
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/labels/{id} [delete]
 func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -339,6 +450,16 @@ func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// listMilestones 列出仓库的里程碑。
+//
+//	@Summary     列出里程碑
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Success     200 {array} store.Milestone
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/milestones [get]
 func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -352,6 +473,18 @@ func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ms)
 }
 
+// createMilestone 创建里程碑。
+//
+//	@Summary     创建里程碑
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body createMilestoneReq true "标题与描述"
+//	@Success     201 {object} store.Milestone
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/milestones [post]
 func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -377,6 +510,19 @@ func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, m)
 }
 
+// updateMilestone 更新里程碑。
+//
+//	@Summary     更新里程碑
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "里程碑 ID"
+//	@Param       body  body updateMilestoneReq true "标题、描述与状态"
+//	@Success     200 {object} store.Milestone
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/milestones/{id} [patch]
 func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -412,6 +558,16 @@ func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
+// deleteMilestone 删除里程碑。
+//
+//	@Summary     删除里程碑
+//	@Tags        issues
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "里程碑 ID"
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/milestones/{id} [delete]
 func (a *API) deleteMilestone(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
