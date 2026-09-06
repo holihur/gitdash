@@ -33,8 +33,9 @@ def user(user_factory):
 def test_profile_me_fields(user):
     _, _, c = user
     me = c.get("/me", expect=200).json()
-    assert set(me) == {"username", "email", "created_at", "mfa_enabled"}
+    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "notify_email"}
     assert me["mfa_enabled"] is False
+    assert me["notify_email"] is False
     assert me["created_at"]
 
 
@@ -44,11 +45,16 @@ def test_profile_email(user_factory, client_factory):
 
     # 设置邮箱
     resp = c.post("/me/profile", json={"email": email}, expect=200).json()
-    assert resp == {"username": username, "email": email}
-    assert c.get("/me", expect=200).json()["email"] == email
+    assert resp == {"username": username, "email": email, "notify_email": False}
+    me = c.get("/me", expect=200).json()
+    assert me["email"] == email and me["notify_email"] is False
 
-    # 坏路径：缺少字段 / 非法格式
-    c.post("/me/profile", json={}, expect=400)
+    # notify_email 开关
+    resp = c.post("/me/profile", json={"notify_email": True}, expect=200).json()
+    assert resp == {"username": username, "email": email, "notify_email": True}
+
+    # 坏路径：非法格式（空 body 是合法的 no-op 更新）
+    c.post("/me/profile", json={}, expect=200)
     c.post("/me/profile", json={"email": "not-an-email"}, expect=400)
 
     # 其他用户不能用同一邮箱
