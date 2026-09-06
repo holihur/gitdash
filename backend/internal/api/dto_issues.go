@@ -63,3 +63,9 @@ type mergePullReq struct {
 type setPullStateReq struct {
 	State string `json:"state"` // 目标状态（open 或 closed）
 }
+
+// addCommentReq issue/PR 评论请求体。
+type addCommentReq struct {
+	// 评论正文（最多 10000 字符）
+	Body string `json:"body"`
+}

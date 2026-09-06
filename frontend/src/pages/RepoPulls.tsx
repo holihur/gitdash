@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api, type PullDiff, type PullRequest } from "@/lib/api";
 import { DiffView } from "@/components/diff-view";
+import CommentSection from "@/components/comment-section";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -310,6 +311,7 @@ export default function RepoPulls({ owner, name }: { owner: string; name: string
                       )}
                     </div>
                     <PullDiffView owner={owner} name={name} number={pr.number} />
+                    <CommentSection owner={owner} name={name} number={pr.number} kind="pulls" />
                   </div>
                 )}
               </div>

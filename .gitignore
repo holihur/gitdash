@@ -14,6 +14,9 @@ backend/internal/api/docs/swagger.yaml
 *.db-shm
 *.db-wal
 
+# local todo list (do not commit)
+todo.md
+
 # python (uv) api tests
 tests/.venv/
 __pycache__/

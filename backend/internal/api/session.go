@@ -4,12 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"gitdash/backend/internal/store"
+	"log"
 	"net"
 	"net/http"
 	"net/netip"
 	"os"
 	"strings"
-	"time"
 )
 
 func (a *API) rateKey(username, ip string) string { return username + "|" + ip }
@@ -18,44 +18,34 @@ func (a *API) rateKey(username, ip string) string { return username + "|" + ip }
 // 避免黑盒测试套件（同 IP 大量注册/登录失败）误触发 429。
 var rateLimitDisabled = os.Getenv("GITDASH_DISABLE_RATE_LIMIT") == "1"
 
+// 限速记录持久化在 store（login_fails 表）：重启与多实例共享同一窗口，
+// 不再有内存 map 的无限增长问题。
+
 func (a *API) rateBlocked(key string) bool {
 	if rateLimitDisabled {
 		return false
 	}
-	a.rateMu.Lock()
-	defer a.rateMu.Unlock()
-	if len(a.rateFails) > loginRateCutoff { // 防止内存无限增长
-		a.rateFails = map[string]rateRec{}
-	}
-	rec, ok := a.rateFails[key]
-	if !ok {
+	blocked, err := a.store.RateBlocked(key, loginMaxFails)
+	if err != nil {
+		log.Printf("rate check %s: %v", key, err)
 		return false
 	}
-	if time.Now().After(rec.until) {
-		delete(a.rateFails, key)
-		return false
-	}
-	return rec.count >= loginMaxFails
+	return blocked
 }
 
 func (a *API) rateFail(key string) {
 	if rateLimitDisabled {
 		return
 	}
-	a.rateMu.Lock()
-	defer a.rateMu.Unlock()
-	rec, ok := a.rateFails[key]
-	if !ok || time.Now().After(rec.until) {
-		rec = rateRec{until: time.Now().Add(loginWindow)}
+	if err := a.store.RateFail(key, loginWindow); err != nil {
+		log.Printf("rate fail record %s: %v", key, err)
 	}
-	rec.count++
-	a.rateFails[key] = rec
 }
 
 func (a *API) rateReset(key string) {
-	a.rateMu.Lock()
-	delete(a.rateFails, key)
-	a.rateMu.Unlock()
+	if err := a.store.RateReset(key); err != nil {
+		log.Printf("rate reset %s: %v", key, err)
+	}
 }
 
 // clientIP 仅当直连地址是回环/内网（即部署在可信反代之后）时才信任
@@ -103,7 +93,9 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-func (a *API) sessionUser(r *http.Request) string {
+// resolveUser 解析请求身份：Bearer/cookie → 登录 session；否则尝试 PAT。
+// 返回 (username, scopes, isPAT)；未认证返回 ("", nil, false)。
+func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	tok := bearerToken(r)
 	if tok == "" {
 		if c, err := r.Cookie(sessionCookie); err == nil {
@@ -111,12 +103,20 @@ func (a *API) sessionUser(r *http.Request) string {
 		}
 	}
 	if tok == "" {
-		return ""
+		return "", nil, false
 	}
 	username, err := a.store.GetSession(tok)
-	if err != nil {
-		return ""
+	if err == nil {
+		return username, nil, false
 	}
+	if name, scopes, err := a.store.ValidatePAT(tok); err == nil {
+		return name, scopes, true
+	}
+	return "", nil, false
+}
+
+func (a *API) sessionUser(r *http.Request) string {
+	username, _, _ := a.resolveUser(r)
 	return username
 }
 

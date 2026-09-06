@@ -62,6 +62,25 @@ type gpgKeyRow struct {
 
 func (gpgKeyRow) TableName() string { return "gpg_keys" }
 
+type patRow struct {
+	ID         int64  `gorm:"primaryKey;autoIncrement"`
+	UserID     int64  `gorm:"not null;index"`
+	Name       string `gorm:"not null"`
+	TokenHash  string `gorm:"not null;uniqueIndex;size:255"`
+	Scopes     string `gorm:"not null;default:'repo'"` // 逗号分隔: repo,inbox,keys
+	CreatedAt  string `gorm:"not null"`
+	LastUsedAt string `gorm:"not null;default:''"`
+}
+
+func (patRow) TableName() string { return "pats" }
+
+// ---- pats DTO ----
+
+type CreatedPAT struct {
+	Token string `json:"token"` // 明文 token，仅创建响应中出现一次
+	PAT            // 内联平铺
+}
+
 // ---- issues / labels / milestones ----
 
 type issueRow struct {
@@ -80,6 +99,21 @@ type issueRow struct {
 }
 
 func (issueRow) TableName() string { return "issues" }
+
+// commentRow issue/PR 评论。kind 区分两种宿主（issue 与 PR 号码各自独立递增）。
+type commentRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Owner     string `gorm:"not null;index:idx_comment_host,priority:1;size:255"`
+	Repo      string `gorm:"not null;index:idx_comment_host,priority:2;size:255"`
+	Kind      string `gorm:"not null;index:idx_comment_host,priority:3;index:idx_comments_owner_repo;size:8"`
+	Number    int64  `gorm:"not null;index:idx_comment_host,priority:4"`
+	Author    string `gorm:"not null;size:255"`
+	Body      string `gorm:"not null"`
+	CreatedAt string `gorm:"not null"`
+	UpdatedAt string `gorm:"not null"`
+}
+
+func (commentRow) TableName() string { return "issue_comments" }
 
 type repoLabelRow struct {
 	ID        int64  `gorm:"primaryKey;autoIncrement"`

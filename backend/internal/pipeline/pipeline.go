@@ -281,6 +281,15 @@ func runStep(workdir string, cfg *Config, step Step, owner, repo, ref, sha strin
 		"run", "--rm",
 		"--workdir", "/workspace",
 		"-v", workdir + ":/workspace",
+		// 沙箱加固：禁外网（依赖拉取需镜像内预装或镜像自身可达源）、
+		// 限制资源、禁止提权、丢弃 capabilities，防止流水线脚本攻击宿主或同级容器。
+		"--network", "none",
+		"--memory", "512m",
+		"--memory-swap", "512m",
+		"--cpus", "1.0",
+		"--pids-limit", "128",
+		"--security-opt", "no-new-privileges",
+		"--cap-drop", "ALL",
 		"-e", "CI=1",
 		"-e", "GITDASH=true",
 		"-e", "GITDASH_REPO=" + owner + "/" + repo,

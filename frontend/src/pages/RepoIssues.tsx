@@ -26,6 +26,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import LabelChip from "@/components/label-chip";
+import CommentSection from "@/components/comment-section";
 import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
 
@@ -428,6 +429,7 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
                         </Button>
                       </div>
                     </div>
+                    <CommentSection owner={owner} name={name} number={issue.number} />
                   </div>
                 )}
               </div>

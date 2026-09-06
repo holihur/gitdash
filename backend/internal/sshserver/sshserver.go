@@ -189,7 +189,7 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 		return
 	}
 	// 权限：push（receive-pack）需 write，clone/fetch/archive 需 read；所有者恒有全部权限
-	if sub == "git-receive-pack" {
+	if sub == "receive-pack" {
 		if !s.st.CanWrite(owner, name, username) {
 			deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
 			return
@@ -247,7 +247,7 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 	err = cmd.Wait()
 	wg.Wait()
 	_ = stdoutR.Close()
-	if sub == "git-receive-pack" {
+	if sub == "receive-pack" {
 		// push 改变了分支/标签集合，失效 15s TTL 缓存
 		gitsvc.InvalidateRefs(owner, name)
 	}

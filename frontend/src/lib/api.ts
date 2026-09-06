@@ -97,6 +97,18 @@ export interface SSHKey {
   created_at: string;
 }
 
+export interface PAT {
+  id: number;
+  name: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string;
+}
+
+export interface CreatedPAT extends PAT {
+  token: string;
+}
+
 export interface Branch {
   name: string;
   is_head: boolean;
@@ -176,6 +188,15 @@ export interface Milestone {
   state: "open" | "closed";
   open_issues: number;
   closed_issues: number;
+}
+
+export interface IssueComment {
+  id: number;
+  number: number;
+  author: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Collab {
@@ -469,6 +490,27 @@ export const api = {
       body: JSON.stringify({ state }),
     }),
 
+  // issue/PR comments
+  listComments: (
+    owner: string,
+    name: string,
+    number: number,
+    kind: "issues" | "pulls" = "issues",
+  ) => req<IssueComment[]>(`/users/${owner}/repos/${name}/${kind}/${number}/comments`),
+  postComment: (
+    owner: string,
+    name: string,
+    number: number,
+    body: string,
+    kind: "issues" | "pulls" = "issues",
+  ) =>
+    req<IssueComment>(`/users/${owner}/repos/${name}/${kind}/${number}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  deleteComment: (owner: string, name: string, id: number) =>
+    req<null>(`/users/${owner}/repos/${name}/comments/${id}`, { method: "DELETE" }),
+
   // issue labels
   listLabels: (owner: string, name: string) => req<Label[]>(`/users/${owner}/repos/${name}/labels`),
   createLabel: (owner: string, name: string, labelName: string, color: string) =>
@@ -632,4 +674,10 @@ export const api = {
   addGPGKey: (armor: string) =>
     req<GPGKey>("/gpg", { method: "POST", body: JSON.stringify({ armor }) }),
   deleteGPGKey: (id: number) => req<null>(`/gpg/${id}`, { method: "DELETE" }),
+
+  // personal access tokens
+  listPATs: () => req<PAT[]>("/tokens"),
+  createPAT: (name: string, scopes: string[]) =>
+    req<CreatedPAT>("/tokens", { method: "POST", body: JSON.stringify({ name, scopes }) }),
+  deletePAT: (id: number) => req<null>(`/tokens/${id}`, { method: "DELETE" }),
 };

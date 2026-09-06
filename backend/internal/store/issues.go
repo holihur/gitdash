@@ -94,3 +94,8 @@ func (s *Store) SetIssueState(owner, repo string, number int64, state string) (I
 	}
 	return s.getIssue(owner, repo, number)
 }
+
+// GetIssue 导出版 getIssue（供 API 层校验 issue 是否存在）。
+func (s *Store) GetIssue(owner, repo string, number int64) (Issue, error) {
+	return s.getIssue(owner, repo, number)
+}

@@ -50,9 +50,6 @@ type API struct {
 	mu         sync.Mutex
 	mfaPending map[string]mfaChallenge // mfa_token -> 待二次验证的登录
 
-	rateMu    sync.Mutex
-	rateFails map[string]rateRec // 登录失败计数（username|ip）
-
 	oauthMu    sync.Mutex
 	oauthState map[string]oauthPending // github oauth state
 
@@ -94,15 +91,9 @@ type oauthPending struct {
 // 登录限速：15 分钟窗口内最多 5 次失败
 
 const (
-	loginMaxFails   = 5
-	loginWindow     = 15 * time.Minute
-	loginRateCutoff = 5000
+	loginMaxFails = 5
+	loginWindow   = 15 * time.Minute
 )
-
-type rateRec struct {
-	count int
-	until time.Time
-}
 
 type mfaChallenge struct {
 	username string
@@ -115,12 +106,12 @@ func New(s *store.Store, version string) *API {
 		store:      s,
 		version:    version,
 		mfaPending: map[string]mfaChallenge{},
-		rateFails:  map[string]rateRec{},
 		oauthState: map[string]oauthPending{},
 	}
 }
 
 type ctxUser struct{}
+type ctxPatScopes struct{}
 
 func userFrom(r *http.Request) string {
 	v, _ := r.Context().Value(ctxUser{}).(string)
@@ -211,6 +202,17 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/labels", a.auth(a.setIssueLabels))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/milestone", a.auth(a.setIssueMilestone))
 
+	// comments（issue 与 PR 共用，kind 由路由闭包区分）
+	issueList, issueAdd := a.issueOrPullComments("issue")
+	pullList, pullAdd := a.issueOrPullComments("pull")
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues/{number}/comments", a.auth(issueList))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/comments", a.auth(issueAdd))
+	mux.HandleFunc("GET /api/repos/{name}/issues/{number}/comments", a.auth(issueList))
+	mux.HandleFunc("POST /api/repos/{name}/issues/{number}/comments", a.auth(issueAdd))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullList))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullAdd))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/comments/{id}", a.auth(a.deleteComment))
+
 	// issue labels & milestones
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/labels", a.auth(a.listLabels))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/labels", a.auth(a.createLabel))
@@ -273,6 +275,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/gpg", a.auth(a.listGPGKeys))
 	mux.HandleFunc("POST /api/gpg", a.auth(a.addGPGKey))
 	mux.HandleFunc("DELETE /api/gpg/{id}", a.auth(a.deleteGPGKey))
+
+	// personal access tokens
+	mux.HandleFunc("GET /api/tokens", a.auth(a.listTokens))
+	mux.HandleFunc("POST /api/tokens", a.auth(a.createTokens))
+	mux.HandleFunc("DELETE /api/tokens/{id}", a.auth(a.deleteToken))
 
 	// swagger（OpenAPI 文档 + 内置 Swagger UI）
 	docs.SwaggerInfo.BasePath = "/api"
@@ -338,13 +345,51 @@ func secureHeaders(next http.Handler) http.Handler {
 
 func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username := a.sessionUser(r)
+		username, scopes, isPAT := a.resolveUser(r)
 		if username == "" {
 			writeCode(w, http.StatusUnauthorized, "unauthorized", "unauthorized")
 			return
 		}
-		next(w, r.WithContext(context.WithValue(r.Context(), ctxUser{}, username)))
+		if isPAT && !patAllowed(r.URL.Path, scopes) {
+			writeCode(w, http.StatusForbidden, "insufficient_scope", "token does not have the required scope")
+			return
+		}
+		ctx := context.WithValue(r.Context(), ctxUser{}, username)
+		if isPAT {
+			ctx = context.WithValue(ctx, ctxPatScopes{}, scopes)
+		}
+		next(w, r.WithContext(ctx))
 	}
+}
+
+// patAllowed 判定 PAT 是否覆盖该路径所需 scope：
+// /api/admin* 一律拒绝；/api/tokens* 管理自身放行；/api/inbox* 需 inbox；
+// /api/keys* 与 /api/gpg* 需 keys；其余需 repo。
+func patAllowed(path string, scopes []string) bool {
+	if strings.HasPrefix(path, "/api/admin") {
+		return false
+	}
+	if strings.HasPrefix(path, "/api/tokens") {
+		return true
+	}
+	required := "repo"
+	switch {
+	case strings.HasPrefix(path, "/api/inbox"):
+		required = "inbox"
+	case strings.HasPrefix(path, "/api/keys"), strings.HasPrefix(path, "/api/gpg"):
+		required = "keys"
+	}
+	for _, s := range scopes {
+		if s == required {
+			return true
+		}
+	}
+	return false
+}
+
+func patScopesFrom(r *http.Request) []string {
+	v, _ := r.Context().Value(ctxPatScopes{}).([]string)
+	return v
 }
 
 func logMiddleware(next http.Handler) http.Handler {

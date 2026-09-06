@@ -87,6 +87,19 @@ type Issue struct {
 	ClosedAt  *string `json:"closed_at"`
 }
 
+// Comment issue/PR 下的评论（Kind: "issue" | "pull"）。
+type Comment struct {
+	ID        int64  `json:"id"`
+	Owner     string `json:"-"`
+	Repo      string `json:"-"`
+	Kind      string `json:"-"`
+	Number    int64  `json:"number"`
+	Author    string `json:"author"`
+	Body      string `json:"body"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 // Collab 仓库协作者（read=可克隆/浏览，write=可 push）
 type Collab struct {
 	Owner      string `json:"owner"`

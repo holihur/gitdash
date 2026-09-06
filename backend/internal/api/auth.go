@@ -1058,6 +1058,12 @@ func (a *API) adminAuth(next http.HandlerFunc) http.HandlerFunc {
 //	@Failure     429 {object} map[string]string
 //	@Router      /admin/login [post]
 func (a *API) adminLogin(w http.ResponseWriter, r *http.Request) {
+	if bt := bearerToken(r); bt != "" {
+		if _, _, err := a.store.ValidatePAT(bt); err == nil {
+			writeCode(w, http.StatusForbidden, "pat_not_allowed", "personal access tokens cannot be used for the admin panel")
+			return
+		}
+	}
 	if !a.adminEnabled() {
 		writeCode(w, http.StatusNotFound, "admin_disabled", "admin panel is disabled (set GITDASH_ADMIN_PASSWORD on first boot)")
 		return
