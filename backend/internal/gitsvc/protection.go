@@ -26,7 +26,8 @@ func CheckBranchProtection(dbPath, owner, repo string, refs []PushRef) error {
 	}
 	st, err := store.OpenDSN(dbPath)
 	if err != nil {
-		return nil
+		// 库不可用放行：保护逻辑故障不应阻断 push（fail-open）
+		return nil //nolint:nilerr // intentional fail-open
 	}
 	for _, p := range refs {
 		if !strings.HasPrefix(p.Ref, "refs/heads/") {

@@ -212,7 +212,8 @@ func preReceiveHook(owner, repo string) error {
 		return nil
 	}
 	if err := gitsvc.Init(dataDir); err != nil {
-		return nil
+		// 目录初始化失败放行：保护逻辑故障不应阻断 push（fail-open）
+		return nil //nolint:nilerr // intentional fail-open
 	}
 	dbPath := os.Getenv("GITDASH_DB")
 	if dbPath == "" {
