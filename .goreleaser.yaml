@@ -53,16 +53,9 @@ nfpms:
     maintainer: "holihur"
     description: "A minimal self-hosted Git service (http + ssh + web ui)"
     license: MIT
-    # 运行依赖 git（SSH 推送/浏览等都调用 git）
-    deb:
-      depends:
-        - git
-    rpm:
-      depends:
-        - git
-    apk:
-      depends:
-        - git
+    # 运行依赖 git（SSH 推送/浏览等都调用 git），适用于 deb/rpm/apk
+    dependencies:
+      - git
     contents:
       # systemd 服务（deb/rpm），安装后 systemctl enable --now gitdash
       - src: packaging/gitdash.service
@@ -111,13 +104,8 @@ nix:
     description: "A minimal self-hosted Git service (http + ssh + web ui)"
     skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
 
-aur:
-  - license: MIT
-    homepage: "https://github.com/holihur/gitdash"
-    description: "A minimal self-hosted Git service (http + ssh + web ui)"
-    private_key: "{{ .Env.AUR_SSH_KEY }}"
-    git_url: "ssh://aur@aur.archlinux.org/gitdash-bin.git"
-    skip_upload: "{{ not (env \"AUR_SSH_KEY\") }}"
+# AUR 发布为 goreleaser Pro 专属功能，如需启用请购买 Pro 并恢复：
+# https://goreleaser.com/customization/aur
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
