@@ -9,7 +9,6 @@ import (
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 	"gitdash/backend/internal/webui"
-	"github.com/swaggo/http-swagger"
 	"io/fs"
 	"log"
 	"net/http"
@@ -22,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 var shaRe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
@@ -266,6 +267,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/diff", a.auth(a.pullDiff))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/merge", a.auth(a.mergePull))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/state", a.auth(a.setPullState))
+
+	// branch protection
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branch-protections", a.auth(a.listBranchProtections))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/branch-protections/{branch}", a.auth(a.setBranchProtection))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/branch-protections/{branch}", a.auth(a.deleteBranchProtection))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.auth(a.listReviews))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.auth(a.createReview))
 

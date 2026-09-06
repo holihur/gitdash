@@ -3813,6 +3813,163 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{owner}/repos/{name}/branch-protections": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "branch-protection"
+                ],
+                "summary": "列出分支保护",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.BranchProtection"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/branch-protections/{branch}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "需要 owner 权限；min_approvals\u003e0 时合并该分支的 PR 需要对应数量的 approve。",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "branch-protection"
+                ],
+                "summary": "设置分支保护",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "分支名",
+                        "name": "branch",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "保护规则",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setBranchProtectionReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.BranchProtection"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "branch-protection"
+                ],
+                "summary": "移除分支保护",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "分支名",
+                        "name": "branch",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{owner}/repos/{name}/branches": {
             "get": {
                 "security": [
@@ -8018,6 +8175,20 @@ const docTemplate = `{
                 }
             }
         },
+        "api.setBranchProtectionReq": {
+            "type": "object",
+            "properties": {
+                "block_deletion": {
+                    "type": "boolean"
+                },
+                "block_force_push": {
+                    "type": "boolean"
+                },
+                "min_approvals": {
+                    "type": "integer"
+                }
+            }
+        },
         "api.setIssueLabelsReq": {
             "type": "object",
             "properties": {
@@ -8269,6 +8440,35 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "sha": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.BranchProtection": {
+            "type": "object",
+            "properties": {
+                "block_deletion": {
+                    "description": "禁止删除该分支",
+                    "type": "boolean"
+                },
+                "block_force_push": {
+                    "description": "禁止非快进（force push）",
+                    "type": "boolean"
+                },
+                "branch": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "min_approvals": {
+                    "description": "合并门禁：需要的最少 approve 数（0 = 不设门禁）",
+                    "type": "integer"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
                     "type": "string"
                 }
             }

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 )
 
@@ -47,8 +49,18 @@ func (a *API) createReview(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_review_state", "state must be approve, request_changes or comment")
 		return
 	}
+	// commit_sha 缺省取当前 head：用于合并门禁的过期判定（head 前进后旧 approve 失效）
+	commitSHA := in.CommitSHA
+	if commitSHA == "" {
+		commitSHA = pr.HeadSHA
+		if pr.State == "open" {
+			if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
+				commitSHA = h
+			}
+		}
+	}
 	me := userFrom(r)
-	review, err := a.store.CreateReview(owner, name, pr.Number, me, in.State, in.Body, in.CommitSHA)
+	review, err := a.store.CreateReview(owner, name, pr.Number, me, in.State, in.Body, commitSHA)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -97,5 +109,34 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"reviews": reviews, "summary": summary})
+	resp := map[string]any{"reviews": reviews, "summary": summary}
+	// 合并门禁信息：目标分支保护规则要求的 approve 数 vs 有效 approve 数
+	// （reviewer 非 PR 作者，且其最新 approve 针对当前 head —— head 前进后过期失效）
+	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && prot.MinApprovals > 0 {
+		head := pr.HeadSHA
+		if pr.State == "open" {
+			if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
+				head = h
+			}
+		}
+		valid := 0
+		latest := map[string]store.PullReview{}
+		for _, rv := range reviews {
+			prev, ok := latest[rv.Reviewer]
+			if !ok || rv.ID > prev.ID {
+				latest[rv.Reviewer] = rv
+			}
+		}
+		for _, rv := range latest {
+			if rv.State == "approve" && rv.Reviewer != pr.Author && rv.CommitSHA == head {
+				valid++
+			}
+		}
+		resp["gate"] = map[string]any{
+			"required":  prot.MinApprovals,
+			"approvals": valid,
+			"mergeable": valid >= prot.MinApprovals,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

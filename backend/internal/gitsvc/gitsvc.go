@@ -162,6 +162,53 @@ done
 	if err := os.WriteFile(hook, []byte(script), 0o755); err != nil {
 		return err
 	}
+	return installPreReceiveHook(hooksDir, owner, name)
+}
+
+// installPreReceiveHook 安装 pre-receive hook：分支保护（禁删/禁强推）在 push 落盘前校验。
+// 校验逻辑在 gitdash 主程序（gitdash pre-receive 子命令）里查库执行；二进制缺失时放行，避免阻断 push。
+func installPreReceiveHook(hooksDir, owner, name string) error {
+	self, err := os.Executable()
+	if err != nil || self == "" {
+		self = "gitdash" // 退化为 PATH 查找
+	}
+	script := `#!/bin/sh
+# gitdash: branch protection (deletion / force-push) enforced before update
+while read oldrev newrev refname; do
+	[ -z "$refname" ] && continue
+	echo "$oldrev $newrev $refname"
+done | @BIN@ pre-receive "@OWNER@" "@REPO@"
+`
+	script = strings.NewReplacer(
+		"@BIN@", self,
+		"@OWNER@", owner,
+		"@REPO@", name,
+	).Replace(script)
+	return os.WriteFile(filepath.Join(hooksDir, "pre-receive"), []byte(script), 0o755)
+}
+
+// EnsureHooks 遍历所有仓库重装 hooks（启动时调用，让存量仓库获得 pre-receive 分支保护）。
+func EnsureHooks() error {
+	entries, err := os.ReadDir(reposDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		owner := e.Name()
+		repos, rerr := os.ReadDir(filepath.Join(reposDir, owner))
+		if rerr != nil {
+			continue
+		}
+		for _, r := range repos {
+			if !strings.HasSuffix(r.Name(), ".git") {
+				continue
+			}
+			_ = installPostReceiveHook(filepath.Join(reposDir, owner, r.Name()), owner, strings.TrimSuffix(r.Name(), ".git"))
+		}
+	}
 	return nil
 }
 

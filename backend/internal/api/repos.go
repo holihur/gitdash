@@ -984,6 +984,14 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 	}
 	kind := r.PathValue("kind")
 	refName := r.PathValue("refname")
+	// 分支保护：被保护的分支禁止通过 web API 删除
+	if kind == "branches" {
+		if _, prot := a.branchProtectionGuard(owner, name, refName); prot {
+			writeCode(w, http.StatusConflict, "branch_protected",
+				"branch is protected: deletion is not allowed")
+			return
+		}
+	}
 	err := gitsvc.DeleteRef(owner, name, kind, refName)
 	if errors.Is(err, gitsvc.ErrHeadBranch) {
 		writeCode(w, http.StatusConflict, "branch_is_head", "cannot delete the default (HEAD) branch")

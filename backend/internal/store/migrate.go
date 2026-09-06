@@ -38,6 +38,7 @@ func (s *Store) migrate() error {
 		&mirrorRow{},
 		&pullRequestRow{},
 		&pullReviewRow{},
+		&branchProtectionRow{},
 		&pipelineCfgRow{},
 		&pipelineRunRow{},
 		&releaseRow{},

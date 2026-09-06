@@ -62,6 +62,8 @@ type Env struct {
 func start(t *testing.T) *Env {
 	t.Helper()
 	dir := t.TempDir()
+	// pre-receive hook 由 git 子进程执行时需要找到测试 DB（见 main_test.go）
+	t.Setenv("GITDASH_DATA", dir)
 	if err := gitsvc.Init(dir); err != nil {
 		t.Fatalf("gitsvc init: %v", err)
 	}

@@ -207,6 +207,21 @@ export interface IssueComment {
 
 export type ReviewState = "approve" | "request_changes" | "comment";
 
+export interface BranchProtection {
+  owner: string;
+  repo: string;
+  branch: string;
+  min_approvals: number;
+  block_deletion: boolean;
+  block_force_push: boolean;
+}
+
+export interface MergeGate {
+  required: number;
+  approvals: number;
+  mergeable: boolean;
+}
+
 export interface PullReview {
   id: number;
   reviewer: string;
@@ -705,6 +720,24 @@ export const api = {
       method: "DELETE",
     }),
 
+  // 分支保护
+  listBranchProtections: (owner: string, name: string) =>
+    req<BranchProtection[]>(`/users/${owner}/repos/${name}/branch-protections`),
+  setBranchProtection: (
+    owner: string,
+    name: string,
+    branch: string,
+    rule: { min_approvals: number; block_deletion: boolean; block_force_push: boolean },
+  ) =>
+    req<BranchProtection>(
+      `/users/${owner}/repos/${name}/branch-protections/${encodeURIComponent(branch)}`,
+      { method: "PUT", body: JSON.stringify(rule) },
+    ),
+  deleteBranchProtection: (owner: string, name: string, branch: string) =>
+    req<null>(`/users/${owner}/repos/${name}/branch-protections/${encodeURIComponent(branch)}`, {
+      method: "DELETE",
+    }),
+
   // pull requests
   listPulls: (owner: string, name: string, state?: PullState, limit?: number, offset?: number) => {
     const p = new URLSearchParams();
@@ -743,7 +776,7 @@ export const api = {
 
   // PR reviews
   listPullReviews: (owner: string, name: string, number: number) =>
-    req<{ reviews: PullReview[]; summary: { approvals: number; request_changes: number } }>(
+    req<{ reviews: PullReview[]; summary: { approvals: number; request_changes: number }; gate?: MergeGate }>(
       `/users/${owner}/repos/${name}/pulls/${number}/reviews`,
     ),
   createPullReview: (owner: string, name: string, number: number, state: ReviewState, body?: string) =>

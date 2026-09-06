@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -81,6 +82,10 @@ func run() {
 	}
 	if err := gitsvc.Init(dataDir); err != nil {
 		log.Fatalf("init git service: %v", err)
+	}
+	// 存量仓库补装 pre-receive hook（分支保护）
+	if err := gitsvc.EnsureHooks(); err != nil {
+		log.Printf("ensure hooks: %v", err)
 	}
 	if err := pipeline.Init(dataDir); err != nil {
 		log.Fatalf("init pipeline: %v", err)
@@ -189,10 +194,47 @@ func run() {
 	log.Fatal(http.ListenAndServe(httpAddr, a.Handler(staticDir)))
 }
 
+// preReceiveHook 分支保护校验：由仓库 pre-receive hook 以 `gitdash pre-receive owner repo` 调用，
+// stdin 每行 `oldrev newrev refname`。拒绝时进程非零退出（push 被拒）。
+// 任何内部错误（如打不开库）都放行，避免保护逻辑故障阻断所有 push。
+func preReceiveHook(owner, repo string) error {
+	dataDir := getenv("GITDASH_DATA", "./data")
+	var refs []gitsvc.PushRef
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		f := strings.Fields(scanner.Text())
+		if len(f) != 3 {
+			continue
+		}
+		refs = append(refs, gitsvc.PushRef{Old: f[0], New: f[1], Ref: f[2]})
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	if err := gitsvc.Init(dataDir); err != nil {
+		return nil
+	}
+	dbPath := os.Getenv("GITDASH_DB")
+	if dbPath == "" {
+		dbPath = filepath.Join(dataDir, "gitdash.db")
+	}
+	return gitsvc.CheckBranchProtection(dbPath, owner, repo, refs)
+}
+
 func main() {
 	switch {
 	case len(os.Args) < 2 || os.Args[1] == "serve":
 		run()
+	case os.Args[1] == "pre-receive":
+		// pre-receive hook 子命令：分支保护校验（stdin: oldrev newrev refname）
+		if len(os.Args) < 4 {
+			fmt.Fprintln(os.Stderr, "pre-receive: missing owner/repo args")
+			os.Exit(1)
+		}
+		if err := preReceiveHook(os.Args[2], os.Args[3]); err != nil {
+			fmt.Fprintln(os.Stderr, "gitdash:", err)
+			os.Exit(1)
+		}
 	case os.Args[1] == "update":
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		newVer, updated, err := updater.SelfUpdate(ctx, version)

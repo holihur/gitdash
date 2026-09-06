@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, GitPullRequestDraft, X } from "lucide-react";
-import { api, type PullReview } from "@/lib/api";
+import { Check, GitPullRequestDraft, ShieldCheck, X } from "lucide-react";
+import { api, type MergeGate, type PullReview } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ export default function PullReviewSection({
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [reviews, setReviews] = useState<PullReview[]>([]);
   const [summary, setSummary] = useState({ approvals: 0, request_changes: 0 });
+  const [gate, setGate] = useState<MergeGate | null>(null);
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,6 +35,7 @@ export default function PullReviewSection({
       const r = await api.listPullReviews(owner, name, number);
       setReviews(r.reviews);
       setSummary(r.summary);
+      setGate(r.gate ?? null);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {
@@ -71,6 +73,19 @@ export default function PullReviewSection({
           <X className="h-3 w-3" />
           {t("pulls.changesRequested", { count: summary.request_changes })}
         </Badge>
+        {gate && (
+          <Badge
+            variant="outline"
+            className={
+              gate.mergeable
+                ? "gap-1 text-green-600 dark:text-green-400"
+                : "gap-1 text-amber-600 dark:text-amber-400"
+            }
+          >
+            <ShieldCheck className="h-3 w-3" />
+            {t("pulls.gateStatus", { approvals: gate.approvals, required: gate.required })}
+          </Badge>
+        )}
       </div>
 
       {loading ? (

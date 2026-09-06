@@ -80,3 +80,10 @@ type createReviewReq struct {
 	Body      string `json:"body"`       // review 说明
 	CommitSHA string `json:"commit_sha"` // 可选：针对的提交 SHA
 }
+
+// setBranchProtectionReq 分支保护规则请求体。
+type setBranchProtectionReq struct {
+	MinApprovals   int  `json:"min_approvals"`
+	BlockDeletion  bool `json:"block_deletion"`
+	BlockForcePush bool `json:"block_force_push"`
+}

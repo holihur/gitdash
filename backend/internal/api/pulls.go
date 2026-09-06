@@ -209,6 +209,37 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged")
 		return
 	}
+	// 合并门禁：目标分支保护规则要求的最少 approve 数。
+	// 有效 approve = reviewer 最新状态为 approve、reviewer 非 PR 作者、针对当前 head（head 前进后过期失效）。
+	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && prot.MinApprovals > 0 {
+		head := pr.HeadSHA
+		if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
+			head = h
+		}
+		reviews, _, lErr := a.store.ListReviews(owner, name, pr.Number)
+		if lErr != nil {
+			writeErr(w, http.StatusInternalServerError, lErr.Error())
+			return
+		}
+		latest := map[string]store.PullReview{}
+		for _, rv := range reviews {
+			if prev, ok := latest[rv.Reviewer]; !ok || rv.ID > prev.ID {
+				latest[rv.Reviewer] = rv
+			}
+		}
+		valid := 0
+		for _, rv := range latest {
+			if rv.State == "approve" && rv.Reviewer != pr.Author && rv.CommitSHA == head {
+				valid++
+			}
+		}
+		if valid < prot.MinApprovals {
+			writeCode(w, http.StatusConflict, "review_required",
+				fmt.Sprintf("branch %q requires %d approval(s) from reviewers other than the PR author (current: %d; approvals on an older head do not count)",
+					pr.TargetBranch, prot.MinApprovals, valid))
+			return
+		}
+	}
 	var in struct {
 		Method string `json:"method"` // ""(fast-forward) | merge | squash
 	}
