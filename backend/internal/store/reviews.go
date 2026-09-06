@@ -35,11 +35,7 @@ func (s *Store) ListReviews(owner, repo string, number int64) ([]PullReview, Rev
 	reviews := []PullReview{}
 	latest := map[string]string{}
 	for _, r := range rows {
-		reviews = append(reviews, PullReview{
-			ID: r.ID, Owner: r.Owner, Repo: r.Repo, Number: r.Number,
-			Reviewer: r.Reviewer, State: r.State, Body: r.Body,
-			CommitSHA: r.CommitSHA, CreatedAt: r.CreatedAt,
-		})
+		reviews = append(reviews, PullReview(r))
 		latest[r.Reviewer] = r.State // 升序遍历，最后写入即最新
 	}
 	var sum ReviewSummary

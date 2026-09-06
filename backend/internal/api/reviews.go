@@ -40,7 +40,7 @@ func (a *API) createReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in createReviewReq
-	if err := readJSON(w, r, &in); err != nil {
+	if jerr := readJSON(w, r, &in); jerr != nil {
 		return
 	}
 	if !validReviewState[in.State] {

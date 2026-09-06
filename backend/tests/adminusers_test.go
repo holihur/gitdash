@@ -21,6 +21,7 @@ func adminLogin(t *testing.T, hs *httptest.Server) string {
 	t.Helper()
 	res := mustAdminDo(t, hs, "", "POST", "/admin/login",
 		`{"username":"admin","password":"admin-pass-123"}`)
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 {
 		t.Fatalf("admin login = %d", res.StatusCode)
 	}
@@ -103,9 +104,9 @@ func TestAdminUsersCRUD(t *testing.T) {
 	}
 
 	// q 过滤
-	code, v := adminDo(t, hs, tok, "GET", "/admin/users?q=alice", "")
-	if code != 200 {
-		t.Fatalf("filter = %d", code)
+	c, v := adminDo(t, hs, tok, "GET", "/admin/users?q=alice", "")
+	if c != 200 {
+		t.Fatalf("filter = %d", c)
 	}
 	if filtered := v.([]any); len(filtered) != 1 {
 		t.Fatalf("filter = %v", filtered)
@@ -151,9 +152,9 @@ func TestAdminUsersCRUD(t *testing.T) {
 	if code, _ := adminDo(t, hs, "", "POST", "/auth/login", `{"username":"carol-admin","password":"newpass-123"}`); code != 401 {
 		t.Fatalf("deleted user login = %d", code)
 	}
-	code, v = adminDo(t, hs, tok, "GET", "/admin/users", "")
-	if code != 200 {
-		t.Fatalf("list after delete = %d", code)
+	c, v = adminDo(t, hs, tok, "GET", "/admin/users", "")
+	if c != 200 {
+		t.Fatalf("list after delete = %d", c)
 	}
 	for _, u := range v.([]any) {
 		name := u.(map[string]any)["username"].(string)

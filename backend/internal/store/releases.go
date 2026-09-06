@@ -42,10 +42,7 @@ func (s *Store) CreateRelease(rel *Release) error {
 		}
 		return err
 	}
-	*rel = Release{
-		ID: row.ID, Owner: row.Owner, Repo: row.Repo, TagName: row.TagName,
-		Name: row.Name, Body: row.Body, Author: row.Author, CreatedAt: row.CreatedAt,
-	}
+	*rel = Release(row)
 	return nil
 }
 
@@ -62,12 +59,7 @@ func (s *Store) GetRelease(owner, repo, tag string) (Release, error) {
 	return releaseFromRow(row), nil
 }
 
-func releaseFromRow(row releaseRow) Release {
-	return Release{
-		ID: row.ID, Owner: row.Owner, Repo: row.Repo, TagName: row.TagName,
-		Name: row.Name, Body: row.Body, Author: row.Author, CreatedAt: row.CreatedAt,
-	}
-}
+func releaseFromRow(row releaseRow) Release { return Release(row) }
 
 // ListReleases 分页列出 release，返回列表与总数。
 func (s *Store) ListReleases(owner, repo string, limit, offset int) ([]Release, int, error) {
@@ -142,10 +134,7 @@ func (s *Store) ListAssets(owner, repo string, releaseID int64) ([]ReleaseAsset,
 	}
 	out := make([]ReleaseAsset, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, ReleaseAsset{
-			ID: row.ID, Owner: row.Owner, Repo: row.Repo, ReleaseID: row.ReleaseID,
-			Filename: row.Filename, Size: row.Size, CreatedAt: row.CreatedAt,
-		})
+		out = append(out, ReleaseAsset(row))
 	}
 	return out, nil
 }
@@ -161,10 +150,7 @@ func (s *Store) GetAsset(owner, repo string, releaseID int64, filename string) (
 		}
 		return ReleaseAsset{}, err
 	}
-	return ReleaseAsset{
-		ID: row.ID, Owner: row.Owner, Repo: row.Repo, ReleaseID: row.ReleaseID,
-		Filename: row.Filename, Size: row.Size, Content: row.Content, CreatedAt: row.CreatedAt,
-	}, nil
+	return ReleaseAsset(row), nil
 }
 
 // DeleteAsset 删除附件。

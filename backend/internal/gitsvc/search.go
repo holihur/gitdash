@@ -2,6 +2,7 @@ package gitsvc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -34,9 +35,10 @@ func Search(owner, name, query, ref string, max int) ([]SearchHit, error) {
 		max = 200
 	}
 	if ref == "" {
-		head, err := HeadBranch(owner, name)
-		if err != nil || head == "" {
-			return []SearchHit{}, nil // 空仓库：无可搜索内容
+		// 任何错误（含空仓库）都视为无可搜索内容
+		head, _ := HeadBranch(owner, name)
+		if head == "" {
+			return []SearchHit{}, nil
 		}
 		ref = head
 	}
@@ -49,7 +51,8 @@ func Search(owner, name, query, ref string, max int) ([]SearchHit, error) {
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && ee.ExitCode() == 1 {
 			return []SearchHit{}, nil // git grep 无命中
 		}
 		return nil, gitErr(RepoPath(owner, name), cmd.Args, "", err)
