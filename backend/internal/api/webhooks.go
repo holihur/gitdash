@@ -143,7 +143,7 @@ func (a *API) listWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	limit := int64(0)
 	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if n, perr := strconv.ParseInt(v, 10, 64); perr == nil {
 			limit = n
 		}
 	}

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"log"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -11,6 +10,7 @@ import (
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/totp"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -223,9 +223,9 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username":     ua.Username,
-		"email":        ua.Email,
-		"created_at":   ua.CreatedAt,
+		"username":       ua.Username,
+		"email":          ua.Email,
+		"created_at":     ua.CreatedAt,
 		"mfa_enabled":    ua.MFAEnabled,
 		"notify_email":   ua.NotifyEmail,
 		"email_verified": ua.EmailVerified,

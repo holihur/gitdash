@@ -932,16 +932,16 @@ func MergeRebase(owner, name, target, source, committer string) (string, error) 
 		return "", err
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	if _, err := gitOut("", "clone", "-q", "--no-local", path, tmp); err != nil {
-		return "", err
+	if _, cerr := gitOut("", "clone", "-q", "--no-local", path, tmp); cerr != nil {
+		return "", cerr
 	}
 	ident := []string{"-c", "user.name=" + committer, "-c", "user.email=" + committer + "@gitdash"}
-	if _, err := gitOut(tmp, append(ident, "checkout", "-q", "-B", "_gd_rebase", "origin/"+source)...); err != nil {
-		return "", err
+	if _, cerr := gitOut(tmp, append(ident, "checkout", "-q", "-B", "_gd_rebase", "origin/"+source)...); cerr != nil {
+		return "", cerr
 	}
-	if _, err := gitOut(tmp, append(ident, "rebase", "--quiet", "origin/"+target)...); err != nil {
+	if _, rerr := gitOut(tmp, append(ident, "rebase", "--quiet", "origin/"+target)...); rerr != nil {
 		_, _ = gitOut(tmp, "rebase", "--abort")
-		return "", fmt.Errorf("rebase conflict or error: %w", err)
+		return "", fmt.Errorf("rebase conflict or error: %w", rerr)
 	}
 	out, err := gitOut(tmp, "rev-parse", "HEAD")
 	if err != nil {
