@@ -68,44 +68,10 @@ nfpms:
       # rpm 的 post 脚本同样适用于 deb/apk（goreleaser 会按格式使用）
       postinstall: packaging/postinstall.sh
 
-# 各包管理器发布配置。对应仓库/密钥不存在时自动跳过（不阻塞 Release）：
-#   - Homebrew tap:   仓库 holihur/homebrew-tap + secret TAP_GITHUB_TOKEN
-#   - Scoop bucket:   仓库 holihur/scoop-bucket + secret TAP_GITHUB_TOKEN
-#   - NUR (nix):      仓库 holihur/nur-packages + secret TAP_GITHUB_TOKEN
-#   - AUR:            secret AUR_SSH_KEY（私钥内容，需有 AUR 账号）
-brews:
-  - repository:
-      owner: holihur
-      name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Formula
-    homepage: "https://github.com/holihur/gitdash"
-    description: "A minimal self-hosted Git service (http + ssh + web ui)"
-    install: |
-      bin.install "gitdash"
-    skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
-
-scoops:
-  - repository:
-      owner: holihur
-      name: scoop-bucket
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: bucket
-    homepage: "https://github.com/holihur/gitdash"
-    description: "A minimal self-hosted Git service (http + ssh + web ui)"
-    skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
-
-nix:
-  - repository:
-      owner: holihur
-      name: nur-packages
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/holihur/gitdash"
-    description: "A minimal self-hosted Git service (http + ssh + web ui)"
-    skip_upload: "{{ not (env \"TAP_GITHUB_TOKEN\") }}"
-
-# AUR 发布为 goreleaser Pro 专属功能，如需启用请购买 Pro 并恢复：
-# https://goreleaser.com/customization/aur
+# 包管理器发布（Homebrew/Scoop/Nix/AUR）暂未启用：
+#   - 需先创建对应仓库（homebrew-tap / scoop-bucket / nur-packages）与 secret
+#   - AUR 为 goreleaser Pro 专属功能
+# 待仓库就绪后参考 https://goreleaser.com/customization 部分恢复
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
