@@ -35,6 +35,7 @@ export const en = {
     cancel: "Cancel",
     delete: "Delete",
     pleaseConfirm: "Please confirm",
+    moreActions: "More actions",
   },
   login: {
     subtitle: "Sign in or register to manage your repositories",
@@ -47,6 +48,7 @@ export const en = {
     passwordMin: "at least 8 characters",
     registerAndSignIn: "Register and sign in",
     hint: "After registering, add your public key on the SSH Keys page to access repositories via SSH.",
+    apiDocs: "API Docs (Swagger)",
     missing: "Please enter a username and password",
     welcomeBack: "Welcome back, {name}",
     accountCreated: "Account created: {name}",
@@ -276,6 +278,7 @@ export const en = {
     deleted: "Deleted",
     empty: "No SSH keys yet",
     emptyHint: "Add a public key to access repositories via SSH.",
+    deleteKey: "Delete key",
     fingerprint: "Fingerprint (SHA256)",
     keyType: "Key type",
     addedAt: "Added",

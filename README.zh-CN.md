@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/holihur/gitdash/actions/workflows/ci.yml/badge.svg)](https://github.com/holihur/gitdash/actions/workflows/ci.yml)
 [![Release](https://github.com/holihur/gitdash/actions/workflows/release.yml/badge.svg)](https://github.com/holihur/gitdash/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/holihur/gitdash/graphs/badge.svg?branch=main)](https://codecov.io/gh/holihur/gitdash)
 
 English | 简体中文
 
@@ -235,8 +236,30 @@ bash scripts/e2e.sh    # 全链路冒烟（真实二进制：注册登录 -> ssh
 # 或指向一个已运行的实例：GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest
 ```
 
+黑盒 E2E UI 测试（TypeScript + Playwright + headless Chrome，独立在 `tests/ui/`，一个业务一个文件）：
+
+```bash
+task test:ui                              # 构建带内嵌前端的二进制并跑 UI 测试
+(cd tests/ui && GITDASH_BIN=/tmp/gitdash-server-ui npx playwright test --grep @happy)
+# 或指向一个已运行的实例：GITDASH_UI_URL=http://127.0.0.1:8080 npx playwright test
+```
+
 - `backend/tests/` 按功能划分：`auth`（注册/登录/会话）、`repos`（仓库 CRUD 与隔离）、`sshkeys`（公钥 CRUD 与绑定）、`browse`（tree/blob/commits）、`sshgit`（真实 SSH clone/push 与权限拒绝）、`updater`（版本比较/校验/解包）、`store`（schema 迁移）、`webui`（静态托管/SPA fallback/路径穿越防护）。CI 中全部自动执行。
 - `tests/`（仓库根目录）为**独立、隔离**的纯黑盒接口自动化测试：不 import 后端代码、不执行 go 构建；用例随机命名、互不共享状态，覆盖 auth / repos / issues / orgs / pulls / webhooks / visibility / blame / ssh keys 的 happy path 与 bad path（400/401/404/409…）。详见 `tests/README.md`。
+- `tests/ui/`（仓库根目录）为**独立、隔离**的纯黑盒 E2E UI 测试套件（Playwright + headless Chrome）：注册 → 建仓 → 代码浏览 → issue → star/fork/watch → 收件箱 → 协作者/Webhook/Release → PR 合并；UI 发现的问题记录在 `tests/ui/bug.md`。详见 `tests/ui/README.md`。
+
+### 代码覆盖率
+
+三个维度的覆盖率都在 CI 中上报 [Codecov](https://codecov.io/gh/holihur/gitdash)（见顶部徽章）：
+
+| 维度 | 方式 | 本地运行 | 当前值（2026-09） |
+| --- | --- | --- | --- |
+| 单元测试（Go） | `go test -coverprofile` | `task coverage:go` | 9.2% statements |
+| 黑盒 API（pytest） | `go build -cover` + `GOCOVERDIR` | `task coverage:blackbox` | 与下合并 |
+| 黑盒 UI（Playwright） | 同 `GOCOVERDIR`，优雅停机落盘 | 与下合并 | 与下合并 |
+| **黑盒合并（API+UI）** | `go tool covdata` | `task coverage:blackbox` | **58.7% statements** |
+
+黑盒覆盖率原理：被测二进制用 `go build -cover` 构建，所有黑盒套件运行时通过 `GOCOVERDIR` 收集执行数据（服务端收到 SIGTERM 优雅退出以保证计数落盘），最后用 `go tool covdata percent / textfmt` 汇总。
 
 ## API 一览
 

@@ -8,9 +8,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -216,7 +218,23 @@ func run() {
 	}
 
 	log.Printf("gitdash %s: http on %s | ssh on %s | data in %s", version, httpAddr, sshAddr, dataDir)
-	log.Fatal(http.ListenAndServe(httpAddr, a.Handler(staticDir)))
+
+	// 优雅停机：收到 SIGINT/SIGTERM 后先 drain HTTP 再退出。
+	// 一是保证 in-flight 请求不丢，二是让 go build -cover 的集成覆盖率
+	// 数据（GOCOVERDIR）能正常落盘（被信号硬杀不会 flush）。
+	srv := &http.Server{Addr: httpAddr, Handler: a.Handler(staticDir)}
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigCh
+		log.Printf("received %s, shutting down...", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}()
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("http server: %v", err)
+	}
 }
 
 // preReceiveHook 分支保护校验：由仓库 pre-receive hook 以 `gitdash pre-receive owner repo` 调用，

@@ -3,6 +3,7 @@ version: "3"
 vars:
   BIN: /tmp/gitdash-server
   PYTEST_BIN: /tmp/gitdash-server-pytest
+  UI_BIN: /tmp/gitdash-server-ui
 
 tasks:
   default:
@@ -70,6 +71,29 @@ tasks:
     generates:
       - /tmp/gitdash-server-pytest
 
+  test:ui:
+    desc: 黑盒 E2E UI 测试（Playwright + headless Chrome，独立 tests/ui 目录）
+    deps: [build:ui-bin]
+    dir: tests/ui
+    cmds:
+      - npm install
+      - npx playwright test
+    env:
+      GITDASH_BIN: "{{.UI_BIN}}"
+
+  build:ui-bin:
+    desc: 构建带内嵌前端的被测二进制（UI 测试用）
+    deps: [frontend]
+    cmds:
+      - rm -rf internal/webui/dist
+      - mkdir -p internal/webui/dist
+      - cp -r ../frontend/dist/. internal/webui/dist/
+      - touch internal/webui/dist/.gitkeep
+      - go build -trimpath -o {{.UI_BIN}} .
+    dir: backend
+    generates:
+      - "{{.UI_BIN}}"
+
   test:frontend:
     desc: 前端类型检查 + 构建
     dir: frontend
@@ -89,10 +113,11 @@ tasks:
       - task: test:e2e
 
   test:all:
-    desc: 一键全量测试 + 黑盒 API 测试（含 pytest，较慢）
+    desc: 一键全量测试 + 黑盒 API 测试 + E2E UI 测试（含 pytest/Playwright，较慢）
     cmds:
       - task: test
       - task: test:api
+      - task: test:ui
 
   # ---------- 本地部署 ----------
   deploy:
@@ -127,6 +152,20 @@ tasks:
     desc: 停止 Docker 部署
     cmds:
       - docker compose down
+
+  # ---------- 覆盖率 ----------
+  coverage:go:
+    desc: 后端单元测试覆盖率（输出 /tmp/gitdash-go-coverage.out/.html）
+    dir: backend
+    cmds:
+      - go test ./... -covermode=atomic -coverprofile=/tmp/gitdash-go-coverage.out
+      - go tool cover -func=/tmp/gitdash-go-coverage.out | tail -1
+      - go tool cover -html=/tmp/gitdash-go-coverage.out -o /tmp/gitdash-go-coverage.html
+
+  coverage:blackbox:
+    desc: 黑盒（API+UI）集成覆盖率（GOCOVERDIR，输出 /tmp/gitdash-blackbox-coverage.out）
+    cmds:
+      - bash scripts/coverage-blackbox.sh
 
   # ---------- 清理 ----------
   clean:

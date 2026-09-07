@@ -1,0 +1,16 @@
+{
+  "name": "gitdash-ui-tests",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Black-box E2E UI tests for gitdash (Playwright). Fully isolated from the backend: drives a real server through headless Chrome only.",
+  "scripts": {
+    "test": "playwright test",
+    "test:happy": "playwright test --grep @happy",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^26.4.1",
+    "typescript": "^5.5.4"
+  }
+}

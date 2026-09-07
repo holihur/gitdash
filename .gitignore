@@ -22,6 +22,12 @@ tests/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# e2e ui tests (playwright)
+tests/ui/node_modules/
+tests/ui/test-results/
+tests/ui/playwright-report/
+tests/ui/bug.md
 .task/
 frontend/tsconfig.tsbuildinfo
 *.tsbuildinfo

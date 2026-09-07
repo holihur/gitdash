@@ -56,7 +56,15 @@ jobs:
 
       - name: Test
         working-directory: backend
-        run: go test ./... 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
+        run: go test ./... -covermode=atomic -coverprofile=/tmp/coverage-unit.out 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
+
+      - name: Upload unit-test coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: /tmp/coverage-unit.out
+          flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
       - name: Test PostgreSQL (store smoke)
         working-directory: backend
@@ -73,9 +81,9 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build server binary
+      - name: Build server binary (with coverage instrumentation for black-box tests)
         working-directory: backend
-        run: go build -o gitdash-server .
+        run: go build -cover -o gitdash-server .
 
       - name: E2E (create repo, ssh clone/push, browsing)
         run: bash scripts/e2e.sh
@@ -120,11 +128,20 @@ jobs:
           name: gitdash-server
           path: /tmp
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
+
+      - name: Prepare coverage dir
+        run: mkdir -p /tmp/gocover-api
+
       - name: Run black-box API tests (happy + bad paths)
         working-directory: tests
         run: chmod +x /tmp/gitdash-server && uv run pytest -v
         env:
           GITDASH_BIN: /tmp/gitdash-server
+          GOCOVERDIR: /tmp/gocover-api
 
       - name: Run black-box API tests against PostgreSQL
         working-directory: tests
@@ -132,6 +149,21 @@ jobs:
         env:
           GITDASH_BIN: /tmp/gitdash-server
           GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
+          GOCOVERDIR: /tmp/gocover-api
+
+      - name: Report black-box (API) coverage
+        working-directory: backend
+        run: |
+          go tool covdata percent -i=/tmp/gocover-api | tail -1
+          go tool covdata textfmt -i=/tmp/gocover-api -o /tmp/coverage-api.out
+
+      - name: Upload black-box (API) coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: /tmp/coverage-api.out
+          flags: blackbox-api
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
   docker:
     name: Docker image build
@@ -173,3 +205,68 @@ jobs:
       - name: Build (tsc + vite)
         working-directory: frontend
         run: pnpm run build
+
+  ui-tests:
+    name: E2E UI tests (Playwright · black-box)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
+
+      # 构建带内嵌前端 + 覆盖率插桩的被测二进制
+      - name: Build embedded frontend + instrumented server binary
+        run: |
+          pnpm install --frozen-lockfile --dir frontend
+          (cd frontend && pnpm run build)
+          rm -rf backend/internal/webui/dist
+          mkdir -p backend/internal/webui/dist
+          cp -r frontend/dist/. backend/internal/webui/dist/
+          touch backend/internal/webui/dist/.gitkeep
+          (cd backend && go build -cover -o /tmp/gitdash-server-ui .)
+
+      - name: Run black-box UI tests
+        working-directory: tests/ui
+        run: |
+          mkdir -p /tmp/gocover-ui
+          npm install
+          npx playwright install --with-deps chromium
+          npx playwright test
+        env:
+          GITDASH_BIN: /tmp/gitdash-server-ui
+          GOCOVERDIR: /tmp/gocover-ui
+
+      - name: Report black-box (UI) coverage
+        working-directory: backend
+        run: |
+          go tool covdata percent -i=/tmp/gocover-ui | tail -1
+          go tool covdata textfmt -i=/tmp/gocover-ui -o /tmp/coverage-ui.out
+
+      - name: Upload black-box (UI) coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: /tmp/coverage-ui.out
+          flags: blackbox-ui
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/ui/test-results
+          retention-days: 3

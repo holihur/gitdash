@@ -12,10 +12,10 @@ dependencies = [
 [tool.uv]
 package = false
 
-# 固定官方 PyPI 作为默认索引（不依赖本机/CI 的镜像配置）
+# 固定阿里云镜像作为默认索引（不依赖本机/CI 的环境变量镜像配置）
 [[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
 
 [tool.pytest.ini_options]

@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/holihur/gitdash/actions/workflows/ci.yml/badge.svg)](https://github.com/holihur/gitdash/actions/workflows/ci.yml)
 [![Release](https://github.com/holihur/gitdash/actions/workflows/release.yml/badge.svg)](https://github.com/holihur/gitdash/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/holihur/gitdash/graphs/badge.svg?branch=main)](https://codecov.io/gh/holihur/gitdash)
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
@@ -235,8 +236,30 @@ Black-box API tests (pytest + requests, dependencies managed with uv, fully isol
 # Or point at an already-running instance: GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest
 ```
 
+Black-box E2E UI tests (TypeScript + Playwright + headless Chrome, isolated under `tests/ui/`, one spec file per business domain):
+
+```bash
+task test:ui                              # build embedded-frontend binary + run UI tests
+(cd tests/ui && GITDASH_BIN=/tmp/gitdash-server-ui npx playwright test --grep @happy)
+# Or point at an already-running instance: GITDASH_UI_URL=http://127.0.0.1:8080 npx playwright test
+```
+
 - `backend/tests/` is split by feature: `auth` (register/login/session), `repos` (repo CRUD & isolation), `sshkeys` (public key CRUD & binding), `browse` (tree/blob/commits), `sshgit` (real SSH clone/push & permission denial), `updater` (version comparison/verification/extraction), `store` (schema migration), `webui` (static hosting/SPA fallback/path traversal protection). All run automatically in CI.
 - `tests/` (repo root) is an **independent, isolated** pure black-box API test suite: it does not import backend code or run go builds; test cases use random names and share no state, covering happy path and bad path (400/401/404/409…) for auth / repos / issues / orgs / pulls / webhooks / visibility / blame / ssh keys. See `tests/README.md` for details.
+- `tests/ui/` (repo root) is an **independent, isolated** pure black-box E2E UI test suite (Playwright + headless Chrome): registration → repo creation → code browsing → issues → star/fork/watch → inbox → collabs/webhooks/releases → PR merge; UI findings are logged in `tests/ui/bug.md`. See `tests/ui/README.md` for details.
+
+### Code Coverage
+
+Three coverage dimensions, all reported to [Codecov](https://codecov.io/gh/holihur/gitdash) in CI (badges above):
+
+| Dimension | Method | Run locally | Current (2026-09) |
+| --- | --- | --- | --- |
+| Unit tests (Go) | `go test -coverprofile` | `task coverage:go` | 9.2% statements |
+| Black-box API (pytest) | `go build -cover` + `GOCOVERDIR` | `task coverage:blackbox` | merged below |
+| Black-box UI (Playwright) | same `GOCOVERDIR`, graceful-shutdown flush | merged below | merged below |
+| **Black-box merged (API + UI)** | `go tool covdata` | `task coverage:blackbox` | **58.7% statements** |
+
+Black-box coverage works by building the server binary with `go build -cover`, running all black-box suites against it with `GOCOVERDIR` set (the server shuts down gracefully on SIGTERM so counters flush), then summarizing with `go tool covdata percent / textfmt`.
 
 ## API Overview
 

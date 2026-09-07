@@ -211,6 +211,7 @@ function SSHKeysSection({ t, to, locale }: SectionProps) {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive hover:text-destructive"
+                      aria-label={`${t("keys.deleteKey")} ${key.name}`}
                       onClick={() => setPendingDelete(key)}
                     >
                       <Trash2 className="h-4 w-4" />

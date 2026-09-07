@@ -37,6 +37,7 @@ export const zhCN: Messages = {
     cancel: "取消",
     delete: "删除",
     pleaseConfirm: "请确认",
+    moreActions: "更多操作",
   },
   login: {
     subtitle: "登录或注册以管理你的仓库",
@@ -49,6 +50,7 @@ export const zhCN: Messages = {
     passwordMin: "至少 8 位",
     registerAndSignIn: "注册并登录",
     hint: "注册后请在「SSH Keys」页面添加公钥，才能通过 SSH 访问仓库。",
+    apiDocs: "API 文档（Swagger）",
     missing: "请输入用户名和密码",
     welcomeBack: "欢迎回来，{name}",
     accountCreated: "账号已创建：{name}",
@@ -275,6 +277,7 @@ export const zhCN: Messages = {
     deleted: "已删除",
     empty: "还没有 SSH Key",
     emptyHint: "添加公钥后才能通过 SSH 访问仓库。",
+    deleteKey: "删除密钥",
     fingerprint: "指纹 (SHA256)",
     keyType: "公钥类型",
     addedAt: "添加时间",

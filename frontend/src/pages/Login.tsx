@@ -221,6 +221,16 @@ export default function Login({ onAuthed }: Props) {
               </form>
             </Tabs>
             <p className="mt-4 text-center text-xs text-muted-foreground">{t("login.hint")}</p>
+            <p className="mt-2 text-center text-xs">
+              <a
+                href="/api/swagger/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {t("login.apiDocs")}
+              </a>
+            </p>
             {(githubEnabled || oidc.enabled) && (
               <div className="mt-3 space-y-2">
                 {githubEnabled && (
