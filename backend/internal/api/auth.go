@@ -891,20 +891,31 @@ func (a *API) githubCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	username, err := a.loginOrCreateOAuthUser(r, "github", fmt.Sprint(gu.ID), gu.Login)
 	if err != nil {
-		fail("account provisioning failed")
+		if errors.Is(err, errOAuthLinkRequired) {
+			fail("account_exists_link_required")
+		} else {
+			fail("account provisioning failed")
+		}
 		return
 	}
 	a.oauthIssueSession(w, r, username)
 }
 
+// errOAuthLinkRequired 同名本地账号存在但当前请求无法证明其控制权，拒绝自动绑定。
+var errOAuthLinkRequired = errors.New("oauth_link_required")
+
 func (a *API) loginOrCreateOAuthUser(r *http.Request, provider, externalID, login string) (string, error) {
 	if _, username, err := a.store.OAuthUser(provider, externalID); err == nil {
 		return username, nil
 	}
-	// 未绑定：按 GitHub login 关联或新建账号
+	// 未绑定：按 provider login 关联或新建账号
 	username := sanitizeGithubLogin(login, externalID)
 	if _, err := a.store.GetByUsername(username); err == nil {
-		// 存在同名用户：绑定后登录
+		// 存在同名本地账号：仅当请求携带该账号的有效会话/PAT（即调用者已证明
+		// 对该账号的控制权）时才绑定，否则拒绝，防止劫持他人本地账号。
+		if me, _, _ := a.resolveUser(r); me != username {
+			return "", errOAuthLinkRequired
+		}
 		uid, uerr := a.store.UserID(username)
 		if uerr != nil {
 			return "", uerr
@@ -921,7 +932,10 @@ func (a *API) loginOrCreateOAuthUser(r *http.Request, provider, externalID, logi
 	}
 	u, err := a.store.CreateUser(username, string(hash))
 	if err != nil {
-		if errors.Is(err, store.ErrExists) { // 竞态
+		if errors.Is(err, store.ErrExists) { // 竞态：同上，需先证明控制权
+			if me, _, _ := a.resolveUser(r); me != username {
+				return "", errOAuthLinkRequired
+			}
 			uid, uerr := a.store.UserID(username)
 			if uerr != nil {
 				return "", uerr
@@ -1104,7 +1118,11 @@ func (a *API) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	username, err := a.loginOrCreateOAuthUser(r, "oidc", ui.Sub, loginHint)
 	if err != nil {
-		fail("account provisioning failed")
+		if errors.Is(err, errOAuthLinkRequired) {
+			fail("account_exists_link_required")
+		} else {
+			fail("account provisioning failed")
+		}
 		return
 	}
 	a.oauthIssueSession(w, r, username)

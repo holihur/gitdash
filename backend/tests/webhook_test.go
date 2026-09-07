@@ -164,6 +164,8 @@ func TestPushSpoolsHookEvent(t *testing.T) {
 // TestWebhookDeliveries 验证投递记录 + 失败重试：直接向 spool 写事件，
 // 服务器侧 webhooks.Run 会投递并落 webhook_deliveries 记录（成功 / 失败均可查）。
 func TestWebhookDeliveries(t *testing.T) {
+	// 回环测试端点属于私有网段，需放开 SSRF 私有网段限制
+	t.Setenv("GITDASH_SSRF_ALLOW_PRIVATE", "1")
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "deliv"}, 201)

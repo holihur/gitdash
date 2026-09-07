@@ -18,6 +18,7 @@ import (
 )
 
 func TestDrainDeliversAndCleansSpool(t *testing.T) {
+	t.Setenv("GITDASH_SSRF_ALLOW_PRIVATE", "1") // httptest 端点为回环地址
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
@@ -82,6 +83,7 @@ func TestDrainDeliversAndCleansSpool(t *testing.T) {
 }
 
 func TestWebhookSignatureHeader(t *testing.T) {
+	t.Setenv("GITDASH_SSRF_ALLOW_PRIVATE", "1") // httptest 端点为回环地址
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "test.db"))
 	if err != nil {

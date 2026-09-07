@@ -7,6 +7,7 @@ import (
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/pipeline"
+	"gitdash/backend/internal/ssrf"
 	"gitdash/backend/internal/store"
 	"net"
 	"net/http"
@@ -379,8 +380,9 @@ func validImportURL(raw string) (string, error) {
 		if err != nil || u.Hostname() == "" {
 			return "", fmt.Errorf("invalid git url")
 		}
-		// git:// 明文且无认证：仅允许回环/内网（本地测试 / 内网 Git 服务器）
-		if importHostBlocked(u) || !importHostLoopbackOrPrivate(u) {
+		// git:// 明文且无认证：仅允许回环/内网（本地测试 / 内网 Git 服务器）；
+		// 公网与 link-local 一律拒绝。
+		if !importHostLoopbackOrPrivate(u) {
 			return "", fmt.Errorf("git:// only allowed for loopback/private hosts")
 		}
 		return raw, nil
@@ -393,7 +395,8 @@ func validImportURL(raw string) (string, error) {
 	}
 }
 
-// importHostBlocked 防 SSRF：阻止 link-local / 云元数据网段。
+// importHostBlocked 防 SSRF：默认禁止回环/私有/链路本地/云元数据网段，
+// 仅允许公网目标；GITDASH_SSRF_ALLOW_PRIVATE=1 可放开私有网段。
 
 func importHostBlocked(u *url.URL) bool {
 	host := u.Hostname()
@@ -409,15 +412,7 @@ func importHostBlocked(u *url.URL) bool {
 		if !ok {
 			continue
 		}
-		addr = addr.Unmap()
-		if addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
-			return true
-		}
-		s := addr.String()
-		if addr.IsPrivate() && strings.HasPrefix(s, "169.254.") {
-			return true
-		}
-		if s == "100.100.100.200" {
+		if ssrf.IsDangerous(addr) {
 			return true
 		}
 	}

@@ -16,11 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/ssrf"
 	"gitdash/backend/internal/store"
 )
 
@@ -136,7 +136,8 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 	}
 }
 
-// blockedLinkLocal 防 SSRF：不允许投递到 link-local / 云元数据网段。
+// blockedLinkLocal 防 SSRF：默认禁止投递到回环/私有/链路本地/云元数据地址，
+// 仅允许公网目标；GITDASH_SSRF_ALLOW_PRIVATE=1 可放开私有网段（自托管内网场景）。
 func blockedLinkLocal(u *urlpkg.URL) bool {
 	host := u.Hostname()
 	if host == "" {
@@ -151,14 +152,7 @@ func blockedLinkLocal(u *urlpkg.URL) bool {
 		if !ok {
 			continue
 		}
-		addr = addr.Unmap()
-		if addr.IsLinkLocalUnicast() || addr.IsLinkLocalMulticast() {
-			return true
-		}
-		if addr.IsPrivate() && strings.HasPrefix(addr.String(), "169.254.") {
-			return true
-		}
-		if addr.String() == "100.100.100.200" {
+		if ssrf.IsDangerous(addr) {
 			return true
 		}
 	}
