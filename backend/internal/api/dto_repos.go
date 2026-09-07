@@ -9,6 +9,10 @@ type createRepoReq struct {
 	Template    string `json:"template"`    // 模板：空 = 空仓库；"readme" = 默认模版（README.md）
 	Private     *bool  `json:"private"`     // 是否私有，默认 true
 	Namespace   string `json:"namespace"`   // 可选：组织名（成员可把仓库建到组织下）
+
+	// 从模版仓库创建：指定源仓库（owner/name），克隆其内容与历史。
+	TemplateOwner string `json:"template_owner"`
+	TemplateName  string `json:"template_name"`
 }
 
 // forkRepoReq fork 仓库请求体。
@@ -49,6 +53,11 @@ type writeCommitReq struct {
 // setRepoVisibilityReq 设置仓库可见性请求体。
 type setRepoVisibilityReq struct {
 	Private *bool `json:"private"` // 是否私有（必填）
+}
+
+// setRepoTemplateReq 设置模版仓库请求体。
+type setRepoTemplateReq struct {
+	IsTemplate *bool `json:"is_template"` // 是否为模版仓库（必填）
 }
 
 // addCollabReq 添加/更新协作者请求体。

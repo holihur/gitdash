@@ -58,6 +58,7 @@ export interface Repo {
   description: string;
   created_at: string;
   private?: boolean;
+  is_template?: boolean;
   /** 仅“可访问仓库列表”返回：owner / read / write */
   role?: "owner" | "read" | "write";
   /** star 数量与当前用户是否已 star */
@@ -520,6 +521,7 @@ export const api = {
     template?: "" | "readme",
     private_?: boolean,
     namespace?: string,
+    templateRepo?: { owner: string; name: string },
   ) =>
     req<Repo>("/repos", {
       method: "POST",
@@ -529,6 +531,8 @@ export const api = {
         template: template ?? "",
         private: private_ ?? true,
         namespace: namespace || undefined,
+        template_owner: templateRepo?.owner || undefined,
+        template_name: templateRepo?.name || undefined,
       }),
     }),
   setRepoVisibility: (owner: string, name: string, private_: boolean) =>
@@ -536,8 +540,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ private: private_ }),
     }),
+  setRepoTemplate: (owner: string, name: string, isTemplate: boolean) =>
+    req<Repo>(`/users/${owner}/repos/${name}/template`, {
+      method: "POST",
+      body: JSON.stringify({ is_template: isTemplate }),
+    }),
   listExplore: (limit?: number, offset?: number) =>
     reqPage<Repo[]>(`/explore/repos${pageQuery(limit, offset)}`),
+  listTemplateRepos: () => req<Repo[]>("/templates"),
   globalSearch: (q: string) =>
     req<GlobalSearchResult>(`/search?q=${encodeURIComponent(q)}`),
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),

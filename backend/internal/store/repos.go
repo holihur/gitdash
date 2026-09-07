@@ -13,6 +13,7 @@ func toRepo(r repoRow) Repo {
 		Name:        r.Name,
 		Description: r.Description,
 		Private:     r.Private,
+		IsTemplate:  r.IsTemplate,
 		CreatedAt:   r.CreatedAt,
 	}
 }
@@ -71,6 +72,19 @@ func (s *Store) ExploreRepos(limit, offset int) ([]Repo, error) {
 func (s *Store) SetRepoPrivate(owner, name string, private bool) error {
 	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
 		Update("private", private)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetRepoTemplate 切换模版仓库标记（仅 owner 调用）。
+func (s *Store) SetRepoTemplate(owner, name string, isTemplate bool) error {
+	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("is_template", isTemplate)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -303,4 +317,19 @@ func (s *Store) CountAccessibleRepos(username string) (int, error) {
 		return 0, err
 	}
 	return int(ownedN + orgN + collabN), nil
+}
+
+// ListAccessibleTemplateRepos 返回当前用户可访问的、标记为模版的仓库。
+func (s *Store) ListAccessibleTemplateRepos(username string) ([]Repo, error) {
+	repos, err := s.AccessibleRepos(username, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	out := []Repo{}
+	for _, r := range repos {
+		if r.IsTemplate {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }

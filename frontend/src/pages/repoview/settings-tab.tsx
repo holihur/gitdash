@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BookTemplate, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { api, type Branch, type BranchProtection, type Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const { t, to } = useI18n();
   const navigate = useNavigate();
   const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [templateBusy, setTemplateBusy] = useState(false);
   const [deleteRepoOpen, setDeleteRepoOpen] = useState(false);
   const [deleteRepoBusy, setDeleteRepoBusy] = useState(false);
 
@@ -36,6 +37,20 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       toast.error(apiErrorMsg(to, e));
     } finally {
       setVisibilityBusy(false);
+    }
+  };
+
+  const toggleTemplate = async () => {
+    if (!repo) return;
+    setTemplateBusy(true);
+    try {
+      const r = await api.setRepoTemplate(owner, name, !repo.is_template);
+      setRepo({ ...repo, is_template: r.is_template });
+      toast.success(t(r.is_template ? "repo.templateNowOn" : "repo.templateNowOff"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setTemplateBusy(false);
     }
   };
 
@@ -78,6 +93,32 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
           </div>
         </CardContent>
       </Card>
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BookTemplate className="h-4 w-4" />
+              {t("repo.templateRepo")}
+            </CardTitle>
+            <CardDescription>{t("repo.templateRepoDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant={repo?.is_template ? "secondary" : "outline"}>
+                {repo?.is_template ? t("repo.templateOn") : t("repo.templateOff")}
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={templateBusy || !repo}
+                onClick={toggleTemplate}
+              >
+                {repo?.is_template ? t("repo.makeNotTemplate") : t("repo.makeTemplate")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="text-base text-destructive">{t("repo.dangerZone")}</CardTitle>

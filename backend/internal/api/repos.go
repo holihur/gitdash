@@ -98,6 +98,8 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.Template = strings.ToLower(strings.TrimSpace(in.Template))
+	in.TemplateOwner = strings.TrimSpace(in.TemplateOwner)
+	in.TemplateName = strings.TrimSpace(in.TemplateName)
 	if !gitsvc.ValidName(in.Name) {
 		writeCode(w, http.StatusBadRequest, "repo_name_invalid", "invalid name: use letters, digits, '.', '_' or '-' (must start alphanumeric)")
 		return
@@ -105,6 +107,44 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	if in.Template != "" && in.Template != "readme" {
 		writeCode(w, http.StatusBadRequest, "invalid_template", "template must be empty or 'readme'")
 		return
+	}
+	// 从模版仓库创建：只能二选一，且源仓库必须是模版仓库。
+	if (in.TemplateOwner == "") != (in.TemplateName == "") {
+		writeCode(w, http.StatusBadRequest, "invalid_template_repo", "template_owner and template_name must be provided together")
+		return
+	}
+	if in.TemplateOwner != "" && in.Template != "" {
+		writeCode(w, http.StatusBadRequest, "invalid_template", "template repo and default template cannot be combined")
+		return
+	}
+	var srcRepo store.Repo
+	var srcErr error
+	if in.TemplateOwner != "" {
+		if !gitsvc.ValidName(in.TemplateOwner) || !gitsvc.ValidName(in.TemplateName) {
+			writeCode(w, http.StatusBadRequest, "invalid_template_repo", "invalid template repo")
+			return
+		}
+		if in.TemplateOwner == owner && in.TemplateName == in.Name {
+			writeCode(w, http.StatusBadRequest, "invalid_template_repo", "cannot use the new repo as its own template")
+			return
+		}
+		srcRepo, srcErr = a.store.GetRepo(in.TemplateOwner, in.TemplateName)
+		if srcErr != nil {
+			writeCode(w, http.StatusNotFound, "template_repo_not_found", "template repo not found")
+			return
+		}
+		if !srcRepo.IsTemplate {
+			writeCode(w, http.StatusBadRequest, "not_template_repo", "source repo is not a template repository")
+			return
+		}
+		if !a.store.CanRead(in.TemplateOwner, in.TemplateName, userFrom(r)) {
+			writeCode(w, http.StatusForbidden, "forbidden", "no access to template repo")
+			return
+		}
+		if !gitsvc.Exists(in.TemplateOwner, in.TemplateName) {
+			writeCode(w, http.StatusNotFound, "template_repo_not_found", "template repo not on disk")
+			return
+		}
 	}
 	if _, err := a.store.GetRepo(owner, in.Name); err == nil || gitsvc.Exists(owner, in.Name) {
 		writeCode(w, http.StatusConflict, "repo_exists", "repo already exists")
@@ -123,7 +163,15 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 	_ = a.store.WatchRepo(userFrom(r), owner, in.Name)
 	repo.Watchers = 1
 	repo.Watching = true
-	if err := gitsvc.CreateBare(owner, in.Name); err != nil {
+	if srcRepo.ID != 0 {
+		// 从模版仓库克隆内容（保留分支/标签并安装 hooks）
+		if err := gitsvc.ForkRepo(in.TemplateOwner, in.TemplateName, owner, in.Name); err != nil {
+			_ = a.store.DeleteRepo(owner, in.Name)
+			_ = gitsvc.Delete(owner, in.Name)
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	} else if err := gitsvc.CreateBare(owner, in.Name); err != nil {
 		_ = a.store.DeleteRepo(owner, in.Name)
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -1188,6 +1236,65 @@ func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, repo)
+}
+
+// setRepoTemplate 设置模版仓库标记。
+//
+//	@Summary     设置模版仓库
+//	@Description 仅仓库所有者可设置。模版仓库可作为创建新仓库的源。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setRepoTemplateReq true "is_template"
+//	@Success     200 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/template [post]
+func (a *API) setRepoTemplate(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in setRepoTemplateReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.IsTemplate == nil {
+		writeErr(w, http.StatusBadRequest, "missing field: is_template")
+		return
+	}
+	if err := a.store.SetRepoTemplate(owner, name, *in.IsTemplate); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	repo, err := a.store.GetRepo(owner, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, repo)
+}
+
+// listTemplateRepos 列出当前用户可访问的模版仓库。
+//
+//	@Summary     列出可访问的模版仓库
+//	@Tags        repos
+//	@Produce     json
+//	@Success     200 {array} store.Repo
+//	@Security    BearerAuth
+//	@Router      /templates [get]
+func (a *API) listTemplateRepos(w http.ResponseWriter, r *http.Request) {
+	me := userFrom(r)
+	repos, err := a.store.ListAccessibleTemplateRepos(me)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.attachStars(repos, me)
+	writeJSON(w, http.StatusOK, repos)
 }
 
 // exploreRepos 列出所有公开仓库。

@@ -48,6 +48,7 @@ type Repo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Private     bool   `json:"private"`
+	IsTemplate  bool   `json:"is_template"`
 	CreatedAt   string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`

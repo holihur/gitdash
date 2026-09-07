@@ -325,6 +325,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// collaborators
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/visibility", a.auth(a.setRepoVisibility))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/template", a.auth(a.setRepoTemplate))
+	mux.HandleFunc("GET /api/templates", a.auth(a.listTemplateRepos))
 	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
 	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))
 

@@ -39,6 +39,7 @@ type repoRow struct {
 	Name        string `gorm:"not null;uniqueIndex:uq_repo;size:255"`
 	Description string `gorm:"not null;default:''"`
 	Private     bool   `gorm:"not null;default:true"`
+	IsTemplate  bool   `gorm:"not null;default:false"`
 	CreatedAt   string `gorm:"not null"`
 }
 

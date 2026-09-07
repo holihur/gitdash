@@ -22,7 +22,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Code browsing**: browse repos by branch / directory, view file contents, commit history and blame on the web
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
-- **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection)
+- **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection) — see [docs/runners.md](docs/runners.md)
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
 - **Self-update**: `gitdash update` for manual updates; optional background auto-update (**off by default**)

@@ -31,3 +31,4 @@ tests/ui/bug.md
 .task/
 frontend/tsconfig.tsbuildinfo
 *.tsbuildinfo
+.data/

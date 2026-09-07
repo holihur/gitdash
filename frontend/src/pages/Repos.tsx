@@ -52,6 +52,8 @@ export default function Repos() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [template, setTemplate] = useState<"" | "readme">("");
+  const [templateRepos, setTemplateRepos] = useState<Repo[]>([]);
+  const [templateRepo, setTemplateRepo] = useState("");
   const [namespace, setNamespace] = useState("");
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [busy, setBusy] = useState(false);
@@ -87,6 +89,7 @@ export default function Repos() {
   useEffect(() => {
     load();
     api.listOrgs().then(setOrgs).catch(() => setOrgs([]));
+    api.listTemplateRepos().then(setTemplateRepos).catch(() => setTemplateRepos([]));
   }, [load]);
 
   const show = tab === "repos" ? repos : tab === "starred" ? starred : watched;
@@ -105,12 +108,21 @@ export default function Repos() {
     }
     setBusy(true);
     try {
-      await api.createRepo(name.trim(), desc.trim(), template, undefined, namespace || undefined);
+      const tplRepo = templateRepos.find((r) => `${r.owner}/${r.name}` === templateRepo);
+      await api.createRepo(
+        name.trim(),
+        desc.trim(),
+        template,
+        undefined,
+        namespace || undefined,
+        tplRepo ? { owner: tplRepo.owner, name: tplRepo.name } : undefined,
+      );
       toast.success(t("repos.created", { name: namespace ? `${namespace}/${name.trim()}` : name.trim() }));
       setOpen(false);
       setName("");
       setDesc("");
       setTemplate("");
+      setTemplateRepo("");
       setNamespace("");
       load();
     } catch (e) {
@@ -237,6 +249,27 @@ export default function Repos() {
                   <option value="readme">{t("repos.templateReadme")}</option>
                 </select>
               </div>
+              {templateRepos.length > 0 && (
+                <div className="grid gap-2">
+                  <Label htmlFor="repo-template-repo">{t("repos.templateRepoLabel")}</Label>
+                  <select
+                    id="repo-template-repo"
+                    value={templateRepo}
+                    onChange={(e) => {
+                      setTemplateRepo(e.target.value);
+                      if (e.target.value) setTemplate("");
+                    }}
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">{t("repos.templateRepoNone")}</option>
+                    {templateRepos.map((r) => (
+                      <option key={`${r.owner}/${r.name}`} value={`${r.owner}/${r.name}`}>
+                        {r.owner}/{r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button onClick={create} disabled={busy}>
@@ -375,6 +408,11 @@ export default function Repos() {
                       <Badge variant="secondary" className="font-normal">
                         {formatDate(repo.created_at, lang === "zh-CN" ? "zh-CN" : "en-US")}
                       </Badge>
+                      {repo.is_template && (
+                        <Badge variant="outline" className="font-normal">
+                          {t("repos.templateBadge")}
+                        </Badge>
+                      )}
                       <Badge variant="secondary" className="gap-1 font-normal">
                         <Star className="h-3 w-3" />
                         {repo.stars ?? 0}
