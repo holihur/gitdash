@@ -56,6 +56,7 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   return (
     <div className="space-y-4">
       <BranchProtectionsCard owner={owner} name={name} />
+      {repo?.role === "owner" && <PipelineCard owner={owner} name={name} />}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("repo.visibility")}</CardTitle>
@@ -258,6 +259,51 @@ function BranchProtectionsCard({ owner, name }: { owner: string; name: string })
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PipelineCard({ owner, name }: { owner: string; name: string }) {
+  const { t, to } = useI18n();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api
+      .getPipeline(owner, name)
+      .then((p) => setEnabled(p.enabled))
+      .catch(() => setEnabled(false));
+  }, [owner, name]);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const res = await api.setPipeline(owner, name, !enabled);
+      setEnabled(res.enabled);
+      toast.success(t(res.enabled ? "pipeline.enabled" : "pipeline.disabled"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("pipeline.title")}</CardTitle>
+        <CardDescription>{t("pipeline.hint")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant={enabled ? "secondary" : "outline"}>
+            {t(enabled ? "pipeline.statusOn" : "pipeline.statusOff")}
+          </Badge>
+          <Button size="sm" variant="outline" disabled={busy || enabled === null} onClick={toggle}>
+            {t(enabled ? "pipeline.turnOff" : "pipeline.turnOn")}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

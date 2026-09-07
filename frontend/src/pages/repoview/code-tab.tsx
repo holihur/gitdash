@@ -510,33 +510,35 @@ export default function CodeTab({
                           {entry.name}
                         </span>
                       </button>
-                      <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                        {entry.type === "blob" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            title={t("fops.editFile")}
-                            onClick={() =>
-                              api
-                                .blob(owner, name, refName, targetPath)
-                                .then((b) => b.encoding === "utf-8" && openEditDialog(targetPath, b.content))
-                                .catch((e) => toast.error(apiErrorMsg(to, e)))
-                            }
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                            <ChevronRight className="h-3.5 w-3.5 rotate-90" />
                           </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          title={entry.type === "tree" ? t("fops.deleteFolder") : t("fops.deleteFile")}
-                          onClick={() => removeEntry(targetPath, entry.type === "tree")}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {entry.type === "blob" && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                api
+                                  .blob(owner, name, refName, targetPath)
+                                  .then((b) => b.encoding === "utf-8" && openEditDialog(targetPath, b.content))
+                                  .catch((e) => toast.error(apiErrorMsg(to, e)))
+                              }
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              {t("fops.editFile")}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => removeEntry(targetPath, entry.type === "tree")}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {entry.type === "tree" ? t("fops.deleteFolder") : t("fops.deleteFile")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                   <TableCell>
