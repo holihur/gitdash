@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -53,10 +52,14 @@ var (
 	boundQueue queue.Queue
 )
 
-// Bind 绑定任务队列消费者。q 为 nil 时沿用进程内 goroutine 直接调度（默认，零依赖）。
+// Bind 绑定任务队列消费者与执行器。q 为 nil 时沿用进程内 goroutine 直接调度（默认，零依赖）；
+// exec 为 nil 时使用内置本地 docker 执行器。
 // 队列模式（如 asynq/redis）下，Trigger 只入队，由 Start 启动的工人真正执行。
-func Bind(st *store.Store, q queue.Queue) {
+func Bind(st *store.Store, q queue.Queue, exec Executor) {
 	boundStore, boundQueue = st, q
+	if exec != nil {
+		boundExecutor = exec
+	}
 	if q != nil {
 		q.Start(context.Background(), []queue.JobKind{KindPipelineRun}, jobHandler)
 	}
@@ -193,7 +196,7 @@ func Trigger(st *store.Store, owner, repo, sha, ref, by string) (store.PipelineR
 	return run, nil
 }
 
-// executeRun 执行流水线：checkout 到触发提交，逐步骤在 docker 容器中运行并写日志。
+// executeRun 执行流水线：解析 DSL（Trigger 已校验过），交由绑定的 Executor 执行并写日志。
 func executeRun(st *store.Store, job RunJob) {
 	runID, owner, repo, sha, ref := job.RunID, job.Owner, job.Repo, job.SHA, job.Ref
 	_ = st.StartPipelineRun(runID)
@@ -239,111 +242,19 @@ func executeRun(st *store.Store, job RunJob) {
 	}
 	writeLog("image: %s  steps: %d", cfg.Image, len(cfg.Steps))
 
-	if err := dockerAvailable(); err != nil {
-		fail("docker not available: %v", err)
-		return
+	exec := boundExecutor
+	if exec == nil {
+		exec = &dispatchExecutor{}
 	}
-
-	tmp, err := os.MkdirTemp("", "gitdash-run-*")
-	if err != nil {
-		fail("create workdir: %v", err)
+	if err := exec.Execute(context.Background(), job, cfg, logFile, func(stepsDone int) {
+		_ = st.ProgressPipelineRun(runID, stepsDone)
+	}); err != nil {
+		fail("%v", err)
 		return
-	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-
-	// checkout 触发提交到临时工作区
-	if out, err := gitsvc.GitOut("", "clone", "--quiet", gitsvc.RepoPath(owner, repo), tmp); err != nil {
-		fail("clone repo: %v: %s", err, strings.TrimSpace(out))
-		return
-	}
-	if out, err := gitsvc.GitOut(tmp, "checkout", "--quiet", "--detach", sha); err != nil {
-		fail("checkout %s: %v: %s", sha, err, strings.TrimSpace(out))
-		return
-	}
-	writeLog("workspace: checked out %s", sha)
-
-	for i, step := range cfg.Steps {
-		writeLog("\n==> [%d/%d] %s", i+1, len(cfg.Steps), step.Name)
-		if err := runStep(tmp, cfg, step, owner, repo, ref, sha, logFile); err != nil {
-			fail("step %q failed: %v", step.Name, err)
-			return
-		}
-		writeLog("<== %s ok", step.Name)
-		_ = st.ProgressPipelineRun(runID, i+1)
 	}
 
 	writeLog("\n== pipeline success ==")
 	_ = st.FinishPipelineRun(runID, "success", "")
-}
-
-// runStep 在 docker 容器里执行单步：工作区挂载到 /workspace，输出实时写入日志。
-func runStep(workdir string, cfg *Config, step Step, owner, repo, ref, sha string, logFile *os.File) error {
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
-	defer cancel()
-
-	// 网络开关：默认 none（沙箱）；GITDASH_PIPELINE_NETWORK 显式指定时用该值
-	network := strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_NETWORK"))
-	if network == "" {
-		network = "none"
-	}
-	args := []string{
-		"run", "--rm",
-		"--workdir", "/workspace",
-		"-v", workdir + ":/workspace",
-		// 沙箱加固：默认禁外网（依赖拉取需镜像内预装或镜像自身可达源）、
-		// 限制资源、禁止提权、丢弃 capabilities，防止流水线脚本攻击宿主或同级容器。
-		"--network", network,
-		"--memory", "512m",
-		"--memory-swap", "512m",
-		"--cpus", "1.0",
-		"--pids-limit", "128",
-		"--security-opt", "no-new-privileges",
-		"--cap-drop", "ALL",
-		"-e", "CI=1",
-		"-e", "GITDASH=true",
-		"-e", "GITDASH_REPO=" + owner + "/" + repo,
-		"-e", "GITDASH_REF=" + ref,
-		"-e", "GITDASH_SHA=" + sha,
-	}
-	for _, e := range cfg.Env {
-		args = append(args, "-e", e)
-	}
-	for _, m := range cfg.Volumes { // DSL 声明的额外挂载卷（docker.sock 已在 validate 拒绝）
-		args = append(args, "-v", m)
-	}
-	args = append(args, cfg.Image, "sh", "-ec", step.Run)
-
-	// 镜像拉取/运行审计日志
-	log.Printf("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
-		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
-	cmd := exec.CommandContext(ctx, "docker", args...)
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("timeout after %s", cfg.Timeout)
-		}
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return fmt.Errorf("exit code %d", ee.ExitCode())
-		}
-		return err
-	}
-	return nil
-}
-
-// dockerAvailable 检查 docker CLI 与守护进程是否可用。
-func dockerAvailable() error {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return ErrDockerMissing
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", ErrDockerMissing, strings.TrimSpace(string(out)))
-	}
-	return nil
 }
 
 func isZeroSHA(s string) bool {

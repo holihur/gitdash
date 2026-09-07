@@ -22,6 +22,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Code browsing**: browse repos by branch / directory, view file contents, commit history and blame on the web
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
+- **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection)
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
 - **Self-update**: `gitdash update` for manual updates; optional background auto-update (**off by default**)
@@ -145,6 +146,8 @@ Environment variables (all optional):
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
+
+Runner (self-hosted CI agent) support requires Redis (`GITDASH_QUEUE=redis`); WS endpoint `/api/runner/ws`, registration `POST /api/runner/register`, management `GET/DELETE /api/runners`.
 
 **Changing listen addresses**:
 
@@ -310,6 +313,7 @@ image: alpine:3.19   # required: image for every step (POSIX sh required)
 timeout: 10m         # optional: per-step timeout (default 10m, max 1h)
 env:                 # optional: KEY=VALUE list injected into containers
   - CGO_ENABLED=0
+runs-on: [docker]    # optional: dispatch to a remote runner matching these labels
 steps:               # required: 1..20 steps
   - name: build
     run: go build ./...
@@ -326,6 +330,25 @@ Pipeline API:
 | GET/PUT | `/api/users/{owner}/repos/{name}/pipeline` | Get / set enabled (PUT: owner only) |
 | GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | List runs / trigger a manual run (`{ref?}`) |
 | GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | Run detail incl. log |
+| POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel` | Cancel a remote-runner run |
+
+## Runners (Self-hosted CI Agents)
+
+Without `runs-on`, pipelines run on the server's local Docker (builtin, zero setup). To execute pipelines on other machines, deploy **agents** (`gitdash-runner`):
+
+1. Requires Redis: start the server with `GITDASH_QUEUE=redis` (the runner hub uses Redis for dispatch, heartbeats and cross-instance routing).
+2. Issue a one-time registration token (valid 10 minutes): users issue a personal-scope token in **Profile → Runners**; org owners issue org-scope tokens via the API; site admins can issue global tokens from the admin panel (`POST /api/admin/runners/registration-token`).
+3. On the agent machine:
+
+```bash
+gitdash-runner register -server http://gitdash.example:8080 \
+  -name build-01 -labels docker,go1.22 -token <TOKEN>
+gitdash-runner run   # config in ~/.gitdash-runner/config.json
+```
+
+4. In `.gitdash.yml` set `runs-on: [docker]` (labels must be a subset of the agent's). gitdash picks the online agent with matching labels and the lowest load, streams a `git archive` snapshot of the pushed commit over the agent's connection (no git credentials are ever sent), and streams logs back. If no agent matches, the run fails immediately; if an agent goes offline mid-run, its run is marked `failed (runner went offline)` (no silent re-execution). Remote runs can be cancelled from the run detail view.
+
+Security model: agents execute arbitrary repo code on their host — treat agent hosts as trusted CI machines; the same sandbox as builtin (no network by default, resource caps, docker.sock mounts rejected) is applied on the agent side. Registration is limited: a personal runner only ever receives that user's repos, an org runner only that org's repos.
 
 ## Upgrade Notes
 

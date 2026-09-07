@@ -49,6 +49,7 @@ type Config struct {
 	Timeout time.Duration
 	Env     []string
 	Volumes []string // 额外挂载卷（host:container），沙箱会校验禁止挂载 docker socket
+	RunsOn  []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
 	Steps   []Step
 }
 
@@ -131,6 +132,33 @@ func Parse(data []byte) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "runs-on":
+			// 支持两种写法：内联 `runs-on: [a, b]` 或块列表 `- a`
+			if strings.HasPrefix(val, "[") {
+				if !strings.HasSuffix(val, "]") {
+					return nil, fmt.Errorf("line %d: invalid runs-on list", i+1)
+				}
+				for _, item := range strings.Split(strings.TrimSuffix(strings.TrimPrefix(val, "["), "]"), ",") {
+					item = strings.TrimSpace(unquote(strings.TrimSpace(item)))
+					if item == "" || len(item) > 32 {
+						return nil, fmt.Errorf("line %d: invalid label in runs-on", i+1)
+					}
+					cfg.RunsOn = append(cfg.RunsOn, item)
+				}
+				i++
+				continue
+			}
+			var err error
+			i, err = readListItems(lines, i+1, func(item string, lineNo int) error {
+				if item == "" || len(item) > 32 {
+					return fmt.Errorf("line %d: invalid label %q", lineNo, item)
+				}
+				cfg.RunsOn = append(cfg.RunsOn, item)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
 		case "steps":
 			var err error
 			i, cfg.Steps, err = readSteps(lines, i+1)
@@ -138,7 +166,7 @@ func Parse(data []byte) (*Config, error) {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, env, volumes, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, env, volumes, runs-on, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {

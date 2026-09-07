@@ -27,6 +27,7 @@ type PipelineRun struct {
 	StepsTotal int     `json:"steps_total"`
 	StepsDone  int     `json:"steps_done"`
 	Error      string  `json:"error,omitempty"`
+	RunnerName string  `json:"runner_name,omitempty"`
 	CreatedAt  string  `json:"created_at"`
 	FinishedAt *string `json:"finished_at"`
 	// Log 由 API 层按需从磁盘读取填充
@@ -39,7 +40,8 @@ func runRowToDTO(r pipelineRunRow) PipelineRun {
 		ID: r.ID, Owner: r.Owner, Repo: r.Repo,
 		SHA: r.SHA, Ref: r.Ref, TriggerBy: r.TriggerBy, Status: r.Status,
 		StepsTotal: r.StepsTotal, StepsDone: r.StepsDone, Error: r.Error,
-		CreatedAt: r.CreatedAt, FinishedAt: r.FinishedAt,
+		RunnerName: r.RunnerName,
+		CreatedAt:  r.CreatedAt, FinishedAt: r.FinishedAt,
 	}
 }
 
@@ -91,6 +93,11 @@ func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy string, steps
 // StartPipelineRun 标记为 running。
 func (s *Store) StartPipelineRun(id int64) error {
 	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).Update("status", "running").Error
+}
+
+// SetPipelineRunRunner 记录执行该 run 的远程 runner 名。
+func (s *Store) SetPipelineRunRunner(id int64, runnerName string) error {
+	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).Update("runner_name", runnerName).Error
 }
 
 // ProgressPipelineRun 更新已完成步骤数。

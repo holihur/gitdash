@@ -21,6 +21,7 @@ import { apiErrorMsg } from "@/lib/errors";
 export const PIPELINE_EXAMPLE = `image: alpine:3.19
 env:
   - CGO_ENABLED=0
+# runs-on: [docker]   # 可选：指定远程 runner 标签
 steps:
   - name: build
     run: echo build
@@ -149,6 +150,16 @@ export default function RepoPipeline({ owner, name, role }: Props) {
     }
   };
 
+  const cancelRun = async (id: number) => {
+    try {
+      await api.cancelPipelineRun(owner, name, id);
+      toast.success(t("pipeline.cancelled"));
+      refreshOne(id);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -253,13 +264,27 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                               {runDetail && runDetail.id === r.id ? (
                                 <>
                                   <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-xs text-muted-foreground">{t("pipeline.log")}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {t("pipeline.log")}
+                                      {runDetail.runner_name && (
+                                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono">
+                                          runner: {runDetail.runner_name}
+                                        </span>
+                                      )}
+                                    </span>
                                     <div className="flex items-center gap-2">
                                       {(runDetail.status === "pending" || runDetail.status === "running") && (
-                                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => refreshOne(r.id)}>
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                          {t("pipeline.refresh")}
-                                        </Button>
+                                        <>
+                                          {canWrite && runDetail.runner_name && (
+                                            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => cancelRun(r.id)}>
+                                              {t("pipeline.cancel")}
+                                            </Button>
+                                          )}
+                                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => refreshOne(r.id)}>
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            {t("pipeline.refresh")}
+                                          </Button>
+                                        </>
                                       )}
                                     </div>
                                   </div>

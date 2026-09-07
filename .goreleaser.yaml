@@ -21,6 +21,22 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.version={{ .Version }}
+  # 自托管 CI agent（runner）
+  - id: gitdash-runner
+    dir: backend
+    main: ./cmd/gitdash-runner
+    binary: gitdash-runner
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
 
 archives:
   - formats: [tar.gz]

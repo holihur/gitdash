@@ -394,6 +394,8 @@ type pipelineRunRow struct {
 	Error      string `gorm:"not null;default:''"`
 	CreatedAt  string `gorm:"not null"`
 	FinishedAt *string
+	// RunnerName 由远程 runner 执行时记录（builtin 执行为空）
+	RunnerName string `gorm:"column:runner_name;not null;default:''"`
 }
 
 func (pipelineRunRow) TableName() string { return "pipeline_runs" }

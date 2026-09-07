@@ -443,6 +443,22 @@ export const zhCN: Messages = {
     },
     dslTitle: "流水线 DSL（.gitdash.yml）",
     dslHint: "自定义 YAML DSL：镜像 + 顺序步骤，任一步骤失败即终止；仓库工作区挂载在 /workspace。",
+    cancel: "取消",
+    cancelled: "已请求取消",
+  },
+  runner: {
+    title: "Runner",
+    hint: "自托管 CI agent 连接到本服务端，通过 runs-on 标签执行流水线。",
+    issueToken: "签发注册 token",
+    tokenIssued: "注册 token 已签发（10 分钟内有效）",
+    tokenOnce: "一次性注册 token —— 仅显示一次：",
+    none: "还没有注册任何 runner。",
+    deleted: "Runner 已删除",
+    scope: {
+      global: "全局",
+      user: "个人",
+      org: "组织",
+    },
   },
   pulls: {
     title: "Pull Requests",

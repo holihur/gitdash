@@ -44,6 +44,8 @@ func (s *Store) migrate() error {
 		&pipelineRunRow{},
 		&releaseRow{},
 		&releaseAssetRow{},
+		&runnerRow{},
+		&runnerTokenRow{},
 	); err != nil {
 		return err
 	}

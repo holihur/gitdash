@@ -7,6 +7,7 @@ import (
 	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/notify"
+	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 	"gitdash/backend/internal/webui"
@@ -28,6 +29,9 @@ import (
 )
 
 var shaRe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
+
+// runnerNameRe runner 名（可读字符，2-64 位由 handler 校验长度）
+var runnerNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]+$`)
 
 // pageParams 解析 ?limit / ?offset；默认上限 200，最大 500，防止列表端点全量返回。
 func pageParams(r *http.Request) (limit, offset int) {
@@ -55,6 +59,9 @@ var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
 type API struct {
 	store   *store.Store
 	version string
+
+	// runnerHub runner WS Hub（main 注入；nil = runner 功能未启用）
+	runnerHub *runner.Hub
 
 	// sshPort SSH 服务端口（clone 地址展示用；main 启动时注入，默认 2222）
 	sshPort string
@@ -183,6 +190,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/settings", a.adminAuth(a.adminSettings))
 	mux.HandleFunc("POST /api/admin/settings", a.adminAuth(a.adminSaveSettings))
 	mux.HandleFunc("POST /api/admin/password", a.adminAuth(a.adminChangePassword))
+	mux.HandleFunc("GET /api/admin/runners", a.adminAuth(a.adminListRunners))
+	mux.HandleFunc("POST /api/admin/runners/registration-token", a.adminAuth(a.createGlobalRunnerToken))
+	mux.HandleFunc("DELETE /api/admin/runners/{name}", a.adminAuth(a.adminDeleteRunner))
 	// 用户管理
 	mux.HandleFunc("GET /api/admin/users", a.adminAuth(a.adminListUsers))
 	mux.HandleFunc("POST /api/admin/users", a.adminAuth(a.adminCreateUser))
@@ -343,6 +353,14 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.listPipelineRuns))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.createPipelineRun))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs/{id}", a.auth(a.getPipelineRun))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel", a.auth(a.cancelPipelineRun))
+
+	// runners（自托管 CI agent）
+	mux.HandleFunc("POST /api/runners/registration-token", a.auth(a.createRunnerToken))
+	mux.HandleFunc("GET /api/runners", a.auth(a.listRunners))
+	mux.HandleFunc("DELETE /api/runners/{name}", a.auth(a.deleteRunner))
+	mux.HandleFunc("POST /api/runner/register", a.registerRunner)
+	mux.HandleFunc("GET /api/runner/ws", a.runnerWS)
 
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))

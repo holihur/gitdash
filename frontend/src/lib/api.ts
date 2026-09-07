@@ -339,8 +339,19 @@ export interface PipelineRun {
   error?: string;
   created_at: string;
   finished_at: string | null;
+  runner_name?: string;
   /** 仅详情返回 */
   log?: string;
+}
+
+export interface Runner {
+  id: number;
+  name: string;
+  labels: string[];
+  scope: string;
+  status: string;
+  last_seen?: string | null;
+  created_at: string;
 }
 
 export type NotifKind = "issue" | "pull";
@@ -750,6 +761,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(ref ? { ref } : {}),
     }),
+  cancelPipelineRun: (owner: string, name: string, id: number) =>
+    req<{ cancelled: boolean }>(`/users/${owner}/repos/${name}/pipeline/runs/${id}/cancel`, {
+      method: "POST",
+    }),
+
+  // runners（自托管 CI agent）
+  listRunners: () => req<Runner[]>("/runners"),
+  createRunnerToken: (scope: "user" | "org", org?: string) =>
+    req<{ token: string; scope: string; expires_at: string }>("/runners/registration-token", {
+      method: "POST",
+      body: JSON.stringify({ scope, org }),
+    }),
+  deleteRunner: (name: string) => req<null>(`/runners/${encodeURIComponent(name)}`, { method: "DELETE" }),
 
   // branches & tags
   listTags: (owner: string, name: string) =>

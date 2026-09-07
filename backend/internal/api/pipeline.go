@@ -122,6 +122,34 @@ func (a *API) getPipelineRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, run)
 }
 
+// cancelPipelineRun 取消远程 runner 执行中的流水线运行。
+//
+//	@Summary     取消流水线运行
+//	@Tags        pipeline
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "运行 ID"
+//	@Success     200 {object} map[string]any
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline/runs/{id}/cancel [post]
+func (a *API) cancelPipelineRun(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeCode(w, http.StatusBadRequest, "invalid_run_id", "invalid run id")
+		return
+	}
+	if err := pipeline.CancelRun(a.store, owner, name, id); err != nil {
+		writeCode(w, http.StatusBadRequest, "cancel_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cancelled": true})
+}
+
 // createPipelineRun 手动触发流水线（body: {ref?: branch}）。
 //
 //	@Summary     手动触发流水线

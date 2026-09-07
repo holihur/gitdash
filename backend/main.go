@@ -23,6 +23,7 @@ import (
 	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/queue"
+	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/sshserver"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/updater"
@@ -183,21 +184,26 @@ func run() {
 	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, sender))
 
 	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
+	// runner（自托管 CI agent）功能需要 redis（跨实例派发与心跳）
+	var runnerHub *runner.Hub
 	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
 	if queueMode == "redis" || queueMode == "asynq" {
 		redisAddr := getenv("GITDASH_REDIS_ADDR", "127.0.0.1:6379")
 		redisDB, _ := strconv.Atoi(getenv("GITDASH_REDIS_DB", "0"))
 		password := os.Getenv("GITDASH_REDIS_PASSWORD")
 		concurrency, _ := strconv.Atoi(getenv("GITDASH_QUEUE_CONCURRENCY", "4"))
-		pipeline.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, concurrency))
+		pipeline.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, concurrency), nil)
 		// 导入 / mirror 任务独立 asynq 实例（Start 一次性注册 kinds，不能与 pipeline 共用）
 		jobs.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, 2))
+		runnerHub = runner.NewHub(st, queue.NewRedisClient(redisAddr, password, redisDB))
+		pipeline.BindHub(runnerHub)
 		log.Printf("task queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
 	} else {
-		pipeline.Bind(st, nil)
+		pipeline.Bind(st, nil, nil)
 		jobs.Bind(st, queue.NewMemory(256, 2)) // 并发的 git 网络操作限 2
 		log.Printf("task queue: in-process")
 	}
+	a.SetRunnerHub(runnerHub)
 	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
 	jobs.RequeuePending()
 

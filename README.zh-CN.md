@@ -146,6 +146,8 @@ go run .
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
 
+Runner（自托管 CI agent）功能需要 Redis（`GITDASH_QUEUE=redis`）；WS 端点 `/api/runner/ws`，注册 `POST /api/runner/register`，管理 `GET/DELETE /api/runners`。
+
 **修改监听地址**：
 
 ```bash
@@ -310,6 +312,7 @@ image: alpine:3.19   # 必填：每步运行所用镜像（需含 POSIX sh）
 timeout: 10m         # 可选：单步超时（默认 10m，上限 1h）
 env:                 # 可选：注入容器的环境变量 KEY=VALUE
   - CGO_ENABLED=0
+runs-on: [docker]    # 可选：派发给匹配标签的远程 runner
 steps:               # 必填：1..20 个步骤
   - name: build
     run: go build ./...
@@ -326,6 +329,25 @@ steps:               # 必填：1..20 个步骤
 | GET/PUT | `/api/users/{owner}/repos/{name}/pipeline` | 查询 / 设置开关（PUT 仅 owner） |
 | GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | 运行列表 / 手动触发（`{ref?}`） |
 | GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | 运行详情（含日志） |
+| POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel` | 取消远程 runner 执行的运行 |
+
+## Runner（自托管 CI Agent）
+
+不写 `runs-on` 时，流水线在服务端本地 Docker 中执行（内置，零配置）。要在其他机器上执行流水线，部署 **agent**（`gitdash-runner`）：
+
+1. 需要 Redis：服务端以 `GITDASH_QUEUE=redis` 启动（runner 调度、心跳与跨实例路由依赖 Redis）。
+2. 签发一次性注册 token（10 分钟有效）：用户在 **个人设置 → Runner** 签发个人 scope；组织 owner 可为组织签发；站点管理员可在管理端签发全局 token（`POST /api/admin/runners/registration-token`）。
+3. 在 agent 机器上：
+
+```bash
+gitdash-runner register -server http://gitdash.example:8080 \
+  -name build-01 -labels docker,go1.22 -token <TOKEN>
+gitdash-runner run   # 配置写入 ~/.gitdash-runner/config.json
+```
+
+4. 在 `.gitdash.yml` 中设置 `runs-on: [docker]`（标签须为 agent 标签的子集）。gitdash 选择标签匹配且负载最低的在线 agent，经其连接推送该提交的 `git archive` 快照（不下发任何 git 凭证），日志实时回传。无匹配 agent 时运行立即失败；agent 执行中掉线，运行记为 `failed (runner went offline)`（不静默重跑）。远程运行可在运行详情中取消。
+
+安全模型：agent 在其宿主上执行仓库任意代码 —— 请将 agent 主机视为受信 CI 机器；agent 侧应用与内置执行一致的沙箱（默认禁外网、资源限制、拒绝 docker.sock 挂载）。注册即隔离：个人 runner 只会收到该用户仓库的任务，组织 runner 只会收到该组织仓库的任务。
 
 ## 升级说明
 

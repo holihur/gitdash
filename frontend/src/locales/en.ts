@@ -444,6 +444,22 @@ export const en = {
     },
     dslTitle: "Pipeline DSL (.gitdash.yml)",
     dslHint: "Custom YAML DSL: image + ordered steps. Any failing step stops the run. The repository workspace is mounted at /workspace.",
+    cancel: "Cancel",
+    cancelled: "Cancel requested",
+  },
+  runner: {
+    title: "Runners",
+    hint: "Self-hosted CI agents connect to this server and run pipelines with a matching runs-on label.",
+    issueToken: "Issue registration token",
+    tokenIssued: "Registration token issued (valid for 10 minutes)",
+    tokenOnce: "One-time registration token — shown only once:",
+    none: "No runners registered yet.",
+    deleted: "Runner deleted",
+    scope: {
+      global: "Global",
+      user: "Personal",
+      org: "Organization",
+    },
   },
   pulls: {
     title: "Pull Requests",

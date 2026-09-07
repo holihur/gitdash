@@ -62,6 +62,14 @@ func (s *Store) OrgRole(org, username string) string {
 	return row.Role
 }
 
+// MyOwnedOrgs 用户拥有 owner 角色的组织名列表（runner 管理范围判定用）。
+func (s *Store) MyOwnedOrgs(username string) ([]string, error) {
+	var orgs []string
+	err := s.db.Model(&orgMemberRow{}).Where("username = ? AND role = ?", username, "owner").
+		Order("org").Pluck("org", &orgs).Error
+	return orgs, err
+}
+
 func (s *Store) OrgMembers(org string) ([]OrgMember, error) {
 	var rows []orgMemberRow
 	err := s.db.Where("org = ?", org).Order("username").Find(&rows).Error
