@@ -31,6 +31,22 @@ GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest -v
 
 两种方式都没配置时整组 skip。
 
+## Runner agent 端到端测试（`test_runners.py`）
+
+真实 agent（`gitdash-runner` 二进制）的黑盒用例需要两个额外二进制 + redis-server：
+
+```bash
+cd backend
+go build -o /tmp/gitdash-server .
+go build -o /tmp/gitdash-runner ./cmd/gitdash-runner
+cd ../tests
+GITDASH_BIN=/tmp/gitdash-server GITDASH_RUNNER_BIN=/tmp/gitdash-runner uv run pytest test_runners.py -v
+```
+
+- `GITDASH_RUNNER_BIN` 未设置时：若 `backend/` 源码与 `go` 可用则现场构建；否则 agent 端到端用例跳过
+- redis-server 缺失时 runner 相关用例跳过（与 `test_pipeline.py` 队列模式一致）
+- agent 用例会临时拉起 `alpine:3.19` 容器，需本机 Docker 可用
+
 ## 覆盖范围（happy path + bad path）
 
 | 文件 | 覆盖 |
@@ -50,6 +66,7 @@ GITDASH_API_URL=http://127.0.0.1:8080 uv run pytest -v
 | `test_star_fork.py` | Star/Fork/导入、fork 来源展示、star/watch 计数、隔离与级联 |
 | `test_mirror.py` | Push 镜像 CRUD、SSRF 防护、立即同步 bad path |
 | `test_pipeline.py` | CI 流水线：开关配置、手动/push 触发、DSL 解析失败、运行记录与日志、权限、级联；队列模式（asynq+redis，需 `GITDASH_BIN` + `redis-server`，缺则跳过） |
+| `test_runners.py` | Runner（自托管 CI agent）：注册 token 签发/权限边界/一次性、runner 注册与重名、WS 凭证校验、跨用户隔离、org scope、runs-on 无匹配 agent 立即失败；Redis 模式完整生命周期（需 `GITDASH_BIN` + `redis-server`，缺则跳过） |
 
 > 提示：用户没有删除 API，若对着**常驻实例**反复跑会产生残留用户；
 > 对 CI / 一次性实例（方式一）无影响。

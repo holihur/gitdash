@@ -74,7 +74,11 @@ func saveConfig(c config) error {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.LUTC)
-	switch flag.Arg(0) {
+	sub := ""
+	if len(os.Args) > 1 {
+		sub = os.Args[1]
+	}
+	switch sub {
 	case "register":
 		cmdRegister()
 	case "run":
@@ -134,7 +138,7 @@ type agent struct {
 	cfg    config
 	conn   *websocket.Conn
 	wsMu   sync.Mutex // WS 写串行化
-	jobs   map[int64]context.CancelFunc
+	jobs   map[int64]*jobState
 	jobsMu sync.Mutex
 }
 
@@ -146,7 +150,7 @@ func cmdRun() {
 	if c.Concurrency <= 0 {
 		c.Concurrency = 2
 	}
-	a := &agent{cfg: c, jobs: map[int64]context.CancelFunc{}}
+	a := &agent{cfg: c, jobs: map[int64]*jobState{}}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -216,16 +220,35 @@ func (a *agent) session(ctx context.Context) error {
 			case <-wsCtx.Done():
 				return wsCtx.Err()
 			}
-			go func(job runner.Job) {
+			// 任务级上下文与 job_data 通道：取消与工作区分块路由都挂在 state 上
+			jctx, jcancel := context.WithCancel(wsCtx)
+			st := &jobState{cancel: jcancel, data: make(chan runner.JobData, 64)}
+			a.jobsMu.Lock()
+			a.jobs[job.RunID] = st
+			a.jobsMu.Unlock()
+			go func(job runner.Job, st *jobState) {
 				defer func() { <-sem }()
-				a.execJob(wsCtx, job)
-			}(job)
+				a.execJob(jctx, job, st)
+				a.jobsMu.Lock()
+				delete(a.jobs, job.RunID)
+				a.jobsMu.Unlock()
+			}(job, st)
+		case runner.TypeJobData:
+			var jd runner.JobData
+			if json.Unmarshal(msg.Payload, &jd) == nil {
+				a.jobsMu.Lock()
+				st := a.jobs[jd.RunID]
+				a.jobsMu.Unlock()
+				if st != nil {
+					st.data <- jd
+				}
+			}
 		case runner.TypeJobCancel:
 			var jc runner.JobCancel
 			if json.Unmarshal(msg.Payload, &jc) == nil {
 				a.jobsMu.Lock()
-				if cf, ok := a.jobs[jc.RunID]; ok {
-					cf()
+				if st, ok := a.jobs[jc.RunID]; ok {
+					st.cancel()
 				}
 				a.jobsMu.Unlock()
 			}
@@ -274,19 +297,31 @@ func (w *wsLogWriter) flush() {
 	}
 }
 
+// jobState 单个执行中任务的会话状态（cancel + 工作区分块路由）。
+type jobState struct {
+	cancel context.CancelFunc
+	data   chan runner.JobData // 由唯一的 WS 读循环推送（禁止多 goroutine 读同一连接）
+}
+
 // execJob 执行单个任务：收工作区快照 → 解包 → 解析 DSL → 容器执行 → 回传状态。
-func (a *agent) execJob(ctx context.Context, job runner.Job) {
-	log.Printf("job %s: run=%d repo=%s/%s ref=%s", job.JobID, job.RunID, job.Owner, job.Repo, job.Ref)
-	jctx, cancel := context.WithCancel(ctx)
-	a.jobsMu.Lock()
-	a.jobs[job.RunID] = cancel
-	a.jobsMu.Unlock()
+// ctx 由调用方创建（session 中已注册到 jobState，用于取消）。
+func (a *agent) execJob(ctx context.Context, job runner.Job, st *jobState) {
+	// 任务结束后持续排空 data 通道，避免读循环因无人消费而阻塞
 	defer func() {
-		cancel()
-		a.jobsMu.Lock()
-		delete(a.jobs, job.RunID)
-		a.jobsMu.Unlock()
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case _, ok := <-st.data:
+					if !ok {
+						return
+					}
+				}
+			}
+		}()
 	}()
+	log.Printf("job %s: run=%d repo=%s/%s ref=%s", job.JobID, job.RunID, job.Owner, job.Repo, job.Ref)
 
 	status := func(s, errMsg string, steps int) {
 		a.send(runner.Message{Type: runner.TypeJobStatus, Payload: mustJSON(runner.JobStatus{
@@ -294,10 +329,10 @@ func (a *agent) execJob(ctx context.Context, job runner.Job) {
 		})})
 	}
 
-	// 接收工作区快照（server 在 ack 后立即推送 job_data 分块）
-	tgz, err := a.recvWorkspace(ctx, job.RunID)
+	// 接收工作区快照（server 在 ack 后立即推送 job_data 分块，由 session 读循环路由而来）
+	tgz, err := a.recvWorkspace(ctx, job.RunID, st.data)
 	if err != nil {
-		if ctx.Err() != nil || jctx.Err() != nil {
+		if ctx.Err() != nil {
 			status("failed", "cancelled", 0)
 			return
 		}
@@ -321,11 +356,11 @@ func (a *agent) execJob(ctx context.Context, job runner.Job) {
 	lw := &wsLogWriter{a: a, runID: job.RunID}
 	defer lw.flush()
 	status("running", "", 0)
-	if err := pipeline.RunInWorkspace(jctx, pipeline.RunJob{
+	if err := pipeline.RunInWorkspace(ctx, pipeline.RunJob{
 		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref,
 	}, cfg, workdir, lw, func(steps int) { status("running", "", steps) }); err != nil {
 		lw.flush()
-		if jctx.Err() != nil && ctx.Err() == nil {
+		if ctx.Err() != nil {
 			status("failed", "cancelled", 0)
 			return
 		}
@@ -337,41 +372,36 @@ func (a *agent) execJob(ctx context.Context, job runner.Job) {
 	log.Printf("job %s: success", job.JobID)
 }
 
-// recvWorkspace 读取 job_data 分块直到 eof，写入临时 tar.gz 文件。
-func (a *agent) recvWorkspace(ctx context.Context, runID int64) (string, error) {
+// recvWorkspace 消费 session 读循环路由来的 job_data 分块直到 eof，写入临时 tar.gz 文件。
+func (a *agent) recvWorkspace(ctx context.Context, runID int64, data <-chan runner.JobData) (string, error) {
 	tmp, err := os.CreateTemp("", "gitdash-workspace-*.tar.gz")
 	if err != nil {
 		return "", err
 	}
 	total := 0
 	for {
-		_, data, err := a.conn.Read(ctx)
-		if err != nil {
+		select {
+		case <-ctx.Done():
 			_ = os.Remove(tmp.Name())
-			return "", err
-		}
-		var msg runner.Message
-		if json.Unmarshal(data, &msg) != nil || msg.Type != runner.TypeJobData {
-			continue // 忽略心跳等无关帧
-		}
-		var jd runner.JobData
-		if json.Unmarshal(msg.Payload, &jd) != nil || jd.RunID != runID {
-			continue
-		}
-		if _, err := tmp.Write(jd.Data); err != nil {
-			_ = os.Remove(tmp.Name())
-			return "", err
-		}
-		total += len(jd.Data)
-		if jd.Eof {
-			break
-		}
-		if total > 512<<20 {
-			_ = os.Remove(tmp.Name())
-			return "", errors.New("workspace too large")
+			return "", ctx.Err()
+		case jd := <-data:
+			if jd.RunID != runID {
+				continue
+			}
+			if _, err := tmp.Write(jd.Data); err != nil {
+				_ = os.Remove(tmp.Name())
+				return "", err
+			}
+			total += len(jd.Data)
+			if jd.Eof {
+				return tmp.Name(), nil
+			}
+			if total > 512<<20 {
+				_ = os.Remove(tmp.Name())
+				return "", errors.New("workspace too large")
+			}
 		}
 	}
-	return tmp.Name(), nil
 }
 
 // extractWorkspace 解包 tar.gz 到新临时目录。

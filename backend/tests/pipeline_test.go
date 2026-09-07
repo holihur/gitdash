@@ -243,8 +243,8 @@ func TestPipelineAsynqQueue(t *testing.T) {
 		t.Fatalf("pipeline init: %v", err)
 	}
 	q := queue.NewAsynq(redisAddr, "", 0, 2)
-	pipeline.Bind(env.Store, q)
-	defer pipeline.Bind(nil, nil) // 还原默认（进程内调度），避免影响其他用例
+	pipeline.Bind(env.Store, q, nil)
+	defer pipeline.Bind(nil, nil, nil) // 还原默认（进程内调度），避免影响其他用例
 
 	alice := register(t, env, "pipeq", "pipe-pass-123")
 	alice.mustStatus("POST", "/repos",

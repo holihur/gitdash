@@ -54,5 +54,6 @@ npx playwright show-report          # 查看报告（含失败截图/trace）
 | `src/repos.spec.ts` | 建仓库（README 模板）、卡片/clone 命令、重名与非法名拒绝 |
 | `src/code.spec.ts` | 仓库代码浏览：README.md 树/渲染、Commits 初始提交 |
 | `src/issues.spec.ts` | Issue 创建与列表展示、空标题禁提交 |
+| `src/runners.spec.ts` | Profile 页 Runners 卡片（空列表、一次性注册 token 签发展示）、未登录 401 |
 
 > 发现的产品 bug 记录在同目录 `bug.md`。

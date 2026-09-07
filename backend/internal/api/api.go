@@ -501,6 +501,9 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap 支持 http.ResponseController / WebSocket 升级（Hijack/Flush 穿透内层 writer）。
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (a *API) staticHandler(dir string) http.HandlerFunc {
 	fs := http.FileServer(http.Dir(dir))
 	return func(w http.ResponseWriter, r *http.Request) {

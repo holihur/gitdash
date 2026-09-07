@@ -127,23 +127,29 @@ func (h *Hub) offlineWatcher() {
 }
 
 func (h *Hub) sweepOffline(ctx context.Context) {
-	names, err := h.st.OnlineRunnerNames()
+	// 遍历全部 runner：agent 优雅断开时状态会立即置 offline，此时其执行中的
+	// run 仍需回收 —— 因此不能只看 DB 里 status=online 的记录。
+	runners, err := h.st.ListAllRunners()
 	if err != nil {
 		return
+	}
+	names := make([]string, 0, len(runners))
+	for _, r := range runners {
+		names = append(names, r.Name)
 	}
 	online := h.onlineRunners(ctx, names)
 	for _, n := range names {
 		if online[n] {
 			continue
 		}
-		if err := h.st.SetRunnerStatus(n, "offline"); err != nil {
+		_ = h.st.SetRunnerStatus(n, "offline")
+		ids, err := h.st.RunningRunIDsByRunner(n)
+		if err != nil || len(ids) == 0 {
 			continue
 		}
 		log.Printf("runner audit: OFFLINE runner=%s time=%s", n, time.Now().UTC().Format(time.RFC3339))
-		if ids, err := h.st.RunningRunIDsByRunner(n); err == nil {
-			for _, id := range ids {
-				_ = h.st.FinishPipelineRun(id, "failed", "runner "+n+" went offline")
-			}
+		for _, id := range ids {
+			_ = h.st.FinishPipelineRun(id, "failed", "runner "+n+" went offline")
 		}
 	}
 }

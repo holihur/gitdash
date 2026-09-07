@@ -60,6 +60,7 @@ nfpms:
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
     builds:
       - gitdash
+      - gitdash-runner
     formats:
       - deb
       - rpm
