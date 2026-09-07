@@ -55,7 +55,7 @@ export default function ReleasesTab({ owner, name, role }: ReleasesTabProps) {
         api.listReleases(owner, name),
         api.listTags(owner, name).catch(() => [] as Tag[]),
       ]);
-      setReleases(rs);
+      setReleases((rs ?? []).map((r) => ({ ...r, assets: r.assets ?? [] })));
       setTags(ts);
       setError("");
     } catch (e) {

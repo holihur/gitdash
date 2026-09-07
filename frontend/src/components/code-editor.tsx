@@ -117,7 +117,18 @@ export default function CodeMirrorEditor({
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dark, readOnly, value, path]);
+  }, [dark, readOnly, path]);
+
+  // 外部 value 变化时增量同步文档，避免销毁重建导致失焦/光标丢失
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (value !== current) {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   return <div ref={host} className={className} style={{ overflow: "hidden" }} />;
 }
