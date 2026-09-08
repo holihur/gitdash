@@ -94,6 +94,8 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_DISABLE_RATE_LIMIT="1",
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
+        GITDASH_ADMIN_USER="gitdash-admin",
+        GITDASH_ADMIN_PASSWORD="admin-test-pass-123456",
     )
     _SPAWNED_SSH_PORT["port"] = ssh_port
     log_path = tmpdir / "server.log"
