@@ -1050,15 +1050,15 @@ func parseCargoToml(src string) ([]cargoDep, map[string][]string) {
 			continue
 		}
 		key, val := m[1], strings.TrimSpace(m[2])
-		switch {
-		case section == "features":
+		switch section {
+		case "features":
 			if arr, ok := parseTomlArray(val); ok {
 				if arr == nil {
 					arr = []string{}
 				}
 				features[key] = arr
 			}
-		case section == "dependencies" || section == "dev-dependencies" || section == "build-dependencies":
+		case "dependencies", "dev-dependencies", "build-dependencies":
 			kind := ""
 			switch section {
 			case "dev-dependencies":
