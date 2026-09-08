@@ -5,6 +5,7 @@ import { GitBranch, Github, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import { takeReturnPath } from "@/lib/auth-expiry";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,17 +47,12 @@ export default function Login({ onAuthed }: Props) {
       .catch(() => undefined);
   }, []);
 
-  // 仅允许站内相对路径，避免开放重定向
-  const safeRedirect = () => {
-    const rd = searchParams.get("redirect") ?? "";
-    return rd.startsWith("/") && !rd.startsWith("//") ? rd : "/";
-  };
-
   const finish = (r: { token?: string; username?: string }) => {
     if (!r.token || !r.username) return;
     onAuthed(r.username);
     toast.success(t("login.welcomeBack", { name: r.username }));
-    nav(safeRedirect());
+    // 回跳优先级：URL ?redirect= > 401 暂存路径 > 首页
+    nav(takeReturnPath(searchParams.get("redirect")), { replace: true });
   };
 
   const submit = async (mode: "login" | "register") => {

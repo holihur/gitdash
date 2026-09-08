@@ -55,6 +55,7 @@ export const zhCN: Messages = {
     apiDocs: "API 文档（Swagger）",
     missing: "请输入用户名和密码",
     welcomeBack: "欢迎回来，{name}",
+    sessionExpired: "登录已过期，请重新登录。",
     accountCreated: "账号已创建：{name}",
     mfaTitle: "两步验证",
     mfaSubtitle: "输入身份验证器 App 中的 6 位验证码",

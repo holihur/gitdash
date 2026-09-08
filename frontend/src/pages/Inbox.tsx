@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
+import { useQueryState } from "@/lib/query-state";
 import { api, type Notification } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +22,7 @@ import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import ListSkeleton from "@/components/list-skeleton";
 
 function notifIcon(n: Notification) {
   switch (n.action) {
@@ -53,8 +55,11 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // 页码/页大小同步进 URL(?page/?size)
+  const { getNum, set } = useQueryState();
+  const page = getNum("page", 1);
+  const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
+  const pageSize = getNum("size", 20);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
@@ -165,7 +170,7 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
         </Card>
       )}
 
-      {loading && <p className="py-10 text-center text-sm text-muted-foreground">…</p>}
+      {loading && <ListSkeleton rows={5} header={false} />}
 
       {!loading && !error && items.length === 0 && (
         <Card>
@@ -255,10 +260,7 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
           pageSize={pageSize}
           total={total}
           onPageChange={setPage}
-          onPageSizeChange={(s) => {
-            setPageSize(s);
-            setPage(1);
-          }}
+          onPageSizeChange={(s) => set({ size: s === 20 ? null : s, page: null })}
         />
       )}
     </div>

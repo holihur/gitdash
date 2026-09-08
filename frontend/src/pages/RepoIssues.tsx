@@ -9,6 +9,7 @@ import {
   Tag,
 } from "lucide-react";
 import { api, type Issue, type Label, type Milestone } from "@/lib/api";
+import { useQueryState } from "@/lib/query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -17,7 +18,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
@@ -30,6 +30,7 @@ import LabelChip from "@/components/label-chip";
 import CommentSection from "@/components/comment-section";
 import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
+import ListSkeleton from "@/components/list-skeleton";
 
 interface Draft {
   labels: number[];
@@ -41,8 +42,15 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issueTotal, setIssueTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // 页码/页大小/标签筛选同步进 URL(?i_page/?i_size/?i_label)
+  const { get, getNum, set } = useQueryState();
+  const page = getNum("i_page", 1);
+  const setPage = (p: number) => set({ i_page: p > 1 ? p : null }, { push: true });
+  const pageSize = getNum("i_size", 20);
+  const setPageSize = (s: number) => set({ i_size: s === 20 ? null : s, i_page: null });
+  const filterLabel = get("i_label", "") ? Number(get("i_label", "")) : null;
+  const setFilterLabel = (id: number | null) =>
+    set({ i_label: id ?? null, i_page: null }, { push: true });
   const [labels, setLabels] = useState<Label[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +59,6 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [savingMeta, setSavingMeta] = useState<number | null>(null);
-  // 按标签筛选（client-side）
-  const [filterLabel, setFilterLabel] = useState<number | null>(null);
 
   // 管理对话框
   const [labelsOpen, setLabelsOpen] = useState(false);
@@ -198,13 +204,14 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
             <Flag className="h-4 w-4" />
             {t("issues.milestones")}
           </Button>
+          {/* 列表非空才显示头部按钮，避免与空状态 CTA 重复 */}
+          {issues.length > 0 && (
+            <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("issues.new")}
+            </Button>
+          )}
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-2">
-                <Plus className="h-4 w-4" />
-                {t("issues.new")}
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>{t("issues.newDialogTitle")}</DialogTitle>
@@ -275,14 +282,18 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
         </Card>
       )}
 
-      {loading && <p className="py-10 text-center text-sm text-muted-foreground">…</p>}
+      {loading && <ListSkeleton rows={5} header={false} />}
 
       {!loading && !error && issues.length === 0 && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <MessageSquare className="h-10 w-10 text-muted-foreground" />
             <p className="font-medium">{t("issues.empty")}</p>
             <p className="text-sm text-muted-foreground">{t("issues.emptyHint")}</p>
+            <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("issues.new")}
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -449,10 +460,7 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
           pageSize={pageSize}
           total={issueTotal}
           onPageChange={setPage}
-          onPageSizeChange={(s) => {
-            setPageSize(s);
-            setPage(1);
-          }}
+          onPageSizeChange={setPageSize}
         />
       )}
 

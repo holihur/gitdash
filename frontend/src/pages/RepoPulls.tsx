@@ -23,13 +23,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Pagination from "@/components/ui/pagination";
+import { useQueryState } from "@/lib/query-state";
 import { cn, formatDate } from "@/lib/utils";
+import ListSkeleton from "@/components/list-skeleton";
 
 export default function RepoPulls({
   owner,
@@ -45,8 +46,12 @@ export default function RepoPulls({
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullTotal, setPullTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // 页码/页大小同步进 URL(?p_page/?p_size)
+  const { getNum, set } = useQueryState();
+  const page = getNum("p_page", 1);
+  const setPage = (p: number) => set({ p_page: p > 1 ? p : null }, { push: true });
+  const pageSize = getNum("p_size", 20);
+  const setPageSize = (s: number) => set({ p_size: s === 20 ? null : s, p_page: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -123,12 +128,13 @@ export default function RepoPulls({
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{t("pulls.count", { count: pulls.length })}</p>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-2">
+          {/* 列表非空才显示头部按钮，避免与空状态 CTA 重复 */}
+          {pulls.length > 0 && (
+            <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4" />
               {t("pulls.new")}
             </Button>
-          </DialogTrigger>
+          )}
           <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>{t("pulls.newDialogTitle")}</DialogTitle>
@@ -201,14 +207,18 @@ export default function RepoPulls({
         </Card>
       )}
 
-      {loading && <p className="py-10 text-center text-sm text-muted-foreground">…</p>}
+      {loading && <ListSkeleton rows={5} header={false} />}
 
       {!loading && !error && pulls.length === 0 && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <GitPullRequest className="h-10 w-10 text-muted-foreground" />
             <p className="font-medium">{t("pulls.empty")}</p>
             <p className="text-sm text-muted-foreground">{t("pulls.emptyHint")}</p>
+            <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("pulls.new")}
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -378,10 +388,7 @@ export default function RepoPulls({
           pageSize={pageSize}
           total={pullTotal}
           onPageChange={setPage}
-          onPageSizeChange={(s) => {
-            setPageSize(s);
-            setPage(1);
-          }}
+          onPageSizeChange={setPageSize}
         />
       )}
     </div>

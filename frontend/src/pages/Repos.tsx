@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Copy, Download, Eye, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
 import { api, cloneCommand, type Org, type Repo } from "@/lib/api";
+import { useQueryState } from "@/lib/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,11 +41,19 @@ export default function Repos() {
   const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [repoTotal, setRepoTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // tab/页码/页大小同步进 URL(?tab/?page/?size)
+  const { get, getNum, set } = useQueryState();
+  const page = getNum("page", 1);
+  const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
+  const pageSize = getNum("size", 20);
+  const tabRaw = get("tab", "repos");
+  const tab = (["repos", "starred", "watching"] as const).includes(tabRaw as "repos")
+    ? (tabRaw as "repos" | "starred" | "watching")
+    : "repos";
+  const setTab = (v: "repos" | "starred" | "watching") =>
+    set({ tab: v === "repos" ? null : v, page: null }, { push: true });
   const [starred, setStarred] = useState<Repo[]>([]);
   const [watched, setWatched] = useState<Repo[]>([]);
-  const [tab, setTab] = useState<"repos" | "starred" | "watching">("repos");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<Repo | null>(null);
@@ -97,8 +106,7 @@ export default function Repos() {
 
   const onPageChange = (p: number) => setPage(p);
   const onPageSizeChange = (s: number) => {
-    setPageSize(s);
-    setPage(1);
+    set({ size: s === 20 ? null : s, page: null });
   };
 
   const create = async () => {

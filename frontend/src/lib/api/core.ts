@@ -1,5 +1,7 @@
 // 会话通过 httpOnly Cookie(gitdash_session) 自动携带，前端不再持有 token。
 
+import { authExpired, stashReturnPath } from "@/lib/auth-expiry";
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -42,12 +44,17 @@ export async function send(path: string, opts: RequestInit = {}): Promise<Respon
     },
   });
   if (!res.ok) {
-    if (res.status === 401 && window.location.pathname !== "/login") {
-      // 会话失效：回登录页并带上回跳地址（cookie 由服务端在 logout 时清除）
-      const redirect = encodeURIComponent(
-        window.location.pathname + window.location.search + window.location.hash,
-      );
-      window.location.href = `/login?redirect=${redirect}`;
+    if (
+      res.status === 401 &&
+      !path.startsWith("/auth/") && // 登录/注册自身的 401 属于业务错误，不算会话过期
+      !path.startsWith("/instance") &&
+      !path.startsWith("/version") &&
+      !path.startsWith("/auth/providers") &&
+      !path.startsWith("/health")
+    ) {
+      // 会话失效：通知 App 切回登录页并记住当前地址，登录后原路返回（不整页刷新）
+      stashReturnPath();
+      authExpired();
     }
     let msg = res.statusText;
     let code: string | undefined;

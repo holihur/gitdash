@@ -8,6 +8,7 @@ import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import { onAuthExpired, stashReturnPath } from "@/lib/auth-expiry";
 import Login from "@/pages/Login";
 
 // 页面按需加载：首屏只需 App 外壳 + 登录页，其余页面路由切换时才拉取
@@ -70,8 +71,20 @@ export default function App() {
       /* ignore */
     }
     setUser(null);
+    // 登出后回登录页，重新登录后回到登出前的页面
+    stashReturnPath();
     toast.success(t("app.loggedOut"));
   };
+
+  // 任意 API 返回 401（会话过期）→ 回登录页；登录后按暂存地址原路返回
+  useEffect(() => {
+    onAuthExpired(() => {
+      setUser((prev) => {
+        if (prev !== null) toast.error(t("login.sessionExpired"));
+        return null;
+      });
+    });
+  }, [t]);
 
   if (!ready) return null;
 

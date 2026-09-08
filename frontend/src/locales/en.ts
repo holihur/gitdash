@@ -53,6 +53,7 @@ export const en = {
     apiDocs: "API Docs (Swagger)",
     missing: "Please enter a username and password",
     welcomeBack: "Welcome back, {name}",
+    sessionExpired: "Session expired, please sign in again.",
     accountCreated: "Account created: {name}",
     mfaTitle: "Two-factor authentication",
     mfaSubtitle: "Enter the 6-digit code from your authenticator app",

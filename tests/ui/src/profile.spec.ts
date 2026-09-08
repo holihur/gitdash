@@ -22,12 +22,13 @@ test.describe("@happy 个人资料 / 安全", () => {
     await page.getByRole("button", { name: "Change password" }).click();
     await expect(toast(page)).toBeVisible();
 
-    // 旧密码被拒（401 会触发整页跳转 /login，错误 toast 随刷新消失）
+    // 旧密码被拒（401 只弹错误 toast，留在登录页，不再整页跳转）
     await signOutViaUi(page);
     await loginViaUi(page, username, password);
-    await page.waitForURL(/\/login/);
+    await expect(toast(page, "error")).toBeVisible();
+    await expect(page.locator("#username")).toBeVisible();
 
-    // 重新登录后按 redirect 参数回到 /profile
+    // 重新登录后回到登出前的 /profile
     await loginViaUi(page, username, next);
     await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
   });

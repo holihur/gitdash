@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import { copyText, formatDate } from "@/lib/utils";
+import { useQueryState } from "@/lib/query-state";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
@@ -17,13 +18,21 @@ export default function Explore() {
   const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // 页码/页大小/搜索词同步进 URL(?page/?size/?q)
+  const { get, getNum, set } = useQueryState();
+  const page = getNum("page", 1);
+  const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
+  const pageSize = getNum("size", 20);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(get("q", ""));
   const [results, setResults] = useState<GlobalSearchResult | null>(null);
   const [searching, setSearching] = useState(false);
+
+  const updateQuery = (q: string) => {
+    setQuery(q);
+    set({ q: q.trim() || null }, { push: false });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,8 +73,7 @@ export default function Explore() {
 
   const onPageChange = (p: number) => setPage(p);
   const onPageSizeChange = (s: number) => {
-    setPageSize(s);
-    setPage(1);
+    set({ size: s === 20 ? null : s, page: null });
   };
 
   const toggleStar = async (repo: Repo) => {
@@ -100,7 +108,7 @@ export default function Explore() {
           className="pl-9"
           placeholder={t("explore.searchPlaceholder")}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => updateQuery(e.target.value)}
         />
       </div>
 
