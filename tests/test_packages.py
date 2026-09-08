@@ -380,3 +380,229 @@ def test_download_counter_and_audit(base_url, pkg_user):
 
     audit = requests.get(f"{base_url}/api/packages/{username}/audit", headers=h, timeout=10).json()
     assert "publish" in [a["action"] for a in audit]
+
+
+# ---- P1 改进项黑盒验证 ----
+
+
+def test_npm_republish_conflict_epublishconflict(base_url, pkg_user):
+    """npm 重复 publish 同版本 → 409 + EPUBLISHCONFLICT。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"dup-{uuid.uuid4().hex[:8]}"
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"data": base64.b64encode(b"abc").decode()}},
+    }
+    url = f"{base_url}/api/packages/npm/{username}/{pkg}"
+    assert requests.put(url, json=body, headers=h, timeout=10).status_code == 201
+    r = requests.put(url, json=body, headers=h, timeout=10)
+    assert r.status_code == 409
+    assert "EPUBLISHCONFLICT" in r.text
+
+
+def test_npm_packument_maintainers_readme(base_url, pkg_user):
+    """packument 含 maintainers / readme 字段（老工具兼容）。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"mnt-{uuid.uuid4().hex[:8]}"
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"data": base64.b64encode(b"abc").decode()}},
+    }
+    requests.put(f"{base_url}/api/packages/npm/{username}/{pkg}", json=body, headers=h, timeout=10)
+    meta = requests.get(f"{base_url}/api/packages/npm/{username}/{pkg}", headers=h, timeout=10).json()
+    assert meta["maintainers"] and meta["maintainers"][0]["name"]
+    assert "readme" in meta
+
+
+def test_head_requests_for_mirrors(base_url, pkg_user):
+    """镜像探测类工具的 HEAD 请求：npm tarball / pypi simple / composer / cargo 均可。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    # npm
+    pkg = f"hd-{uuid.uuid4().hex[:8]}"
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"data": base64.b64encode(b"abc").decode()}},
+    }
+    requests.put(f"{base_url}/api/packages/npm/{username}/{pkg}", json=body, headers=h, timeout=10)
+    r = requests.head(f"{base_url}/api/packages/npm/{username}/{pkg}/-/{pkg}-1.0.0.tgz", headers=h, timeout=10)
+    assert r.status_code == 200
+    assert r.headers["Content-Type"] == "application/gzip"
+    # pypi simple
+    requests.post(
+        f"{base_url}/api/packages/pypi/{username}/",
+        data={"name": pkg, "version": "1.0.0"},
+        files={"content": (f"{pkg}-1.0.0-py3-none-any.whl", b"w")},
+        headers=h, timeout=10,
+    )
+    assert requests.head(f"{base_url}/api/packages/pypi/{username}/simple/", headers=h, timeout=10).status_code == 200
+    assert requests.head(f"{base_url}/api/packages/pypi/{username}/simple/{pkg}/", headers=h, timeout=10).status_code == 200
+    # composer packages.json / cargo index
+    assert requests.head(f"{base_url}/api/packages/composer/{username}/packages.json", headers=h, timeout=10).status_code == 200
+    crate = "headcrate"
+    requests.put(
+        f"{base_url}/api/packages/cargo/{username}/api/v1/crates/new",
+        data=f'{{"name":"{crate}","vers":"0.1.0","cksum":""}}\n'.encode() + b"c",
+        headers=h, timeout=10,
+    )
+    assert requests.head(
+        f"{base_url}/api/packages/cargo/{username}/index/{crate[:2]}/{crate[2:4]}/{crate}",
+        headers=h, timeout=10,
+    ).status_code == 200
+
+
+def test_maven_semver_sorting(base_url, pkg_user):
+    """maven latest/release 按版本段比较：1.10.0 > 1.9.0，1.0.0 > 1.0.0-rc1。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    base = f"{base_url}/api/packages/maven/{username}"
+    grp = f"com/sem{uuid.uuid4().hex[:4]}"
+    for v in ("1.9.0", "1.10.0", "1.0.0-rc1", "1.11.0-SNAPSHOT"):
+        requests.put(f"{base}/{grp}/sv/{v}/sv-{v}.jar", data=f"jar-{v}".encode(), headers=h, timeout=10)
+    meta = requests.get(f"{base}/{grp}/sv/maven-metadata.xml", headers=h, timeout=10)
+    assert "<latest>1.11.0-SNAPSHOT</latest>" in meta.text
+    assert "<release>1.10.0</release>" in meta.text  # release 排除 SNAPSHOT
+    versions = meta.text.split("<versions>")[1].split("</versions>")[0]
+    assert versions.index("1.9.0") < versions.index("1.10.0")
+    assert versions.index("1.0.0-rc1") < versions.index("1.9.0")
+
+
+def test_maven_snapshot_protocol(base_url, pkg_user):
+    """SNAPSHOT：版本级 metadata 自动生成 + 时间戳文件名解析 + 非时间戳兜底。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    base = f"{base_url}/api/packages/maven/{username}"
+    grp = f"com/snap{uuid.uuid4().hex[:4]}"
+    art = "mylib"
+    # 上传时间戳制品（maven deploy 实际写法）
+    ts_jar = f"{art}-1.0.0-20260908.101010-1.jar"
+    requests.put(f"{base}/{grp}/{art}/1.0.0-SNAPSHOT/{ts_jar}", data=b"jar-ts", headers=h, timeout=10)
+    requests.put(f"{base}/{grp}/{art}/1.0.0-SNAPSHOT/{art}-1.0.0-20260908.101010-1.pom", data=b"<pom/>", headers=h, timeout=10)
+
+    # 版本级 metadata 自动生成
+    meta = requests.get(f"{base}/{grp}/{art}/1.0.0-SNAPSHOT/maven-metadata.xml", headers=h, timeout=10)
+    assert meta.status_code == 200
+    assert "<timestamp>20260908.101010</timestamp>" in meta.text
+    assert "<buildNumber>1</buildNumber>" in meta.text
+    assert f"<value>1.0.0-20260908.101010-1</value>" in meta.text
+
+    # 按时间戳文件名下载
+    r = requests.get(f"{base}/{grp}/{art}/1.0.0-SNAPSHOT/{ts_jar}", headers=h, timeout=10)
+    assert r.status_code == 200 and r.content == b"jar-ts"
+
+    # 非时间戳文件名兜底（老客户端）
+    r = requests.get(f"{base}/{grp}/{art}/1.0.0-SNAPSHOT/{art}-1.0.0-SNAPSHOT.jar", headers=h, timeout=10)
+    assert r.status_code == 200 and r.content == b"jar-ts"
+
+    # 校验和跟随时间戳文件
+    import hashlib
+    sha1 = requests.get(f"{base}/{grp}/{art}/1.0.0-SNAPSHOT/{ts_jar}.sha1", headers=h, timeout=10)
+    assert sha1.text.strip() == hashlib.sha1(b"jar-ts").hexdigest()
+
+
+def _make_crate(crate: str, cargo_toml: str) -> bytes:
+    """构造 .crate（gzip tar，内含 {crate}-0.1.0/Cargo.toml）。"""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        data = cargo_toml.encode()
+        ti = tarfile.TarInfo(f"{crate}-0.1.0/Cargo.toml")
+        ti.size = len(data)
+        tf.addfile(ti, io.BytesIO(data))
+    gzbuf = io.BytesIO()
+    with gzip.GzipFile(fileobj=gzbuf, mode="wb") as gz:
+        gz.write(buf.getvalue())
+    return gzbuf.getvalue()
+
+
+def test_cargo_index_deps_features(base_url, pkg_user):
+    """cargo 索引 deps/features 从 .crate 内 Cargo.toml 填充。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    crate = f"dpcrate{uuid.uuid4().hex[:6]}"
+    dep_crate = "serde"
+    toml = f"""[package]
+name = "{crate}"
+version = "0.1.0"
+
+[dependencies]
+{dep_crate} = {{ version = "1.0", features = ["derive"], optional = true, default-features = false }}
+rand = "0.8"
+
+[dev-dependencies]
+tempfile = "3.0"
+
+[features]
+default = ["std"]
+std = []
+"""
+    crate_bytes = _make_crate(crate, toml)
+    base = f"{base_url}/api/packages/cargo/{username}"
+    cksum = __import__("hashlib").sha256(crate_bytes).hexdigest()
+    meta = f'{{"name":"{crate}","vers":"0.1.0","deps":[],"cksum":"{cksum}","features":{{}}}}\n'.encode()
+    r = requests.put(f"{base}/api/v1/crates/new", data=meta + crate_bytes, headers=h, timeout=10)
+    assert r.status_code == 201
+
+    idx = requests.get(f"{base}/index/{crate[:2]}/{crate[2:4]}/{crate}", headers=h, timeout=10)
+    entry = json.loads(idx.text.splitlines()[0])
+    deps = {d["name"]: d for d in entry["deps"]}
+    assert deps[dep_crate]["req"] == "1.0"
+    assert deps[dep_crate]["features"] == ["derive"]
+    assert deps[dep_crate]["optional"] is True
+    assert deps[dep_crate]["default_features"] is False
+    assert deps["rand"]["req"] == "0.8"
+    assert "kind" not in deps["rand"]
+    assert deps["tempfile"]["kind"] == "dev"
+    assert entry["features"] == {"default": ["std"], "std": []}
+
+
+def test_go_upload_streaming_large_module(base_url, pkg_user):
+    """go module zip 流式落盘：较大 zip 上传/下载内容一致。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    module = f"example.com/{username}/biglib"
+    import os as _os
+    zip_data = _zip_bytes({
+        "biglib@v1.2.0/go.mod": b"module example.com/biglib\n",
+        "biglib@v1.2.0/big.bin": _os.urandom(8 << 20),  # 8MB
+    })
+    r = requests.put(
+        f"{base_url}/api/packages/go/{username}/{module}/@v/v1.2.0.zip",
+        data=zip_data, headers=h, timeout=60,
+    )
+    assert r.status_code == 201
+    got = requests.get(f"{base_url}/api/packages/go/{username}/{module}/@v/v1.2.0.zip", headers=h, timeout=60)
+    assert got.content == zip_data
+
+
+def _make_wheel(pkg: str, requires_python: str) -> bytes:
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(
+            f"{pkg}-1.0.0.dist-info/METADATA",
+            f"Metadata-Version: 2.1\nName: {pkg}\nVersion: 1.0.0\nRequires-Python: {requires_python}\n",
+        )
+    return buf.getvalue()
+
+
+def test_pypi_simple_data_attributes(base_url, pkg_user):
+    """pypi simple 链接带 data-requires-python 与 data-hashes（hash-checking 模式）。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"rp_{uuid.uuid4().hex[:8]}"
+    wheel = _make_wheel(pkg, ">=3.9")
+    import hashlib
+    requests.post(
+        f"{base_url}/api/packages/pypi/{username}/",
+        data={"name": pkg, "version": "1.0.0"},
+        files={"content": (f"{pkg}-1.0.0-py3-none-any.whl", wheel)},
+        headers=h, timeout=10,
+    )
+    proj = requests.get(f"{base_url}/api/packages/pypi/{username}/simple/{pkg}/", headers=h, timeout=10)
+    assert 'data-requires-python="&gt;=3.9"' in proj.text
+    assert f'data-hashes="sha256={hashlib.sha256(wheel).hexdigest()}"' in proj.text

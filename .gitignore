@@ -16,6 +16,7 @@ backend/internal/api/docs/swagger.yaml
 
 # local todo list (do not commit)
 todo.md
+next.md
 
 # python (uv) api tests
 tests/.venv/

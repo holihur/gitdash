@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -28,6 +29,7 @@ type Package struct {
 	Downloads int64  `json:"downloads"`
 	Yanked    bool   `json:"yanked"`
 	Uploader  string `json:"uploader"`
+	Meta      string `json:"meta,omitempty"` // 生态相关扩展元数据（JSON/文本），如 cargo deps/features、pypi Requires-Python
 	CreatedAt string `json:"created_at"`
 }
 
@@ -44,6 +46,7 @@ type packageRow struct {
 	Downloads int64  `gorm:"not null;default:0"`
 	Yanked    bool   `gorm:"not null;default:false"`
 	Uploader  string `gorm:"not null;size:255"`
+	Meta      string `gorm:"not null;default:'';size:8192"`
 	BlobPath  string `gorm:"column:blob_path;not null;default:'';size:512"`
 	Content   []byte `gorm:"not null;default:''"`
 	CreatedAt string `gorm:"not null"`
@@ -150,7 +153,7 @@ func packageFromRow(row packageRow) Package {
 	return Package{
 		ID: row.ID, Owner: row.Owner, Repo: row.Repo, Type: row.Type, Name: row.Name,
 		Version: row.Version, Filename: row.Filename, Size: row.Size, Checksum: row.Checksum,
-		Downloads: row.Downloads, Yanked: row.Yanked, Uploader: row.Uploader, CreatedAt: row.CreatedAt,
+		Downloads: row.Downloads, Yanked: row.Yanked, Uploader: row.Uploader, Meta: row.Meta, CreatedAt: row.CreatedAt,
 	}
 }
 
@@ -164,10 +167,52 @@ func (s *Store) CreatePackage(p *Package, content []byte) error {
 	row := packageRow{
 		Owner: p.Owner, Repo: p.Repo, Type: p.Type, Name: p.Name, Version: p.Version,
 		Filename: p.Filename, Size: int64(len(content)), Checksum: sha, Uploader: p.Uploader,
-		BlobPath: blobPath, Content: content, CreatedAt: now(),
+		Meta: p.Meta, BlobPath: blobPath, Content: content, CreatedAt: now(),
 	}
 	if blobPath != "" {
 		row.Content = []byte{} // 内容已落盘，DB 只存元数据
+	}
+	if err := s.db.Create(&row).Error; err != nil {
+		if isUniqueErr(err) {
+			return ErrExists
+		}
+		return err
+	}
+	*p = packageFromRow(row)
+	return nil
+}
+
+// CreatePackageFromFile 流式创建包文件：从临时文件流式计算 sha256 并 rename 进
+// 内容寻址 blob 存储，避免大文件全量读入内存。成功后临时文件会被移走或删除。
+func (s *Store) CreatePackageFromFile(p *Package, tmpPath string) error {
+	f, err := os.Open(tmpPath)
+	if err != nil {
+		return err
+	}
+	h := sha256.New()
+	size, err := io.Copy(h, f)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	sha := hex.EncodeToString(h.Sum(nil))
+	blobPath := blobFile(sha)
+	if blobPath != "" {
+		if err := os.MkdirAll(filepath.Dir(blobPath), 0o755); err != nil {
+			return err
+		}
+		if _, statErr := os.Stat(blobPath); statErr == nil {
+			_ = os.Remove(tmpPath) // 同内容 blob 已存在
+		} else if err := os.Rename(tmpPath, blobPath); err != nil {
+			return err
+		}
+	}
+	row := packageRow{
+		Owner: p.Owner, Repo: p.Repo, Type: p.Type, Name: p.Name, Version: p.Version,
+		Filename: p.Filename, Size: size, Checksum: sha, Uploader: p.Uploader, Meta: p.Meta,
+		BlobPath: blobPath, CreatedAt: now(),
 	}
 	if err := s.db.Create(&row).Error; err != nil {
 		if isUniqueErr(err) {
