@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { BadgeCheck, Cpu, Copy, KeyRound, ShieldCheck, ShieldOff, Trash2, UserRound } from "lucide-react";
@@ -529,9 +530,14 @@ function RunnersSection() {
             </CardTitle>
             <CardDescription className="mt-1">{t("runner.hint")}</CardDescription>
           </div>
-          <Button size="sm" variant="outline" disabled={busy} onClick={issue}>
-            {t("runner.issueToken")}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/runners">{t("runnerGuide.title")}</Link>
+            </Button>
+            <Button size="sm" variant="outline" disabled={busy} onClick={issue}>
+              {t("runner.issueToken")}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

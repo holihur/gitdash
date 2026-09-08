@@ -1,6 +1,9 @@
 # gitdash Windows one-line installer
 #
-#   irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1 | iex
+# Server CLI:
+#   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1)))
+# Self-hosted CI runner:
+#   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) runner
 #
 # Environment variables:
 #   GITDASH_VERSION      pin a version (e.g. v0.1.0), defaults to latest release
@@ -9,7 +12,7 @@
 $ErrorActionPreference = "Stop"
 
 $Repo = "holihur/gitdash"
-$BinName = "gitdash.exe"
+if ($args.Count -gt 0 -and $args[0] -eq "runner") { $BinName = "gitdash-runner.exe" } else { $BinName = "gitdash.exe" }
 $Version = $env:GITDASH_VERSION
 $InstallDir = if ($env:GITDASH_INSTALL_DIR) { $env:GITDASH_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\gitdash" }
 

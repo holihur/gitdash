@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # gitdash 一键安装脚本
 #
-#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash           # 安装 gitdash 服务端 CLI
+#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- runner  # 安装自托管 CI runner
 #
 # 环境变量:
 #   GITDASH_VERSION      指定版本 (如 v0.1.0)，默认最新 release
@@ -9,7 +10,11 @@
 set -euo pipefail
 
 REPO="holihur/gitdash"
-BIN_NAME="gitdash"
+if [ "${1:-}" = "runner" ]; then
+  BIN_NAME="gitdash-runner"
+else
+  BIN_NAME="gitdash"
+fi
 INSTALL_DIR="${GITDASH_INSTALL_DIR:-}"
 VERSION="${GITDASH_VERSION:-}"
 
