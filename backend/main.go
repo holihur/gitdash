@@ -137,6 +137,16 @@ func run() {
 			} else if n > 0 {
 				log.Printf("mfa-challenge cleanup: removed %d expired challenges", n)
 			}
+			if n, err := st.PruneSessions(); err != nil {
+				log.Printf("session cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("session cleanup: removed %d expired sessions", n)
+			}
+			if n, err := st.PruneNotifications(90 * 24 * time.Hour); err != nil {
+				log.Printf("notification cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("notification cleanup: removed %d old read notifications", n)
+			}
 			time.Sleep(time.Hour)
 		}
 	}()

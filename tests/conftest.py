@@ -208,3 +208,20 @@ def repo_factory(user_factory):
             client.delete(f"/repos/{name}", expect=204)
         except Exception:
             pass
+
+
+# ---- admin 面板 fixture（test_admin / test_gdpr 共用）----
+
+@pytest.fixture(scope="session")
+def admin(base_url):
+    from conftest import ApiClient
+
+    c = ApiClient(base_url)
+    r = c.post("/admin/login",
+               json={"username": "gitdash-admin", "password": "admin-test-pass-123456"})
+    if r.status_code == 404:
+        pytest.skip("admin panel disabled on this instance")
+    assert r.status_code == 200, r.text
+    yield c
+
+

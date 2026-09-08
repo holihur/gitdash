@@ -196,6 +196,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/auth/mfa-verify", a.mfaVerify)
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))
 	mux.HandleFunc("GET /api/me", a.auth(a.me))
+	mux.HandleFunc("GET /api/me/export", a.auth(a.exportMe))
 
 	// user profile & mfa
 	mux.HandleFunc("POST /api/me/password", a.auth(a.changePassword))

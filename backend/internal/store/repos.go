@@ -122,6 +122,11 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			{&collabRow{}, "owner = ? AND repo = ?"},
 			{&webhookRow{}, "owner = ? AND repo = ?"},
 			{&pullRequestRow{}, "owner = ? AND repo = ?"},
+			{&commentRow{}, "owner = ? AND repo = ?"},
+			{&pullReviewRow{}, "owner = ? AND repo = ?"},
+			{&releaseRow{}, "owner = ? AND repo = ?"},
+			{&releaseAssetRow{}, "owner = ? AND repo = ?"},
+			{&branchProtectionRow{}, "owner = ? AND repo = ?"},
 			{&pipelineCfgRow{}, "owner = ? AND repo = ?"},
 			{&pipelineRunRow{}, "owner = ? AND repo = ?"},
 		}
@@ -129,6 +134,13 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			if err := tx.Where(d.cond, owner, name).Delete(d.model).Error; err != nil {
 				return err
 			}
+		}
+		// webhook 投递记录按 hook_id 关联，需在 hooks 删除前用子查询清理
+		if err := tx.Exec(
+			"DELETE FROM webhook_deliveries WHERE hook_id IN (SELECT id FROM webhooks WHERE owner = ? AND repo = ?)",
+			owner, name,
+		).Error; err != nil {
+			return err
 		}
 		res := tx.Where("owner = ? AND name = ?", owner, name).Delete(&repoRow{})
 		if res.Error != nil {

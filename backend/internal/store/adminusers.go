@@ -59,6 +59,35 @@ func (s *Store) AdminDeleteUser(username string) error {
 				return err
 			}
 		}
+		// 名下 packages（含文件 blob 路径引用；blob 为内容寻址、不含个人信息）
+		if err := tx.Where("owner = ?", username).Delete(&packageRow{}).Error; err != nil {
+			return err
+		}
+		// 登录限速记录（key 形如 "username|ip"）
+		if err := tx.Where("`key` LIKE ?", username+"|%").Delete(&loginFailRow{}).Error; err != nil {
+			return err
+		}
+		// 被遗忘权：他人仓库中该用户的作者身份匿名化（内容保留以维持协作历史）
+		const ghost = "deleted-user"
+		anon := []struct {
+			model any
+			cond  string
+			field string
+		}{
+			{&issueRow{}, "author = ?", "author"},
+			{&commentRow{}, "author = ?", "author"},
+			{&pullRequestRow{}, "author = ?", "author"},
+			{&pullRequestRow{}, "merged_by = ?", "merged_by"},
+			{&pullReviewRow{}, "reviewer = ?", "reviewer"},
+			{&releaseRow{}, "author = ?", "author"},
+			{&pipelineRunRow{}, "trigger_by = ?", "trigger_by"},
+			{&notificationRow{}, "actor = ?", "actor"},
+		}
+		for _, a := range anon {
+			if err := tx.Model(a.model).Where(a.cond, username).Update(a.field, ghost).Error; err != nil {
+				return err
+			}
+		}
 		return tx.Delete(&userRow{}, u.ID).Error
 	})
 }

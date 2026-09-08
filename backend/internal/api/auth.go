@@ -220,6 +220,26 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// exportMe 导出本人全部个人数据（GDPR Art. 20 data portability）。
+//
+//	@Summary     导出个人数据
+//	@Description 以 JSON 附件形式下载本账号在实例上的个人数据与自产内容。
+//	@Tags        users
+//	@Produce     json
+//	@Success     200 {object} store.UserExport
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /me/export [get]
+func (a *API) exportMe(w http.ResponseWriter, r *http.Request) {
+	data, err := a.store.ExportUserData(userFrom(r))
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	w.Header().Set("Content-Disposition", `attachment; filename="gitdash-export.json"`)
+	writeJSON(w, http.StatusOK, data)
+}
+
 // updateProfile 更新个人资料（邮箱与邮件通知开关；邮箱空串清除）。
 //
 //	@Summary     更新个人资料
