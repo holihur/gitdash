@@ -25,7 +25,8 @@ func TestRunHostStep(t *testing.T) {
 
 	SetHostAllowed(true)
 	defer SetHostAllowed(false)
-	if err := be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "echo $GREETING"}, "o", "r", "main", "abc", logSink); err != nil {
+	err = be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "echo $GREETING"}, "o", "r", "main", "abc", logSink)
+	if err != nil {
 		t.Fatalf("host step: %v", err)
 	}
 	if out := logSink.String(); !strings.Contains(out, "hi") {
