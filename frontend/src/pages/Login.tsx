@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Github, ShieldCheck } from "lucide-react";
-import { api, setToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
@@ -54,7 +54,6 @@ export default function Login({ onAuthed }: Props) {
 
   const finish = (r: { token?: string; username?: string }) => {
     if (!r.token || !r.username) return;
-    setToken(r.token);
     onAuthed(r.username);
     toast.success(t("login.welcomeBack", { name: r.username }));
     nav(safeRedirect());
