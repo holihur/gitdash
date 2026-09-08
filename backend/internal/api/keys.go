@@ -25,7 +25,7 @@ import (
 func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
 	keys, err := a.store.ListKeys(userFrom(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, keys)
@@ -71,7 +71,7 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, k)

@@ -31,12 +31,12 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pageParams(r)
 	issues, err := a.store.ListIssues(owner, name, limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	total, err := a.store.CountIssues(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	setTotal(w, total)
@@ -84,7 +84,7 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	issue, err := a.store.CreateIssue(owner, name, me, title, in.Body)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	a.notify(owner, name, "issue", "opened", me, issue.Number, issue.Title, "")
@@ -132,7 +132,7 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	issue, err := a.store.SetIssueState(owner, name, number, in.State)
@@ -141,7 +141,7 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	if prev.State != issue.State {
@@ -221,7 +221,7 @@ func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 	}
 	issue, err := a.store.GetPullIssue(owner, name, n)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
@@ -267,7 +267,7 @@ func (a *API) setIssueMilestone(w http.ResponseWriter, r *http.Request) {
 	}
 	issue, err := a.store.GetPullIssue(owner, name, n)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
@@ -290,7 +290,7 @@ func (a *API) listLabels(w http.ResponseWriter, r *http.Request) {
 	}
 	ls, err := a.store.ListLabels(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, ls)
@@ -345,7 +345,7 @@ func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, l)
@@ -396,7 +396,7 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 	}
 	cur, err := a.store.ListLabels(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	var curLabel *store.Label
@@ -423,7 +423,7 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, upd)
@@ -473,7 +473,7 @@ func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 	}
 	ms, err := a.store.ListMilestones(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, ms)
@@ -510,7 +510,7 @@ func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := a.store.CreateMilestone(owner, name, in.Title, strings.TrimSpace(in.Description))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, m)
@@ -558,7 +558,7 @@ func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, m)

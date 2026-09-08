@@ -31,7 +31,7 @@ func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	}
 	hooks, err := a.store.ListWebhooks(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, hooks)
@@ -83,7 +83,7 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, hk)
@@ -153,7 +153,7 @@ func (a *API) listWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, deliveries)

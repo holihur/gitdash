@@ -36,11 +36,11 @@ type builtinDockerExecutor struct{}
 func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, logSink io.Writer, progress func(int)) error {
 	be := &builtinDockerExecutor{}
 	for i, step := range cfg.Steps {
-		fmt.Fprintf(logSink, "\n==> [%d/%d] %s\n", i+1, len(cfg.Steps), step.Name)
+		_, _ = fmt.Fprintf(logSink, "\n==> [%d/%d] %s\n", i+1, len(cfg.Steps), step.Name)
 		if err := be.runStep(ctx, dir, cfg, step, job.Owner, job.Repo, job.Ref, job.SHA, logSink); err != nil {
 			return fmt.Errorf("step %q failed: %w", step.Name, err)
 		}
-		fmt.Fprintf(logSink, "<== %s ok\n", step.Name)
+		_, _ = fmt.Fprintf(logSink, "<== %s ok\n", step.Name)
 		if progress != nil {
 			progress(i + 1)
 		}
@@ -67,12 +67,12 @@ func (e *builtinDockerExecutor) Execute(ctx context.Context, job RunJob, cfg *Co
 
 	// checkout 触发提交到临时工作区
 	if out, err := gitsvc.GitOut("", "clone", "--quiet", gitsvc.RepoPath(owner, repo), tmp); err != nil {
-		return fmt.Errorf("clone repo: %v: %s", err, strings.TrimSpace(out))
+		return fmt.Errorf("clone repo: %w: %s", err, strings.TrimSpace(out))
 	}
 	if out, err := gitsvc.GitOut(tmp, "checkout", "--quiet", "--detach", sha); err != nil {
-		return fmt.Errorf("checkout %s: %v: %s", sha, err, strings.TrimSpace(out))
+		return fmt.Errorf("checkout %s: %w: %s", sha, err, strings.TrimSpace(out))
 	}
-	fmt.Fprintf(logSink, "workspace: checked out %s\n", sha)
+	_, _ = fmt.Fprintf(logSink, "workspace: checked out %s\n", sha)
 
 	return RunInWorkspace(ctx, job, cfg, tmp, logSink, progress)
 }

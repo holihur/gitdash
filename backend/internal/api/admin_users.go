@@ -28,7 +28,7 @@ func (a *API) adminListUsers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pageParams(r)
 	users, total, err := a.store.AdminListUsers(strings.TrimSpace(r.URL.Query().Get("q")), limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	setTotal(w, total)
@@ -73,7 +73,7 @@ func (a *API) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	u, err := a.store.CreateUser(username, string(hash))
@@ -82,12 +82,12 @@ func (a *API) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	if email != "" {
 		if err := a.store.SetUserEmail(username, email); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 			return
 		}
 		u.Email = email
@@ -122,7 +122,7 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	if err := a.store.UpdatePassword(username, string(hash)); err != nil {
@@ -130,12 +130,12 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 			writeNotFound(w, "user")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	// 重置后撤销该用户全部会话，强制重新登录
 	if err := a.store.DeleteSessionsExcept(username, ""); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	log.Printf("admin %q reset password of user %q", userFrom(r), username)
@@ -162,7 +162,7 @@ func (a *API) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 			writeNotFound(w, "user")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	log.Printf("admin %q deleted user %q", userFrom(r), username)

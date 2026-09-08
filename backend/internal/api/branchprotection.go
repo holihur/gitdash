@@ -26,7 +26,7 @@ func (a *API) listBranchProtections(w http.ResponseWriter, r *http.Request) {
 	}
 	prots, err := a.store.ListBranchProtections(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, prots)
@@ -65,7 +65,7 @@ func (a *API) setBranchProtection(w http.ResponseWriter, r *http.Request) {
 		MinApprovals: in.MinApprovals, BlockDeletion: in.BlockDeletion, BlockForcePush: in.BlockForcePush,
 	}
 	if err := a.store.SetBranchProtection(&bp); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, bp)

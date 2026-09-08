@@ -32,12 +32,12 @@ func (a *API) listPulls(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	pulls, err := a.store.ListPulls(owner, name, state, limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	total, err := a.store.CountPulls(owner, name, state)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	setTotal(w, total)
@@ -113,7 +113,7 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 	}
 	pr, err := a.store.CreatePull(owner, name, userFrom(r), in.Title, in.Body, in.SourceBranch, in.TargetBranch, baseSHA, srcSHA)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	a.notify(owner, name, "pull", "opened", userFrom(r), pr.Number, pr.Title, "")
@@ -156,7 +156,7 @@ func (a *API) getPullOr404(w http.ResponseWriter, owner, name, num string) (stor
 		return store.PullRequest{}, err
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return store.PullRequest{}, err
 	}
 	return pr, nil
@@ -304,7 +304,7 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 	}
 	merged, err := a.store.MarkPullMerged(owner, name, pr.Number, headSHA, userFrom(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	a.notify(owner, name, "pull", "merged", userFrom(r), merged.Number, merged.Title, "")
@@ -345,7 +345,7 @@ func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
 	}
 	updated, err := a.store.SetPullState(owner, name, pr.Number, in.State)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	// 状态未变化（如重复 close）不重复发通知

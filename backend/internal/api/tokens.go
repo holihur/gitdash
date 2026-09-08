@@ -22,12 +22,12 @@ import (
 func (a *API) listTokens(w http.ResponseWriter, r *http.Request) {
 	uid, err := a.store.UserID(userFrom(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	pats, err := a.store.ListPATs(uid)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, pats)
@@ -68,12 +68,12 @@ func (a *API) createTokens(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := a.store.UserID(userFrom(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	token, pat, err := a.store.CreatePAT(uid, in.Name, scopeStr)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, store.CreatedPAT{Token: token, PAT: pat})
@@ -100,7 +100,7 @@ func (a *API) deleteToken(w http.ResponseWriter, r *http.Request) {
 	}
 	uid, err := a.store.UserID(userFrom(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	if errors.Is(a.store.DeletePAT(uid, id), store.ErrNotFound) {

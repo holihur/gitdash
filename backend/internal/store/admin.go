@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"time"
 
 	"gorm.io/gorm/clause"
@@ -113,4 +114,68 @@ func (s *Store) TakeOAuthState(state, nowStr string) (bool, error) {
 func (s *Store) PruneOAuthStates(nowStr string) (int64, error) {
 	res := s.db.Where("\"key\" LIKE 'oauth_state:%' AND value < ?", nowStr).Delete(&settingRow{})
 	return res.RowsAffected, res.Error
+}
+
+// ---- MFA 二次验证 challenge（持久化：重启 / 多实例下 mfa-verify 仍有效）----
+
+type mfaChallengeData struct {
+	Username string `json:"u"`
+	Expires  string `json:"e"`
+	Attempts int    `json:"a"`
+}
+
+// PutMFAChallenge 写入待二次验证的登录 challenge。
+func (s *Store) PutMFAChallenge(token, username, expiresAt string) error {
+	v, err := json.Marshal(mfaChallengeData{Username: username, Expires: expiresAt})
+	if err != nil {
+		return err
+	}
+	return s.SetSetting("mfa_challenge:"+token, string(v))
+}
+
+// GetMFAChallenge 读取 challenge（不消费）；不存在返回 ErrNotFound。
+func (s *Store) GetMFAChallenge(token string) (username, expiresAt string, attempts int, err error) {
+	v := s.GetSetting("mfa_challenge:" + token)
+	if v == "" {
+		return "", "", 0, ErrNotFound
+	}
+	var d mfaChallengeData
+	if err := json.Unmarshal([]byte(v), &d); err != nil {
+		return "", "", 0, err
+	}
+	return d.Username, d.Expires, d.Attempts, nil
+}
+
+// SaveMFAChallenge 更新 challenge 的失败尝试次数。
+func (s *Store) SaveMFAChallenge(token, username, expiresAt string, attempts int) error {
+	v, err := json.Marshal(mfaChallengeData{Username: username, Expires: expiresAt, Attempts: attempts})
+	if err != nil {
+		return err
+	}
+	return s.SetSetting("mfa_challenge:"+token, string(v))
+}
+
+// DeleteMFAChallenge 删除 challenge（校验通过 / 过期 / 尝试超限时调用）。
+func (s *Store) DeleteMFAChallenge(token string) error {
+	return s.db.Where("\"key\" = ?", "mfa_challenge:"+token).Delete(&settingRow{}).Error
+}
+
+// PruneMFAChallenges 删除已过期的 MFA challenge，返回清理条数。
+func (s *Store) PruneMFAChallenges(nowStr string) (int64, error) {
+	// settings 表的 value 是 JSON（含 "e":"<expires>"），过期判断需在应用层做
+	var rows []settingRow
+	if err := s.db.Where("\"key\" LIKE 'mfa_challenge:%'").Find(&rows).Error; err != nil {
+		return 0, err
+	}
+	var pruned int64
+	for _, row := range rows {
+		var d mfaChallengeData
+		if json.Unmarshal([]byte(row.Value), &d) != nil || d.Expires <= nowStr {
+			if err := s.db.Where("\"key\" = ?", row.Key).Delete(&settingRow{}).Error; err != nil {
+				return pruned, err
+			}
+			pruned++
+		}
+	}
+	return pruned, nil
 }

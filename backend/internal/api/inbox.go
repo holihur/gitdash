@@ -28,12 +28,12 @@ func (a *API) listInbox(w http.ResponseWriter, r *http.Request) {
 	}
 	items, err := a.store.ListNotifications(me, limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	total, err := a.store.CountNotifications(me)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	setTotal(w, total)
@@ -52,7 +52,7 @@ func (a *API) inboxUnread(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	n, err := a.store.UnreadNotifications(me)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"count": n})
@@ -79,7 +79,7 @@ func (a *API) inboxReadOne(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusNotFound, "notification_not_found", "notification not found")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -96,7 +96,7 @@ func (a *API) inboxReadOne(w http.ResponseWriter, r *http.Request) {
 func (a *API) inboxReadAll(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	if err := a.store.MarkAllNotificationsRead(me); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -122,7 +122,7 @@ func (a *API) deleteInbox(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusNotFound, "notification_not_found", "notification not found")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

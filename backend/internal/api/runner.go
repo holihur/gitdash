@@ -54,7 +54,7 @@ func (a *API) createRunnerToken(w http.ResponseWriter, r *http.Request) {
 	}
 	token, dto, err := a.store.CreateRunnerToken(scope)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -68,7 +68,7 @@ func (a *API) createRunnerToken(w http.ResponseWriter, r *http.Request) {
 func (a *API) createGlobalRunnerToken(w http.ResponseWriter, r *http.Request) {
 	token, dto, err := a.store.CreateRunnerToken("")
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	log.Printf("runner audit: GLOBAL TOKEN issued by admin time=%s", time.Now().UTC().Format(time.RFC3339))
@@ -127,7 +127,7 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	secret := hex.EncodeToString(raw)
@@ -137,7 +137,7 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusConflict, "name_taken", "runner name already registered")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	log.Printf("runner audit: REGISTER runner=%s scope=%q time=%s", in.Name, scope, time.Now().UTC().Format(time.RFC3339))
@@ -161,7 +161,7 @@ func (a *API) listRunners(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	orgs, err := a.store.MyOwnedOrgs(me)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	scopes := make([]string, 0, len(orgs)+1)
@@ -171,7 +171,7 @@ func (a *API) listRunners(w http.ResponseWriter, r *http.Request) {
 	}
 	runners, err := a.store.ListRunnersByScopes(scopes)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	// 附上实时在线状态（Redis lastseen）
@@ -197,7 +197,7 @@ func (a *API) deleteRunner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.DeleteRunner(name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	log.Printf("runner audit: DELETE runner=%s by=%s time=%s", name, me, time.Now().UTC().Format(time.RFC3339))
@@ -221,7 +221,7 @@ func (a *API) runnerScopeAllowed(me, scope string) bool {
 func (a *API) adminListRunners(w http.ResponseWriter, r *http.Request) {
 	runners, err := a.store.ListAllRunners()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	for i := range runners {
@@ -251,10 +251,12 @@ func (a *API) runnerWS(w http.ResponseWriter, r *http.Request) {
 }
 
 type (
+	//nolint:unused // 仅供 swagger @Param 注解引用
 	createRunnerTokenReq struct {
 		Scope string `json:"scope"`
 		Org   string `json:"org"`
 	}
+	//nolint:unused // 仅供 swagger @Param 注解引用
 	registerRunnerReq struct {
 		Name   string   `json:"name"`
 		Labels []string `json:"labels"`

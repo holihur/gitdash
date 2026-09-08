@@ -64,17 +64,17 @@ func (a *API) globalSearch(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	repos, err := a.store.SearchRepos(q, limit)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	issues, err := a.store.SearchIssues(q, userFrom(r), limit)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	users, err := a.store.SearchUsers(q, limit)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"repos": repos, "issues": issues, "users": users})

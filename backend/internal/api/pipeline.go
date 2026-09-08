@@ -26,7 +26,7 @@ func (a *API) getPipeline(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := a.store.GetPipeline(owner, name)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -59,7 +59,7 @@ func (a *API) setPipeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.SetPipeline(owner, name, in.Enabled); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"enabled": in.Enabled})
@@ -84,7 +84,7 @@ func (a *API) listPipelineRuns(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	runs, err := a.store.ListPipelineRuns(owner, name, limit)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, runs)
@@ -198,7 +198,7 @@ func (a *API) createPipelineRun(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusTooManyRequests, "too_many_runs", "too many active pipeline runs")
 		return
 	case err != nil:
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, run)

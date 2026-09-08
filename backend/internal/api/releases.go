@@ -46,7 +46,7 @@ func (a *API) listReleases(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pageParams(r)
 	rels, total, err := a.store.ListReleases(owner, name, limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	setTotal(w, total)
@@ -97,7 +97,7 @@ func (a *API) createRelease(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusConflict, "release_exists", "release already exists for tag "+in.TagName)
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, rel)
@@ -127,7 +127,7 @@ func (a *API) getRelease(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "release")
 		} else {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 		}
 		return
 	}
@@ -161,7 +161,7 @@ func (a *API) deleteRelease(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "release")
 		} else {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 		}
 		return
 	}
@@ -175,7 +175,7 @@ func (a *API) getReleaseOr404(w http.ResponseWriter, owner, name, tag string) (s
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "release")
 		} else {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 		}
 		return store.Release{}, false
 	}
@@ -245,7 +245,7 @@ func (a *API) uploadAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	count, err := a.store.CountAssets(rel.ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	if count > 0 && count >= maxAssetsPerRelease {
@@ -261,7 +261,7 @@ func (a *API) uploadAsset(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusConflict, "asset_exists", "asset already exists: "+filename)
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, asset)
@@ -291,7 +291,7 @@ func (a *API) listAssets(w http.ResponseWriter, r *http.Request) {
 	}
 	assets, err := a.store.ListAssets(owner, name, rel.ID)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, assets)
@@ -330,7 +330,7 @@ func (a *API) downloadAsset(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "asset")
 		} else {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 		}
 		return
 	}
@@ -372,7 +372,7 @@ func (a *API) deleteAsset(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "asset")
 		} else {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 		}
 		return
 	}

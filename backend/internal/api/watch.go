@@ -35,7 +35,7 @@ func (a *API) watchRepo(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	if !a.store.IsWatching(me, owner, name) {
 		if err := a.store.WatchRepo(me, owner, name); err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
+			internalError(w, err)
 			return
 		}
 	}
@@ -49,7 +49,7 @@ func (a *API) unwatchRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	me := userFrom(r)
 	if err := a.store.UnwatchRepo(me, owner, name); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	a.writeWatchState(w, owner, name, me)
@@ -67,7 +67,7 @@ func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	repos, err := a.store.WatchedRepos(me)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	a.attachStars(repos, me)

@@ -132,6 +132,11 @@ func run() {
 			} else if n > 0 {
 				log.Printf("oauth-state cleanup: removed %d expired states", n)
 			}
+			if n, err := st.PruneMFAChallenges(time.Now().UTC().Format(time.RFC3339)); err != nil {
+				log.Printf("mfa-challenge cleanup: %v", err)
+			} else if n > 0 {
+				log.Printf("mfa-challenge cleanup: removed %d expired challenges", n)
+			}
 			time.Sleep(time.Hour)
 		}
 	}()

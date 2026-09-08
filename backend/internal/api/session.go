@@ -141,16 +141,16 @@ func newSessionToken() (string, error) {
 func (a *API) startSession(w http.ResponseWriter, r *http.Request, status int, username string) {
 	ua, err := a.store.GetByUsername(username)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	token, err := newSessionToken()
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	if err := a.store.CreateSession(token, ua.ID); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	a.setSessionCookie(w, r, token)

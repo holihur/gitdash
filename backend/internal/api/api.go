@@ -72,9 +72,8 @@ type API struct {
 	// EmailSender 由 main 注入（nil = SMTP 未配置，邮箱验证降级为直接视为已验证）
 	emailSender *notify.Sender
 
-	mu         sync.Mutex
-	mfaPending map[string]mfaChallenge // mfa_token -> 待二次验证的登录
-	// OAuth/OIDC state 存 settings 表（PutOAuthState/TakeOAuthState），重启与多实例下均有效
+	// MFA challenge 与 OAuth/OIDC state 均存 settings 表
+	// （PutMFAChallenge/PutOAuthState），重启与多实例下均有效
 
 	gpgMu     sync.Mutex
 	gpgKeys   []gpgsig.Key
@@ -125,18 +124,11 @@ const (
 	loginWindow   = 15 * time.Minute
 )
 
-type mfaChallenge struct {
-	username string
-	expires  time.Time
-	attempts int
-}
-
 func New(s *store.Store, version string) *API {
 	return &API{
-		store:      s,
-		version:    version,
-		sshPort:    "2222",
-		mfaPending: map[string]mfaChallenge{},
+		store:   s,
+		version: version,
+		sshPort: "2222",
 	}
 }
 
@@ -632,6 +624,14 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
+// internalError 记录内部错误细节到日志，对外只返回通用文案，避免
+// GORM/驱动/文件系统错误（表结构、路径等）泄漏进 HTTP 响应。
+// 请求上下文（方法/路径/状态码）由 logMiddleware 统一记录。
+func internalError(w http.ResponseWriter, err error) {
+	log.Printf("internal error: %v", err)
+	writeCode(w, http.StatusInternalServerError, "internal_error", "internal server error")
+}
+
 // writeCode 返回带稳定错误码的错误（前端可据此 i18n；message 为英文兜底文案）
 
 func writeCode(w http.ResponseWriter, status int, code, msg string) {
@@ -664,7 +664,7 @@ func (a *API) resolveTarget(w http.ResponseWriter, r *http.Request) (string, str
 			if errors.Is(err, store.ErrNotFound) {
 				writeNotFound(w, "repo")
 			} else {
-				writeErr(w, http.StatusInternalServerError, err.Error())
+				internalError(w, err)
 			}
 			return "", "", false
 		}

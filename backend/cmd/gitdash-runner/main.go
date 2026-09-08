@@ -111,7 +111,6 @@ func cmdRegister() {
 	if err != nil {
 		log.Fatalf("register: %v", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
 	var out struct {
 		Runner struct {
 			Name   string   `json:"name"`
@@ -123,7 +122,9 @@ func cmdRegister() {
 		Error  string `json:"error"`
 		Code   string `json:"code"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || resp.StatusCode >= 300 {
+	decodeErr := json.NewDecoder(resp.Body).Decode(&out)
+	_ = resp.Body.Close()
+	if decodeErr != nil || resp.StatusCode >= 300 {
 		log.Fatalf("register failed: status=%d err=%s", resp.StatusCode, out.Error)
 	}
 	if err := saveConfig(config{Server: *server, Name: out.Runner.Name, Secret: out.Secret, Labels: labelsOut, Concurrency: 2}); err != nil {
@@ -176,12 +177,14 @@ func cmdRun() {
 func (a *agent) session(ctx context.Context) error {
 	wsCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	ws, _, err := websocket.Dial(wsCtx, wsURL(a.cfg.Server), &websocket.DialOptions{
+	ws, wresp, err := websocket.Dial(wsCtx, wsURL(a.cfg.Server), &websocket.DialOptions{ //nolint:bodyclose // coder/websocket 的 resp.Body 由连接自身管理
 		HTTPHeader: map[string][]string{"Authorization": {"Bearer " + a.cfg.Name + ":" + a.cfg.Secret}},
 	})
 	if err != nil {
 		return err
 	}
+	_ = wresp // coder/websocket v1.8: 成功握手时 resp 非 nil，Body 由连接管理，不应外部关闭
+
 	a.conn = ws
 	defer func() { _ = ws.Close(websocket.StatusNormalClosure, "") }()
 	log.Printf("gitdash-runner %s 已连接 %s", version, a.cfg.Server)

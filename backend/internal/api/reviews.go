@@ -62,7 +62,7 @@ func (a *API) createReview(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	review, err := a.store.CreateReview(owner, name, pr.Number, me, in.State, in.Body, commitSHA)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	// 关注者通知 + webhook 事件（review:state）
@@ -106,7 +106,7 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 	}
 	reviews, summary, err := a.store.ListReviews(owner, name, pr.Number)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	resp := map[string]any{"reviews": reviews, "summary": summary}

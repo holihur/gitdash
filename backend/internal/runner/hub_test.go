@@ -76,13 +76,14 @@ func TestHubDispatchAndHeartbeat(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/runner/ws"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+	ws, wresp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{ //nolint:bodyclose // coder/websocket 的 resp.Body 由连接自身管理
 		HTTPHeader: map[string][]string{"Authorization": {"Bearer agent-1:sec-1"}},
 	})
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
 	defer func() { _ = ws.Close(websocket.StatusNormalClosure, "") }()
+	_ = wresp // coder/websocket v1.8: 成功握手时 resp 非 nil，Body 由连接管理，不应外部关闭
 
 	send := func(msg Message) {
 		t.Helper()
@@ -167,14 +168,19 @@ func TestHubRejectsBadSecret(t *testing.T) {
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/runner/ws"
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+	_, wresp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
 		HTTPHeader: map[string][]string{"Authorization": {"Bearer agent-2:wrong"}},
 	})
 	if err == nil {
 		t.Fatal("bad secret should be rejected")
 	}
-	if resp != nil && resp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want 401", resp.StatusCode)
+	if wresp != nil {
+		_ = wresp.Body.Close()
+		if wresp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401", wresp.StatusCode)
+		}
+	} else {
+		t.Fatal("bad secret should be rejected with a response")
 	}
 }
 

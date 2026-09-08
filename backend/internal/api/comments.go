@@ -45,7 +45,7 @@ func (a *API) listComments(w http.ResponseWriter, r *http.Request, kind string) 
 	limit, offset := pageParams(r)
 	comments, err := a.store.ListComments(owner, name, kind, number, limit, offset)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, comments)
@@ -117,7 +117,7 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 	}
 	comment, err := a.store.CreateComment(owner, name, kind, number, me, body, inline)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	// 通知关注者（issue/PR 作者与 watcher），不通知评论者本人；评论摘要截断到 200 字符
@@ -165,7 +165,7 @@ func (a *API) deleteComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.DeleteComment(owner, name, id); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

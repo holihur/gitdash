@@ -38,7 +38,7 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, o)
@@ -55,7 +55,7 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 func (a *API) listOrgs(w http.ResponseWriter, r *http.Request) {
 	orgs, err := a.store.ListMyOrgs(userFrom(r))
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	out := []map[string]any{}
@@ -110,7 +110,7 @@ func (a *API) deleteOrg(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusConflict, "org_not_empty", "delete or move all repositories before deleting the organization")
 			return
 		}
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -134,7 +134,7 @@ func (a *API) listOrgMembers(w http.ResponseWriter, r *http.Request) {
 	}
 	members, err := a.store.OrgMembers(org)
 	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, members)
@@ -179,7 +179,7 @@ func (a *API) addOrgMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.AddOrgMember(org, in.Username, in.Role); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
+		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"org": org, "username": in.Username, "role": in.Role})
