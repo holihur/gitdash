@@ -20,6 +20,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Admin panel**: admin users, settings (OAuth providers), password management
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings
 - **Code browsing**: browse repos by branch / directory, view file contents, commit history and blame on the web
+- **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust) and Maven (Java) under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md)
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
 - **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection) — see [docs/runners.md](docs/runners.md)

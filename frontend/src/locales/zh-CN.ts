@@ -18,6 +18,7 @@ export const zhCN: Messages = {
     keys: "SSH Keys",
     orgs: "组织",
     runners: "Runner",
+    packages: "包仓库",
   },
   common: {
     name: "名称",
@@ -767,5 +768,20 @@ export const zhCN: Messages = {
     import_failed: "导入失败",
     mirror_not_configured: "未配置镜像目标",
     mirror_sync_failed: "同步失败",
+  },
+  packages: {
+    title: "包仓库",
+    subtitle:
+      "发布在你命名空间下的私有包（npm / composer / pypi / rubygems / go / cargo / maven）。客户端配置见 docs/packages.zh-CN.md。",
+    all: "全部",
+    type: "类型",
+    version: "最新版本",
+    size: "大小",
+    downloads: "下载次数",
+    empty: "还没有包 —— 用你喜欢的包管理器发布一个吧。",
+    deleted: "包已删除",
+    deleteTitle: "删除包",
+    deleteDesc: "删除 {name} 及其全部版本？",
+    audit: "最近操作",
   },
 };

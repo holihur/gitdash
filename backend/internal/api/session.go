@@ -93,7 +93,8 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// resolveUser 解析请求身份：Bearer/cookie → 登录 session；否则尝试 PAT。
+// resolveUser 解析请求身份：Bearer/cookie → 登录 session；否则尝试 PAT；
+// 再否则尝试 Basic（密码作为 PAT 或 session token，用户名须与 token 归属一致）。
 // 返回 (username, scopes, isPAT)；未认证返回 ("", nil, false)。
 func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	tok := bearerToken(r)
@@ -103,6 +104,20 @@ func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 		}
 	}
 	if tok == "" {
+		if user, pass, ok := r.BasicAuth(); ok && pass != "" {
+			if name, scopes, err := a.store.ValidatePAT(pass); err == nil {
+				if user == "" || user == name {
+					return name, scopes, true
+				}
+				return "", nil, false
+			}
+			if name, err := a.store.GetSession(pass); err == nil {
+				if user == "" || user == name {
+					return name, nil, false
+				}
+			}
+			return "", nil, false
+		}
 		return "", nil, false
 	}
 	username, err := a.store.GetSession(tok)

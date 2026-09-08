@@ -33,6 +33,32 @@ export interface User {
   email_verified?: boolean;
 }
 
+export interface PackageEntry {
+  id: number;
+  owner: string;
+  repo?: string;
+  type: string;
+  name: string;
+  version: string;
+  filename: string;
+  size: number;
+  checksum: string;
+  downloads: number;
+  uploader: string;
+  created_at: string;
+}
+
+export interface PackageAuditEntry {
+  id: number;
+  owner: string;
+  type: string;
+  name: string;
+  version: string;
+  action: string;
+  actor: string;
+  created_at: string;
+}
+
 export interface LoginResult {
   token?: string;
   username?: string;
@@ -938,4 +964,17 @@ export const api = {
   createPAT: (name: string, scopes: string[]) =>
     req<CreatedPAT>("/tokens", { method: "POST", body: JSON.stringify({ name, scopes }) }),
   deletePAT: (id: number) => req<null>(`/tokens/${id}`, { method: "DELETE" }),
+
+  // packages（私有包注册表）
+  listPackages: (owner: string, type?: string) =>
+    req<PackageEntry[]>(`/packages/${encodeURIComponent(owner)}${type ? `/${type}` : ""}`),
+  deletePackage: (type: string, owner: string, name: string) =>
+    req<null>(
+      `/packages/${encodeURIComponent(type)}/${encodeURIComponent(owner)}/${name
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`,
+      { method: "DELETE" },
+    ),
+  listPackageAudit: (owner: string) => req<PackageAuditEntry[]>(`/packages/${encodeURIComponent(owner)}/audit`),
 };

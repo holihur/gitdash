@@ -2235,6 +2235,528 @@ const docTemplate = `{
                 }
             }
         },
+        "/packages/cargo/{owner}/api/v1/crates/new": {
+            "put": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "cargo 发布",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank": {
+            "delete": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "cargo yank / unyank",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "crate 名",
+                        "name": "crate",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "版本",
+                        "name": "version",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/packages/cargo/{owner}/config.json": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "cargo config",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/packages/cargo/{owner}/index/{rest}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "cargo 索引",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "稀疏索引路径（最后一段为 crate 名）",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/packages/composer/{owner}/packages.json": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "composer 元数据",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/packages/composer/{owner}/{vendor}/{name}": {
+            "put": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "composer 上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "vendor",
+                        "name": "vendor",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "版本",
+                        "name": "version",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/packages/go/{owner}/{rest}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "go GOPROXY",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "{module}/@v/{file}",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "put": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "go 上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "{module}/@v/{version}.zip",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/packages/maven/{owner}/{rest}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "maven 下载",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "{group}/{artifact}/{version}/{filename}",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "put": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "maven 上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "{group}/{artifact}/{version}/{filename}",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/packages/npm/{owner}/{rest}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "npm 元数据 / tarball",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名 或 包名/-/文件名 或 dist-tags 路径",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "put": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "npm 发布 / dist-tag",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名（可含 @scope/）或 dist-tag 路径",
+                        "name": "rest",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/packages/pypi/{owner}/": {
+            "post": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "pypi 上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/packages/pypi/{owner}/pypi/{name}/json": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "pypi JSON API",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/packages/pypi/{owner}/simple": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "pypi simple index",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/packages/rubygems/{owner}/api/v1/gems": {
+            "post": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "rubygems 发布",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    }
+                }
+            }
+        },
+        "/packages/{owner}/audit": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "packages"
+                ],
+                "summary": "包审计记录",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包类型",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.PackageAudit"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/{owner}/{type}": {
+            "get": {
+                "description": "列出 owner 命名空间下的包（type 可选过滤：npm/composer/pypi/rubygems/go/cargo/maven）",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "packages"
+                ],
+                "summary": "列出包",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包类型",
+                        "name": "type",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Package"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/{type}/{owner}/{name}": {
+            "delete": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "删除包",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "包类型",
+                        "name": "type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/repos": {
             "get": {
                 "security": [
@@ -3482,6 +4004,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/runner/register": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runners"
+                ],
+                "summary": "注册 runner",
+                "parameters": [
+                    {
+                        "description": "name/labels/token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.registerRunnerReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/runners": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runners"
+                ],
+                "summary": "列出 runner",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Runner"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/runners/registration-token": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "runners"
+                ],
+                "summary": "签发 runner 注册 token",
+                "parameters": [
+                    {
+                        "description": "scope: user|org（org 需 body.org）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.createRunnerTokenReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.RunnerToken"
+                        }
+                    }
+                }
+            }
+        },
         "/search": {
             "get": {
                 "security": [
@@ -3561,6 +4190,33 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/templates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "列出可访问的模版仓库",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.Repo"
                             }
                         }
                     }
@@ -5996,6 +6652,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "取消流水线运行",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "运行 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{owner}/repos/{name}/pulls": {
             "get": {
                 "security": [
@@ -7525,6 +8235,77 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{owner}/repos/{name}/template": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "仅仓库所有者可设置。模版仓库可作为创建新仓库的源。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "设置模版仓库",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "is_template",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRepoTemplateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Repo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{owner}/repos/{name}/tree": {
             "get": {
                 "security": [
@@ -8258,6 +9039,13 @@ const docTemplate = `{
                 "template": {
                     "description": "模板：空 = 空仓库；\"readme\" = 默认模版（README.md）",
                     "type": "string"
+                },
+                "template_name": {
+                    "type": "string"
+                },
+                "template_owner": {
+                    "description": "从模版仓库创建：指定源仓库（owner/name），克隆其内容与历史。",
+                    "type": "string"
                 }
             }
         },
@@ -8274,6 +9062,17 @@ const docTemplate = `{
                 },
                 "state": {
                     "description": "approve | request_changes | comment",
+                    "type": "string"
+                }
+            }
+        },
+        "api.createRunnerTokenReq": {
+            "type": "object",
+            "properties": {
+                "org": {
+                    "type": "string"
+                },
+                "scope": {
                     "type": "string"
                 }
             }
@@ -8399,6 +9198,23 @@ const docTemplate = `{
                 }
             }
         },
+        "api.registerRunnerReq": {
+            "type": "object",
+            "properties": {
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "api.setBranchProtectionReq": {
             "type": "object",
             "properties": {
@@ -8471,6 +9287,15 @@ const docTemplate = `{
                 "state": {
                     "description": "目标状态（open 或 closed）",
                     "type": "string"
+                }
+            }
+        },
+        "api.setRepoTemplateReq": {
+            "type": "object",
+            "properties": {
+                "is_template": {
+                    "description": "是否为模版仓库（必填）",
+                    "type": "boolean"
                 }
             }
         },
@@ -8941,6 +9766,83 @@ const docTemplate = `{
                 }
             }
         },
+        "store.Package": {
+            "type": "object",
+            "properties": {
+                "checksum": {
+                    "description": "sha256 hex",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "downloads": {
+                    "type": "integer"
+                },
+                "filename": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "description": "可选：关联仓库（跟随其可见性），空 = 不关联",
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "npm | composer | pypi | rubygems | go | cargo | maven",
+                    "type": "string"
+                },
+                "uploader": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                },
+                "yanked": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "store.PackageAudit": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "publish | delete | yank | unyank",
+                    "type": "string"
+                },
+                "actor": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
         "store.PipelineCIStatus": {
             "type": "object",
             "properties": {
@@ -9121,6 +10023,9 @@ const docTemplate = `{
                 "import_url": {
                     "type": "string"
                 },
+                "is_template": {
+                    "type": "boolean"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -9146,6 +10051,47 @@ const docTemplate = `{
                 },
                 "watching": {
                     "type": "boolean"
+                }
+            }
+        },
+        "store.Runner": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "last_seen": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scope": {
+                    "description": "\"\"=全局 | \"user:{owner}\" | \"org:{org}\"",
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.RunnerToken": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
                 }
             }
         },

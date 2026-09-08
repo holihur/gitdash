@@ -379,6 +379,55 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/tokens", a.auth(a.createTokens))
 	mux.HandleFunc("DELETE /api/tokens/{id}", a.auth(a.deleteToken))
 
+	// packages（私有包注册表：npm / composer / pypi / rubygems / go / cargo / maven）
+	// 读：任意已认证用户（关联仓库时跟随其可见性）；写：owner 本人或组织 owner 角色成员
+	mux.HandleFunc("GET /api/packages/{owner}", a.auth(a.listPackagesUI))
+	mux.HandleFunc("GET /api/packages/{owner}/{type}", a.auth(a.listPackagesUI))
+	mux.HandleFunc("GET /api/packages/{owner}/audit", a.auth(a.listPackageAudit))
+	mux.HandleFunc("DELETE /api/packages/{type}/{owner}/{name...}", a.auth(a.deletePackageUI))
+
+	// npm
+	mux.HandleFunc("PUT /api/packages/npm/{owner}/{rest...}", a.auth(a.npmPublish))
+	mux.HandleFunc("DELETE /api/packages/npm/{owner}/{name...}", a.auth(a.npmDelete))
+	mux.HandleFunc("GET /api/packages/npm/{owner}/{rest...}", a.auth(a.npmGet))
+
+	// pypi（twine）
+	mux.HandleFunc("POST /api/packages/pypi/{owner}", a.auth(a.pypiUpload))
+	mux.HandleFunc("POST /api/packages/pypi/{owner}/", a.auth(a.pypiUpload))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/pypi/{name}/json", a.auth(a.pypiJSON))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple", a.auth(a.pypiSimpleIndex))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/", a.auth(a.pypiSimpleIndex))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/{name}", a.auth(a.pypiSimpleProject))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/{name}/", a.auth(a.pypiSimpleProject))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/download/{name}/{version}/{filename}", a.auth(a.pypiDownload))
+
+	// go (GOPROXY)
+	mux.HandleFunc("PUT /api/packages/go/{owner}/{rest...}", a.auth(a.goPut))
+	mux.HandleFunc("GET /api/packages/go/{owner}/{rest...}", a.auth(a.goRoute))
+
+	// cargo
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/config.json", a.auth(a.cargoConfig))
+	mux.HandleFunc("PUT /api/packages/cargo/{owner}/api/v1/crates/new", a.auth(a.cargoPublish))
+	mux.HandleFunc("DELETE /api/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank", a.auth(a.cargoYank))
+	mux.HandleFunc("PUT /api/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank", a.auth(a.cargoYank))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/index/{rest...}", a.auth(a.cargoIndex))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/dl/{crate}/{version}/{filename}", a.auth(a.cargoDownload))
+
+	// rubygems
+	mux.HandleFunc("POST /api/packages/rubygems/{owner}/api/v1/gems", a.auth(a.gemPush))
+	mux.HandleFunc("GET /api/packages/rubygems/{owner}/gems/{filename}", a.auth(a.gemDownload))
+
+	// composer
+	mux.HandleFunc("PUT /api/packages/composer/{owner}/{vendor}/{name}", a.auth(a.composerUpload))
+	mux.HandleFunc("GET /api/packages/composer/{owner}/packages.json", a.auth(a.composerPackagesJSON))
+	mux.HandleFunc("GET /api/packages/composer/{owner}/p2/{vendor}/{name}", a.auth(a.composerP2))
+	mux.HandleFunc("GET /api/packages/composer/{owner}/download/{vendor}/{name}/{version}/{filename}", a.auth(a.composerDownload))
+
+	// maven
+	mux.HandleFunc("PUT /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenUpload))
+	mux.HandleFunc("GET /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenGet))
+	mux.HandleFunc("HEAD /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenGet))
+
 	// swagger（OpenAPI 文档 + 内置 Swagger UI）
 	docs.SwaggerInfo.BasePath = "/api"
 	docs.SwaggerInfo.Host = ""

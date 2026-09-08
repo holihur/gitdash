@@ -16,6 +16,7 @@ export const en = {
     keys: "SSH Keys",
     orgs: "Organizations",
     runners: "Runners",
+    packages: "Packages",
   },
   common: {
     name: "Name",
@@ -769,6 +770,21 @@ export const en = {
     import_failed: "Import failed",
     mirror_not_configured: "No mirror target configured",
     mirror_sync_failed: "Sync failed",
+  },
+  packages: {
+    title: "Package Registry",
+    subtitle:
+      "Private packages you published under your namespace (npm / composer / pypi / rubygems / go / cargo / maven). See docs/packages.md for client setup.",
+    all: "All",
+    type: "Type",
+    version: "Latest version",
+    size: "Size",
+    downloads: "Downloads",
+    empty: "No packages yet — publish one with your favourite package manager.",
+    deleted: "Package deleted",
+    deleteTitle: "Delete package",
+    deleteDesc: "Delete {name} and all its versions?",
+    audit: "Recent activity",
   },
 };
 

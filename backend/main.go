@@ -106,6 +106,8 @@ func run() {
 	if err != nil {
 		log.Fatalf("open store: %v", err)
 	}
+	// 包文件内容寻址 blob 存储
+	store.SetBlobDir(filepath.Join(dataDir, "packages-blobs"))
 
 	// 后台定期清理过期的登录失败限流行，防止表无限增长
 	go func() {

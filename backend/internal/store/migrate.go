@@ -44,6 +44,9 @@ func (s *Store) migrate() error {
 		&pipelineRunRow{},
 		&releaseRow{},
 		&releaseAssetRow{},
+		&packageRow{},
+		&packageTagRow{},
+		&packageAuditRow{},
 		&runnerRow{},
 		&runnerTokenRow{},
 	); err != nil {
