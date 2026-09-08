@@ -72,7 +72,6 @@ steps:
 
 func TestParseErrors(t *testing.T) {
 	cases := map[string]string{
-		"missing image":     "steps:\n  - run: x\n",
 		"missing steps":     "image: alpine\n",
 		"empty run":         "image: alpine\nsteps:\n  - name: a\n",
 		"unknown key":       "foo: bar\nimage: alpine\nsteps:\n  - run: x\n",

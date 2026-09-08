@@ -1,7 +1,7 @@
 # Runner 使用指南（自托管 CI Agent）
 
 自托管 runner 让 gitdash 的 CI 流水线不再局限于服务端本机 Docker：你可以在任意机器上部署
-`gitdash-runner` agent，它主动连接 gitdash 服务端领取任务，在本地容器中执行 `.gitdash.yml`
+`gitdash-runner` agent，它主动连接 gitdash 服务端领取任务，在本地容器中执行 `.gitdash.yml`（`gitdash-runner run -exec host` 可切换为无 Docker 的宿主执行，无容器沙箱，需显式开启）
 定义的流水线，并把日志、状态实时回传。
 
 ## 架构
@@ -106,6 +106,45 @@ runs-on:                     # 块列表
   - go1.22
 ```
 
+## 宿主执行模式（无 Docker）
+
+目标机器没有 Docker 也能跑流水线：`.gitdash.yml` **省略 `image`**，步骤直接在宿主 `sh -ec`
+中执行（工作区解包到临时目录，`GITDASH_REPO` / `GITDASH_REF` / `GITDASH_SHA` / `CI=1`
+与 cfg `env` 一并注入，`volumes` 被忽略）。
+
+开启方式（**默认关闭**，两侧独立开启）：
+
+```bash
+# 服务端：允许本机 builtin 执行 image 为空的流水线
+GITDASH_PIPELINE_EXEC=host gitdash serve
+
+# agent：允许该 runner 执行 image 为空的流水线
+gitdash-runner run -exec host
+```
+
+流水线写法（省略 `image`，其余键不变）：
+
+```yaml
+env:
+  - GREETING=hello
+steps:
+  - name: build
+    run: go build ./...
+  - name: test
+    run: go test ./...
+```
+
+未开启时：省略 `image` 的流水线记 `failed (host execution is disabled ...)`，
+错误信息会提示开启方法；写了 `image` 的流水线不受影响（仍走 Docker 沙箱）。
+
+注意事项：
+
+- **无容器沙箱**：没有网络隔离、资源限制与 capability 降权——`env`、`timeout` 生效，
+  但步骤代码对宿主文件系统/网络有完整访问权，等同把执行机交给该 scope 的仓库所有者
+- 仅在你完全受信的机器上开启；不要用 root 跑 agent 的 host 模式
+- 需要 POSIX `sh`（Linux/macOS 天然满足；Windows agent 不支持 host 模式）
+- 黑盒测试用例见 `tests/test_pipeline_host.py`
+
 ## 管理 Runner
 
 - 用户：个人设置 → Runner 卡片：在线状态（绿点）、标签、签发 token、删除
@@ -134,6 +173,7 @@ runs-on:                     # 块列表
 4. **沙箱一致**：agent 侧执行与内置执行共用同一套参数——默认禁外网（`GITDASH_PIPELINE_NETWORK`
    可显式放开）、512MB 内存 / 1 CPU / 128 pids、`no-new-privileges`、丢弃全部 capabilities、
    拒绝挂载 `/var/run/docker.sock`。
+   **host 模式绕过全部沙箱**（见「宿主执行模式」节），仅在受信机器上开启。
 5. **注册 token 面窄**：一次性 + 10 分钟过期，泄露影响有限。
 
 ## 环境变量速查
@@ -143,5 +183,7 @@ runs-on:                     # 块列表
 | `GITDASH_QUEUE=redis` | 服务端 | 启用 runner 功能（必填） |
 | `GITDASH_REDIS_ADDR` / `_PASSWORD` / `_DB` | 服务端 | Redis 连接 |
 | `GITDASH_PIPELINE_NETWORK` | 服务端/agent | 容器网络：默认 `none`，显式指定则用该值 |
+| `GITDASH_PIPELINE_EXEC=host` | 服务端 | 允许 builtin 执行省略 `image` 的流水线（宿主 `sh`，无沙箱，默认关闭） |
+| `gitdash-runner run -exec host` | agent | 允许该 runner 执行省略 `image` 的流水线（宿主 `sh`，无沙箱，默认关闭） |
 | `GITDASH_PIPELINE_DEFAULT_TIMEOUT` | 服务端/agent | 单步默认超时（默认 10m，上限 1h） |
 | config.json `concurrency` | agent | 并发任务数（默认 2，无对应环境变量） |

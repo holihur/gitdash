@@ -4,7 +4,8 @@
 //
 // DSL 语法（受支持的 YAML 子集）：
 //
-//	image: alpine:3.19      # 必填：每步运行所用镜像
+//	image: alpine:3.19      # 可选：每步运行所用镜像（Docker 沙箱执行）；
+//	                        # 省略时直接在宿主 sh 中执行（需服务端/agent 允许 host 执行）
 //	timeout: 10m            # 可选：单步超时（默认 10m，上限 1h）
 //	env:                    # 可选：注入容器的环境变量
 //	  - CGO_ENABLED=0
@@ -176,10 +177,7 @@ func Parse(data []byte) (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.Image == "" {
-		return fmt.Errorf("image is required")
-	}
-	if !imageRe.MatchString(c.Image) {
+	if c.Image != "" && !imageRe.MatchString(c.Image) {
 		return fmt.Errorf("invalid image %q", c.Image)
 	}
 	if len(c.Steps) == 0 {

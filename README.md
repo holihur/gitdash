@@ -309,7 +309,7 @@ Enable the pipeline in the repo's **Pipeline** tab (owner only). On every push t
 Custom YAML DSL (supported subset):
 
 ```yaml
-image: alpine:3.19   # required: image for every step (POSIX sh required)
+image: alpine:3.19   # optional: image for every step (omit to run directly on the host, requires GITDASH_PIPELINE_EXEC=host)
 timeout: 10m         # optional: per-step timeout (default 10m, max 1h)
 env:                 # optional: KEY=VALUE list injected into containers
   - CGO_ENABLED=0
@@ -334,7 +334,7 @@ Pipeline API:
 
 ## Runners (Self-hosted CI Agents)
 
-Without `runs-on`, pipelines run on the server's local Docker (builtin, zero setup). To execute pipelines on other machines, deploy **agents** (`gitdash-runner`):
+Without `runs-on`, pipelines run on the server's local Docker (builtin, zero setup); set `GITDASH_PIPELINE_EXEC=host` to also allow pipelines that omit `image` to run directly on the server host via `sh` (no container sandbox — opt-in). To execute pipelines on other machines, deploy **agents** (`gitdash-runner`):
 
 1. Requires Redis: start the server with `GITDASH_QUEUE=redis` (the runner hub uses Redis for dispatch, heartbeats and cross-instance routing).
 2. Issue a one-time registration token (valid 10 minutes): users issue a personal-scope token in **Profile → Runners**; org owners issue org-scope tokens via the API; site admins can issue global tokens from the admin panel (`POST /api/admin/runners/registration-token`).

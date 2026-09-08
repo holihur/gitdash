@@ -32,7 +32,19 @@ var (
 	ErrTooManyRuns = errors.New("too many active runs")
 	// ErrDockerMissing docker 不可用。
 	ErrDockerMissing = errors.New("docker not available")
+	// ErrHostDisabled host（无 Docker）执行未开启：image 留空的流水线被拒绝。
+	ErrHostDisabled = errors.New("host execution is disabled (set GITDASH_PIPELINE_EXEC=host on the server, or register the runner with -exec host)")
 )
+
+// hostAllowed host（无 Docker）执行开关：环境变量 GITDASH_PIPELINE_EXEC=host 时开启。
+// 流水线 .gitdash.yml 省略 image 即直接在宿主 sh 执行（无容器沙箱），默认关闭。
+var hostAllowed = false
+
+// HostAllowed 是否允许 host 执行。
+func HostAllowed() bool { return hostAllowed }
+
+// SetHostAllowed 显式开关 host 执行（agent 命令行 -exec host 使用）。
+func SetHostAllowed(v bool) { hostAllowed = v }
 
 const maxActiveRuns = 3
 
@@ -84,6 +96,9 @@ func jobHandler(ctx context.Context, job queue.Job) error {
 // Init 创建流水线日志目录（main 启动时调用）。
 // 环境变量 GITDASH_PIPELINE_DEFAULT_TIMEOUT 可覆盖单步默认超时（如 "30s"，用于测试）。
 func Init(dataDir string) error {
+	if os.Getenv("GITDASH_PIPELINE_EXEC") == "host" {
+		hostAllowed = true
+	}
 	if d, err := time.ParseDuration(os.Getenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT")); err == nil && d > 0 && d <= MaxStepTimeout {
 		DefaultStepTimeout = d
 	}
@@ -240,7 +255,11 @@ func executeRun(st *store.Store, job RunJob) {
 		fail("invalid %s: %v", FileName, perr)
 		return
 	}
-	writeLog("image: %s  steps: %d", cfg.Image, len(cfg.Steps))
+	img := cfg.Image
+	if img == "" {
+		img = "host"
+	}
+	writeLog("image: %s  steps: %d", img, len(cfg.Steps))
 
 	exec := boundExecutor
 	if exec == nil {

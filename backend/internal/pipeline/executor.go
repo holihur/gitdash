@@ -49,11 +49,14 @@ func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, lo
 }
 
 // Execute 实现 Executor：clone → checkout → 逐步执行。
-func (e *builtinDockerExecutor) Execute(ctx context.Context, job RunJob, cfg *Config, logSink io.Writer, progress func(int)) error {
+func (e *builtinDockerExecutor) Execute(ctx context.Context, job RunJob, cfg *Config, logSink io.Writer, progress func(stepsDone int)) error {
 	owner, repo, sha := job.Owner, job.Repo, job.SHA
 
-	if err := dockerAvailable(); err != nil {
-		return err
+	// image 为空 = host 执行（无需 docker）；仅当需要容器时才检查 docker 可用性
+	if cfg.Image != "" {
+		if err := dockerAvailable(); err != nil {
+			return err
+		}
 	}
 
 	tmp, err := os.MkdirTemp("", "gitdash-run-*")
@@ -74,8 +77,12 @@ func (e *builtinDockerExecutor) Execute(ctx context.Context, job RunJob, cfg *Co
 	return RunInWorkspace(ctx, job, cfg, tmp, logSink, progress)
 }
 
-// runStep 在 docker 容器里执行单步：工作区挂载到 /workspace，输出实时写入日志。
+// runStep 执行单步：image 为空时直接在宿主 sh 中执行（host 模式），
+// 否则在 docker 容器里执行（工作区挂载到 /workspace，输出实时写入日志）。
 func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, cfg *Config, step Step, owner, repo, ref, sha string, logSink io.Writer) error {
+	if cfg.Image == "" {
+		return runHostStep(parent, workdir, cfg, step, owner, repo, ref, sha, logSink)
+	}
 	ctx, cancel := context.WithTimeout(parent, cfg.Timeout)
 	defer cancel()
 
@@ -115,6 +122,44 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	log.Printf("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
 		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
 	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdout = logSink
+	cmd.Stderr = logSink
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("timeout after %s", cfg.Timeout)
+		}
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return fmt.Errorf("exit code %d", ee.ExitCode())
+		}
+		return err
+	}
+	return nil
+}
+
+// runHostStep 无 Docker 时直接在宿主 sh 中执行步骤（image 留空即 host 模式）。
+// 注意：host 模式没有容器沙箱（无网络/资源隔离），需显式开启（服务端
+// GITDASH_PIPELINE_EXEC=host，agent 注册时 -exec host），未开启时被拒绝。
+func runHostStep(parent context.Context, workdir string, cfg *Config, step Step, owner, repo, ref, sha string, logSink io.Writer) error {
+	if !HostAllowed() {
+		return ErrHostDisabled
+	}
+	ctx, cancel := context.WithTimeout(parent, cfg.Timeout)
+	defer cancel()
+
+	log.Printf("pipeline audit: exec=host repo=%s/%s step=%q time=%s",
+		owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
+	cmd := exec.CommandContext(ctx, "sh", "-ec", step.Run)
+	cmd.Dir = workdir
+	env := append(os.Environ(),
+		"CI=1",
+		"GITDASH=true",
+		"GITDASH_REPO="+owner+"/"+repo,
+		"GITDASH_REF="+ref,
+		"GITDASH_SHA="+sha,
+	)
+	env = append(env, cfg.Env...)
+	cmd.Env = env
 	cmd.Stdout = logSink
 	cmd.Stderr = logSink
 	if err := cmd.Run(); err != nil {

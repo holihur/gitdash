@@ -425,13 +425,25 @@ func csrfGuard(next http.Handler) http.Handler {
 }
 
 // secureHeaders 基础安全响应头（CSP 允许内联主题脚本，其 sha256 随 index.html 保持同步）。
+// swagger UI 页面自带库生成的内联初始化脚本（内容随配置变化，无法预置 hash），
+// 对其单独放行 'unsafe-inline'（仅限该路径下的同源文档界面）。
 
-func secureHeaders(next http.Handler) http.Handler {
-	csp := "default-src 'self'; script-src 'self' 'sha256-3ErQTYhfRUcdQMKUwZWjeUj+0gLQwEdW3gtvOjOALlg=' 'sha256-5N7k7wNTDShVptRxTM9+DDLf2WYyHnUno1d06dT7Cic='; " +
+const (
+	cspDefault = "default-src 'self'; script-src 'self' 'sha256-3ErQTYhfRUcdQMKUwZWjeUj+0gLQwEdW3gtvOjOALlg=' 'sha256-5N7k7wNTDShVptRxTM9+DDLf2WYyHnUno1d06dT7Cic='; " +
 		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; " +
 		"font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+	cspSwagger = "default-src 'self'; script-src 'self' 'unsafe-inline'; " +
+		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
+		"font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+)
+
+func secureHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", csp)
+		if strings.HasPrefix(r.URL.Path, "/api/swagger") {
+			w.Header().Set("Content-Security-Policy", cspSwagger)
+		} else {
+			w.Header().Set("Content-Security-Policy", cspDefault)
+		}
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")

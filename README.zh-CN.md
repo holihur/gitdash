@@ -309,7 +309,7 @@ task test:ui                              # 构建带内嵌前端的二进制并
 自定义 YAML DSL（受支持子集）：
 
 ```yaml
-image: alpine:3.19   # 必填：每步运行所用镜像（需含 POSIX sh）
+image: alpine:3.19   # 可选：每步运行所用镜像（省略时直接在宿主 sh 执行，需 GITDASH_PIPELINE_EXEC=host）
 timeout: 10m         # 可选：单步超时（默认 10m，上限 1h）
 env:                 # 可选：注入容器的环境变量 KEY=VALUE
   - CGO_ENABLED=0
@@ -334,7 +334,7 @@ steps:               # 必填：1..20 个步骤
 
 ## Runner（自托管 CI Agent）
 
-不写 `runs-on` 时，流水线在服务端本地 Docker 中执行（内置，零配置）。要在其他机器上执行流水线，部署 **agent**（`gitdash-runner`）：
+不写 `runs-on` 时，流水线在服务端本地 Docker 中执行（内置，零配置）；设置 `GITDASH_PIPELINE_EXEC=host` 后还允许省略 `image` 的流水线直接在服务端宿主 `sh` 执行（无容器沙箱，需显式开启）。要在其他机器上执行流水线，部署 **agent**（`gitdash-runner`）：
 
 1. 需要 Redis：服务端以 `GITDASH_QUEUE=redis` 启动（runner 调度、心跳与跨实例路由依赖 Redis）。
 2. 签发一次性注册 token（10 分钟有效）：用户在 **个人设置 → Runner** 签发个人 scope；组织 owner 可为组织签发；站点管理员可在管理端签发全局 token（`POST /api/admin/runners/registration-token`）。

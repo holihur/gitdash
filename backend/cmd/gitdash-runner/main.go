@@ -143,6 +143,13 @@ type agent struct {
 }
 
 func cmdRun() {
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	execMode := fs.String("exec", "docker", "执行模式：docker（容器沙箱）或 host（无 Docker，直接宿主 sh 执行）")
+	_ = fs.Parse(os.Args[2:])
+	if *execMode == "host" {
+		pipeline.SetHostAllowed(true)
+		log.Printf("host 执行模式已开启（无容器沙箱，谨慎使用）")
+	}
 	c, err := loadConfig()
 	if err != nil {
 		log.Fatalf("读取配置失败（先执行 register）: %v", err)

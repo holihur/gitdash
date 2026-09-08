@@ -18,7 +18,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
-export const PIPELINE_EXAMPLE = `image: alpine:3.19
+export const PIPELINE_EXAMPLE = `image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行（需服务端开启）
 env:
   - CGO_ENABLED=0
 # runs-on: [docker]   # 可选：指定远程 runner 标签
