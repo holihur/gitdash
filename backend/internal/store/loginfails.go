@@ -15,7 +15,7 @@ func (loginFailRow) TableName() string { return "login_fails" }
 // RateBlocked 判断 key 是否已被限流（窗口内失败次数 >= maxFails）。
 func (s *Store) RateBlocked(key string, maxFails int) (bool, error) {
 	var r loginFailRow
-	if err := s.db.Where("`key` = ?", key).First(&r).Error; err != nil {
+	if err := s.db.Where("\"key\" = ?", key).First(&r).Error; err != nil {
 		return false, nil //nolint:nilerr // 无记录 = 未限流，查询失败按未限流处理
 	}
 	if until, e := time.Parse(time.RFC3339, r.Until); e == nil && time.Now().After(until) {
@@ -28,7 +28,7 @@ func (s *Store) RateBlocked(key string, maxFails int) (bool, error) {
 // RateFail 记录一次失败：窗口内累加；窗口过期则重新开始计时。
 func (s *Store) RateFail(key string, window time.Duration) error {
 	var r loginFailRow
-	err := s.db.Where("`key` = ?", key).First(&r).Error
+	err := s.db.Where("\"key\" = ?", key).First(&r).Error
 	if err == nil {
 		if until, e := time.Parse(time.RFC3339, r.Until); e == nil && time.Now().After(until) {
 			r.Count, r.Until = 0, ""
@@ -52,5 +52,5 @@ func (s *Store) CleanupLoginFails(olderThan time.Duration) (int64, error) {
 
 // RateReset 成功登录后清除失败记录。
 func (s *Store) RateReset(key string) error {
-	return s.db.Where("`key` = ?", key).Delete(&loginFailRow{}).Error
+	return s.db.Where("\"key\" = ?", key).Delete(&loginFailRow{}).Error
 }

@@ -63,8 +63,8 @@ func (s *Store) AdminDeleteUser(username string) error {
 		if err := tx.Where("owner = ?", username).Delete(&packageRow{}).Error; err != nil {
 			return err
 		}
-		// 登录限速记录（key 形如 "username|ip"）
-		if err := tx.Where("`key` LIKE ?", username+"|%").Delete(&loginFailRow{}).Error; err != nil {
+		// 登录限速记录（key 形如 "username|ip"；双引号引用兼容 SQLite/PG）
+		if err := tx.Where("\"key\" LIKE ?", username+"|%").Delete(&loginFailRow{}).Error; err != nil {
 			return err
 		}
 		// 被遗忘权：他人仓库中该用户的作者身份匿名化（内容保留以维持协作历史）
