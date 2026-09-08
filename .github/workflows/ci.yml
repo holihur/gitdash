@@ -30,8 +30,6 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2 # --new-from-rev=HEAD~1 需要父提交
 
       - uses: actions/setup-go@v6
         with:
@@ -44,7 +42,6 @@ jobs:
         with:
           version: v2.13.2
           working-directory: backend
-          args: --new-from-rev=HEAD~1
 
       - name: Build
         working-directory: backend
@@ -201,6 +198,10 @@ jobs:
       - name: Install
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+
+      - name: Test (vitest)
+        working-directory: frontend
+        run: pnpm run test
 
       - name: Build (tsc + vite)
         working-directory: frontend
