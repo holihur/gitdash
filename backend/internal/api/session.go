@@ -48,15 +48,46 @@ func (a *API) rateReset(key string) {
 	}
 }
 
-// clientIP 仅当直连地址是回环/内网（即部署在可信反代之后）时才信任
-// X-Forwarded-For，避免客户端伪造头部绕过限流。
+// trustedProxies 允许提供 X-Forwarded-For 的反代地址（GITDASH_TRUSTED_PROXIES，逗号分隔 IP/CIDR）。
+// 每次读取（便于测试 t.Setenv）；未配置时仅信任回环（单机反代的常见形态）。
+func trustedProxies() []netip.Prefix {
+	var out []netip.Prefix
+	for _, p := range strings.Split(os.Getenv("GITDASH_TRUSTED_PROXIES"), ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.Contains(p, "/") {
+			if pr, err := netip.ParsePrefix(p); err == nil {
+				out = append(out, pr.Masked())
+			}
+		} else if a, err := netip.ParseAddr(p); err == nil {
+			out = append(out, netip.PrefixFrom(a, a.BitLen()))
+		}
+	}
+	return out
+}
+
+func isTrustedProxy(addr netip.Addr) bool {
+	proxies := trustedProxies()
+	if len(proxies) == 0 {
+		return addr.IsLoopback()
+	}
+	for _, p := range proxies {
+		if p.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientIP 仅在直连地址是受信反代时才信任 X-Forwarded-For，避免伪造头部绕过限流。
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	addr, err := netip.ParseAddr(host)
-	if err == nil && (addr.IsLoopback() || addr.IsPrivate()) {
+	if addr, err := netip.ParseAddr(host); err == nil && isTrustedProxy(addr) {
 		if h := r.Header.Get("X-Forwarded-For"); h != "" {
 			if i := strings.IndexByte(h, ','); i > 0 {
 				return strings.TrimSpace(h[:i])
