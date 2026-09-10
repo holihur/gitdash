@@ -133,11 +133,15 @@ func (a *API) adminMe(w http.ResponseWriter, r *http.Request) {
 //	@Router      /admin/settings [get]
 func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 	enabled, id, _ := a.oauthSettings()
+	googleOn, googleID, _ := a.googleSettings()
 	oidcOn := a.store.GetSetting("oidc_enabled") == "1"
 	writeJSON(w, http.StatusOK, map[string]any{
 		"github_oauth_enabled": enabled,
 		"github_client_id":     id,
 		"github_has_secret":    a.store.GetSetting("github_client_secret") != "",
+		"google_oauth_enabled": googleOn,
+		"google_client_id":     googleID,
+		"google_has_secret":    a.store.GetSetting("google_client_secret") != "",
 		"oidc_enabled":         oidcOn,
 		"oidc_name":            a.store.GetSetting("oidc_name"),
 		"oidc_issuer":          a.store.GetSetting("oidc_issuer"),
@@ -152,7 +156,7 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 //	@Tags        admin
 //	@Accept      json
 //	@Produce     json
-//	@Param       body body map[string]any true "设置项（github/oidc 开关与配置）"
+//	@Param       body body map[string]any true "设置项（github/google/oidc 开关与配置）"
 //	@Success     200 {object} map[string]any
 //	@Failure     400 {object} map[string]string
 //	@Failure     401 {object} map[string]string
@@ -181,6 +185,11 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	writeStr("github_client_id", in["github_client_id"])
 	if v, ok := in["github_client_secret"].(string); ok && v != "" {
 		_ = a.store.SetSetting("github_client_secret", strings.TrimSpace(v))
+	}
+	setBool("google_oauth_enabled", in["google_oauth_enabled"])
+	writeStr("google_client_id", in["google_client_id"])
+	if v, ok := in["google_client_secret"].(string); ok && v != "" {
+		_ = a.store.SetSetting("google_client_secret", strings.TrimSpace(v))
 	}
 	setBool("oidc_enabled", in["oidc_enabled"])
 	writeStr("oidc_name", in["oidc_name"])

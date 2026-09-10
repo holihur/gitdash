@@ -71,6 +71,7 @@ func (a *API) oauthSettings() (enabled bool, clientID, clientSecret string) {
 func (a *API) providers(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
 		"github": map[string]any{"enabled": false},
+		"google": map[string]any{"enabled": false},
 		"oidc":   map[string]any{"enabled": false},
 	}
 	ghEnabled, ghID, _ := a.oauthSettings()
@@ -84,6 +85,13 @@ func (a *API) providers(w http.ResponseWriter, r *http.Request) {
 		resp["github"] = map[string]any{
 			"enabled": true, "client_id": ghID,
 			"authorize_url": a.githubBase() + "/login/oauth/authorize?" + q.Encode(),
+		}
+	}
+	if enabled, id, _ := a.googleSettings(); enabled && id != "" {
+		resp["google"] = map[string]any{
+			"enabled":       true,
+			"name":          "Google",
+			"authorize_url": reqBase(r) + "/api/auth/google",
 		}
 	}
 	if a.store.GetSetting("oidc_enabled") == "1" && a.store.GetSetting("oidc_client_id") != "" {
@@ -213,7 +221,7 @@ func (a *API) loginOrCreateOAuthUser(r *http.Request, provider, externalID, logi
 		return username, nil
 	}
 	// 未绑定：按 provider login 关联或新建账号
-	username := sanitizeGithubLogin(login, externalID)
+	username := sanitizeOAuthLogin(login, externalID)
 	if _, err := a.store.GetByUsername(username); err == nil {
 		// 存在同名本地账号：仅当请求携带该账号的有效会话/PAT（即调用者已证明
 		// 对该账号的控制权）时才绑定，否则拒绝，防止劫持他人本地账号。
@@ -255,17 +263,6 @@ func (a *API) loginOrCreateOAuthUser(r *http.Request, provider, externalID, logi
 		return "", err
 	}
 	return u.Username, nil
-}
-
-func sanitizeGithubLogin(login, externalID string) string {
-	u := strings.ToLower(strings.TrimSpace(login))
-	if !usernameRe.MatchString(u) {
-		u = "gh" + externalID
-		if len(u) > 32 {
-			u = u[:32]
-		}
-	}
-	return u
 }
 
 func randomPassword() string {

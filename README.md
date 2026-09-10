@@ -17,7 +17,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Repo mirroring & import**: import from a remote URL and push-mirror to GitHub/GitLab-like remotes
 - **Webhooks**: per-repo webhooks with HMAC signature delivery
 - **GPG keys**: upload GPG public keys to verify commit signatures
-- **OAuth login**: GitHub OAuth and generic OIDC login (configurable in the admin panel)
+- **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **Admin panel**: admin users, settings (OAuth providers), password management
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings
 - **Code browsing**: browse repos by branch / directory, view file contents, commit history and blame on the web

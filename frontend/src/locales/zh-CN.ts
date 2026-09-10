@@ -67,6 +67,7 @@ export const zhCN: Messages = {
     verify: "验证",
     back: "返回",
     signInWithGithub: "使用 GitHub 登录",
+    signInWithGoogle: "使用 Google 登录",
     signInWithOIDC: "使用 {name} 登录",
   },
   pagination: {
@@ -636,6 +637,9 @@ export const zhCN: Messages = {
     githubTitle: "GitHub OAuth 登录",
     githubHint: "默认不启用。开启并填入 OAuth App 信息后，用户即可用 GitHub 登录。",
     githubEnable: "启用 GitHub 登录",
+    googleTitle: "Google 登录",
+    googleHint: "默认不启用。开启并填入 Google OAuth 客户端（Web 应用）信息后，用户即可用 Google 登录。",
+    googleEnable: "启用 Google 登录",
     oidcTitle: "OIDC 登录",
     oidcHint: "通用 OpenID Connect（如 GitLab、Keycloak、Azure AD）。默认不启用。",
     oidcEnable: "启用 OIDC 登录",

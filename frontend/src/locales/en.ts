@@ -65,6 +65,7 @@ export const en = {
     verify: "Verify",
     back: "Back",
     signInWithGithub: "Continue with GitHub",
+    signInWithGoogle: "Continue with Google",
     signInWithOIDC: "Continue with {name}",
   },
   pagination: {
@@ -637,6 +638,9 @@ export const en = {
     githubTitle: "GitHub OAuth login",
     githubHint: "Disabled by default. Turn it on and fill in an OAuth App to let users sign in with GitHub.",
     githubEnable: "Enable GitHub login",
+    googleTitle: "Google login",
+    googleHint: "Disabled by default. Turn it on and fill in a Google OAuth client (Web application) to let users sign in with Google.",
+    googleEnable: "Enable Google login",
     oidcTitle: "OIDC login",
     oidcHint: "Generic OpenID Connect (GitLab, Keycloak, Azure AD…). Disabled by default.",
     oidcEnable: "Enable OIDC login",

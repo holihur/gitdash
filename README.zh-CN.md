@@ -17,7 +17,7 @@ English | 简体中文
 - **镜像与导入**：从远端 URL 导入仓库，push 镜像到 GitHub/GitLab 等远端
 - **Webhook**：仓库级 webhook，HMAC 签名推送
 - **GPG Key**：上传 GPG 公钥验证提交签名
-- **OAuth 登录**：GitHub OAuth 与通用 OIDC 登录（管理面板可配置）
+- **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
 - **发现（Explore）**：浏览公开仓库；仓库设置页可切换公开 / 私有
 - **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame

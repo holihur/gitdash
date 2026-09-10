@@ -239,7 +239,7 @@ const docTemplate = `{
                 "summary": "保存系统设置",
                 "parameters": [
                     {
-                        "description": "设置项（github/oidc 开关与配置）",
+                        "description": "设置项（github/google/oidc 开关与配置）",
                         "name": "body",
                         "in": "body",
                         "required": true,

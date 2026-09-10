@@ -173,6 +173,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/me/email/resend", a.auth(a.resendEmailVerification))
 	mux.HandleFunc("GET /api/auth/github", a.githubStart)
 	mux.HandleFunc("GET /api/auth/github/callback", a.githubCallback)
+	mux.HandleFunc("GET /api/auth/google", a.googleStart)
+	mux.HandleFunc("GET /api/auth/google/callback", a.googleCallback)
 	mux.HandleFunc("GET /api/auth/oidc/start", a.oidcStart)
 	mux.HandleFunc("GET /api/auth/oidc/callback", a.oidcCallback)
 

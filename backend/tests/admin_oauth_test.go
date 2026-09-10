@@ -74,6 +74,7 @@ func TestAdminDisabledByDefault(t *testing.T) {
 	want("GET", "/admin/me", "", 404)
 	want("POST", "/admin/login", `{"username":"admin","password":"x"}`, 404)
 	want("GET", "/auth/github", "", 404)
+	want("GET", "/auth/google", "", 404)
 	want("GET", "/auth/oidc/start", "", 404)
 
 	// providers 默认全关
@@ -85,12 +86,13 @@ func TestAdminDisabledByDefault(t *testing.T) {
 	defer func() { _ = res.Body.Close() }()
 	var m struct {
 		Github struct{ Enabled bool } `json:"github"`
+		Google struct{ Enabled bool } `json:"google"`
 		OIDC   struct{ Enabled bool } `json:"oidc"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&m); err != nil {
 		t.Fatal(err)
 	}
-	if m.Github.Enabled || m.OIDC.Enabled {
+	if m.Github.Enabled || m.Google.Enabled || m.OIDC.Enabled {
 		t.Fatalf("providers should be disabled: %+v", m)
 	}
 }
