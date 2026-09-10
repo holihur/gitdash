@@ -6,6 +6,7 @@ import (
 	"errors"
 	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/gpgsig"
+	"gitdash/backend/internal/metrics"
 	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/store"
@@ -456,6 +457,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.Handle("GET /api/swagger/", httpSwagger.WrapHandler)
 
 	// public
+	// prometheus metrics
+	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -566,8 +569,12 @@ func patAllowed(path string, scopes []string) bool {
 func logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rw := &statusWriter{ResponseWriter: w, status: 200}
+		start := time.Now()
 		next.ServeHTTP(rw, r)
 		log.Printf("%s %s -> %d", r.Method, r.URL.Path, rw.status)
+		if r.URL.Path != "/metrics" {
+			metrics.Observe(r.Method, r.URL.Path, rw.status, time.Since(start))
+		}
 	})
 }
 
