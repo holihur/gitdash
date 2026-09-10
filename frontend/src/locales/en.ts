@@ -645,6 +645,7 @@ export const en = {
     deleted: "Deleted: {path}",
     lastModified: "Last modified",
     lastCommit: "Last commit",
+    lastCommitTime: "Commit time",
     confirmDeleteFile: "Delete file {path} and create a commit?",
     confirmDeleteFolder: "Delete folder {path} and everything inside it?",
     msgCreate: "Add {path}",

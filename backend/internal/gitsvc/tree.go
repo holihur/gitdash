@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -119,6 +120,17 @@ func Tree(owner, name, ref, dir string) ([]Entry, error) {
 			entries[i].LastCommit, entries[i].ModifiedAt, entries[i].ModifiedBy, entries[i].ModifiedMsg = parts[0], parts[1], parts[2], parts[3]
 		}
 	}
+	// 目录在前、文件在后，各自按名称（忽略大小写）排序。
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].Type != entries[j].Type {
+			return entries[i].Type == "tree"
+		}
+		a, b := strings.ToLower(entries[i].Name), strings.ToLower(entries[j].Name)
+		if a != b {
+			return a < b
+		}
+		return entries[i].Name < entries[j].Name
+	})
 	return entries, nil
 }
 

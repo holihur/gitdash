@@ -479,13 +479,13 @@ export default function CodeTab({
 
       {!emptyRepo && !error && !blob && (
         <div className="overflow-x-auto rounded-lg border">
-          <Table className="min-w-[560px]">
+          <Table className="min-w-[720px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("common.name")}</TableHead>
-                <TableHead className="w-24">{t("common.type")}</TableHead>
                 <TableHead className="w-28 text-right">{t("common.size")}</TableHead>
                 <TableHead className="w-72">{t("fops.lastCommit")}</TableHead>
+                <TableHead className="w-40 whitespace-nowrap">{t("fops.lastCommitTime")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -541,11 +541,6 @@ export default function CodeTab({
                       </DropdownMenu>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {entry.type === "tree" ? t("common.directory") : t("common.file")}
-                    </Badge>
-                  </TableCell>
                   <TableCell className="text-right text-sm text-muted-foreground">
                     {entry.type === "blob" ? formatSize(entry.size) : "-"}
                   </TableCell>
@@ -570,14 +565,14 @@ export default function CodeTab({
                         </div>
                         <div className="truncate text-xs">
                           {entry.modified_by && <span>{entry.modified_by}</span>}
-                          <span className={entry.modified_by ? "ml-2" : ""}>
-                            {formatDate(entry.modified_at ?? "", locale)}
-                          </span>
                         </div>
                       </div>
                     ) : (
                       "-"
                     )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                    {entry.modified_at ? formatDate(entry.modified_at, locale) : "-"}
                   </TableCell>
                 </TableRow>
                 );
