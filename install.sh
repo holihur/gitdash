@@ -60,7 +60,9 @@ if [ -z "$VERSION" ]; then
   [ -n "$VERSION" ] || err "无法获取最新版本，可设置 GITDASH_VERSION 重试"
 fi
 VER="${VERSION#v}"
-URL="https://github.com/$REPO/releases/download/$VERSION/${BIN_NAME}_${VER}_${OS}_${ARCH}.tar.gz"
+# release 压缩包按项目名（gitdash）命名，且同时包含 gitdash 与 gitdash-runner 两个二进制；
+# 安装 runner 时同样下载该压缩包，再取出 $BIN_NAME（与 install.ps1 一致）。
+URL="https://github.com/$REPO/releases/download/$VERSION/gitdash_${VER}_${OS}_${ARCH}.tar.gz"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
