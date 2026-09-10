@@ -14,8 +14,18 @@ import (
 	"testing"
 	"time"
 
+	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/queue"
 	"gitdash/backend/internal/store"
 )
+
+// bindQueue 为异步 webhook 投递绑定内存队列 + worker（drain 只负责入队）。
+func bindQueue(t *testing.T, st *store.Store) {
+	t.Helper()
+	Bind(st)
+	jobs.SetWebhookHandler(HandleJob)
+	jobs.Bind(st, queue.NewMemory(64, 2))
+}
 
 func TestDrainDeliversAndCleansSpool(t *testing.T) {
 	t.Setenv("GITDASH_SSRF_ALLOW_PRIVATE", "1") // httptest 端点为回环地址
@@ -28,6 +38,7 @@ func TestDrainDeliversAndCleansSpool(t *testing.T) {
 	if err := os.MkdirAll(spool, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	bindQueue(t, st)
 
 	delivered := make(chan map[string]any, 4)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -91,6 +102,7 @@ func TestWebhookSignatureHeader(t *testing.T) {
 	}
 	spool := filepath.Join(dir, "events")
 	_ = os.MkdirAll(spool, 0o755)
+	bindQueue(t, st)
 
 	got := make(chan string, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/queue"
 	"gitdash/backend/internal/webhooks"
 )
 
@@ -185,7 +187,10 @@ func TestWebhookDeliveries(t *testing.T) {
 		map[string]string{"url": "http://127.0.0.1:1/unreachable"}, 201)
 	hook2 := int64(m2["id"].(float64))
 
-	// harness 不经 main.go，需手动启动 spool 消费循环（与生产同路径）
+	// harness 不经 main.go，需手动启动 spool 消费循环与异步投递队列（与生产同路径）
+	webhooks.Bind(env.Store)
+	jobs.SetWebhookHandler(webhooks.HandleJob)
+	jobs.Bind(env.Store, queue.NewMemory(64, 4))
 	go webhooks.Run(filepath.Join(env.DataDir, "webhook-events"), env.Store, 200*time.Millisecond)
 
 	// 投一个 push 事件（模拟 post-receive / API spool）

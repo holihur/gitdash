@@ -200,6 +200,10 @@ func run() {
 	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
 	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, sender), pipeline.PullHandler(st))
 
+	// webhook 投递异步化：spool 只负责入队，投递由任务队列 worker 执行。
+	webhooks.Bind(st)
+	jobs.SetWebhookHandler(webhooks.HandleJob)
+
 	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
 	// runner（自托管 CI agent）功能需要 redis（跨实例派发与心跳）
 	var runnerHub *runner.Hub

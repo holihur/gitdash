@@ -1,4 +1,5 @@
-// Package webhooks 消费 post-receive spool 中的 push 事件并投递到配置的 URL。
+// Package webhooks 消费 post-receive / API spool 中的事件，异步投递到配置的 webhook URL。
+// 投递本身由任务队列 worker（jobs.KindWebhook）执行，spool 排空不再阻塞。
 package webhooks
 
 import (
@@ -45,6 +46,12 @@ type Event struct {
 }
 
 var client = &http.Client{Timeout: 10 * time.Second}
+
+// boundStore 供队列 worker（HandleJob）查 hook 与落投递记录（main 启动时 Bind）。
+var boundStore *store.Store
+
+// Bind 绑定 store，供异步投递 worker 使用。必须在队列开始消费前调用。
+func Bind(st *store.Store) { boundStore = st }
 
 // allowHTTP 进程启动时读取一次，避免每次投递都查环境变量。
 var allowHTTP = os.Getenv("GITDASH_WEBHOOK_ALLOW_HTTP") != ""
@@ -110,16 +117,17 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 		}
 		hooks, err := st.ListWebhooks(ev.Owner, ev.Repo)
 		if err == nil && len(hooks) > 0 {
-			// 并行投递：单个慢端点不再阻塞整个 spool 排空与 CI 触发
-			var wg sync.WaitGroup
-			for _, h := range hooks {
-				wg.Add(1)
-				go func(h store.Webhook) {
-					defer wg.Done()
-					deliverAndRecord(st, h, ev, 0)
-				}(h)
+			// 异步投递：入队后立即返回，由队列 worker 投递（不阻塞 spool 排空与 CI 触发）
+			body, merr := json.Marshal(ev)
+			if merr != nil {
+				log.Printf("webhook: marshal event %s/%s: %v", ev.Owner, ev.Repo, merr)
+			} else {
+				for _, h := range hooks {
+					if err := jobs.EnqueueWebhook(jobs.WebhookPayload{HookID: h.ID, Body: body}); err != nil {
+						log.Printf("webhook: enqueue %s/%s hook %d: %v", ev.Owner, ev.Repo, h.ID, err)
+					}
+				}
 			}
-			wg.Wait()
 		}
 		// push mirror 自动同步（仅 push 事件，走异步任务队列，避免无界 goroutine）
 		if ev.Event == "push" {
@@ -184,8 +192,35 @@ const (
 	baseBackoff = 30 * time.Second
 )
 
-// deliverAndRecord 投递一次并落记录；deliverID>0 表示是重试（更新既有记录而非新建）。
-func deliverAndRecord(st *store.Store, hook store.Webhook, ev Event, deliveryID int64) {
+// HandleJob 队列 worker：投递一条 webhook（异步队列处理）。
+func HandleJob(payload []byte) error {
+	if boundStore == nil {
+		return nil
+	}
+	var p jobs.WebhookPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return nil //nolint:nilerr // 非法载荷直接丢弃
+	}
+	hook, ok, err := boundStore.GetWebhookByID(p.HookID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		if p.DeliveryID > 0 {
+			_ = boundStore.UpdateDelivery(p.DeliveryID, "failed", 0, "webhook deleted", "")
+		}
+		return nil
+	}
+	var ev Event
+	if err := json.Unmarshal(p.Body, &ev); err != nil {
+		return nil //nolint:nilerr // 非法载荷直接丢弃
+	}
+	deliverAndRecord(boundStore, hook, ev, p.DeliveryID, p.Attempts)
+	return nil
+}
+
+// deliverAndRecord 投递一次并落记录；deliveryID>0 表示是重试（更新既有记录而非新建）。
+func deliverAndRecord(st *store.Store, hook store.Webhook, ev Event, deliveryID int64, attempts int) {
 	body, err := json.Marshal(ev)
 	if err != nil {
 		return
@@ -203,7 +238,11 @@ func deliverAndRecord(st *store.Store, hook store.Webhook, ev Event, deliveryID 
 	if derr != nil {
 		errMsg = derr.Error()
 	}
-	next, giveUp := backoff(1)
+	n := attempts
+	if n < 1 {
+		n = 1
+	}
+	next, giveUp := backoff(n)
 	status := "retry"
 	if giveUp {
 		status = "failed"
@@ -233,11 +272,9 @@ func processRetries(st *store.Store) {
 		return
 	}
 	for _, d := range due {
-		hook, ok, err := st.GetWebhookByID(d.HookID)
-		if err != nil {
+		if _, ok, err := st.GetWebhookByID(d.HookID); err != nil {
 			continue
-		}
-		if !ok {
+		} else if !ok {
 			_ = st.UpdateDelivery(d.ID, "failed", 0, "webhook deleted", "")
 			continue
 		}
@@ -246,27 +283,13 @@ func processRetries(st *store.Store) {
 			_ = st.UpdateDelivery(d.ID, "failed", 0, "payload missing", "")
 			continue
 		}
-		var ev Event
-		if err := json.Unmarshal([]byte(payload), &ev); err != nil {
-			_ = st.UpdateDelivery(d.ID, "failed", 0, "payload invalid", "")
-			continue
+		// 推后 next_retry，避免 worker 处理完成前被重复取出（不递增 attempts）。
+		_ = st.DeferDelivery(d.ID, time.Now().UTC().Add(2*baseBackoff).Format(time.RFC3339))
+		if err := jobs.EnqueueWebhook(jobs.WebhookPayload{
+			HookID: d.HookID, DeliveryID: d.ID, Attempts: d.Attempts, Body: []byte(payload),
+		}); err != nil {
+			log.Printf("webhook: enqueue retry %d: %v", d.ID, err)
 		}
-		code, derr := deliver(hook.URL, []byte(payload), hook.Secret)
-		if derr == nil && code >= 200 && code < 300 {
-			_ = st.UpdateDelivery(d.ID, "success", code, "", "")
-			continue
-		}
-		errMsg := "status " + strconv.Itoa(code)
-		if derr != nil {
-			errMsg = derr.Error()
-		}
-		next, giveUp := backoff(d.Attempts)
-		status := "retry"
-		if giveUp {
-			status = "failed"
-			next = ""
-		}
-		_ = st.UpdateDelivery(d.ID, status, code, errMsg, next)
 	}
 }
 

@@ -64,6 +64,11 @@ func (s *Store) UpdateDelivery(id int64, status string, code int, errMsg, nextRe
 		Updates(map[string]any{"status": status, "code": code, "error": errMsg, "next_retry": nextRetry, "attempts": gorm.Expr("attempts + 1")}).Error
 }
 
+// DeferDelivery 仅推后 next_retry（入队重试后避免被重复取出；不递增 attempts）。
+func (s *Store) DeferDelivery(id int64, nextRetry string) error {
+	return s.db.Model(&webhookDeliveryRow{}).Where("id = ?", id).Update("next_retry", nextRetry).Error
+}
+
 // DueRetries 取出到期待重试的投递记录（status=retry 且 next_retry <= nowStr，最旧优先）。
 func (s *Store) DueRetries(nowStr string, limit int) ([]WebhookDelivery, error) {
 	if limit <= 0 {
