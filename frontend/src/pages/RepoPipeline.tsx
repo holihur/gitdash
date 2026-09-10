@@ -5,6 +5,7 @@ import { api, type PipelineRun, type PipelineRunStatus } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -19,6 +20,9 @@ import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
 export const PIPELINE_EXAMPLE = `image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行（需服务端开启）
+# on: [push, pull_request, schedule, workflow_dispatch]  # 自动触发白名单（默认仅 push）
+# schedule:              # on 含 schedule 时必填（cron：分 时 日 月 周）
+#   - "0 2 * * *"
 env:
   - CGO_ENABLED=0
 # runs-on: [docker]   # 可选：指定远程 runner 标签
@@ -64,6 +68,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [ref, setRef] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [runDetail, setRunDetail] = useState<PipelineRun | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -116,7 +121,8 @@ export default function RepoPipeline({ owner, name, role }: Props) {
   const trigger = async () => {
     setTriggering(true);
     try {
-      const run = await api.triggerPipelineRun(owner, name);
+      const target = ref.trim();
+      const run = await api.triggerPipelineRun(owner, name, target ? { ref: target } : {});
       toast.success(t("pipeline.triggered", { id: run.id }));
       setRuns((rs) => [run, ...rs]);
       setExpanded(run.id);
@@ -124,6 +130,17 @@ export default function RepoPipeline({ owner, name, role }: Props) {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setTriggering(false);
+    }
+  };
+
+  const rerun = async (id: number) => {
+    try {
+      const run = await api.rerunPipelineRun(owner, name, id);
+      toast.success(t("pipeline.triggered", { id: run.id }));
+      setRuns((rs) => [run, ...rs]);
+      setExpanded(run.id);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
     }
   };
 
@@ -190,10 +207,18 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                 </Button>
               )}
               {canWrite && (
-                <Button variant="outline" size="sm" className="gap-1.5" disabled={triggering} onClick={trigger}>
-                  <Play className="h-3.5 w-3.5" />
-                  {t("pipeline.runNow")}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={ref}
+                    onChange={(e) => setRef(e.target.value)}
+                    placeholder={t("pipeline.refPlaceholder")}
+                    className="h-8 w-40 text-xs"
+                  />
+                  <Button variant="outline" size="sm" className="gap-1.5" disabled={triggering} onClick={trigger}>
+                    <Play className="h-3.5 w-3.5" />
+                    {t("pipeline.runNow")}
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -249,7 +274,16 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{r.sha.slice(0, 7)}</code>
                         </TableCell>
                         <TableCell className="truncate text-sm">{r.ref}</TableCell>
-                        <TableCell className="truncate text-sm text-muted-foreground">{r.trigger_by}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            {r.event && (
+                              <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                {t(`pipeline.event.${r.event}`)}
+                              </Badge>
+                            )}
+                            <span className="truncate">{r.trigger_by}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {formatDate(r.created_at, locale)}
                         </TableCell>
@@ -273,6 +307,11 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                                       )}
                                     </span>
                                     <div className="flex items-center gap-2">
+                                      {canWrite && (runDetail.status === "success" || runDetail.status === "failed") && (
+                                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => rerun(r.id)}>
+                                          {t("pipeline.rerun")}
+                                        </Button>
+                                      )}
                                       {(runDetail.status === "pending" || runDetail.status === "running") && (
                                         <>
                                           {canWrite && runDetail.runner_name && (

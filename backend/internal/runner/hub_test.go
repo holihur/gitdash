@@ -199,7 +199,7 @@ func TestOfflineSweepFailsRuns(t *testing.T) {
 	if _, err := st.CreateRunner("agent-3", "sec-3", "", "", "", ""); err != nil {
 		t.Fatalf("create runner: %v", err)
 	}
-	run, err := st.CreatePipelineRun("alice", "demo", "s", "main", "alice", 2)
+	run, err := st.CreatePipelineRun("alice", "demo", "s", "main", "alice", "", nil, 2)
 	if err != nil {
 		t.Fatalf("create run: %v", err)
 	}

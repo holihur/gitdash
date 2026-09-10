@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -34,6 +35,8 @@ var (
 	ErrDockerMissing = errors.New("docker not available")
 	// ErrHostDisabled host（无 Docker）执行未开启：image 留空的流水线被拒绝。
 	ErrHostDisabled = errors.New("host execution is disabled (set GITDASH_PIPELINE_EXEC=host on the server, or register the runner with -exec host)")
+	// ErrTriggerDisabled 该事件未在 .gitdash.yml 的 on 白名单中（静默跳过）。
+	ErrTriggerDisabled = errors.New("trigger disabled for this event")
 )
 
 // hostAllowed host（无 Docker）执行开关：环境变量 GITDASH_PIPELINE_EXEC=host 时开启。
@@ -57,7 +60,9 @@ type RunJob struct {
 	Repo  string `json:"repo"`
 	SHA   string `json:"sha"`
 	Ref   string `json:"ref"`
-	Event string `json:"event,omitempty"` // push | manual（条件步骤 when 依据）
+	Event string `json:"event,omitempty"` // push | pull_request | schedule | workflow_dispatch | manual（when 依据）
+	// Inputs dispatch 传入的键值对（注入为 INPUT_<KEY> 环境变量，优先级低于仓库级/DSL env）。
+	Inputs map[string]string `json:"inputs,omitempty"`
 }
 
 var (
@@ -156,27 +161,50 @@ func PushHandler(st *store.Store) func(webhooks.Event) {
 		if strings.HasPrefix(ev.Ref, "refs/heads/") {
 			ref = strings.TrimPrefix(ev.Ref, "refs/heads/")
 		}
-		if _, err := Trigger(st, ev.Owner, ev.Repo, ev.New, ref, ev.User, "push"); err != nil &&
-			!errors.Is(err, ErrNoPipeline) && !errors.Is(err, ErrTooManyRuns) {
+		if _, err := Trigger(st, TriggerOpts{Owner: ev.Owner, Repo: ev.Repo, SHA: ev.New, Ref: ref, By: ev.User, Event: "push"}); err != nil &&
+			!ignorableTriggerErr(err) {
 			log.Printf("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
+		}
+		// 分支 push：若该分支是某个 open PR 的源分支，按 pull_request 事件再触发一次（synchronize）
+		if branch, ok := strings.CutPrefix(ev.Ref, "refs/heads/"); ok {
+			TriggerOpenPRsForBranch(st, ev.Owner, ev.Repo, branch, ev.New, ev.User)
 		}
 	}
 }
 
-// Trigger 创建一次流水线运行（push 或手动）。
-// 提交上无 .gitdash.yml 时返回 ErrNoPipeline；DSL 解析错误会记为 failed 的运行，便于排查。
-// event 为 "push" 或 "manual"，进入条件步骤（when: event ...）的求值。
-func Trigger(st *store.Store, owner, repo, sha, ref, by, event string) (store.PipelineRun, error) {
-	if active, err := st.RunningPipelineRunIDs(owner, repo); err == nil && len(active) >= maxActiveRuns {
+// ignorableTriggerErr 常见的“静默跳过”错误（不记服务端错误日志）。
+func ignorableTriggerErr(err error) bool {
+	return errors.Is(err, ErrNoPipeline) || errors.Is(err, ErrTooManyRuns) || errors.Is(err, ErrTriggerDisabled)
+}
+
+// TriggerOpts 触发一次流水线运行的参数。
+type TriggerOpts struct {
+	Owner string
+	Repo  string
+	SHA   string
+	Ref   string // 完整 ref（refs/heads/x）或短分支名
+	By    string // 触发者（用户 / schedule / dispatch actor）
+	Event string // push | pull_request | schedule | workflow_dispatch | manual
+	// Inputs 仅 workflow_dispatch 使用，注入为 INPUT_<KEY> 环境变量。
+	Inputs map[string]string
+	// Force 跳过 on 白名单校验（手动触发与重跑用）。
+	Force bool
+}
+
+// Trigger 创建一次流水线运行。
+// 提交上无 .gitdash.yml 时返回 ErrNoPipeline；事件未被 on 白名单启用时返回 ErrTriggerDisabled；
+// 同仓库进行中运行达上限时返回 ErrTooManyRuns。DSL 解析错误会记为 failed 的运行，便于排查。
+func Trigger(st *store.Store, opts TriggerOpts) (store.PipelineRun, error) {
+	if active, err := st.RunningPipelineRunIDs(opts.Owner, opts.Repo); err == nil && len(active) >= maxActiveRuns {
 		return store.PipelineRun{}, ErrTooManyRuns
 	}
-	blob, err := gitsvc.ReadBlob(owner, repo, sha, FileName)
+	blob, err := gitsvc.ReadBlob(opts.Owner, opts.Repo, opts.SHA, FileName)
 	if err != nil || blob.Encoding != "utf-8" || strings.TrimSpace(blob.Content) == "" {
 		return store.PipelineRun{}, ErrNoPipeline
 	}
 	cfg, perr := Parse([]byte(blob.Content))
 	if perr != nil {
-		run, cerr := st.CreatePipelineRun(owner, repo, sha, ref, by, 0)
+		run, cerr := st.CreatePipelineRun(opts.Owner, opts.Repo, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, 0)
 		if cerr != nil {
 			return run, cerr
 		}
@@ -186,11 +214,14 @@ func Trigger(st *store.Store, owner, repo, sha, ref, by, event string) (store.Pi
 		run.Error = msg
 		return run, nil
 	}
-	run, err := st.CreatePipelineRun(owner, repo, sha, ref, by, cfg.UnitCount())
+	if !opts.Force && !cfg.Triggers(opts.Event) {
+		return store.PipelineRun{}, ErrTriggerDisabled
+	}
+	run, err := st.CreatePipelineRun(opts.Owner, opts.Repo, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, cfg.UnitCount())
 	if err != nil {
 		return run, err
 	}
-	job := RunJob{RunID: run.ID, Owner: owner, Repo: repo, SHA: sha, Ref: ref, Event: event}
+	job := RunJob{RunID: run.ID, Owner: opts.Owner, Repo: opts.Repo, SHA: opts.SHA, Ref: opts.Ref, Event: opts.Event, Inputs: opts.Inputs}
 	if boundQueue == nil {
 		// 进程内直接调度（默认）
 		go executeRun(st, job)
@@ -204,7 +235,7 @@ func Trigger(st *store.Store, owner, repo, sha, ref, by, event string) (store.Pi
 	defer cancel()
 	qj := queue.Job{
 		Kind:    KindPipelineRun,
-		ID:      fmt.Sprintf("%s-%s-%d", owner, repo, run.ID),
+		ID:      fmt.Sprintf("%s-%s-%d", opts.Owner, opts.Repo, run.ID),
 		Payload: payload,
 	}
 	if err := boundQueue.Enqueue(ctx, qj); err != nil {
@@ -215,6 +246,35 @@ func Trigger(st *store.Store, owner, repo, sha, ref, by, event string) (store.Pi
 		return run, nil
 	}
 	return run, nil
+}
+
+// InputEnv 把 dispatch inputs 转成 INPUT_<KEY> 环境变量（键大写、非字母数字转下划线）。
+func InputEnv(inputs map[string]string) []string {
+	if len(inputs) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(inputs))
+	for k := range inputs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(inputs))
+	for _, k := range keys {
+		out = append(out, "INPUT_"+inputEnvKey(k)+"="+inputs[k])
+	}
+	return out
+}
+
+func inputEnvKey(k string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(k) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
 }
 
 // executeRun 执行流水线：解析 DSL（Trigger 已校验过），交由绑定的 Executor 执行并写日志。
@@ -261,11 +321,14 @@ func executeRun(st *store.Store, job RunJob) {
 		fail("invalid %s: %v", FileName, perr)
 		return
 	}
-	// 仓库级环境变量在前，DSL 声明的 env 在后（同 key 时后者覆盖前者）
+	// 环境变量优先级（低→高）：dispatch inputs < 仓库级环境变量 < DSL env
 	if repoEnv, err := st.RepoEnvVars(owner, repo); err == nil {
 		cfg.Env = append(repoEnv, cfg.Env...)
 	} else {
 		writeLog("!! load repo env vars: %v", err)
+	}
+	if len(job.Inputs) > 0 {
+		cfg.Env = append(InputEnv(job.Inputs), cfg.Env...)
 	}
 
 	img := cfg.Image

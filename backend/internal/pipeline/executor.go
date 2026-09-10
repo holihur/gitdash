@@ -37,7 +37,7 @@ type builtinDockerExecutor struct{}
 // 普通步骤顺序执行；parallel 组内子步骤并发执行；when 不满足的步骤/组被跳过（计为完成）。
 func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, logSink io.Writer, progress func(int)) error {
 	be := &builtinDockerExecutor{}
-	wctx := WhenCtx{Ref: job.Ref, Event: job.Event}
+	wctx := WhenCtx{Ref: job.Ref, Event: job.Event, Sha: job.SHA, Repo: job.Owner + "/" + job.Repo}
 	total := cfg.UnitCount()
 	done := 0
 	for _, step := range cfg.Steps {
@@ -83,7 +83,7 @@ func (s Step) when(ctx WhenCtx) bool {
 // runParallelGroup 并发执行一个 parallel 组的子步骤；全部结束后返回首个失败。
 // 日志经过 loggingWriter 保证多 goroutine 写入不损坏；子步骤输出按原样交叉写入。
 func runParallelGroup(ctx context.Context, be *builtinDockerExecutor, dir string, cfg *Config, group Step, job RunJob, logSink io.Writer, done *int, total int, progress func(int)) error {
-	wctx := WhenCtx{Ref: job.Ref, Event: job.Event}
+	wctx := WhenCtx{Ref: job.Ref, Event: job.Event, Sha: job.SHA, Repo: job.Owner + "/" + job.Repo}
 	errs := make([]error, len(group.Parallel))
 	var wg sync.WaitGroup
 	var mu sync.Mutex

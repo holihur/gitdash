@@ -43,7 +43,9 @@ func celWhenEnv() *cel.Env {
 // WhenCtx 条件求值上下文。
 type WhenCtx struct {
 	Ref   string // 完整 ref（refs/heads/main、refs/tags/v1），手动触发为短分支名
-	Event string // push | manual
+	Event string // push | pull_request | schedule | workflow_dispatch | manual
+	Sha   string // 对应提交
+	Repo  string // owner/name
 }
 
 // whenVars 基于上下文构造 CEL 变量值。
@@ -63,6 +65,8 @@ func (c WhenCtx) whenVars() map[string]any {
 		"tag":    tag,
 		"ref":    c.Ref,
 		"event":  c.Event,
+		"sha":    c.Sha,
+		"repo":   c.Repo,
 	}
 }
 

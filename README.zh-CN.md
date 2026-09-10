@@ -306,7 +306,27 @@ task test:ui                              # 构建带内嵌前端的二进制并
 
 ## CI 流水线 (MVP)
 
-在仓库的 **流水线** 页开启（仅 owner）。此后每次 push 分支，gitdash 会读取该提交上的 `.gitdash.yml` 并在 Docker 容器中逐步执行（仓库工作区挂载在 `/workspace`，任一步骤失败即终止），也支持手动触发。运行日志保存在 `<data>/pipelines/{owner}/{repo}/`。
+在仓库的 **流水线** 页开启（仅 owner）。此后 gitdash 会读取目标提交上的 `.gitdash.yml` 并在 Docker 容器中逐步执行（仓库工作区挂载在 `/workspace`，任一步骤失败即终止）。运行日志保存在 `<data>/pipelines/{owner}/{repo}/`。
+
+**触发方式**（由 `.gitdash.yml` 的 `on:` 控制自动触发；省略 `on` 时仅 `push`）：
+
+| 触发 | 事件名 | 说明 |
+| --- | --- | --- |
+| 分支 / tag push | `push` | push 到 `refs/heads/*` 或 `refs/tags/*`；PR 合并到目标分支也会触发 |
+| Pull Request | `pull_request` | PR opened/reopened，以及向源分支 push（synchronize，仅同仓库 PR） |
+| 定时 | `schedule` | `schedule:` 列 cron（分 时 日 月 周），基于默认分支的 DSL；每 30s 扫描一次 |
+| 外部 dispatch | `workflow_dispatch` | `POST .../pipeline/dispatch`，可用 PAT 从外部系统触发并传 `inputs` |
+| 手动 | `manual` | UI「立即运行」/ `POST .../pipeline/runs`（可指定 `ref` 分支/tag 或 `sha`），不受 `on` 限制 |
+
+`.gitdash.yml` 触发配置示例：
+
+```yaml
+on: [push, pull_request, schedule, workflow_dispatch]
+schedule:
+  - "0 2 * * *"   # 每天 02:00（UTC）
+```
+
+外部 dispatch（需 `on` 含 `workflow_dispatch`）：`POST /api/users/{owner}/repos/{name}/pipeline/dispatch`，body `{ref?|sha?, inputs?}`；`inputs` 注入为 `INPUT_<KEY>` 环境变量（优先级低于仓库级/DSL env）。
 
 仓库 **设置 → 流水线环境变量** 可配置仓库级环境变量（仅 owner），它们会自动注入每次运行的容器 / host 执行环境；同名时 `.gitdash.yml` 里的 `env` 覆盖仓库变量。变量值以明文存储在数据库中，仅仓库 owner 可读写。
 
@@ -315,6 +335,9 @@ task test:ui                              # 构建带内嵌前端的二进制并
 ```yaml
 image: alpine:3.19   # 可选：每步运行所用镜像（省略时直接在宿主 sh 执行，需 GITDASH_PIPELINE_EXEC=host）
 timeout: 10m         # 可选：单步超时（默认 10m，上限 1h）
+on: [push, pull_request]  # 可选：自动触发事件白名单（默认仅 push）
+schedule:            # 可选：cron 列表（需 on 含 schedule）
+  - "0 2 * * *"
 env:                 # 可选：注入容器的环境变量 KEY=VALUE
   - CGO_ENABLED=0
 runs-on: [docker]    # 可选：派发给匹配标签的远程 runner
@@ -327,12 +350,16 @@ steps:               # 必填：1..20 个步骤
       go vet ./...
 ```
 
+`when:` 条件步骤可用变量：`branch`、`tag`、`ref`、`event`、`sha`、`repo`。
+
 流水线 API：
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET/PUT | `/api/users/{owner}/repos/{name}/pipeline` | 查询 / 设置开关（PUT 仅 owner） |
-| GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | 运行列表 / 手动触发（`{ref?}`） |
+| GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | 运行列表 / 手动触发（`{ref?|sha?, inputs?}`） |
+| POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/rerun` | 重跑一次既有运行（复用其 sha/ref/event） |
+| POST | `/api/users/{owner}/repos/{name}/pipeline/dispatch` | 外部 dispatch 触发（需 `on: workflow_dispatch`，支持 `inputs`） |
 | GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | 运行详情（含日志） |
 | POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel` | 取消远程 runner 执行的运行 |
 | GET | `/api/users/{owner}/repos/{name}/env` | 列出仓库级流水线环境变量 |

@@ -7,6 +7,10 @@
 //	image: alpine:3.19      # 可选：每步运行所用镜像（Docker 沙箱执行）；
 //	                        # 省略时直接在宿主 sh 中执行（需服务端/agent 允许 host 执行）
 //	timeout: 10m            # 可选：单步超时（默认 10m，上限 1h）
+//	on: [push, pull_request] # 可选：自动触发事件白名单（push|pull_request|schedule|workflow_dispatch）
+//	                        # 省略时仅 push 触发（手动触发始终允许）
+//	schedule:               # 可选：cron 表达式列表（需 on 包含 schedule）
+//	  - "0 2 * * *"
 //	env:                    # 可选：注入容器的环境变量
 //	  - CGO_ENABLED=0
 //	steps:                  # 必填：1..20 个步骤单元（并行子步骤各自计数），顺序执行，任一失败即终止
@@ -25,7 +29,8 @@
 //	          go vet ./...
 //
 // 条件表达式（when）支持的变量：branch（refs/heads/ 之后的短名）、tag（refs/tags/ 之后的短名）、
-// ref（完整 ref）、event（push | manual）。运算符：==、!=、&&、||、!，支持括号与空字符串字面量。
+// ref（完整 ref）、event（push | pull_request | schedule | workflow_dispatch | manual）、sha、repo。
+// 运算符：==、!=、&&、||、!，支持括号与空字符串字面量。
 package pipeline
 
 import (
@@ -34,6 +39,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/robfig/cron/v3"
 
 	"cel.dev/cel-go/cel"
 )
@@ -44,6 +51,8 @@ const (
 	MaxSteps       = 20
 	MaxEnvVars     = 20
 	MaxRunLength   = 8 << 10
+	// MaxSchedules 单仓库定时触发表达式上限。
+	MaxSchedules = 5
 )
 
 // DefaultStepTimeout 单步默认超时，可被 GITDASH_PIPELINE_DEFAULT_TIMEOUT 覆盖
@@ -69,6 +78,48 @@ type Config struct {
 	Volumes []string // 额外挂载卷（host:container），沙箱会校验禁止挂载 docker socket
 	RunsOn  []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
 	Steps   []Step
+	// On 可选：自动触发事件白名单。省略时仅 push 生效（手动触发始终允许）。
+	On []string
+	// Schedule 可选：cron（5 字段：分 时 日 月 周）表达式列表，需 On 包含 schedule。
+	Schedule []string
+}
+
+// allowedTriggers 事件白名单。
+var allowedTriggers = map[string]bool{
+	"push": true, "pull_request": true, "schedule": true, "workflow_dispatch": true,
+}
+
+// Triggers 判断某事件是否在触发白名单内；未声明 `on` 时仅 push 生效。
+func (c *Config) Triggers(event string) bool {
+	if len(c.On) == 0 {
+		return event == "push"
+	}
+	for _, e := range c.On {
+		if e == event {
+			return true
+		}
+	}
+	return false
+}
+
+// ScheduleEnabled 是否启用了定时触发（on 含 schedule 且至少一条 cron）。
+func (c *Config) ScheduleEnabled() bool { return c.Triggers("schedule") && len(c.Schedule) > 0 }
+
+// DispatchEnabled 是否允许外部 webhook dispatch（on 含 workflow_dispatch）。
+func (c *Config) DispatchEnabled() bool { return c.Triggers("workflow_dispatch") }
+
+// cronParser 标准 5 字段 cron（分 时 日 月 周）。
+var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+
+// parseCron 校验 cron 表达式。
+func parseCron(expr string, lineNo int) error {
+	if expr == "" || len(expr) > 128 {
+		return fmt.Errorf("line %d: invalid schedule expression", lineNo)
+	}
+	if _, err := cronParser.Parse(expr); err != nil {
+		return fmt.Errorf("line %d: invalid cron %q: %w", lineNo, expr, err)
+	}
+	return nil
 }
 
 // dockerSockPath 宿主 docker socket 路径（禁止挂载进流水线容器）。
@@ -183,8 +234,40 @@ func Parse(data []byte) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "on":
+			var err error
+			i, err = readInlineOrBlockList(lines, i, val, func(item string, lineNo int) error {
+				if !allowedTriggers[item] {
+					return fmt.Errorf("line %d: unknown trigger %q (allowed: push, pull_request, schedule, workflow_dispatch)", lineNo, item)
+				}
+				for _, e := range cfg.On {
+					if e == item {
+						return fmt.Errorf("line %d: duplicate trigger %q", lineNo, item)
+					}
+				}
+				cfg.On = append(cfg.On, item)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+		case "schedule":
+			var err error
+			i, err = readInlineOrBlockList(lines, i, val, func(item string, lineNo int) error {
+				if len(cfg.Schedule) >= MaxSchedules {
+					return fmt.Errorf("line %d: too many schedules (max %d)", lineNo, MaxSchedules)
+				}
+				if perr := parseCron(item, lineNo); perr != nil {
+					return perr
+				}
+				cfg.Schedule = append(cfg.Schedule, item)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, env, volumes, runs-on, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, on, schedule, env, volumes, runs-on, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -196,6 +279,15 @@ func Parse(data []byte) (*Config, error) {
 func (c *Config) validate() error {
 	if c.Image != "" && !imageRe.MatchString(c.Image) {
 		return fmt.Errorf("invalid image %q", c.Image)
+	}
+	if len(c.Schedule) > MaxSchedules {
+		return fmt.Errorf("too many schedules (max %d)", MaxSchedules)
+	}
+	if c.Triggers("schedule") && len(c.Schedule) == 0 {
+		return fmt.Errorf("\"schedule\" is listed in on but no schedule expressions are set")
+	}
+	if len(c.Schedule) > 0 && !c.Triggers("schedule") {
+		return fmt.Errorf("schedule expressions require \"schedule\" in on")
 	}
 	if len(c.Steps) == 0 {
 		return fmt.Errorf("at least one step is required")
@@ -290,6 +382,33 @@ func parseTimeout(val string, lineNo int) (time.Duration, error) {
 		d = MaxStepTimeout
 	}
 	return d, nil
+}
+
+// readInlineOrBlockList 读取 `key: [a, b]` 内联列表或 `key:` 后的缩进 `- item` 块列表。
+func readInlineOrBlockList(lines []string, i int, val string, add func(item string, lineNo int) error) (int, error) {
+	if strings.HasPrefix(val, "[") {
+		if !strings.HasSuffix(val, "]") {
+			return i, fmt.Errorf("line %d: invalid inline list", i+1)
+		}
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(val, "["), "]"))
+		if inner == "" {
+			return i + 1, nil
+		}
+		for _, item := range strings.Split(inner, ",") {
+			item = strings.TrimSpace(unquote(strings.TrimSpace(item)))
+			if item == "" {
+				return i, fmt.Errorf("line %d: empty item in list", i+1)
+			}
+			if err := add(item, i+1); err != nil {
+				return i, err
+			}
+		}
+		return i + 1, nil
+	}
+	if val != "" {
+		return i, fmt.Errorf("line %d: expected a list ([a, b] or indented \"- item\")", i+1)
+	}
+	return readListItems(lines, i+1, add)
 }
 
 // readListItems 消费缩进的 `- item` 列表，返回新的下标。

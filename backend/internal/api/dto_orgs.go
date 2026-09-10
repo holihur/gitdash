@@ -31,9 +31,11 @@ type setPipelineReq struct {
 	Enabled bool `json:"enabled"` // 是否启用流水线
 }
 
-// createPipelineRunReq 手动触发流水线请求体。
+// createPipelineRunReq 手动触发/重跑/外部 dispatch 流水线请求体。
 //
 //nolint:unused // 仅供 swagger @Param 注解引用
 type createPipelineRunReq struct {
-	Ref string `json:"ref"` // 可选分支名，为空时使用仓库默认分支
+	Ref    string            `json:"ref"`    // 可选：分支或 tag 短名，为空且无 sha 时用默认分支
+	SHA    string            `json:"sha"`    // 可选：直接指定提交（分支名/tag/SHA 均可）
+	Inputs map[string]string `json:"inputs"` // 可选（仅 dispatch）：注入为 INPUT_<KEY> 环境变量
 }

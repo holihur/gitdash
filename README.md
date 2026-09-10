@@ -306,7 +306,27 @@ Repo social / inbox (watch → subscribe to repo activity in your inbox):
 
 ## CI Pipeline (MVP)
 
-Enable the pipeline in the repo's **Pipeline** tab (owner only). On every push to a branch, gitdash reads `.gitdash.yml` at the pushed commit and executes the steps in Docker containers (workspace mounted at `/workspace`); steps run in order and the first failure stops the run. Manual runs are available from the tab as well. Run logs are kept under `<data>/pipelines/{owner}/{repo}/`.
+Enable the pipeline in the repo's **Pipeline** tab (owner only). gitdash then reads `.gitdash.yml` at the target commit and executes the steps in Docker containers (workspace mounted at `/workspace`); steps run in order and the first failure stops the run. Run logs are kept under `<data>/pipelines/{owner}/{repo}/`.
+
+**Triggers** (automatic triggers are gated by `on:` in `.gitdash.yml`; without `on:` only `push` applies):
+
+| Trigger | Event | Notes |
+| --- | --- | --- |
+| branch / tag push | `push` | pushes to `refs/heads/*` or `refs/tags/*`; a PR merge also pushes to the target branch |
+| Pull Request | `pull_request` | PR opened/reopened, plus pushes to the source branch (synchronize, same-repo PRs only) |
+| Schedule | `schedule` | cron list under `schedule:` (min hour dom month dow) from the default branch; scanned every 30s |
+| External dispatch | `workflow_dispatch` | `POST .../pipeline/dispatch`, callable from external systems with a PAT and `inputs` |
+| Manual | `manual` | UI "Run now" / `POST .../pipeline/runs` with an optional `ref` (branch/tag) or `sha`; never gated by `on` |
+
+Example trigger config:
+
+```yaml
+on: [push, pull_request, schedule, workflow_dispatch]
+schedule:
+  - "0 2 * * *"   # every day at 02:00 UTC
+```
+
+External dispatch (requires `on: [..., workflow_dispatch]`): `POST /api/users/{owner}/repos/{name}/pipeline/dispatch` with `{ref?|sha?, inputs?}`; `inputs` are injected as `INPUT_<KEY>` env vars (lower precedence than repo-level/DSL env).
 
 Repository-level environment variables can be configured under **Settings → Pipeline environment variables** (owner only). They are injected into the container / host environment of every run; on a key collision, the `env` block in `.gitdash.yml` takes precedence. Values are stored in plaintext in the database and are readable/writable by the repo owner only.
 
@@ -315,6 +335,9 @@ Custom YAML DSL (supported subset):
 ```yaml
 image: alpine:3.19   # optional: image for every step (omit to run directly on the host, requires GITDASH_PIPELINE_EXEC=host)
 timeout: 10m         # optional: per-step timeout (default 10m, max 1h)
+on: [push, pull_request]  # optional: automatic trigger whitelist (default: push only)
+schedule:            # optional: cron list (requires "schedule" in on)
+  - "0 2 * * *"
 env:                 # optional: KEY=VALUE list injected into containers
   - CGO_ENABLED=0
 runs-on: [docker]    # optional: dispatch to a remote runner matching these labels
@@ -327,12 +350,16 @@ steps:               # required: 1..20 steps
       go vet ./...
 ```
 
+`when:` conditions can use `branch`, `tag`, `ref`, `event`, `sha` and `repo`.
+
 Pipeline API:
 
 | Method | Path | Description |
 | --- | --- | --- |
 | GET/PUT | `/api/users/{owner}/repos/{name}/pipeline` | Get / set enabled (PUT: owner only) |
-| GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | List runs / trigger a manual run (`{ref?}`) |
+| GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | List runs / manual trigger (`{ref?|sha?, inputs?}`) |
+| POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/rerun` | Re-run an existing run (reuses its sha/ref/event) |
+| POST | `/api/users/{owner}/repos/{name}/pipeline/dispatch` | External dispatch (requires `on: workflow_dispatch`; supports `inputs`) |
 | GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | Run detail incl. log |
 | POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel` | Cancel a remote-runner run |
 | GET | `/api/users/{owner}/repos/{name}/env` | List repo-level pipeline environment variables |

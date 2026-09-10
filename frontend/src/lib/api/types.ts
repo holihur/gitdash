@@ -384,6 +384,10 @@ export interface PipelineRun {
   status: PipelineRunStatus;
   steps_total: number;
   steps_done: number;
+  /** 触发事件：push|pull_request|schedule|workflow_dispatch|manual（旧记录可能为空） */
+  event?: string;
+  /** 仅 workflow_dispatch 传入的 inputs */
+  inputs?: Record<string, string>;
   error?: string;
   created_at: string;
   finished_at: string | null;

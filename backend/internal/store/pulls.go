@@ -91,6 +91,20 @@ func (s *Store) ListPulls(owner, repo, state string, limit, offset int) ([]PullR
 	return out, nil
 }
 
+// ListOpenPullsBySource 某源分支上的全部 open PR（分支 push 时触发 PR CI 用）。
+func (s *Store) ListOpenPullsBySource(owner, repo, source string) ([]PullRequest, error) {
+	var rows []pullRequestRow
+	if err := s.db.Where("owner = ? AND repo = ? AND state = ? AND source_branch = ?", owner, repo, "open", source).
+		Order("number DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := []PullRequest{}
+	for _, r := range rows {
+		out = append(out, pullToDTO(r))
+	}
+	return out, nil
+}
+
 // CountPulls 仓库 PR 总数（state 为空时统计全部）。
 func (s *Store) CountPulls(owner, repo, state string) (int, error) {
 	q := s.db.Model(&pullRequestRow{}).Where("owner = ? AND repo = ?", owner, repo)

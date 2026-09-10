@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 
 	"gorm.io/gorm"
@@ -17,32 +18,39 @@ type Pipeline struct {
 
 // PipelineRun 一次流水线执行（push 或手动触发）。
 type PipelineRun struct {
-	ID         int64   `json:"id"`
-	Owner      string  `json:"-"`
-	Repo       string  `json:"-"`
-	SHA        string  `json:"sha"`
-	Ref        string  `json:"ref"`
-	TriggerBy  string  `json:"trigger_by"`
-	Status     string  `json:"status"` // pending | running | success | failed
-	StepsTotal int     `json:"steps_total"`
-	StepsDone  int     `json:"steps_done"`
-	Error      string  `json:"error,omitempty"`
-	RunnerName string  `json:"runner_name,omitempty"`
-	CreatedAt  string  `json:"created_at"`
-	FinishedAt *string `json:"finished_at"`
+	ID        int64  `json:"id"`
+	Owner     string `json:"-"`
+	Repo      string `json:"-"`
+	SHA       string `json:"sha"`
+	Ref       string `json:"ref"`
+	TriggerBy string `json:"trigger_by"`
+	// Event 触发事件：push|pull_request|schedule|workflow_dispatch|manual（旧记录为空）
+	Event      string            `json:"event,omitempty"`
+	Inputs     map[string]string `json:"inputs,omitempty"`
+	Status     string            `json:"status"` // pending | running | success | failed
+	StepsTotal int               `json:"steps_total"`
+	StepsDone  int               `json:"steps_done"`
+	Error      string            `json:"error,omitempty"`
+	RunnerName string            `json:"runner_name,omitempty"`
+	CreatedAt  string            `json:"created_at"`
+	FinishedAt *string           `json:"finished_at"`
 	// Log 由 API 层按需从磁盘读取填充
 	Log string `json:"log,omitempty"`
 }
 
 // runRowToDTO row → DTO 转换。
 func runRowToDTO(r pipelineRunRow) PipelineRun {
-	return PipelineRun{
+	out := PipelineRun{
 		ID: r.ID, Owner: r.Owner, Repo: r.Repo,
-		SHA: r.SHA, Ref: r.Ref, TriggerBy: r.TriggerBy, Status: r.Status,
+		SHA: r.SHA, Ref: r.Ref, TriggerBy: r.TriggerBy, Event: r.Event, Status: r.Status,
 		StepsTotal: r.StepsTotal, StepsDone: r.StepsDone, Error: r.Error,
 		RunnerName: r.RunnerName,
 		CreatedAt:  r.CreatedAt, FinishedAt: r.FinishedAt,
 	}
+	if r.Inputs != "" {
+		_ = json.Unmarshal([]byte(r.Inputs), &out.Inputs)
+	}
+	return out
 }
 
 // GetPipeline 返回仓库流水线配置（未配置时 Enabled=false）。
@@ -74,14 +82,22 @@ func (s *Store) SetPipeline(owner, repo string, enabled bool) error {
 }
 
 // CreatePipelineRun 新建一次运行记录（初始 pending）。
-func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy string, stepsTotal int) (PipelineRun, error) {
+// event 为触发事件；inputs 为 dispatch 传入的键值对（其余事件为 nil）。
+func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy, event string, inputs map[string]string, stepsTotal int) (PipelineRun, error) {
+	inputsJSON := ""
+	if len(inputs) > 0 {
+		if b, err := json.Marshal(inputs); err == nil {
+			inputsJSON = string(b)
+		}
+	}
+	ts := now()
 	r := PipelineRun{
-		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy,
-		Status: "pending", StepsTotal: stepsTotal, CreatedAt: now(),
+		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event,
+		Inputs: inputs, Status: "pending", StepsTotal: stepsTotal, CreatedAt: ts,
 	}
 	row := pipelineRunRow{
-		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy,
-		Status: "pending", StepsTotal: stepsTotal, StepsDone: 0, CreatedAt: r.CreatedAt,
+		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event, Inputs: inputsJSON,
+		Status: "pending", StepsTotal: stepsTotal, StepsDone: 0, CreatedAt: ts,
 	}
 	if err := s.db.Create(&row).Error; err != nil {
 		return r, err
@@ -160,6 +176,56 @@ func (s *Store) LatestPipelineRunForSHA(owner, repo, sha string) (PipelineRun, b
 		return PipelineRun{}, false, err
 	}
 	return runRowToDTO(row), true, nil
+}
+
+// ---- 定时触发去重 ----
+
+// GetScheduleLastFired 返回某 (repo, cron) 最近一次认领时间（RFC3339）；无记录时 ok=false。
+func (s *Store) GetScheduleLastFired(owner, repo, expr string) (string, bool, error) {
+	var row pipelineScheduleRow
+	err := s.db.Where("owner = ? AND repo = ? AND expr = ?", owner, repo, expr).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return row.LastFired, true, nil
+}
+
+// ClaimSchedule 原子认领一次定时触发：仅当无记录或 last_fired < at 时成功。
+// 多实例并发时依靠条件更新 + 主键唯一约束保证只有一个实例成功。
+func (s *Store) ClaimSchedule(owner, repo, expr, at string) (bool, error) {
+	res := s.db.Model(&pipelineScheduleRow{}).
+		Where("owner = ? AND repo = ? AND expr = ? AND last_fired < ?", owner, repo, expr, at).
+		Update("last_fired", at)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	if res.RowsAffected > 0 {
+		return true, nil
+	}
+	err := s.db.Create(&pipelineScheduleRow{Owner: owner, Repo: repo, Expr: expr, LastFired: at}).Error
+	if err == nil {
+		return true, nil
+	}
+	if isUniqueErr(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+// ListEnabledPipelines 已开启流水线的仓库列表（定时触发扫描用）。
+func (s *Store) ListEnabledPipelines() ([]Pipeline, error) {
+	var rows []pipelineCfgRow
+	if err := s.db.Where("enabled = ?", true).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]Pipeline, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Pipeline(r))
+	}
+	return out, nil
 }
 
 // FailStalePipelineRuns 孤儿 run 回收：把早于 cutoff 仍停在 pending/running 的运行

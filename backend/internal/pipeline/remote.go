@@ -80,11 +80,12 @@ func (d *dispatchExecutor) Execute(ctx context.Context, job RunJob, cfg *Config,
 			dsl = blob.Content
 		}
 	}
-	// 仓库级环境变量随任务下发（agent 端解析 DSL 后合并）
+	// 仓库级环境变量 + dispatch inputs 随任务下发（agent 端解析 DSL 后合并，DSL env 优先）
 	var repoEnv []string
 	if boundStore != nil {
 		repoEnv, _ = boundStore.RepoEnvVars(job.Owner, job.Repo)
 	}
+	repoEnv = append(InputEnv(job.Inputs), repoEnv...)
 	rjob := runner.Job{
 		JobID: fmt.Sprintf("%s-%s-%d", job.Owner, job.Repo, job.RunID),
 		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref, Event: job.Event, DSL: dsl, Env: repoEnv,

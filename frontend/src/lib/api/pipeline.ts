@@ -14,10 +14,23 @@ export const pipelineApi = {
     req<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?limit=50`),
   getPipelineRun: (owner: string, name: string, id: number) =>
     req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`),
-  triggerPipelineRun: (owner: string, name: string, ref?: string) =>
+  triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string } | string) =>
     req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs`, {
       method: "POST",
-      body: JSON.stringify(ref ? { ref } : {}),
+      body: JSON.stringify(typeof body === "string" ? { ref: body } : (body ?? {})),
+    }),
+  rerunPipelineRun: (owner: string, name: string, id: number) =>
+    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}/rerun`, {
+      method: "POST",
+    }),
+  dispatchPipelineRun: (
+    owner: string,
+    name: string,
+    body?: { ref?: string; sha?: string; inputs?: Record<string, string> },
+  ) =>
+    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/dispatch`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
     }),
   cancelPipelineRun: (owner: string, name: string, id: number) =>
     req<{ cancelled: boolean }>(`/users/${owner}/repos/${name}/pipeline/runs/${id}/cancel`, {

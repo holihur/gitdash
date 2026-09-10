@@ -198,7 +198,7 @@ func run() {
 		log.Fatalf("create api spool dir: %v", err)
 	}
 	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
-	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, sender))
+	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, sender), pipeline.PullHandler(st))
 
 	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
 	// runner（自托管 CI agent）功能需要 redis（跨实例派发与心跳）
@@ -221,6 +221,8 @@ func run() {
 		log.Printf("task queue: in-process")
 	}
 	a.SetRunnerHub(runnerHub)
+	// 定时触发：扫描已开启流水线的仓库，按 .gitdash.yml 的 schedule（cron）触发
+	go pipeline.StartScheduler(st, 30*time.Second)
 	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
 	jobs.RequeuePending()
 

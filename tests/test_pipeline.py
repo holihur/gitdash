@@ -207,6 +207,113 @@ def test_pipeline_repo_delete_cascades(pl_env):
     alice.delete(f"/repos/{repo}", expect=204)
 
 
+# ---- 触发方式：ref/tag/sha、rerun、dispatch、PR ----
+
+def test_pipeline_manual_by_ref_and_sha(pl_env):
+    an, _, alice, _, repo = pl_env
+    _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)  # DSL 错误 → 快速 failed，不依赖 docker
+
+    base = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    assert base["ref"] == "main"
+    sha = base["sha"]
+    assert sha
+
+    # 建 tag v1 指向 main
+    alice.post(
+        f"/users/{an}/repos/{repo}/refs",
+        json={"type": "tag", "name": "v1", "from": "main"},
+        expect=201,
+    )
+    # 按 tag 触发（ref 存完整 refs/tags/...）
+    tagged = alice.post(_p(an, repo, "/runs"), json={"ref": "v1"}, expect=201).json()
+    assert tagged["ref"] == "refs/tags/v1"
+    assert tagged["sha"] == sha
+    # 按 sha 触发
+    by_sha = alice.post(_p(an, repo, "/runs"), json={"sha": sha}, expect=201).json()
+    assert by_sha["sha"] == sha
+
+    # 不存在的 ref / sha
+    assert alice.post(_p(an, repo, "/runs"), json={"ref": "nope"}, expect=400).json()["code"] == "ref_not_found"
+    assert alice.post(_p(an, repo, "/runs"), json={"sha": "deadbeef"}, expect=400).json()["code"] == "commit_not_found"
+
+
+def test_pipeline_rerun(pl_env):
+    an, _, alice, _, repo = pl_env
+    _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)
+    run = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    run = _wait_terminal(alice, an, repo, run["id"], timeout=15)
+    assert run["status"] == "failed"
+    assert run["event"] == "manual"
+
+    again = alice.post(_p(an, repo, f"/runs/{run['id']}/rerun"), json={}, expect=201).json()
+    assert again["id"] != run["id"]
+    assert again["sha"] == run["sha"]
+    assert again["ref"] == run["ref"]
+    assert again["event"] == "manual"
+
+    alice.post(_p(an, repo, "/runs/999999/rerun"), json={}, expect=404)
+
+
+def test_pipeline_dispatch_requires_optin(pl_env):
+    an, _, alice, _, repo = pl_env
+    _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)
+
+    # 未声明 workflow_dispatch → 400
+    r = alice.post(_p(an, repo, "/dispatch"), json={}, expect=400).json()
+    assert r["code"] == "dispatch_not_enabled"
+
+    # 声明后 → 201，event=workflow_dispatch，inputs 持久化
+    opt_in = "on: [workflow_dispatch]\nsteps:\n  - name: x\n    run: echo hi\n"
+    _commit(alice, an, repo, ".gitdash.yml", opt_in, action="update")
+    run = alice.post(_p(an, repo, "/dispatch"), json={"inputs": {"greeting": "hi"}}, expect=201).json()
+    assert run["event"] == "workflow_dispatch"
+    assert run["inputs"] == {"greeting": "hi"}
+
+    # 手动触发不接收 inputs（仅 dispatch 生效）
+    manual = alice.post(_p(an, repo, "/runs"), json={"inputs": {"greeting": "hi"}}, expect=201).json()
+    assert not manual.get("inputs")
+    assert manual["event"] == "manual"
+
+
+def test_pipeline_pull_request_trigger(pl_env):
+    an, _, alice, _, repo = pl_env
+    # feature 分支 + 带 on[pull_request] 的 DSL
+    alice.post(
+        f"/users/{an}/repos/{repo}/refs",
+        json={"type": "branch", "name": "feature", "from": "main"},
+        expect=201,
+    )
+    alice.post(
+        f"/users/{an}/repos/{repo}/commits",
+        json={
+            "branch": "feature",
+            "message": "dsl on feature",
+            "changes": [
+                {"path": ".gitdash.yml", "action": "create", "content": "on: [pull_request]\nsteps:\n  - name: x\n    run: echo pr\n"}
+            ],
+        },
+        expect=201,
+    )
+    alice.put(_p(an, repo), json={"enabled": True}, expect=200)
+
+    alice.post(
+        f"/users/{an}/repos/{repo}/pulls",
+        json={"title": "pr ci", "source_branch": "feature", "target_branch": "main"},
+        expect=201,
+    )
+
+    deadline = time.time() + 20
+    runs = []
+    while time.time() < deadline:
+        runs = alice.get(_p(an, repo, "/runs"), expect=200).json()
+        if any(r.get("event") == "pull_request" for r in runs):
+            break
+        time.sleep(1)
+    pr_runs = [r for r in runs if r.get("event") == "pull_request"]
+    assert pr_runs, f"PR open should trigger a pull_request run: {runs}"
+    assert pr_runs[0]["ref"] == "feature"
+
+
 # ---- 队列模式（asynq + redis）----
 
 def _free_port() -> int:

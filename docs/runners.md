@@ -74,11 +74,15 @@ Variables available to `when` (compare with `==` / `!=`, combine with `&&` / `||
 |---------|-------------------------------------------------------------|
 | `branch`| short branch name (`""` for tags/refs)                      |
 | `tag`   | short tag name (`""` unless a tag push)                     |
-| `ref`   | full ref (`refs/heads/main`, `refs/tags/v1`)                |
-| `event` | `push` or `manual` (manual = triggered from the UI/API)     |
+| `ref`   | ref (`refs/heads/main`, `refs/tags/v1`, or a short branch)  |
+| `event` | `push` \| `pull_request` \| `schedule` \| `workflow_dispatch` \| `manual` |
+| `sha`   | the commit being run                                        |
+| `repo`  | `owner/name`                                                |
 
-Note: tag pushes now trigger the pipeline too (`when: tag != ""` enables or
-gates tag-only jobs). Progress counts each sub-step as one unit.
+Note: tag pushes trigger the pipeline too (`when: tag != ""` enables or
+gates tag-only jobs). The set of automatic triggers is controlled by `on:` in
+`.gitdash.yml` (default: `push` only); `manual` runs are always allowed. Progress
+counts each sub-step as one unit.
 
 ## Host execution mode (no Docker)
 
