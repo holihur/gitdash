@@ -1,8 +1,17 @@
 // Package runner 实现自托管 runner（agent）：
 // agent 主动外连服务端 WS（/api/runner/ws），服务端经 Redis pub/sub 跨实例派发任务。
+// 反向模式（ModeReverse）下方向相反：runner 监听、服务端主动拨号（见 reverse.go）。
 package runner
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"net/http"
+	"strings"
+)
+
+// ModeReverse runner 反向连接模式：runner 监听，gitdash 服务端主动拨号。
+// 用于服务端位于内网（无公网地址）、runner 暴露在公网的部署。
+const ModeReverse = "reverse"
 
 // WS 消息类型（server <-> agent）
 const (
@@ -83,3 +92,21 @@ func RedisChannel(runnerName string) string { return "gitdash:runner:" + runnerN
 
 // lastSeenKey agent 心跳 TTL key（任意实例可判在线）。
 func lastSeenKey(runnerName string) string { return "gitdash:runner:lastseen:" + runnerName }
+
+// reverseLockKey 反向拨号选主锁：多实例下只有持有该锁的实例去拨指定 runner。
+func reverseLockKey(runnerName string) string { return "gitdash:runner:reverse:" + runnerName }
+
+// BearerCredentials 解析 `Authorization: Bearer {name}:{value}`。
+// 普通模式 value 为 runner secret（服务端校验 sha256）；
+// 反向模式服务端拨号时 value 为 sha256(secret)（runner 端本地重算同值校验）。
+func BearerCredentials(r *http.Request) (name, value string, ok bool) {
+	h := r.Header.Get("Authorization")
+	if !strings.HasPrefix(h, "Bearer ") {
+		return "", "", false
+	}
+	parts := strings.SplitN(strings.TrimPrefix(h, "Bearer "), ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}

@@ -4,6 +4,10 @@
 Each agent dials out to the gitdash server over a WebSocket, picks up jobs, runs
 `.gitdash.yml` pipelines in local Docker containers, and streams logs/status back. Start it with `gitdash-runner run -exec host` to also allow pipelines that omit `image` to run directly on the runner host via `sh` (no container sandbox — opt-in).
 
+If the gitdash server is behind NAT (no public address the runner can reach), use
+**reverse mode**: the runner listens and the gitdash server dials out to it (see
+"Reverse mode" below).
+
 See the full guide (Chinese): [runners.zh-CN.md](./runners.zh-CN.md)
 
 ## Quick start
@@ -110,6 +114,39 @@ steps:
   host filesystem/network. Enable only on fully trusted machines, never as root.
 - Requires POSIX `sh` (Linux/macOS; not supported for Windows agents).
 - Black-box coverage: `tests/test_pipeline_host.py`.
+
+## Reverse mode (gitdash behind NAT, runner public)
+
+When the gitdash server sits in an intranet (no public address, so the runner
+cannot dial it) but the runner is publicly reachable, register the runner in
+reverse mode and let the server dial out:
+
+```bash
+# runner host: register with its public address, then listen
+gitdash-runner register -server http://gitdash.internal:8080 \
+  -name build-pub-01 -labels docker -token <TOKEN> \
+  -reverse -url ws://runner.example.com:8443
+gitdash-runner serve            # binds the port from -url; -listen to override
+```
+
+- `-reverse` records `mode=reverse`; `-url` is the **public** `ws://`/`wss://`
+  address the server dials (required).
+- `serve` optionally takes `-tls-cert`/`-tls-key` to terminate TLS itself, or run
+  it behind a reverse proxy and use a `wss://` url.
+- Authentication: the server dials with `Authorization: Bearer {name}:{sha256(secret)}`;
+  the runner recomputes the hash from its local secret and compares in constant
+  time. The server still stores only the hash.
+- Multi-instance: a Redis leader lock (`gitdash:runner:reverse:{name}`) ensures a
+  single server instance dials each reverse runner; jobs from other instances are
+  routed over Redis pub/sub as usual.
+- **Use `wss://` (TLS) or a trusted network** — plain `ws://` exposes the auth
+  hash to eavesdroppers.
+- The server refuses to dial loopback/private/link-local/metadata addresses by
+  default (SSRF guard); set `GITDASH_SSRF_ALLOW_PRIVATE=1` to allow private
+  targets (same switch as import/mirror protection).
+- Once connected, behaviour is identical to the default mode (labels, workspace
+  snapshot, logs, cancel, runner name on the run).
+- Modes are mutually exclusive; switch by deleting and re-registering the runner.
 
 ## Security model
 

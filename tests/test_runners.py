@@ -187,6 +187,8 @@ def runner_env(tmp_path_factory):
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
         GITDASH_QUEUE="redis",
         GITDASH_REDIS_ADDR=f"127.0.0.1:{rport}",
+        # 反向模式测试用 127.0.0.1 作为 runner 地址，需放开 SSRF 私有网段限制
+        GITDASH_SSRF_ALLOW_PRIVATE="1",
     )
     log = open(tmpdir / "server.log", "wb")
     proc = subprocess.Popen(
@@ -361,6 +363,26 @@ def _spawn_agent(base: str, agent_bin: str, home: Path, name: str, labels: str, 
     return proc, log
 
 
+def _spawn_reverse_agent(
+    base: str, agent_bin: str, home: Path, name: str, labels: str, token: str, url: str, port: int
+):
+    """注册反向 runner 并启动 serve（本机监听，由 gitdash 服务端主动拨号）。"""
+    env = dict(os.environ)
+    env["HOME"] = str(home)
+    r = subprocess.run(
+        [agent_bin, "register", "-server", base, "-name", name,
+         "-labels", labels, "-token", token, "-reverse", "-url", url],
+        env=env, capture_output=True, text=True, timeout=30,
+    )
+    assert r.returncode == 0, f"register failed: {r.stdout} {r.stderr}"
+    log = open(home / "agent.log", "wb")
+    proc = subprocess.Popen(
+        [agent_bin, "serve", "-listen", f"127.0.0.1:{port}"],
+        env=env, stdout=log, stderr=subprocess.STDOUT,
+    )
+    return proc, log
+
+
 def _wait_run(base, c, owner, repo, run_id: int, status: str, timeout: float):
     deadline = time.time() + timeout
     detail = None
@@ -372,6 +394,90 @@ def _wait_run(base, c, owner, repo, run_id: int, status: str, timeout: float):
             return detail
         time.sleep(0.5)
     pytest.fail(f"run {run_id} not {status} in {timeout}s: {detail}")
+
+
+def test_reverse_register_requires_url(runner_env):
+    """反向模式注册必须提供合法 ws/wss url，否则 400（且不消耗 token）。"""
+    base = runner_env
+    username = f"rru-{_uuid()}"
+    tok = _client(base).post(
+        "/auth/register", json={"username": username, "password": "test-pass-123456"}, expect=201
+    ).json()["token"]
+    c = _client(base, tok)
+    token = c.post(REG_TOKEN, json={"scope": "user"}, expect=201).json()["token"]
+    c.post(
+        "/runner/register",
+        json={"name": f"rru-{_uuid()}", "token": token, "mode": "reverse"},
+        expect=400,
+    )
+    c.post(
+        "/runner/register",
+        json={"name": f"rru-{_uuid()}", "token": token, "mode": "reverse", "url": "http://x"},
+        expect=400,
+    )
+    # token 未被消耗，仍可用于合法注册
+    c.post(
+        "/runner/register",
+        json={"name": f"rru-{_uuid()}", "token": token, "mode": "reverse", "url": "ws://127.0.0.1:1"},
+        expect=201,
+    )
+
+
+def test_reverse_pipeline_end_to_end(runner_env, tmp_path):
+    """反向模式端到端：runner serve 监听，服务端主动拨号，任务正常执行并回传。"""
+    base = runner_env
+    agent_bin = _agent_bin(tmp_path)
+
+    username = f"rrev-{_uuid()}"
+    c = _client(base).post(
+        "/auth/register", json={"username": username, "password": "test-pass-123456"}, expect=201
+    )
+    c = _client(base, c.json()["token"])
+    repo = f"rrev-{_uuid()}"
+    c.post("/repos", json={"name": repo, "template": "readme"}, expect=201)
+
+    token = c.post(REG_TOKEN, json={"scope": "user"}, expect=201).json()["token"]
+    rname = f"rrev-{_uuid()}"
+    port = _free_port()
+    url = f"ws://127.0.0.1:{port}"
+    agent_proc, agent_log = _spawn_reverse_agent(
+        base, agent_bin, tmp_path / "agent", rname, "docker", token, url, port
+    )
+    try:
+        # 服务端 reverseWatcher 每 5s 对账一次，首次拨号可能在 agent 监听前，需容忍重试
+        _wait_online(base, c, rname, timeout=40)
+
+        yaml = (
+            "image: alpine:3.19\n"
+            "runs-on: [docker]\n"
+            "steps:\n"
+            "  - name: build\n    run: echo hello-from-reverse\n"
+        )
+        c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
+        c.post(
+            f"/users/{username}/repos/{repo}/commits",
+            json={
+                "message": "add pipeline",
+                "changes": [{"path": ".gitdash.yml", "action": "create", "content": yaml}],
+            },
+            expect=201,
+        )
+        run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201).json()
+        detail = _wait_run(base, c, username, repo, run["id"], "success", timeout=180)
+        assert detail["runner_name"] == rname
+        assert "hello-from-reverse" in detail["log"]
+
+        online = [r for r in c.get("/runners", expect=200).json() if r["name"] == rname]
+        assert online and online[0]["status"] == "online"
+        assert online[0]["mode"] == "reverse"
+        assert online[0]["url"] == url
+    finally:
+        agent_proc.terminate()
+        try:
+            agent_proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            agent_proc.kill()
+        agent_log.close()
 
 
 def test_remote_pipeline_end_to_end(runner_env, tmp_path):

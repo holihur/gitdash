@@ -648,6 +648,7 @@ function RunnersSection() {
                   </p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {t(`runner.scope.${r.scope === "" ? "global" : r.scope.split(":")[0]}`)}
+                    {r.mode === "reverse" && ` · ${t("runner.mode.reverse")}`}
                     {r.labels.length > 0 && ` · ${r.labels.join(", ")}`}
                   </p>
                 </div>

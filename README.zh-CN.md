@@ -355,6 +355,17 @@ gitdash-runner run   # 配置写入 ~/.gitdash-runner/config.json
 
 4. 在 `.gitdash.yml` 中设置 `runs-on: [docker]`（标签须为 agent 标签的子集）。gitdash 选择标签匹配且负载最低的在线 agent，经其连接推送该提交的 `git archive` 快照（不下发任何 git 凭证），日志实时回传。无匹配 agent 时运行立即失败；agent 执行中掉线，运行记为 `failed (runner went offline)`（不静默重跑）。远程运行可在运行详情中取消。
 
+**反向连接模式**（gitdash 在内网、runner 在公网）：runner 监听端口，由 gitdash 服务端主动拨号，适用于服务端无公网地址、runner 无法回连的场景。
+
+```bash
+gitdash-runner register -server http://gitdash.internal:8080 \
+  -name build-pub-01 -labels docker -token <TOKEN> \
+  -reverse -url ws://runner.example.com:8443
+gitdash-runner serve   # 监听 url 端口；-listen 覆盖，-tls-cert/-tls-key 直接启用 TLS
+```
+
+服务端以 `Authorization: Bearer {name}:{sha256(secret)}` 拨号认证（只存 hash）；多实例经 Redis 选主锁保证只有一个实例拨号。公网部署请用 `wss://`（TLS）或仅在受信网络使用 `ws://`。详见 [docs/runners.zh-CN.md](docs/runners.zh-CN.md)。
+
 安全模型：agent 在其宿主上执行仓库任意代码 —— 请将 agent 主机视为受信 CI 机器；agent 侧应用与内置执行一致的沙箱（默认禁外网、资源限制、拒绝 docker.sock 挂载）。注册即隔离：个人 runner 只会收到该用户仓库的任务，组织 runner 只会收到该组织仓库的任务。
 
 ## 升级说明

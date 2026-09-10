@@ -5,6 +5,8 @@ import { api, type Runner } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn, copyText } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -18,6 +20,8 @@ export default function Runners() {
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<"dial" | "reverse">("dial");
+  const [reverseUrl, setReverseUrl] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -33,9 +37,13 @@ export default function Runners() {
 
   const server = window.location.origin;
 
-  const installCmd = token
-    ? `${INSTALL_BASE} && gitdash-runner register -server ${server} -name my-runner -labels docker -token ${token} && gitdash-runner run`
-    : null;
+  const installCmd = !token
+    ? null
+    : mode === "dial"
+      ? `${INSTALL_BASE} && gitdash-runner register -server ${server} -name my-runner -labels docker -token ${token} && gitdash-runner run`
+      : reverseUrl.trim()
+        ? `${INSTALL_BASE} && gitdash-runner register -server ${server} -name my-runner -labels docker -token ${token} -reverse -url ${reverseUrl.trim()} && gitdash-runner serve`
+        : null;
 
   const issue = async () => {
     setBusy(true);
@@ -117,6 +125,38 @@ export default function Runners() {
               {t("runner.issueToken")}
             </Button>
           )}
+          {token && (
+            <div className="space-y-2">
+              <Label className="text-xs">{t("runner.modeLabel")}</Label>
+              <div className="flex gap-2">
+                {(["dial", "reverse"] as const).map((m) => (
+                  <Button
+                    key={m}
+                    size="sm"
+                    variant={mode === m ? "default" : "outline"}
+                    onClick={() => setMode(m)}
+                  >
+                    {t(`runner.mode.${m}`)}
+                  </Button>
+                ))}
+              </div>
+              {mode === "reverse" && (
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground">{t("runner.reverseDesc")}</p>
+                  <Label className="text-xs" htmlFor="runner-reverse-url">
+                    {t("runner.reverseUrlLabel")}
+                  </Label>
+                  <Input
+                    id="runner-reverse-url"
+                    value={reverseUrl}
+                    onChange={(e) => setReverseUrl(e.target.value)}
+                    placeholder={t("runner.reverseUrlPlaceholder")}
+                    className="font-mono text-xs"
+                  />
+                </div>
+              )}
+            </div>
+          )}
           {installCmd && (
             <>
               <p className="text-xs text-muted-foreground">{t("runner.tokenOnce")}</p>
@@ -139,6 +179,9 @@ export default function Runners() {
               </div>
               <p className="text-xs text-muted-foreground">{t("runnerGuide.tokenNote")}</p>
             </>
+          )}
+          {token && mode === "reverse" && !reverseUrl.trim() && (
+            <p className="text-xs text-destructive">{t("runner.reverseUrlRequired")}</p>
           )}
         </CardContent>
       </Card>
@@ -176,9 +219,15 @@ export default function Runners() {
                       <Badge variant="outline" className="text-[10px]">
                         {t(`runner.scope.${r.scope === "" ? "global" : r.scope.split(":")[0]}`)}
                       </Badge>
+                      {r.mode === "reverse" && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          {t("runner.mode.reverse")}
+                        </Badge>
+                      )}
                     </p>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {r.labels.length > 0 ? r.labels.join(", ") : "—"}
+                      {(r.labels.length > 0 ? r.labels.join(", ") : "—") +
+                        (r.mode === "reverse" && r.url ? ` · ${r.url}` : "")}
                     </p>
                   </div>
                   <Button size="icon" variant="ghost" onClick={() => remove(r.name)}>

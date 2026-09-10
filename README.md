@@ -355,6 +355,17 @@ gitdash-runner run   # config in ~/.gitdash-runner/config.json
 
 4. In `.gitdash.yml` set `runs-on: [docker]` (labels must be a subset of the agent's). gitdash picks the online agent with matching labels and the lowest load, streams a `git archive` snapshot of the pushed commit over the agent's connection (no git credentials are ever sent), and streams logs back. If no agent matches, the run fails immediately; if an agent goes offline mid-run, its run is marked `failed (runner went offline)` (no silent re-execution). Remote runs can be cancelled from the run detail view.
 
+**Reverse mode** (gitdash behind NAT, public runner): the runner listens and the server dials out — for servers without a public address the runner can reach.
+
+```bash
+gitdash-runner register -server http://gitdash.internal:8080 \
+  -name build-pub-01 -labels docker -token <TOKEN> \
+  -reverse -url ws://runner.example.com:8443
+gitdash-runner serve   # binds the url port; -listen to override, -tls-cert/-tls-key for TLS
+```
+
+The server dials with `Authorization: Bearer {name}:{sha256(secret)}` (it stores only the hash); a Redis leader lock keeps a single instance dialing each reverse runner. Use `wss://` (TLS) on public networks. See [docs/runners.md](docs/runners.md).
+
 Security model: agents execute arbitrary repo code on their host — treat agent hosts as trusted CI machines; the same sandbox as builtin (no network by default, resource caps, docker.sock mounts rejected) is applied on the agent side. Registration is limited: a personal runner only ever receives that user's repos, an org runner only that org's repos.
 
 ## Upgrade Notes

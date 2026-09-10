@@ -500,6 +500,16 @@ export const en = {
     tokenOnce: "One-time registration token — shown only once:",
     none: "No runners registered yet.",
     deleted: "Runner deleted",
+    modeLabel: "Connection mode",
+    mode: {
+      dial: "Dial-out",
+      reverse: "Reverse",
+    },
+    reverseTitle: "Reverse mode (gitdash behind NAT / runner on the public internet)",
+    reverseDesc: "The runner listens and the gitdash server dials out to it — for servers without a public address that cannot be reached by the runner.",
+    reverseUrlLabel: "Runner public address",
+    reverseUrlPlaceholder: "ws://runner.example.com:8443",
+    reverseUrlRequired: "Enter the runner's public ws:// or wss:// address",
     scope: {
       global: "Global",
       user: "Personal",

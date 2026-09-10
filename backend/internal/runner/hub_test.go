@@ -66,7 +66,7 @@ func TestHubDispatchAndHeartbeat(t *testing.T) {
 		t.Fatal("hub should be enabled")
 	}
 
-	if _, err := st.CreateRunner("agent-1", "sec-1", "docker", "user:alice"); err != nil {
+	if _, err := st.CreateRunner("agent-1", "sec-1", "docker", "user:alice", "", ""); err != nil {
 		t.Fatalf("create runner: %v", err)
 	}
 
@@ -160,7 +160,7 @@ func TestHubRejectsBadSecret(t *testing.T) {
 	defer h.Stop()
 	defer h.Stop()
 
-	if _, err := st.CreateRunner("agent-2", "sec-2", "", ""); err != nil {
+	if _, err := st.CreateRunner("agent-2", "sec-2", "", "", "", ""); err != nil {
 		t.Fatalf("create runner: %v", err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(h.HandleWS))
@@ -196,7 +196,7 @@ func TestOfflineSweepFailsRuns(t *testing.T) {
 	defer h.Stop()
 	defer h.Stop()
 
-	if _, err := st.CreateRunner("agent-3", "sec-3", "", ""); err != nil {
+	if _, err := st.CreateRunner("agent-3", "sec-3", "", "", "", ""); err != nil {
 		t.Fatalf("create runner: %v", err)
 	}
 	run, err := st.CreatePipelineRun("alice", "demo", "s", "main", "alice", 2)

@@ -10442,10 +10442,16 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "mode": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
                 "token": {
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }
@@ -11711,6 +11717,10 @@ const docTemplate = `{
                 "last_seen": {
                     "type": "string"
                 },
+                "mode": {
+                    "description": "\"\"=agent 主动外连（dial） | \"reverse\"=服务端主动拨号",
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -11719,6 +11729,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }

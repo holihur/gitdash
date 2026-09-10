@@ -4,8 +4,12 @@
 package ssrf
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"net/netip"
 	"os"
+	"time"
 )
 
 // allowPrivate 每次读取（测试用 t.Setenv 动态设置；环境变量读取开销可忽略）。
@@ -32,4 +36,55 @@ func IsDangerous(addr netip.Addr) bool {
 		return false
 	}
 	return addr.IsLoopback() || addr.IsPrivate() || addr.IsUnspecified()
+}
+
+// HostBlocked 解析主机名并判断是否命中危险地址（注册时快速校验用）。
+// 解析失败视为拦截（fail-closed）。
+func HostBlocked(host string) bool {
+	if host == "" {
+		return true
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(context.Background(), "ip", host)
+	if err != nil || len(ips) == 0 {
+		return true
+	}
+	for _, ip := range ips {
+		if IsDangerous(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// DialContext 解析目标并拒绝危险地址，然后直连解析出的 IP。
+// 直接拨 IP（而非交回系统重新解析）以消除 DNS 重绑定的 TOCTOU 窗口。
+func DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil, err
+	}
+	if len(ips) == 0 {
+		return nil, fmt.Errorf("no address for %s", host)
+	}
+	safe := make([]netip.Addr, 0, len(ips))
+	for _, ip := range ips {
+		if IsDangerous(ip) {
+			return nil, fmt.Errorf("blocked address %s for %s", ip, host)
+		}
+		safe = append(safe, ip)
+	}
+	d := &net.Dialer{Timeout: 10 * time.Second}
+	var lastErr error
+	for _, ip := range safe {
+		conn, derr := d.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if derr == nil {
+			return conn, nil
+		}
+		lastErr = derr
+	}
+	return nil, lastErr
 }

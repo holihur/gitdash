@@ -6,10 +6,12 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"gitdash/backend/internal/runner"
+	"gitdash/backend/internal/ssrf"
 	"gitdash/backend/internal/store"
 )
 
@@ -101,6 +103,8 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 		Name   string   `json:"name"`
 		Labels []string `json:"labels"`
 		Token  string   `json:"token"`
+		Mode   string   `json:"mode"` // ""|dial（agent 外连） | reverse（服务端拨号）
+		URL    string   `json:"url"`  // reverse 模式：runner 对外暴露的 WS 地址
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -120,6 +124,30 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	mode := strings.TrimSpace(in.Mode)
+	if mode == "dial" {
+		mode = ""
+	}
+	reverseURL := strings.TrimSpace(in.URL)
+	switch mode {
+	case "":
+		reverseURL = "" // 普通模式不保存地址
+	case runner.ModeReverse:
+		u, uerr := url.Parse(reverseURL)
+		if uerr != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") {
+			writeCode(w, http.StatusBadRequest, "invalid_url", "reverse mode requires a ws:// or wss:// url")
+			return
+		}
+		// 反向模式服务端会主动拨该地址：拒绝回环/私有/链路本地目标（防 SSRF），
+		// GITDASH_SSRF_ALLOW_PRIVATE=1 可放开（自托管受信环境）。
+		if ssrf.HostBlocked(u.Hostname()) {
+			writeCode(w, http.StatusBadRequest, "blocked_url", "reverse url resolves to a blocked (private/loopback) address")
+			return
+		}
+	default:
+		writeCode(w, http.StatusBadRequest, "invalid_mode", `mode must be "dial" or "reverse"`)
+		return
+	}
 	scope, err := a.store.ConsumeRunnerToken(in.Token)
 	if err != nil {
 		writeCode(w, http.StatusForbidden, "invalid_token", "registration token invalid or expired")
@@ -131,7 +159,7 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secret := hex.EncodeToString(raw)
-	runnerDTO, err := a.store.CreateRunner(in.Name, secret, strings.Join(in.Labels, ","), scope)
+	runnerDTO, err := a.store.CreateRunner(in.Name, secret, strings.Join(in.Labels, ","), scope, mode, reverseURL)
 	if err != nil {
 		if errors.Is(err, store.ErrExists) {
 			writeCode(w, http.StatusConflict, "name_taken", "runner name already registered")
@@ -140,7 +168,7 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	log.Printf("runner audit: REGISTER runner=%s scope=%q time=%s", in.Name, scope, time.Now().UTC().Format(time.RFC3339))
+	log.Printf("runner audit: REGISTER runner=%s scope=%q mode=%q url=%q time=%s", in.Name, scope, mode, reverseURL, time.Now().UTC().Format(time.RFC3339))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"runner": runnerDTO,
 		"secret": secret, // 仅此一次
@@ -261,5 +289,7 @@ type (
 		Name   string   `json:"name"`
 		Labels []string `json:"labels"`
 		Token  string   `json:"token"`
+		Mode   string   `json:"mode"`
+		URL    string   `json:"url"`
 	}
 )

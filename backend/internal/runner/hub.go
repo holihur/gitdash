@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +34,9 @@ type Hub struct {
 	sessions map[int64]*session    // runID → 远程执行会话
 	busy     map[string]int        // runnerName → 执行中会话数
 
+	// reverse 反向拨号循环，runnerName → 循环状态（含取消函数），受 mu 保护。
+	reverse map[string]*reverseLoop
+
 	stopOnce sync.Once
 	stop     chan struct{}
 }
@@ -54,17 +56,27 @@ func NewHub(st *store.Store, rdb *redis.Client) *Hub {
 		conns:    map[string]*agentConn{},
 		sessions: map[int64]*session{},
 		busy:     map[string]int{},
+		reverse:  map[string]*reverseLoop{},
 		stop:     make(chan struct{}),
 	}
 	if rdb != nil {
 		go h.offlineWatcher()
+		go h.reverseWatcher()
 	}
 	return h
 }
 
 // Stop 停止后台协程（测试/优雅停机用）。
 func (h *Hub) Stop() {
-	h.stopOnce.Do(func() { close(h.stop) })
+	h.stopOnce.Do(func() {
+		close(h.stop)
+		h.mu.Lock()
+		for name, l := range h.reverse {
+			l.cancel()
+			delete(h.reverse, name)
+		}
+		h.mu.Unlock()
+	})
 }
 
 // Enabled 是否已启用（Redis 就绪）。
@@ -162,7 +174,7 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ErrNoRedis.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	name, secret, ok := runnerCredentials(r)
+	name, secret, ok := BearerCredentials(r)
 	if !ok {
 		http.Error(w, "missing credentials", http.StatusUnauthorized)
 		return
@@ -176,6 +188,12 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	h.serveConn(r.Context(), name, ws)
+}
+
+// serveConn 注册并运行一条 agent 连接的生命周期（双向泵 + Redis 订阅 + 在线状态）。
+// 无论连接由 agent 拨入（HandleWS）还是本服务端拨出（反向模式），后续处理完全一致。
+func (h *Hub) serveConn(ctx context.Context, name string, ws *websocket.Conn) {
 	conn := &agentConn{name: name, ws: ws, send: make(chan Message, 64)}
 
 	h.mu.Lock()
@@ -195,7 +213,6 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		_ = h.st.SetRunnerStatus(name, "offline")
 	}()
 
-	ctx := r.Context()
 	if err := h.st.SetRunnerStatus(name, "online"); err != nil {
 		log.Printf("runner: mark online %s: %v", name, err)
 	}
@@ -348,17 +365,4 @@ func (h *Hub) redisPump(ctx context.Context, sub *redis.PubSub, conn *agentConn)
 func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
-}
-
-// runnerCredentials 解析 runner 凭证：`Authorization: Bearer {name}:{secret}`。
-func runnerCredentials(r *http.Request) (name, secret string, ok bool) {
-	h := r.Header.Get("Authorization")
-	if !strings.HasPrefix(h, "Bearer ") {
-		return "", "", false
-	}
-	parts := strings.SplitN(strings.TrimPrefix(h, "Bearer "), ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	return parts[0], parts[1], true
 }

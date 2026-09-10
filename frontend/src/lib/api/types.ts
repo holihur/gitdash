@@ -398,6 +398,10 @@ export interface Runner {
   labels: string[];
   scope: string;
   status: string;
+  /** ""=agent 主动外连 | "reverse"=runner 监听、服务端拨号 */
+  mode?: string;
+  /** 反向模式：服务端拨号的 WS 地址 */
+  url?: string;
   last_seen?: string | null;
   created_at: string;
 }

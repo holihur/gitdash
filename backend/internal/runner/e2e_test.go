@@ -106,7 +106,7 @@ func TestRunRemoteEndToEnd(t *testing.T) {
 	defer h.Stop()
 	defer h.Stop()
 
-	if _, err := st.CreateRunner("agent-e2e", "sec", "docker", ""); err != nil {
+	if _, err := st.CreateRunner("agent-e2e", "sec", "docker", "", "", ""); err != nil {
 		t.Fatalf("create runner: %v", err)
 	}
 

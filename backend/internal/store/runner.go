@@ -17,6 +17,8 @@ type Runner struct {
 	Labels     []string  `json:"labels"`
 	Scope      string    `json:"scope"` // ""=全局 | "user:{owner}" | "org:{org}"
 	Status     string    `json:"status"`
+	Mode       string    `json:"mode"` // ""=agent 主动外连（dial） | "reverse"=服务端主动拨号
+	URL        string    `json:"url,omitempty"`
 	LastSeen   *string   `json:"last_seen,omitempty"`
 	CreatedAt  string    `json:"created_at"`
 	LastSeenAt time.Time `json:"-"`
@@ -36,8 +38,11 @@ type runnerRow struct {
 	Labels     string `gorm:"not null;default:''"`
 	Scope      string `gorm:"not null;default:'';index"`
 	Status     string `gorm:"not null;default:'offline'"`
-	LastSeen   *string
-	CreatedAt  string `gorm:"not null"`
+	// Mode ""=agent 主动外连服务端（dial）；"reverse"=runner 监听、服务端主动拨号。
+	Mode      string `gorm:"not null;default:''"`
+	URL       string `gorm:"not null;default:''"`
+	LastSeen  *string
+	CreatedAt string `gorm:"not null"`
 }
 
 func (runnerRow) TableName() string { return "runners" }
@@ -81,7 +86,7 @@ func splitLabels(s string) []string {
 func runnerRowToDTO(r runnerRow) Runner {
 	return Runner{
 		ID: r.ID, Name: r.Name, Labels: splitLabels(r.Labels), Scope: r.Scope,
-		Status: r.Status, LastSeen: r.LastSeen, CreatedAt: r.CreatedAt,
+		Status: r.Status, Mode: r.Mode, URL: r.URL, LastSeen: r.LastSeen, CreatedAt: r.CreatedAt,
 	}
 }
 
@@ -124,8 +129,9 @@ func (s *Store) ConsumeRunnerToken(token string) (string, error) {
 // ---- runners ----
 
 // CreateRunner 注册 runner；secret 明文由调用方生成，只存 hash。
-func (s *Store) CreateRunner(name, secret, labels, scope string) (Runner, error) {
-	row := runnerRow{Name: name, SecretHash: runnerHash(secret), Labels: labels, Scope: scope, Status: "offline", CreatedAt: now()}
+// mode 为 ""（dial）或 "reverse"；reverse 时 url 为服务端拨号的 WS 地址。
+func (s *Store) CreateRunner(name, secret, labels, scope, mode, url string) (Runner, error) {
+	row := runnerRow{Name: name, SecretHash: runnerHash(secret), Labels: labels, Scope: scope, Mode: mode, URL: url, Status: "offline", CreatedAt: now()}
 	if err := s.db.Create(&row).Error; err != nil {
 		if isUniqueErr(err) {
 			return Runner{}, ErrExists
@@ -133,6 +139,19 @@ func (s *Store) CreateRunner(name, secret, labels, scope string) (Runner, error)
 		return Runner{}, err
 	}
 	return runnerRowToDTO(row), nil
+}
+
+// GetRunnerSecretHash 返回 runner 存储的凭证 hash（sha256(secret) 的 hex）。
+// 反向模式服务端拨号时用它作为共享凭证（runner 端用本地 secret 重新计算同值）。
+func (s *Store) GetRunnerSecretHash(name string) (string, error) {
+	var row runnerRow
+	if err := s.db.Select("secret_hash").Where("name = ?", name).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", ErrNotFound
+		}
+		return "", err
+	}
+	return row.SecretHash, nil
 }
 
 func (s *Store) GetRunner(name string) (Runner, error) {
@@ -181,6 +200,19 @@ func (s *Store) ListRunnersByScopes(scopes []string) ([]Runner, error) {
 func (s *Store) ListAllRunners() ([]Runner, error) {
 	var rows []runnerRow
 	if err := s.db.Order("id DESC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]Runner, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, runnerRowToDTO(r))
+	}
+	return out, nil
+}
+
+// ListReverseRunners 反向模式（mode="reverse"）且配置了 url 的 runner（Hub 拨号对账用）。
+func (s *Store) ListReverseRunners() ([]Runner, error) {
+	var rows []runnerRow
+	if err := s.db.Where("mode = ? AND url <> ''", "reverse").Order("id DESC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]Runner, 0, len(rows))

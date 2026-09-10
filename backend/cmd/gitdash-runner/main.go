@@ -15,6 +15,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -22,6 +25,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -45,6 +49,10 @@ type config struct {
 	Secret      string   `json:"secret"`
 	Labels      []string `json:"labels"`
 	Concurrency int      `json:"concurrency"`
+	// Mode 为空 = agent 主动外连服务端（dial）；runner.ModeReverse = 本机监听、服务端主动拨号。
+	Mode string `json:"mode,omitempty"`
+	// URL 反向模式时对外暴露的 WS 地址（如 wss://runner.example.com:8443），服务端据此拨号。
+	URL string `json:"url,omitempty"`
 }
 
 func configPath() string {
@@ -83,8 +91,10 @@ func main() {
 		cmdRegister()
 	case "run":
 		cmdRun()
+	case "serve":
+		cmdServe()
 	default:
-		fmt.Fprintln(os.Stderr, "usage: gitdash-runner [register|run]")
+		fmt.Fprintln(os.Stderr, "usage: gitdash-runner [register|run|serve]")
 		os.Exit(2)
 	}
 }
@@ -95,10 +105,24 @@ func cmdRegister() {
 	name := fs.String("name", "", "runner 名称（全局唯一）")
 	labels := fs.String("labels", "", "逗号分隔标签（如 docker,go1.22）")
 	token := fs.String("token", "", "一次性注册 token")
+	reverse := fs.Bool("reverse", false, "反向模式：runner 监听，gitdash 服务端主动拨号（服务端在内网 / runner 在公网）")
+	url := fs.String("url", "", "反向模式对外暴露的 WS 地址（如 wss://runner.example.com:8443）")
 	_ = fs.Parse(os.Args[2:])
 	if *server == "" || *name == "" || *token == "" {
 		fmt.Fprintln(os.Stderr, "register 需要 -server -name -token")
 		os.Exit(2)
+	}
+	mode := ""
+	if *reverse {
+		mode = runner.ModeReverse
+		if *url == "" {
+			fmt.Fprintln(os.Stderr, "-reverse 需要 -url（对外暴露的 ws:// 或 wss:// 地址）")
+			os.Exit(2)
+		}
+		if u, err := neturl.Parse(*url); err != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") {
+			fmt.Fprintln(os.Stderr, "-url 必须是合法的 ws:// 或 wss:// 地址")
+			os.Exit(2)
+		}
 	}
 	var labelsOut []string
 	for _, l := range strings.Split(*labels, ",") {
@@ -106,7 +130,7 @@ func cmdRegister() {
 			labelsOut = append(labelsOut, l)
 		}
 	}
-	body, _ := json.Marshal(map[string]any{"name": *name, "labels": labelsOut, "token": *token})
+	body, _ := json.Marshal(map[string]any{"name": *name, "labels": labelsOut, "token": *token, "mode": mode, "url": *url})
 	resp, err := http.Post(strings.TrimRight(*server, "/")+"/api/runner/register", "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		log.Fatalf("register: %v", err)
@@ -127,8 +151,12 @@ func cmdRegister() {
 	if decodeErr != nil || resp.StatusCode >= 300 {
 		log.Fatalf("register failed: status=%d err=%s", resp.StatusCode, out.Error)
 	}
-	if err := saveConfig(config{Server: *server, Name: out.Runner.Name, Secret: out.Secret, Labels: labelsOut, Concurrency: 2}); err != nil {
+	if err := saveConfig(config{Server: *server, Name: out.Runner.Name, Secret: out.Secret, Labels: labelsOut, Concurrency: 2, Mode: mode, URL: *url}); err != nil {
 		log.Fatalf("save config: %v", err)
+	}
+	if mode == runner.ModeReverse {
+		fmt.Printf("已注册反向 runner %q (scope=%q, id=%d)\nsecret 已写入 %s\n启动：gitdash-runner serve（监听 %s）\n", out.Runner.Name, out.Runner.Scope, out.Runner.ID, configPath(), *url)
+		return
 	}
 	fmt.Printf("已注册 runner %q (scope=%q, id=%d)\nsecret 已写入 %s\n", out.Runner.Name, out.Runner.Scope, out.Runner.ID, configPath())
 }
@@ -155,6 +183,9 @@ func cmdRun() {
 	if err != nil {
 		log.Fatalf("读取配置失败（先执行 register）: %v", err)
 	}
+	if c.Mode == runner.ModeReverse {
+		log.Fatalf("当前 runner 为反向模式：请用 gitdash-runner serve（监听等待服务端拨号），而非 run")
+	}
 	if c.Concurrency <= 0 {
 		c.Concurrency = 2
 	}
@@ -173,7 +204,101 @@ func cmdRun() {
 	}
 }
 
-// session 单次 WS 连接生命周期：hello → 心跳 → 消息循环。
+// cmdServe 反向模式：本机监听 WS，等待 gitdash 服务端主动拨入。
+func cmdServe() {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	execMode := fs.String("exec", "docker", "执行模式：docker（容器沙箱）或 host（无 Docker，直接宿主 sh 执行）")
+	listen := fs.String("listen", "", "监听地址（默认取配置 url 的端口，绑到 :port）")
+	tlsCert := fs.String("tls-cert", "", "TLS 证书 PEM（与 -tls-key 同时提供则用 wss/https 监听，勿置于明文网络）")
+	tlsKey := fs.String("tls-key", "", "TLS 私钥 PEM")
+	_ = fs.Parse(os.Args[2:])
+	if *execMode == "host" {
+		pipeline.SetHostAllowed(true)
+		log.Printf("host 执行模式已开启（无容器沙箱，谨慎使用）")
+	}
+	c, err := loadConfig()
+	if err != nil {
+		log.Fatalf("读取配置失败（先执行 register -reverse）: %v", err)
+	}
+	if c.Mode != runner.ModeReverse {
+		log.Fatalf("当前 runner 非反向模式（mode=%q）：请先 register -reverse -url ...；普通模式用 gitdash-runner run", c.Mode)
+	}
+	if c.Concurrency <= 0 {
+		c.Concurrency = 2
+	}
+	addr := *listen
+	if addr == "" {
+		addr = listenAddrFromURL(c.URL)
+	}
+	a := &agent{cfg: c, jobs: map[int64]*jobState{}}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", a.serveWS)
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-ctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(sctx)
+	}()
+
+	log.Printf("gitdash-runner %s 反向监听 %s（等待 gitdash 服务端拨号，url=%s）", version, addr, c.URL)
+	var serveErr error
+	if *tlsCert != "" && *tlsKey != "" {
+		serveErr = srv.ListenAndServeTLS(*tlsCert, *tlsKey)
+	} else {
+		serveErr = srv.ListenAndServe()
+	}
+	stop()
+	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		log.Fatalf("listen: %v", serveErr)
+	}
+}
+
+// serveWS 处理 gitdash 服务端拨入的 WS 连接。
+// 认证：`Authorization: Bearer {name}:{sha256(secret)}`——服务端存的就是该 hash，本地重算同值校验。
+func (a *agent) serveWS(w http.ResponseWriter, r *http.Request) {
+	name, presented, ok := runner.BearerCredentials(r)
+	if !ok || name != a.cfg.Name {
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(presented), []byte(secretHash(a.cfg.Secret))) != 1 {
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
+	}
+	ws, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		return
+	}
+	log.Printf("gitdash-runner %s 服务端已拨入", version)
+	_ = a.runConn(r.Context(), ws)
+}
+
+// secretHash 计算 runner 凭证 hash（与服务端 runnerHash 一致：sha256 的 hex）。
+func secretHash(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
+}
+
+// listenAddrFromURL 从对外 url 推导监听地址（绑到 :端口）。
+func listenAddrFromURL(raw string) string {
+	u, err := neturl.Parse(raw)
+	if err != nil {
+		return ":8443"
+	}
+	if p := u.Port(); p != "" {
+		return ":" + p
+	}
+	if u.Scheme == "wss" || u.Scheme == "https" {
+		return ":443"
+	}
+	return ":80"
+}
+
+// session 单次 WS 连接生命周期（dial 模式：agent 主动连服务端）。
 func (a *agent) session(ctx context.Context) error {
 	wsCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -184,10 +309,17 @@ func (a *agent) session(ctx context.Context) error {
 		return err
 	}
 	_ = wresp // coder/websocket v1.8: 成功握手时 resp 非 nil，Body 由连接管理，不应外部关闭
+	log.Printf("gitdash-runner %s 已连接 %s", version, a.cfg.Server)
+	return a.runConn(wsCtx, ws)
+}
 
+// runConn 在已建立的连接上运行 agent 协议（hello → 心跳 → 消息循环）。
+// dial（session）与反向模式（serveWS）共用同一实现，消息方向与语义完全一致。
+func (a *agent) runConn(ctx context.Context, ws *websocket.Conn) error {
+	wsCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	a.conn = ws
 	defer func() { _ = ws.Close(websocket.StatusNormalClosure, "") }()
-	log.Printf("gitdash-runner %s 已连接 %s", version, a.cfg.Server)
 
 	a.send(runner.Message{Type: runner.TypeHello, Payload: mustJSON(runner.Hello{
 		Name: a.cfg.Name, Labels: a.cfg.Labels, Version: "1",

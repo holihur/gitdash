@@ -4,12 +4,24 @@
 `gitdash-runner` agent，它主动连接 gitdash 服务端领取任务，在本地容器中执行 `.gitdash.yml`（`gitdash-runner run -exec host` 可切换为无 Docker 的宿主执行，无容器沙箱，需显式开启）
 定义的流水线，并把日志、状态实时回传。
 
+> 若 gitdash 位于内网（无公网地址）、runner 在公网无法被回连，可用**反向连接模式**：
+> runner 改为监听，由 gitdash 服务端主动拨号，见下文「反向连接模式（gitdash 在内网 / runner 在公网）」。
+
 ## 架构
 
 ```
 ┌──────────────┐   WS 长连接（agent 主动外连，无需开放入站端口）   ┌────────────────┐
 │ gitdash-runner│ ◀──────────────────────────────────────────────▶ │  gitdash 服务端  │
 │  (docker)     │   派发任务 / 回传日志与状态 / 心跳 / 取消          │  Redis Hub      │
+└──────────────┘                                                  └────────────────┘
+```
+
+反向模式（内网服务端拨公网 runner）：
+
+```
+┌──────────────┐   WS 长连接（服务端主动外连 runner 的监听端口）  ┌────────────────┐
+│  gitdash 服务端 │ ──────────────────────────────────────────────▶ │ gitdash-runner  │
+│  (内网/NAT)    │   派发任务 / 握手认证 / 心跳                      │  serve 监听端口  │
 └──────────────┘                                                  └────────────────┘
 ```
 
@@ -145,6 +157,54 @@ steps:
 - 需要 POSIX `sh`（Linux/macOS 天然满足；Windows agent 不支持 host 模式）
 - 黑盒测试用例见 `tests/test_pipeline_host.py`
 
+## 反向连接模式（gitdash 在内网 / runner 在公网）
+
+当 gitdash 服务端本身位于内网（无公网地址、runner 无法回连）而 runner 暴露在公网时，
+可让 runner 监听端口、由 gitdash 服务端主动拨号（连接方向与默认模式相反）。
+
+### 第一步：注册为反向 runner
+
+```bash
+gitdash-runner register \
+  -server http://gitdash.internal:8080 \
+  -name build-pub-01 -labels docker,go1.22 \
+  -token <一次性注册token> \
+  -reverse -url ws://runner.example.com:8443
+```
+
+- `-reverse`：声明反向模式（服务端 `runners.mode = reverse`）
+- `-url`：**runner 对外可达**的 `ws://` 或 `wss://` 地址，服务端据此拨号（必填）
+- 其余（名称、标签、scope、一次性 token）与默认模式一致
+
+### 第二步：启动监听
+
+```bash
+gitdash-runner serve
+```
+
+- 默认监听地址由 `-url` 的端口推导（绑 `:8443`）；可用 `-listen 127.0.0.1:8443` 覆盖
+- 需要 TLS 时可用 `-tls-cert` / `-tls-key` 直接监听 `https`（对应 `-url wss://...`），
+  或置于 Nginx/Caddy 之后做 TLS 终止
+- 之后行为与默认模式**完全一致**：服务端按 `runs-on` 标签选它、下发工作区快照、
+  回传日志/状态、支持取消；运行详情同样显示 runner 名
+
+### 认证与多实例
+
+- 服务端拨号时携带 `Authorization: Bearer {name}:{sha256(secret)}`；runner 用本地 `secret`
+  重算同一 hash 常量时间比对。服务端只存 hash，不存 secret 明文。
+- 多实例部署经 Redis 选主锁（`gitdash:runner:reverse:{name}`，连接期间续租）：
+  同一时刻只有一个实例拨号，其余实例经 Redis pub/sub 把任务路由到持有连接的实例。
+- runner 掉线后服务端每 5s 重连；删除 runner 会立即停止拨号并关闭连接。
+
+### 安全与网络
+
+- **务必用 `wss://`（TLS）或仅在受信网络使用 `ws://`**：明文 `ws` 会把认证 hash 暴露给
+  链路窃听者（与默认模式把 secret 放在明文 WS 头的问题相同）。
+- runner 防火墙需放行监听端口，来源为 gitdash 服务端的出网 IP；服务端只需能出站访问该端口。
+- 服务端默认拒绝向**回环/私有/链路本地/云元数据**地址拨号（防 SSRF）；若 runner 确实在私有网段，
+  在服务端设置 `GITDASH_SSRF_ALLOW_PRIVATE=1` 放开（与导入/mirror 防护同一开关）。
+- 两种模式互斥：切换模式需删除后重新注册（`DELETE /api/runners/{name}` 或前端删除）。
+
 ## 管理 Runner
 
 - 用户：个人设置 → Runner 卡片：在线状态（绿点）、标签、签发 token、删除
@@ -187,3 +247,5 @@ steps:
 | `gitdash-runner run -exec host` | agent | 允许该 runner 执行省略 `image` 的流水线（宿主 `sh`，无沙箱，默认关闭） |
 | `GITDASH_PIPELINE_DEFAULT_TIMEOUT` | 服务端/agent | 单步默认超时（默认 10m，上限 1h） |
 | config.json `concurrency` | agent | 并发任务数（默认 2，无对应环境变量） |
+| config.json `mode` / `url` | agent | 反向模式标记与对外 WS 地址（`register -reverse -url` 写入） |
+| `GITDASH_SSRF_ALLOW_PRIVATE=1` | 服务端 | 允许反向模式拨号到私有/回环地址（默认拦截，防 SSRF） |

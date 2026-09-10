@@ -499,6 +499,16 @@ export const zhCN: Messages = {
     tokenOnce: "一次性注册 token —— 仅显示一次：",
     none: "还没有注册任何 runner。",
     deleted: "Runner 已删除",
+    modeLabel: "连接模式",
+    mode: {
+      dial: "主动外连",
+      reverse: "反向连接",
+    },
+    reverseTitle: "反向连接（gitdash 在内网 / runner 在公网）",
+    reverseDesc: "runner 监听端口，由 gitdash 服务端主动拨号连接；适用于服务端无公网地址、runner 无法回连的场景。",
+    reverseUrlLabel: "runner 对外地址",
+    reverseUrlPlaceholder: "ws://runner.example.com:8443",
+    reverseUrlRequired: "请填写 runner 的对外 ws:// 或 wss:// 地址",
     scope: {
       global: "全局",
       user: "个人",
