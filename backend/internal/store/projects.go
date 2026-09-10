@@ -104,7 +104,7 @@ func (s *Store) ListProjectColumns(projectID int64) ([]ProjectColumn, error) {
 	}
 	out := []ProjectColumn{}
 	for _, r := range rows {
-		out = append(out, ProjectColumn{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Position: r.Position})
+		out = append(out, ProjectColumn(r))
 	}
 	return out, nil
 }
@@ -120,7 +120,7 @@ func (s *Store) CreateProjectColumn(owner, repo string, projectID int64, name st
 	if err := s.db.Create(&r).Error; err != nil {
 		return ProjectColumn{}, err
 	}
-	return ProjectColumn{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Position: r.Position}, nil
+	return ProjectColumn(r), nil
 }
 
 // UpdateProjectColumn 重命名 / 调整顺序。
@@ -171,7 +171,7 @@ func (s *Store) ListProjectSwimlanes(projectID int64) ([]ProjectSwimlane, error)
 	}
 	out := []ProjectSwimlane{}
 	for _, r := range rows {
-		out = append(out, ProjectSwimlane{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Position: r.Position})
+		out = append(out, ProjectSwimlane(r))
 	}
 	return out, nil
 }
@@ -187,7 +187,7 @@ func (s *Store) CreateProjectSwimlane(owner, repo string, projectID int64, name 
 	if err := s.db.Create(&r).Error; err != nil {
 		return ProjectSwimlane{}, err
 	}
-	return ProjectSwimlane{ID: r.ID, ProjectID: r.ProjectID, Name: r.Name, Position: r.Position}, nil
+	return ProjectSwimlane(r), nil
 }
 
 func (s *Store) UpdateProjectSwimlane(projectID, id int64, name string, position *int) error {

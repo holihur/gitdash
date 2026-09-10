@@ -51,10 +51,7 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
+	var in createProjectReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -94,10 +91,7 @@ func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	var in struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
+	var in updateProjectReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -269,9 +263,7 @@ func (a *API) createProjectColumn(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	var in struct {
-		Name string `json:"name"`
-	}
+	var in createProjectColumnReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -314,10 +306,7 @@ func (a *API) updateProjectColumn(w http.ResponseWriter, r *http.Request) {
 	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
 		return
 	}
-	var in struct {
-		Name     string `json:"name"`
-		Position *int   `json:"position"`
-	}
+	var in updateProjectColumnReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -411,9 +400,7 @@ func (a *API) createProjectSwimlane(w http.ResponseWriter, r *http.Request) {
 	if !ok2 {
 		return
 	}
-	var in struct {
-		Name string `json:"name"`
-	}
+	var in createProjectSwimlaneReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -456,10 +443,7 @@ func (a *API) updateProjectSwimlane(w http.ResponseWriter, r *http.Request) {
 	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
 		return
 	}
-	var in struct {
-		Name     string `json:"name"`
-		Position *int   `json:"position"`
-	}
+	var in updateProjectSwimlaneReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -553,12 +537,7 @@ func (a *API) createProjectCard(w http.ResponseWriter, r *http.Request) {
 	if !ok2 {
 		return
 	}
-	var in struct {
-		ColumnID    int64  `json:"column_id"`
-		SwimlaneID  int64  `json:"swimlane_id"`
-		IssueNumber int64  `json:"issue_number"`
-		Note        string `json:"note"`
-	}
+	var in createProjectCardReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
@@ -604,12 +583,7 @@ func (a *API) updateProjectCard(w http.ResponseWriter, r *http.Request) {
 	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
 		return
 	}
-	var in struct {
-		ColumnID   *int64  `json:"column_id"`
-		SwimlaneID *int64  `json:"swimlane_id"`
-		Position   *int    `json:"position"`
-		Note       *string `json:"note"`
-	}
+	var in updateProjectCardReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}

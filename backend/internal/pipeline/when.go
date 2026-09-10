@@ -77,13 +77,9 @@ func compileWhen(expr string, lineNo int) (cel.Program, error) {
 	}
 	ast, iss := celWhenEnv().Compile(expr)
 	if iss.Err() != nil {
-		return nil, fmt.Errorf("line %d: when: %s", lineNo, iss.Err())
+		return nil, fmt.Errorf("line %d: when: %w", lineNo, iss.Err())
 	}
-	if eq, ok := ast.OutputType().Equal(cel.BoolType).(interface{ Boolean() bool }); ok {
-		if !eq.Boolean() {
-			return nil, fmt.Errorf("line %d: when: expression must be boolean", lineNo)
-		}
-	} else if ast.OutputType().Equal(cel.BoolType).Value().(bool) == false {
+	if !ast.OutputType().IsExactType(cel.BoolType) {
 		return nil, fmt.Errorf("line %d: when: expression must be boolean", lineNo)
 	}
 	prg, err := celWhenEnv().Program(ast)

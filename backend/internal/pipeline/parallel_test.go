@@ -8,7 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func TestParseParallelAndWhen(t *testing.T) {
@@ -115,7 +114,6 @@ func TestWhenEval(t *testing.T) {
 func TestRunInWorkspaceParallelAndSkip(t *testing.T) {
 	SetHostAllowed(true)
 	defer SetHostAllowed(false)
-	cfg := &Config{Timeout: 30 * time.Second}
 	src := `steps:
   - name: gate
     when: branch == "main"
