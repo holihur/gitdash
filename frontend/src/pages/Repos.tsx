@@ -234,7 +234,7 @@ export default function Repos() {
                     id="repo-namespace"
                     value={namespace}
                     onChange={(e) => setNamespace(e.target.value)}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">{t("repos.namespacePersonal")}</option>
                     {orgs.map((o) => (
@@ -251,7 +251,7 @@ export default function Repos() {
                   id="repo-template"
                   value={template}
                   onChange={(e) => setTemplate(e.target.value as "" | "readme")}
-                  className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">{t("repos.templateNone")}</option>
                   <option value="readme">{t("repos.templateReadme")}</option>
@@ -267,7 +267,7 @@ export default function Repos() {
                       setTemplateRepo(e.target.value);
                       if (e.target.value) setTemplate("");
                     }}
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="">{t("repos.templateRepoNone")}</option>
                     {templateRepos.map((r) => (
