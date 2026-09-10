@@ -205,6 +205,46 @@ def test_host_run_push_trigger(host_repo):
     assert final["status"] == "success"
 
 
+def test_host_repo_env_vars_injected(host_repo):
+    """仓库级环境变量注入 host 步骤。"""
+    username, repo, c = host_repo
+    c.put(
+        f"/users/{username}/repos/{repo}/env",
+        json={"key": "GREETING", "value": "repo-level"},
+        expect=200,
+    )
+    c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
+    _commit(c, username, repo, ".gitdash.yml", "steps:\n  - name: hello\n    run: echo G=$GREETING\n")
+
+    run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201)
+    run = _wait_terminal(c, username, repo, run["id"])
+    assert run["status"] == "success", run
+    assert "G=repo-level" in run.get("log", ""), run.get("log")
+
+
+def test_host_repo_env_dsl_override(host_repo):
+    """同 key 时 DSL env 覆盖仓库级环境变量。"""
+    username, repo, c = host_repo
+    c.put(
+        f"/users/{username}/repos/{repo}/env",
+        json={"key": "GREETING", "value": "repo-level"},
+        expect=200,
+    )
+    c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
+    _commit(
+        c,
+        username,
+        repo,
+        ".gitdash.yml",
+        "env:\n  - GREETING=dsl-level\nsteps:\n  - name: hello\n    run: echo G=$GREETING\n",
+    )
+
+    run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201)
+    run = _wait_terminal(c, username, repo, run["id"])
+    assert run["status"] == "success", run
+    assert "G=dsl-level" in run.get("log", ""), run.get("log")
+
+
 def test_host_disabled_rejects_no_image(base_url, user_factory):
     """默认实例（未开启 host 执行）：省略 image 的流水线记 failed 并说明原因。"""
     if not GITDASH_BIN and not os.environ.get("GITDASH_API_URL"):

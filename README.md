@@ -308,6 +308,8 @@ Repo social / inbox (watch → subscribe to repo activity in your inbox):
 
 Enable the pipeline in the repo's **Pipeline** tab (owner only). On every push to a branch, gitdash reads `.gitdash.yml` at the pushed commit and executes the steps in Docker containers (workspace mounted at `/workspace`); steps run in order and the first failure stops the run. Manual runs are available from the tab as well. Run logs are kept under `<data>/pipelines/{owner}/{repo}/`.
 
+Repository-level environment variables can be configured under **Settings → Pipeline environment variables** (owner only). They are injected into the container / host environment of every run; on a key collision, the `env` block in `.gitdash.yml` takes precedence. Values are stored in plaintext in the database and are readable/writable by the repo owner only.
+
 Custom YAML DSL (supported subset):
 
 ```yaml
@@ -333,6 +335,9 @@ Pipeline API:
 | GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | List runs / trigger a manual run (`{ref?}`) |
 | GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | Run detail incl. log |
 | POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel` | Cancel a remote-runner run |
+| GET | `/api/users/{owner}/repos/{name}/env` | List repo-level pipeline environment variables |
+| PUT | `/api/users/{owner}/repos/{name}/env` | Create / overwrite an environment variable (`{key, value}`) |
+| DELETE | `/api/users/{owner}/repos/{name}/env/{key}` | Delete an environment variable |
 
 ## Runners (Self-hosted CI Agents)
 

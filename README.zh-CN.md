@@ -308,6 +308,8 @@ task test:ui                              # 构建带内嵌前端的二进制并
 
 在仓库的 **流水线** 页开启（仅 owner）。此后每次 push 分支，gitdash 会读取该提交上的 `.gitdash.yml` 并在 Docker 容器中逐步执行（仓库工作区挂载在 `/workspace`，任一步骤失败即终止），也支持手动触发。运行日志保存在 `<data>/pipelines/{owner}/{repo}/`。
 
+仓库 **设置 → 流水线环境变量** 可配置仓库级环境变量（仅 owner），它们会自动注入每次运行的容器 / host 执行环境；同名时 `.gitdash.yml` 里的 `env` 覆盖仓库变量。变量值以明文存储在数据库中，仅仓库 owner 可读写。
+
 自定义 YAML DSL（受支持子集）：
 
 ```yaml
@@ -333,6 +335,9 @@ steps:               # 必填：1..20 个步骤
 | GET/POST | `/api/users/{owner}/repos/{name}/pipeline/runs` | 运行列表 / 手动触发（`{ref?}`） |
 | GET | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}` | 运行详情（含日志） |
 | POST | `/api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel` | 取消远程 runner 执行的运行 |
+| GET | `/api/users/{owner}/repos/{name}/env` | 列出仓库级流水线环境变量 |
+| PUT | `/api/users/{owner}/repos/{name}/env` | 新增 / 覆盖环境变量（`{key, value}`） |
+| DELETE | `/api/users/{owner}/repos/{name}/env/{key}` | 删除环境变量 |
 
 ## Runner（自托管 CI Agent）
 

@@ -1,5 +1,5 @@
 import { req } from "./core";
-import type { PipelineRun, Runner } from "./types";
+import type { PipelineRun, RepoEnvVar, Runner } from "./types";
 
 export const pipelineApi = {
   // pipeline（CI）
@@ -22,6 +22,19 @@ export const pipelineApi = {
   cancelPipelineRun: (owner: string, name: string, id: number) =>
     req<{ cancelled: boolean }>(`/users/${owner}/repos/${name}/pipeline/runs/${id}/cancel`, {
       method: "POST",
+    }),
+
+  // 仓库级流水线环境变量（仅 owner）
+  listRepoEnvVars: (owner: string, name: string) =>
+    req<RepoEnvVar[]>(`/users/${owner}/repos/${name}/env`),
+  setRepoEnvVar: (owner: string, name: string, key: string, value: string) =>
+    req<RepoEnvVar[]>(`/users/${owner}/repos/${name}/env`, {
+      method: "PUT",
+      body: JSON.stringify({ key, value }),
+    }),
+  deleteRepoEnvVar: (owner: string, name: string, key: string) =>
+    req<{ deleted: boolean }>(`/users/${owner}/repos/${name}/env/${encodeURIComponent(key)}`, {
+      method: "DELETE",
     }),
 
 

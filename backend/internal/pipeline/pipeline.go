@@ -261,6 +261,13 @@ func executeRun(st *store.Store, job RunJob) {
 		fail("invalid %s: %v", FileName, perr)
 		return
 	}
+	// 仓库级环境变量在前，DSL 声明的 env 在后（同 key 时后者覆盖前者）
+	if repoEnv, err := st.RepoEnvVars(owner, repo); err == nil {
+		cfg.Env = append(repoEnv, cfg.Env...)
+	} else {
+		writeLog("!! load repo env vars: %v", err)
+	}
+
 	img := cfg.Image
 	if img == "" {
 		img = "host"

@@ -206,6 +206,9 @@ func (c *Config) validate() error {
 	if units := c.UnitCount(); units > MaxSteps {
 		return fmt.Errorf("too many steps (max %d, got %d)", MaxSteps, units)
 	}
+	if len(c.Env) > MaxEnvVars {
+		return fmt.Errorf("too many env vars (max %d)", MaxEnvVars)
+	}
 	for i, s := range c.Steps {
 		if err := validateStep("step", i+1, s); err != nil {
 			return err

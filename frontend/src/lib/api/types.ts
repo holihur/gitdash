@@ -402,6 +402,12 @@ export interface Runner {
   created_at: string;
 }
 
+export interface RepoEnvVar {
+  key: string;
+  value: string;
+  created_at: string;
+}
+
 export type NotifKind = "issue" | "pull";
 export type NotifAction = "opened" | "closed" | "reopened" | "merged";
 

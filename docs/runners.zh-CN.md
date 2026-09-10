@@ -110,7 +110,7 @@ runs-on:                     # 块列表
 
 目标机器没有 Docker 也能跑流水线：`.gitdash.yml` **省略 `image`**，步骤直接在宿主 `sh -ec`
 中执行（工作区解包到临时目录，`GITDASH_REPO` / `GITDASH_REF` / `GITDASH_SHA` / `CI=1`
-与 cfg `env` 一并注入，`volumes` 被忽略）。
+与仓库级环境变量、cfg `env` 一并注入，`volumes` 被忽略；同 key 时 cfg `env` 覆盖仓库变量）。
 
 开启方式（**默认关闭**，两侧独立开启）：
 

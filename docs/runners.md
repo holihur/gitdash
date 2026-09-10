@@ -80,8 +80,9 @@ gates tag-only jobs). Progress counts each sub-step as one unit.
 
 Pipelines that **omit `image`** run each step directly in a host `sh -ec` — useful
 when the machine has no Docker. The workspace snapshot is unpacked to a temp
-directory and `CI=1`, `GITDASH_REPO`/`GITDASH_REF`/`GITDASH_SHA` plus the DSL `env`
-entries are injected (`volumes` is ignored).
+directory and `CI=1`, `GITDASH_REPO`/`GITDASH_REF`/`GITDASH_SHA` plus the repo-level
+environment variables and the DSL `env` entries are injected (`volumes` is ignored).
+On a key collision, the DSL `env` wins over repo-level variables.
 
 Enable it explicitly (off by default, independently on each side):
 

@@ -44,7 +44,10 @@ type Job struct {
 	SHA   string `json:"sha"`
 	Ref   string `json:"ref"`
 	Event string `json:"event,omitempty"` // push | manual（条件步骤 when 依据）
-	DSL   string `json:"dsl"` // .gitdash.yml 原文（agent 端用统一 parser 解析）
+	DSL   string `json:"dsl"`             // .gitdash.yml 原文（agent 端用统一 parser 解析）
+	// Env 仓库级环境变量（KEY=VALUE），由 server 侧读取并随任务下发；
+	// agent 端解析 DSL 后合并（DSL 内 env 同 key 覆盖）。
+	Env []string `json:"env,omitempty"`
 }
 
 // JobData 工作区快照分块（base64 tar.gz 片段；eof=true 结束）。

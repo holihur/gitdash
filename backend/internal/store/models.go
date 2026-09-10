@@ -446,6 +446,17 @@ type pipelineRunRow struct {
 
 func (pipelineRunRow) TableName() string { return "pipeline_runs" }
 
+// repoEnvVarRow 仓库级流水线环境变量（每次运行注入容器 / host 执行环境）。
+type repoEnvVarRow struct {
+	Owner     string `gorm:"primaryKey;size:255"`
+	Repo      string `gorm:"primaryKey;size:255"`
+	Key       string `gorm:"primaryKey;size:255"`
+	Value     string `gorm:"not null;default:''"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (repoEnvVarRow) TableName() string { return "repo_env_vars" }
+
 // ---- releases / release assets ----
 
 type releaseRow struct {

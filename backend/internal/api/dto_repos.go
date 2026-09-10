@@ -65,3 +65,9 @@ type addCollabReq struct {
 	Username   string `json:"username"`   // 协作者用户名
 	Permission string `json:"permission"` // 权限：read 或 write
 }
+
+// setRepoEnvVarReq 设置仓库级流水线环境变量请求体。
+type setRepoEnvVarReq struct {
+	Key   string `json:"key"`   // 环境变量名（[A-Za-z_][A-Za-z0-9_]*）
+	Value string `json:"value"` // 环境变量值
+}

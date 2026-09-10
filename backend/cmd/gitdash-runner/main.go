@@ -362,6 +362,10 @@ func (a *agent) execJob(ctx context.Context, job runner.Job, st *jobState) {
 		status("failed", "invalid .gitdash.yml: "+err.Error(), 0)
 		return
 	}
+	// 仓库级环境变量在前，DSL env 在后（同 key 时 DSL 覆盖）
+	if len(job.Env) > 0 {
+		cfg.Env = append(job.Env, cfg.Env...)
+	}
 
 	lw := &wsLogWriter{a: a, runID: job.RunID}
 	defer lw.flush()
