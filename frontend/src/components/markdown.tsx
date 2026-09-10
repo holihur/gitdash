@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 marked.setOptions({ gfm: true, breaks: false });
 
 /** Markdown 渲染（DOMPurify 消毒后展示；代码块由 highlight.js 高亮）。 */
-export function MarkdownView({ text }: { text: string }) {
+export function MarkdownView({ text, className }: { text: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   const html = useMemo(() => {
@@ -38,7 +38,7 @@ export function MarkdownView({ text }: { text: string }) {
   return (
     <div
       ref={ref}
-      className="markdown-body overflow-x-auto text-sm leading-6"
+      className={cn("markdown-body overflow-x-auto text-sm leading-6", className)}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

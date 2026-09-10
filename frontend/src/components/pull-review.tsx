@@ -4,7 +4,8 @@ import { Check, GitPullRequestDraft, ShieldCheck, X } from "lucide-react";
 import { api, type MergeGate, type PullReview } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownView } from "@/components/markdown";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -118,7 +119,7 @@ export default function PullReviewSection({
                   {formatDate(r.created_at, locale)}
                 </span>
               </div>
-              {r.body && <p className="mt-1 whitespace-pre-wrap break-words text-xs">{r.body}</p>}
+              {r.body && <MarkdownView text={r.body} className="mt-1 text-xs leading-5" />}
             </div>
           ))}
         </div>
@@ -126,11 +127,11 @@ export default function PullReviewSection({
 
       {canWrite && (
         <div className="space-y-2 border-t pt-2">
-          <Textarea
+          <MarkdownEditor
             rows={2}
             placeholder={t("pulls.reviewPlaceholder")}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={setBody}
           />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" className="gap-1 text-green-600 dark:text-green-400" disabled={busy} onClick={() => submit("approve")}>

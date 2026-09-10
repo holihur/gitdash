@@ -4,6 +4,7 @@ import { MessageSquare } from "lucide-react";
 import { api, type IssueComment } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MarkdownView } from "@/components/markdown";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -235,7 +236,7 @@ export function PullDiffView({
                           <span className="ml-2 text-muted-foreground">
                             {formatDate(c.created_at, locale)}
                           </span>
-                          <p className="mt-0.5 whitespace-pre-wrap break-words">{c.body}</p>
+                          <MarkdownView text={c.body} className="mt-0.5 text-xs leading-5" />
                         </div>
                       ))}
                       {showForm && (

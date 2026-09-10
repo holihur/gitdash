@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { api, type IssueComment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownView } from "@/components/markdown";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -99,17 +100,19 @@ export default function CommentSection({ owner, name, number, kind = "issues" }:
                   </Button>
                 )}
               </div>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm">{c.body}</p>
+              <div className="mt-1">
+                <MarkdownView text={c.body} />
+              </div>
             </div>
           ))}
         </div>
       )}
       <div className="space-y-2">
-        <Textarea
+        <MarkdownEditor
           rows={3}
           placeholder={t("comments.placeholder")}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={setBody}
         />
         <Button size="sm" disabled={posting || !body.trim()} onClick={post}>
           {t("comments.post")}

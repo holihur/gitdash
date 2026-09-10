@@ -40,6 +40,10 @@ export const zhCN: Messages = {
     delete: "删除",
     pleaseConfirm: "请确认",
     moreActions: "更多操作",
+    write: "编写",
+    preview: "预览",
+    markdownSupported: "支持 Markdown",
+    nothingToPreview: "暂无可预览内容",
   },
   login: {
     subtitle: "登录或注册以管理你的仓库",

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
@@ -236,12 +236,12 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
                 </div>
                 <div className="grid gap-2">
                   <FieldLabel htmlFor="issue-body">{t("issues.bodyLabel")}</FieldLabel>
-                  <Textarea
+                  <MarkdownEditor
                     id="issue-body"
                     rows={5}
                     placeholder={t("issues.bodyPlaceholder")}
                     value={body}
-                    onChange={(e) => setBody(e.target.value)}
+                    onChange={setBody}
                   />
                 </div>
               </div>

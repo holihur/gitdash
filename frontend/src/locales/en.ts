@@ -38,6 +38,10 @@ export const en = {
     delete: "Delete",
     pleaseConfirm: "Please confirm",
     moreActions: "More actions",
+    write: "Write",
+    preview: "Preview",
+    markdownSupported: "Markdown supported",
+    nothingToPreview: "Nothing to preview",
   },
   login: {
     subtitle: "Sign in or register to manage your repositories",

@@ -26,7 +26,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownView } from "@/components/markdown";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import Pagination from "@/components/ui/pagination";
 import { useQueryState } from "@/lib/query-state";
 import { cn, formatDate } from "@/lib/utils";
@@ -184,11 +185,11 @@ export default function RepoPulls({
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="pr-body">{t("issues.bodyLabel")}</Label>
-                <Textarea
+                <MarkdownEditor
                   id="pr-body"
                   rows={4}
                   value={body}
-                  onChange={(e) => setBody(e.target.value)}
+                  onChange={setBody}
                 />
               </div>
             </div>
@@ -312,9 +313,7 @@ export default function RepoPulls({
                 </div>
                 {openDetail && (
                   <div className="space-y-3 border-t bg-muted/20 px-4 py-3">
-                    {pr.body.trim() && (
-                      <p className="whitespace-pre-wrap break-words text-sm">{pr.body}</p>
-                    )}
+                    {pr.body.trim() && <MarkdownView text={pr.body} />}
                     {pr.state === "merged" && (
                       <p className="text-xs text-muted-foreground">
                         {t("pulls.mergedOn", {
