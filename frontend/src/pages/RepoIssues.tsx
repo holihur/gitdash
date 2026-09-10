@@ -27,6 +27,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import LabelChip from "@/components/label-chip";
+import { MarkdownView } from "@/components/markdown";
 import CommentSection from "@/components/comment-section";
 import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
@@ -388,9 +389,11 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
                 </div>
                 {openDetail && (
                   <div className="space-y-3 border-t bg-muted/30 px-4 py-3">
-                    <p className="whitespace-pre-wrap break-words text-sm">
-                      {issue.body.trim() || t("issues.noBody")}
-                    </p>
+                    {issue.body.trim() ? (
+                      <MarkdownView text={issue.body} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("issues.noBody")}</p>
+                    )}
                     <div className="space-y-3 rounded-lg border bg-card p-3">
                       <div>
                         <p className="mb-1.5 text-xs font-medium text-muted-foreground">
