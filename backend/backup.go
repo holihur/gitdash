@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -58,12 +59,12 @@ func writeBackup(dataDir, out string) error {
 			snapPath = tmp.Name()
 			_ = tmp.Close()
 			_ = os.Remove(snapPath) // VACUUM INTO 要求目标不存在
-			defer os.Remove(snapPath)
+			defer func() { _ = os.Remove(snapPath) }()
 			db, err := sql.Open("sqlite", src)
 			if err != nil {
 				return fmt.Errorf("open sqlite: %w", err)
 			}
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			if _, err := db.Exec("VACUUM INTO ?", snapPath); err != nil {
 				return fmt.Errorf("sqlite snapshot: %w", err)
 			}
@@ -74,7 +75,7 @@ func writeBackup(dataDir, out string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz := gzip.NewWriter(f)
 	tw := tar.NewWriter(gz)
 
@@ -132,7 +133,7 @@ func writeTarFile(tw *tar.Writer, path, name string, info os.FileInfo) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	_, err = io.Copy(tw, src)
 	return err
 }
@@ -172,16 +173,16 @@ func restoreArchive(archive, dataDir string, force bool) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

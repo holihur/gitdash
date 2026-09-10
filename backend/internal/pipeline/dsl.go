@@ -157,7 +157,7 @@ func validateVolume(spec string) error {
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
-		return fmt.Errorf("GITDASH_PIPELINE_VOLUMES_DIR %q not accessible: %v", root, err)
+		return fmt.Errorf("GITDASH_PIPELINE_VOLUMES_DIR %q not accessible: %w", root, err)
 	}
 	resolved := clean
 	if r, err := filepath.EvalSymlinks(clean); err == nil {
