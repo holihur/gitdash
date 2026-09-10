@@ -1,10 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { Bell, Compass, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, Building2, UserRound, Cpu, Package } from "lucide-react";
+import { Bell, Compass, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, Building2, UserRound, Cpu, Package, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
+import { CommandPalette } from "@/components/command-palette";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
@@ -103,7 +104,9 @@ export default function App() {
 
 function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [unread, setUnread] = useState(0);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // 周期刷新未读通知数（30s），供导航铃铛角标使用。
   const refreshUnread = useCallback(async () => {
@@ -123,6 +126,59 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
     }, 30_000);
     return () => clearInterval(timer);
   }, [refreshUnread]);
+
+  // 全局快捷键：Ctrl/Cmd+K 或 / 打开命令面板；g 前缀序列快速跳转。
+  useEffect(() => {
+    let gPending = false;
+    let timer: number | undefined;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const typing =
+        !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+        return;
+      }
+      if (typing) return;
+      if (e.key === "/") {
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      if (e.key === "g") {
+        gPending = true;
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          gPending = false;
+        }, 800);
+        return;
+      }
+      if (gPending) {
+        gPending = false;
+        const dest: Record<string, string> = {
+          r: "/",
+          e: "/explore",
+          o: "/orgs",
+          i: "/inbox",
+          u: "/runners",
+          k: "/keys",
+          p: "/packages",
+          m: "/profile",
+        };
+        const to = dest[e.key.toLowerCase()];
+        if (to) {
+          e.preventDefault();
+          navigate(to);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearTimeout(timer);
+    };
+  }, [navigate]);
 
   const navItems = useMemo<NavOverflowItem[]>(
     () => [
@@ -158,6 +214,15 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           </Link>
           <NavOverflow items={navItems} />
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              title={t("app.commandPalette")}
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <ThemeToggle />
             <LangToggle />
             <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
@@ -252,6 +317,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           <Route path="/login" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }

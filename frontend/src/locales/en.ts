@@ -8,6 +8,12 @@ export const en = {
     dark: "Dark",
     system: "System",
     language: "Language",
+    commandPalette: "Command palette",
+    commandPlaceholder: "Type a command or search…",
+    noCommands: "No matching commands",
+    cmdNav: "Navigation",
+    cmdRepos: "Repositories",
+    cmdHint: "↑↓ navigate · ↵ select · Esc close",
   },
   nav: {
     repos: "Repositories",

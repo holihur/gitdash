@@ -10,6 +10,12 @@ export const zhCN: Messages = {
     dark: "深色",
     system: "跟随系统",
     language: "语言",
+    commandPalette: "命令面板",
+    commandPlaceholder: "输入命令或搜索…",
+    noCommands: "没有匹配的命令",
+    cmdNav: "导航",
+    cmdRepos: "仓库",
+    cmdHint: "↑↓ 选择 · ↵ 确认 · Esc 关闭",
   },
   nav: {
     repos: "仓库",
