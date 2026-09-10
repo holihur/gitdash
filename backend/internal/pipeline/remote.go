@@ -82,7 +82,7 @@ func (d *dispatchExecutor) Execute(ctx context.Context, job RunJob, cfg *Config,
 	}
 	rjob := runner.Job{
 		JobID: fmt.Sprintf("%s-%s-%d", job.Owner, job.Repo, job.RunID),
-		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref, DSL: dsl,
+		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref, Event: job.Event, DSL: dsl,
 	}
 
 	workspace, done, err := workspaceSnapshot(job.Owner, job.Repo, job.SHA)

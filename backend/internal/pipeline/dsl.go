@@ -9,13 +9,23 @@
 //	timeout: 10m            # 可选：单步超时（默认 10m，上限 1h）
 //	env:                    # 可选：注入容器的环境变量
 //	  - CGO_ENABLED=0
-//	steps:                  # 必填：1..20 个步骤，顺序执行，任一失败即终止
+//	steps:                  # 必填：1..20 个步骤单元（并行子步骤各自计数），顺序执行，任一失败即终止
 //	  - name: build
 //	    run: go build ./...
-//	  - name: test
-//	    run: |
-//	      go test ./...
-//	      go vet ./...
+//	  - name: gate         # 条件步骤：when 不满足时整组跳过（计为已完成）
+//	    when: branch == main
+//	    run: go test ./...
+//	  - name: checks       # parallel：子步骤并发执行，任一失败该组失败
+//	    parallel:
+//	      - name: lint-js
+//	        run: npm lint
+//	      - name: lint-go
+//	        when: event == push
+//	        run: |
+//	          go vet ./...
+//
+// 条件表达式（when）支持的变量：branch（refs/heads/ 之后的短名）、tag（refs/tags/ 之后的短名）、
+// ref（完整 ref）、event（push | manual）。运算符：==、!=、&&、||、!，支持括号与空字符串字面量。
 package pipeline
 
 import (
@@ -24,6 +34,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"cel.dev/cel-go/cel"
 )
 
 // MaxStepTimeout 单步最大时长。
@@ -38,10 +50,15 @@ const (
 // （Init 时读取，便于测试/受限环境缩短）。
 var DefaultStepTimeout = 10 * time.Minute
 
-// Step 流水线中的一个步骤。
+// Step 流水线中的一个步骤。有 run 则为普通步骤；有 parallel 则为并行组（二者互斥）。
 type Step struct {
 	Name string
 	Run  string
+	// When 为 CEL 条件表达式原文；whenCond 是 parse 阶段编译好的求值程序。
+	// 不满足时跳过该步骤（或整组）。
+	When     string
+	whenCond cel.Program
+	Parallel []Step // 可选：并发子步骤（不允许嵌套 parallel）
 }
 
 // Config 解析后的流水线配置。
@@ -162,7 +179,7 @@ func Parse(data []byte) (*Config, error) {
 			}
 		case "steps":
 			var err error
-			i, cfg.Steps, err = readSteps(lines, i+1)
+			i, cfg.Steps, err = readSteps(lines, i+1, 2)
 			if err != nil {
 				return nil, err
 			}
@@ -186,12 +203,12 @@ func (c *Config) validate() error {
 	if len(c.Steps) > MaxSteps {
 		return fmt.Errorf("too many steps (max %d)", MaxSteps)
 	}
+	if units := c.UnitCount(); units > MaxSteps {
+		return fmt.Errorf("too many steps (max %d, got %d)", MaxSteps, units)
+	}
 	for i, s := range c.Steps {
-		if strings.TrimSpace(s.Run) == "" {
-			return fmt.Errorf("step %d (%s): run is required", i+1, s.Name)
-		}
-		if len(s.Run) > MaxRunLength {
-			return fmt.Errorf("step %d (%s): run script too long", i+1, s.Name)
+		if err := validateStep("step", i+1, s); err != nil {
+			return err
 		}
 	}
 	for i, v := range c.Volumes {
@@ -201,6 +218,57 @@ func (c *Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// validateStep 递归校验步骤：name、脚本体、并行子步骤（不允许嵌套 parallel）与超长限制。
+func validateStep(kind string, n int, s Step) error {
+	if s.Name == "" {
+		return fmt.Errorf("%s %d: name is required", kind, n)
+	}
+	switch {
+	case s.Parallel != nil && strings.TrimSpace(s.Run) != "":
+		return fmt.Errorf("%s %d (%s): run and parallel are mutually exclusive", kind, n, s.Name)
+	case s.Parallel != nil:
+		if kind == "sub-step" {
+			return fmt.Errorf("sub-step %d (%s): nested parallel groups are not allowed", n, s.Name)
+		}
+		for i, sub := range s.Parallel {
+			if err := validateStep("sub-step", i+1, sub); err != nil {
+				return err
+			}
+		}
+	default:
+		if strings.TrimSpace(s.Run) == "" {
+			return fmt.Errorf("%s %d (%s): run is required", kind, n, s.Name)
+		}
+	}
+	if len(s.Run) > MaxRunLength {
+		return fmt.Errorf("%s %d (%s): run script too long", kind, n, s.Name)
+	}
+	return nil
+}
+
+// UnitCount 进度计数的步骤单元数量：普通步骤计 1，并行组按子步骤逐个计数。
+func (c *Config) UnitCount() int {
+	n := 0
+	for _, s := range c.Steps {
+		n += stepUnitCount(s)
+	}
+	return n
+}
+
+func stepUnitCount(s Step) int {
+	if len(s.Parallel) > 0 {
+		n := 0
+		for _, sub := range s.Parallel {
+			n += stepUnitCount(sub)
+		}
+		if n == 0 {
+			return 1
+		}
+		return n
+	}
+	return 1
 }
 
 // parseTimeout 解析 Go duration（上限 MaxStepTimeout，下限 1s）。
@@ -252,12 +320,13 @@ func readListItems(lines []string, i int, add func(item string, lineNo int) erro
 	return i, nil
 }
 
-// readSteps 消费 steps 列表；每个 `- ` 起始一个步骤，后续更深缩进的 key/value 归属当前步骤。
-func readSteps(lines []string, i int) (int, []Step, error) {
+// readSteps 消费一段列表：`- ` 项目落在 listInd 缩进，字段行落在更深缩进。
+// 顶层调用 listInd=2；步骤内 parallel 的子步骤递归调用，listInd=parallel 键的缩进+2。
+func readSteps(lines []string, i, listInd int) (int, []Step, error) {
 	steps := []Step{}
-	if i >= len(lines) || blankOrComment(lines[i]) || indentOf(lines[i]) < 2 ||
+	if i >= len(lines) || blankOrComment(lines[i]) || indentOf(lines[i]) < listInd ||
 		!strings.HasPrefix(strings.TrimSpace(lines[i]), "- ") {
-		return i, steps, fmt.Errorf("line %d: expected at least one step (indent 2, prefix \"- \")", i+1)
+		return i, steps, fmt.Errorf("line %d: expected at least one step (indent %d, prefix \"- \")", i+1, listInd)
 	}
 	cur := -1
 	for i < len(lines) {
@@ -267,11 +336,11 @@ func readSteps(lines []string, i int) (int, []Step, error) {
 			continue
 		}
 		ind := indentOf(line)
-		if ind == 0 {
-			break // 顶层键
+		if ind < listInd {
+			break // 回到上层
 		}
 		trimmed := strings.TrimSpace(line)
-		if ind >= 2 && strings.HasPrefix(trimmed, "- ") {
+		if strings.HasPrefix(trimmed, "- ") && ind == listInd {
 			steps = append(steps, Step{})
 			cur = len(steps) - 1
 			first := strings.TrimSpace(stripComment(trimmed[2:]))
@@ -283,9 +352,9 @@ func readSteps(lines []string, i int) (int, []Step, error) {
 			i++
 			continue
 		}
-		// 步骤内 key/value（如 name/run），或 run 的多行块
+		// 步骤字段（name/run/when/parallel）或 run 的多行块
 		if cur < 0 {
-			return i, steps, fmt.Errorf("line %d: unexpected indentation before first step", i+1)
+			return i, steps, fmt.Errorf("line %d: unexpected indentation before step", i+1)
 		}
 		key, val, err := splitKeyValue(line, i+1)
 		if err != nil {
@@ -310,19 +379,45 @@ func readSteps(lines []string, i int) (int, []Step, error) {
 			}
 			steps[cur].Run = val
 			i++
+		case "when":
+			prog, perr := compileWhen(val, i+1)
+			if perr != nil {
+				return i, steps, perr
+			}
+			steps[cur].When = val
+			steps[cur].whenCond = prog
+			i++
+		case "parallel":
+			if val != "" {
+				return i, steps, fmt.Errorf("line %d: parallel takes a list of sub-steps", i+1)
+			}
+			j, subs, serr := readSteps(lines, i+1, ind+2)
+			if serr != nil {
+				return i, steps, fmt.Errorf("parallel (line %d): %w", i+1, serr)
+			}
+			steps[cur].Parallel = subs
+			i = j
 		default:
-			return i, steps, fmt.Errorf("line %d: unknown step key %q (allowed: name, run)", i+1, key)
+			return i, steps, fmt.Errorf("line %d: unknown step key %q (allowed: name, run, when, parallel)", i+1, key)
 		}
 	}
-	// 默认步骤名
-	for i := range steps {
-		if steps[i].Name == "" {
-			steps[i].Name = "step-" + strconv.Itoa(i+1)
+	// 默认步骤名（并行组的子步骤跟在父名后，避免并列日志里无法区分）
+	for j := range steps {
+		if steps[j].Name == "" {
+			steps[j].Name = "step-" + strconv.Itoa(j+1)
 		}
-	}
-	for _, s := range steps {
-		if !stepNameRe.MatchString(s.Name) {
-			return i, steps, fmt.Errorf("invalid step name %q", s.Name)
+		for k := range steps[j].Parallel {
+			if steps[j].Parallel[k].Name == "" {
+				steps[j].Parallel[k].Name = steps[j].Name + "-" + strconv.Itoa(k+1)
+			}
+		}
+		if !stepNameRe.MatchString(steps[j].Name) {
+			return i, steps, fmt.Errorf("invalid step name %q", steps[j].Name)
+		}
+		for _, sub := range steps[j].Parallel {
+			if !stepNameRe.MatchString(sub.Name) {
+				return i, steps, fmt.Errorf("invalid step name %q", sub.Name)
+			}
 		}
 	}
 	return i, steps, nil
@@ -383,8 +478,20 @@ func assignStepField(step *Step, s string, lineNo int) error {
 		step.Name = val
 	case "run":
 		step.Run = val
+	case "when":
+		if val == "" {
+			return fmt.Errorf("line %d: when requires a condition expression", lineNo)
+		}
+		prog, perr := compileWhen(val, lineNo)
+		if perr != nil {
+			return perr
+		}
+		step.When = val
+		step.whenCond = prog
+	case "parallel":
+		return fmt.Errorf("line %d: parallel takes a list of sub-steps (not inline)", lineNo)
 	default:
-		return fmt.Errorf("line %d: unknown step key %q (allowed: name, run)", lineNo, key)
+		return fmt.Errorf("line %d: unknown step key %q (allowed: name, run, when, parallel)", lineNo, key)
 	}
 	return nil
 }

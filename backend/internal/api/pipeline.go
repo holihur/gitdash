@@ -188,7 +188,7 @@ func (a *API) createPipelineRun(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "ref_not_found", "branch not found: "+in.Ref)
 		return
 	}
-	run, err := pipeline.Trigger(a.store, owner, name, sha, in.Ref, userFrom(r))
+	run, err := pipeline.Trigger(a.store, owner, name, sha, in.Ref, userFrom(r), "manual")
 	switch {
 	case errors.Is(err, pipeline.ErrNoPipeline):
 		writeCode(w, http.StatusBadRequest, "pipeline_file_missing",

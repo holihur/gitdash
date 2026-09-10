@@ -37,6 +37,45 @@ compatible). If no online agent matches the labels, the run fails immediately;
 if an agent goes offline mid-run, its run is marked `failed (runner went offline)`
 — no silent re-execution. Remote runs can be cancelled from the run detail view.
 
+## Parallel sub-steps and conditional steps (.gitdash.yml)
+
+Anywhere a step lives, `parallel:` swaps sequential execution for concurrent
+sub-steps (any failure fails the group after all sub-steps finish). `when:` is a
+[CEL](https://github.com/google/cel-go) boolean expression checked at run time —
+unsatisfied steps (or whole groups) are skipped and still count as completed:
+
+```yaml
+image: alpine:3.19
+steps:
+  - name: checks            # parallel sub-steps run concurrently, logs interleaved
+    parallel:
+      - name: lint-js
+        run: npm lint
+      - name: lint-go
+        run: go vet ./...
+  - name: deploy            # sub-steps may each carry when
+    when: branch == "main" && event == "push"
+    parallel:
+      - name: deploy-staging
+        run: p deploy staging
+      - name: deploy-prod
+        when: tag.matches(r'v\d+')
+        run: p deploy prod
+```
+
+Variables available to `when` (compare with `==` / `!=`, combine with `&&` / `||`,
+`!` and parentheses, string functions like `startsWith` / `matches`):
+
+| var     | value                                                       |
+|---------|-------------------------------------------------------------|
+| `branch`| short branch name (`""` for tags/refs)                      |
+| `tag`   | short tag name (`""` unless a tag push)                     |
+| `ref`   | full ref (`refs/heads/main`, `refs/tags/v1`)                |
+| `event` | `push` or `manual` (manual = triggered from the UI/API)     |
+
+Note: tag pushes now trigger the pipeline too (`when: tag != ""` enables or
+gates tag-only jobs). Progress counts each sub-step as one unit.
+
 ## Host execution mode (no Docker)
 
 Pipelines that **omit `image`** run each step directly in a host `sh -ec` — useful

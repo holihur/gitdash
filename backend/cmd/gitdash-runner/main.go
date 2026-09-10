@@ -367,7 +367,7 @@ func (a *agent) execJob(ctx context.Context, job runner.Job, st *jobState) {
 	defer lw.flush()
 	status("running", "", 0)
 	if err := pipeline.RunInWorkspace(ctx, pipeline.RunJob{
-		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref,
+		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref, Event: job.Event,
 	}, cfg, workdir, lw, func(steps int) { status("running", "", steps) }); err != nil {
 		lw.flush()
 		if ctx.Err() != nil {

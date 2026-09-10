@@ -43,6 +43,7 @@ type Job struct {
 	Repo  string `json:"repo"`
 	SHA   string `json:"sha"`
 	Ref   string `json:"ref"`
+	Event string `json:"event,omitempty"` // push | manual（条件步骤 when 依据）
 	DSL   string `json:"dsl"` // .gitdash.yml 原文（agent 端用统一 parser 解析）
 }
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
@@ -32,20 +33,110 @@ func BuiltinExecutor() Executor { return &builtinDockerExecutor{} }
 // builtinDockerExecutor 在本地 docker 中执行：checkout 触发提交，逐步骤在容器中运行。
 type builtinDockerExecutor struct{}
 
-// RunInWorkspace 在已检出的工作区 dir 中执行流水线（agent 与 builtin 共用的核心逻辑）。
+// RunInWorkspace 在已检出的工作区中执行流水线（agent 与 builtin 共用的核心逻辑）。
+// 普通步骤顺序执行；parallel 组内子步骤并发执行；when 不满足的步骤/组被跳过（计为完成）。
 func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, logSink io.Writer, progress func(int)) error {
 	be := &builtinDockerExecutor{}
-	for i, step := range cfg.Steps {
-		_, _ = fmt.Fprintf(logSink, "\n==> [%d/%d] %s\n", i+1, len(cfg.Steps), step.Name)
-		if err := be.runStep(ctx, dir, cfg, step, job.Owner, job.Repo, job.Ref, job.SHA, logSink); err != nil {
+	wctx := WhenCtx{Ref: job.Ref, Event: job.Event}
+	total := cfg.UnitCount()
+	done := 0
+	for _, step := range cfg.Steps {
+		if step.whenCond != nil && !step.when(wctx) {
+			_, _ = fmt.Fprintf(logSink, "\n==> [%d/%d] %s (skipped: when \"%s\" not satisfied)\n",
+				done+1, total, step.Name, step.When)
+			_, _ = fmt.Fprintf(logSink, "<== %s skipped\n", step.Name)
+			done += stepUnitCount(step)
+			if progress != nil {
+				progress(done)
+			}
+			continue
+		}
+		if len(step.Parallel) > 0 {
+			if err := runParallelGroup(ctx, be, dir, cfg, step, job, logSink, &done, total, progress); err != nil {
+				return fmt.Errorf("parallel step %q failed: %w", step.Name, err)
+			}
+			_, _ = fmt.Fprintf(logSink, "<== %s (%d sub-steps) ok\n", step.Name, len(step.Parallel))
+			if progress != nil {
+				progress(done)
+			}
+			continue
+		}
+		_, _ = fmt.Fprintf(logSink, "\n==> [%d/%d] %s\n", done+1, total, step.Name)
+		if err := be.runStep(ctx, dir, cfg, step, job, syncWriter(logSink)); err != nil {
 			return fmt.Errorf("step %q failed: %w", step.Name, err)
 		}
 		_, _ = fmt.Fprintf(logSink, "<== %s ok\n", step.Name)
+		done++
 		if progress != nil {
-			progress(i + 1)
+			progress(done)
 		}
 	}
 	return nil
+}
+
+// when 求值步骤条件；错误视为跳过。
+func (s Step) when(ctx WhenCtx) bool {
+	done, err := ctx.evalWhen(s.whenCond)
+	return err == nil && done
+}
+
+// runParallelGroup 并发执行一个 parallel 组的子步骤；全部结束后返回首个失败。
+// 日志经过 loggingWriter 保证多 goroutine 写入不损坏；子步骤输出按原样交叉写入。
+func runParallelGroup(ctx context.Context, be *builtinDockerExecutor, dir string, cfg *Config, group Step, job RunJob, logSink io.Writer, done *int, total int, progress func(int)) error {
+	wctx := WhenCtx{Ref: job.Ref, Event: job.Event}
+	errs := make([]error, len(group.Parallel))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	for j, sub := range group.Parallel {
+		wg.Add(1)
+		go func(j int, sub Step) {
+			defer wg.Done()
+			w := &loggingWriter{w: logSink, prefix: "[" + sub.Name + "] ", mu: &mu}
+			if sub.whenCond != nil && !sub.when(wctx) {
+				_, _ = fmt.Fprintf(w, "==> [%d/%d] %s (skipped: when \"%s\" not satisfied)\n", *done+j+1, total, sub.Name, sub.When)
+				_, _ = fmt.Fprintf(w, "<== %s skipped\n", sub.Name)
+				return
+			}
+			_, _ = fmt.Fprintf(w, "==> [%d/%d] %s\n", *done+j+1, total, sub.Name)
+			if err := be.runStep(ctx, dir, cfg, sub, job, w); err != nil {
+				_, _ = fmt.Fprintf(w, "<== %s FAILED: %v\n", sub.Name, err)
+				errs[j] = fmt.Errorf("sub-step %q failed: %w", sub.Name, err)
+				return
+			}
+			_, _ = fmt.Fprintf(w, "<== %s ok\n", sub.Name)
+		}(j, sub)
+	}
+	wg.Wait()
+	for j := range errs {
+		if errs[j] != nil {
+			return errs[j]
+		}
+	}
+	*done += len(group.Parallel)
+	return nil
+}
+
+// syncWriter 对日志写入串行化（并行子步骤共享 logSink）。
+func syncWriter(w io.Writer) io.Writer {
+	mu := &sync.Mutex{}
+	return &loggingWriter{w: w, mu: mu}
+}
+
+// loggingWriter 并发安全日志写入（每次 Write 整体持锁）。
+type loggingWriter struct {
+	w      io.Writer
+	prefix string
+	mu     *sync.Mutex
+}
+
+func (l *loggingWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.prefix != "" {
+		// 前缀仅写在每行首字节前（简单起见，仅对一次调用整体加前缀）
+		_, _ = fmt.Fprint(l.w, l.prefix)
+	}
+	return l.w.Write(p)
 }
 
 // Execute 实现 Executor：clone → checkout → 逐步执行。
@@ -79,7 +170,9 @@ func (e *builtinDockerExecutor) Execute(ctx context.Context, job RunJob, cfg *Co
 
 // runStep 执行单步：image 为空时直接在宿主 sh 中执行（host 模式），
 // 否则在 docker 容器里执行（工作区挂载到 /workspace，输出实时写入日志）。
-func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, cfg *Config, step Step, owner, repo, ref, sha string, logSink io.Writer) error {
+// logSink 需并发安全（并行组的调用方传入 loggingWriter）。
+func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, cfg *Config, step Step, job RunJob, logSink io.Writer) error {
+	owner, repo, ref, sha := job.Owner, job.Repo, job.Ref, job.SHA
 	if cfg.Image == "" {
 		return runHostStep(parent, workdir, cfg, step, owner, repo, ref, sha, logSink)
 	}

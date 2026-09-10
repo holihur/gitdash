@@ -16,16 +16,17 @@ func TestRunHostStep(t *testing.T) {
 	be := &builtinDockerExecutor{}
 	logSink := &bytes.Buffer{}
 
+	job := RunJob{Owner: "o", Repo: "r", Ref: "main", SHA: "abc"}
 	// 未开启 host 执行时拒绝
 	SetHostAllowed(false)
-	err := be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "echo ok"}, "o", "r", "main", "abc", logSink)
+	err := be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "echo ok"}, job, logSink)
 	if !errors.Is(err, ErrHostDisabled) {
 		t.Fatalf("host disabled: want ErrHostDisabled, got %v", err)
 	}
 
 	SetHostAllowed(true)
 	defer SetHostAllowed(false)
-	err = be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "echo $GREETING"}, "o", "r", "main", "abc", logSink)
+	err = be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "echo $GREETING"}, job, logSink)
 	if err != nil {
 		t.Fatalf("host step: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestRunHostStep(t *testing.T) {
 
 	// 失败退出码
 	logSink.Reset()
-	err = be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "exit 3"}, "o", "r", "main", "abc", logSink)
+	err = be.runStep(context.Background(), dir, cfg, Step{Name: "s", Run: "exit 3"}, job, logSink)
 	if err == nil || !strings.Contains(err.Error(), "exit code 3") {
 		t.Fatalf("want exit code 3 error, got %v", err)
 	}

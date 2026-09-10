@@ -57,6 +57,7 @@ type RunJob struct {
 	Repo  string `json:"repo"`
 	SHA   string `json:"sha"`
 	Ref   string `json:"ref"`
+	Event string `json:"event,omitempty"` // push | manual（条件步骤 when 依据）
 }
 
 var (
@@ -135,13 +136,14 @@ func ReadLog(owner, repo string, id int64) (string, error) {
 }
 
 // PushHandler 返回挂到 webhook spool 调度器上的 push 事件处理器：
-// 仓库开启流水线且该提交含 .gitdash.yml 时触发一次运行。
+// 仓库开启流水线且该提交含 .gitdash.yml 时触发一次运行（分支与 tag push 均可，
+// 条件步骤据此可用 when: tag / when: branch）。
 func PushHandler(st *store.Store) func(webhooks.Event) {
 	return func(ev webhooks.Event) {
 		if ev.Event != "push" || ev.New == "" || isZeroSHA(ev.New) {
 			return
 		}
-		if !strings.HasPrefix(ev.Ref, "refs/heads/") {
+		if !strings.HasPrefix(ev.Ref, "refs/heads/") && !strings.HasPrefix(ev.Ref, "refs/tags/") {
 			return
 		}
 		if !gitsvc.ValidName(ev.Owner) || !gitsvc.ValidName(ev.Repo) {
@@ -150,8 +152,11 @@ func PushHandler(st *store.Store) func(webhooks.Event) {
 		if !st.IsPipelineEnabled(ev.Owner, ev.Repo) {
 			return
 		}
-		branch := strings.TrimPrefix(ev.Ref, "refs/heads/")
-		if _, err := Trigger(st, ev.Owner, ev.Repo, ev.New, branch, ev.User); err != nil &&
+		ref := ev.Ref // tag 传完整 ref（when: tag 依据完整 ref 前缀判定）
+		if strings.HasPrefix(ev.Ref, "refs/heads/") {
+			ref = strings.TrimPrefix(ev.Ref, "refs/heads/")
+		}
+		if _, err := Trigger(st, ev.Owner, ev.Repo, ev.New, ref, ev.User, "push"); err != nil &&
 			!errors.Is(err, ErrNoPipeline) && !errors.Is(err, ErrTooManyRuns) {
 			log.Printf("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
 		}
@@ -160,7 +165,8 @@ func PushHandler(st *store.Store) func(webhooks.Event) {
 
 // Trigger 创建一次流水线运行（push 或手动）。
 // 提交上无 .gitdash.yml 时返回 ErrNoPipeline；DSL 解析错误会记为 failed 的运行，便于排查。
-func Trigger(st *store.Store, owner, repo, sha, ref, by string) (store.PipelineRun, error) {
+// event 为 "push" 或 "manual"，进入条件步骤（when: event ...）的求值。
+func Trigger(st *store.Store, owner, repo, sha, ref, by, event string) (store.PipelineRun, error) {
 	if active, err := st.RunningPipelineRunIDs(owner, repo); err == nil && len(active) >= maxActiveRuns {
 		return store.PipelineRun{}, ErrTooManyRuns
 	}
@@ -180,11 +186,11 @@ func Trigger(st *store.Store, owner, repo, sha, ref, by string) (store.PipelineR
 		run.Error = msg
 		return run, nil
 	}
-	run, err := st.CreatePipelineRun(owner, repo, sha, ref, by, len(cfg.Steps))
+	run, err := st.CreatePipelineRun(owner, repo, sha, ref, by, cfg.UnitCount())
 	if err != nil {
 		return run, err
 	}
-	job := RunJob{RunID: run.ID, Owner: owner, Repo: repo, SHA: sha, Ref: ref}
+	job := RunJob{RunID: run.ID, Owner: owner, Repo: repo, SHA: sha, Ref: ref, Event: event}
 	if boundQueue == nil {
 		// 进程内直接调度（默认）
 		go executeRun(st, job)
@@ -259,7 +265,7 @@ func executeRun(st *store.Store, job RunJob) {
 	if img == "" {
 		img = "host"
 	}
-	writeLog("image: %s  steps: %d", img, len(cfg.Steps))
+	writeLog("image: %s  steps: %d", img, cfg.UnitCount())
 
 	exec := boundExecutor
 	if exec == nil {
