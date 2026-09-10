@@ -89,7 +89,7 @@ func (a *API) adminLogin(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: adminCookie, Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode, MaxAge: 12 * 3600})
+	http.SetCookie(w, &http.Cookie{Name: adminCookie, Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil || forceSecureCookies, SameSite: http.SameSiteLaxMode, MaxAge: 12 * 3600})
 	writeJSON(w, http.StatusOK, map[string]string{"username": in.Username})
 }
 

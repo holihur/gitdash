@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
 
 	"gitdash/backend/internal/api"
@@ -246,8 +247,6 @@ func run() {
 		staticDir = resolveStaticDir()
 	}
 
-	log.Printf("gitdash %s: http on %s | ssh on %s | data in %s", version, httpAddr, sshAddr, dataDir)
-
 	// 优雅停机：收到 SIGINT/SIGTERM 后先 drain HTTP 再退出。
 	// 一是保证 in-flight 请求不丢，二是让 go build -cover 的集成覆盖率
 	// 数据（GOCOVERDIR）能正常落盘（被信号硬杀不会 flush）。
@@ -261,9 +260,51 @@ func run() {
 		defer cancel()
 		_ = srv.Shutdown(ctx)
 	}()
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("http server: %v", err)
+
+	tlsCert := strings.TrimSpace(os.Getenv("GITDASH_TLS_CERT"))
+	tlsKey := strings.TrimSpace(os.Getenv("GITDASH_TLS_KEY"))
+	acmeDomains := splitCSV(os.Getenv("GITDASH_ACME_DOMAINS"))
+
+	var serveErr error
+	switch {
+	case len(acmeDomains) > 0:
+		// 自动 HTTPS（Let's Encrypt / ACME HTTP-01）
+		m := &autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			Cache:      autocert.DirCache(getenv("GITDASH_ACME_CACHE", filepath.Join(dataDir, "acme-cache"))),
+			HostPolicy: autocert.HostWhitelist(acmeDomains...),
+			Email:      os.Getenv("GITDASH_ACME_EMAIL"),
+		}
+		srv.TLSConfig = m.TLSConfig()
+		go func() {
+			httpSrv := &http.Server{Addr: getenv("GITDASH_ACME_HTTP_ADDR", ":80"), Handler: m.HTTPHandler(nil)}
+			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("acme http server: %v", err)
+			}
+		}()
+		log.Printf("gitdash %s: https on %s (ACME %s) | ssh on %s | data in %s", version, httpAddr, strings.Join(acmeDomains, ","), sshAddr, dataDir)
+		serveErr = srv.ListenAndServeTLS("", "")
+	case tlsCert != "" && tlsKey != "":
+		log.Printf("gitdash %s: https on %s | ssh on %s | data in %s", version, httpAddr, sshAddr, dataDir)
+		serveErr = srv.ListenAndServeTLS(tlsCert, tlsKey)
+	default:
+		log.Printf("gitdash %s: http on %s | ssh on %s | data in %s (set GITDASH_TLS_CERT/KEY or GITDASH_ACME_DOMAINS for HTTPS)", version, httpAddr, sshAddr, dataDir)
+		serveErr = srv.ListenAndServe()
 	}
+	if serveErr != nil && serveErr != http.ErrServerClosed {
+		log.Fatalf("server: %v", serveErr)
+	}
+}
+
+// splitCSV 拆分逗号分隔的非空项。
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // preReceiveHook 分支保护校验：由仓库 pre-receive hook 以 `gitdash pre-receive owner repo` 调用，

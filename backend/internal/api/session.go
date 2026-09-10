@@ -69,13 +69,16 @@ func clientIP(r *http.Request) string {
 
 const sessionCookie = "gitdash_session"
 
+// forceSecureCookies 为反向代理终止 TLS 的部署提供的显式开关（此时 r.TLS 为 nil）。
+var forceSecureCookies = os.Getenv("GITDASH_SECURE_COOKIES") != ""
+
 func (a *API) setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   r.TLS != nil || forceSecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(store.SessionTTL.Seconds()),
 	})
