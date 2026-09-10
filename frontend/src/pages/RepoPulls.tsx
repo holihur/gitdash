@@ -6,10 +6,10 @@ import {
   GitPullRequestArrow,
   GitPullRequestClosed,
   Plus,
-  ShieldCheck,
 } from "lucide-react";
 import { api, type MergeGate, type PullDiff, type PullRequest } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { MergeGateBadges } from "@/components/merge-gate";
 import { PullDiffView as InlinePullDiffView } from "@/components/diff-view";
 import CommentSection from "@/components/comment-section";
 import PullReviewSection from "@/components/pull-review";
@@ -443,7 +443,6 @@ export function MergeGateBadge({
   number: number;
   refreshKey?: number;
 }) {
-  const { t } = useI18n();
   const [gate, setGate] = useState<MergeGate | null>(null);
 
   useEffect(() => {
@@ -458,17 +457,5 @@ export function MergeGateBadge({
   }, [owner, name, number, refreshKey]);
 
   if (!gate) return null;
-  return (
-    <Badge
-      variant="outline"
-      className={
-        gate.mergeable
-          ? "gap-1 text-green-600 dark:text-green-400"
-          : "gap-1 text-amber-600 dark:text-amber-400"
-      }
-    >
-      <ShieldCheck className="h-3 w-3" />
-      {t("pulls.gateStatus", { approvals: gate.approvals, required: gate.required })}
-    </Badge>
-  );
+  return <MergeGateBadges gate={gate} />;
 }

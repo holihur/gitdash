@@ -112,7 +112,7 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{"reviews": reviews, "summary": summary}
 	// 合并门禁信息：目标分支保护规则要求的 approve 数 vs 有效 approve 数
 	// （reviewer 非 PR 作者，且其最新 approve 针对当前 head —— head 前进后过期失效）
-	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && prot.MinApprovals > 0 {
+	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && (prot.MinApprovals > 0 || prot.RequireCI) {
 		head := pr.HeadSHA
 		if pr.State == "open" {
 			if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
@@ -132,11 +132,26 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 				valid++
 			}
 		}
-		resp["gate"] = map[string]any{
+		gate := map[string]any{
 			"required":  prot.MinApprovals,
 			"approvals": valid,
 			"mergeable": valid >= prot.MinApprovals,
 		}
+		// 分支保护要求 CI 通过时，合并门禁同时受当前 head 的流水线状态约束。
+		if prot.RequireCI {
+			status := "missing"
+			ciPassed := false
+			if run, has, cErr := a.store.LatestPipelineRunForSHA(owner, name, head); cErr == nil && has {
+				status = run.Status
+				ciPassed = run.Status == "success"
+			}
+			gate["ci_required"] = true
+			gate["ci_status"] = status
+			if !ciPassed {
+				gate["mergeable"] = false
+			}
+		}
+		resp["gate"] = gate
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

@@ -155,6 +155,7 @@ function BranchProtectionsCard({ owner, name }: { owner: string; name: string })
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branch, setBranch] = useState("");
   const [minApprovals, setMinApprovals] = useState("0");
+  const [requireCI, setRequireCI] = useState(false);
   const [blockDeletion, setBlockDeletion] = useState(true);
   const [blockForcePush, setBlockForcePush] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -188,6 +189,7 @@ function BranchProtectionsCard({ owner, name }: { owner: string; name: string })
     try {
       await api.setBranchProtection(owner, name, branch.trim(), {
         min_approvals: n,
+        require_ci: requireCI,
         block_deletion: blockDeletion,
         block_force_push: blockForcePush,
       });
@@ -213,6 +215,7 @@ function BranchProtectionsCard({ owner, name }: { owner: string; name: string })
   const ruleSummary = (p: BranchProtection) => {
     const parts: string[] = [];
     if (p.min_approvals > 0) parts.push(t("repo.bpMinApprovals", { count: p.min_approvals }));
+    if (p.require_ci) parts.push(t("repo.bpRequireCI"));
     if (p.block_deletion) parts.push(t("repo.bpBlockDeletion"));
     if (p.block_force_push) parts.push(t("repo.bpBlockForcePush"));
     return parts.join(" · ") || t("repo.bpNoRules");
@@ -253,6 +256,14 @@ function BranchProtectionsCard({ owner, name }: { owner: string; name: string })
               value={minApprovals}
               onChange={(e) => setMinApprovals(e.target.value)}
             />
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm">
+            <input
+              type="checkbox"
+              checked={requireCI}
+              onChange={(e) => setRequireCI(e.target.checked)}
+            />
+            {t("repo.bpRequireCI")}
           </label>
           <label className="flex items-center gap-1.5 pb-2 text-sm">
             <input

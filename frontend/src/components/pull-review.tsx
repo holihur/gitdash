@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, GitPullRequestDraft, ShieldCheck, X } from "lucide-react";
+import { Check, GitPullRequestDraft, X } from "lucide-react";
 import { api, type MergeGate, type PullReview } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MergeGateBadges } from "@/components/merge-gate";
 import { MarkdownView } from "@/components/markdown";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { formatDate } from "@/lib/utils";
@@ -74,19 +75,7 @@ export default function PullReviewSection({
           <X className="h-3 w-3" />
           {t("pulls.changesRequested", { count: summary.request_changes })}
         </Badge>
-        {gate && (
-          <Badge
-            variant="outline"
-            className={
-              gate.mergeable
-                ? "gap-1 text-green-600 dark:text-green-400"
-                : "gap-1 text-amber-600 dark:text-amber-400"
-            }
-          >
-            <ShieldCheck className="h-3 w-3" />
-            {t("pulls.gateStatus", { approvals: gate.approvals, required: gate.required })}
-          </Badge>
-        )}
+        {gate && <MergeGateBadges gate={gate} />}
       </div>
 
       {loading ? (

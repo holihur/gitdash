@@ -10594,6 +10594,9 @@ const docTemplate = `{
                 },
                 "min_approvals": {
                     "type": "integer"
+                },
+                "require_ci": {
+                    "type": "boolean"
                 }
             }
         },
@@ -10950,6 +10953,10 @@ const docTemplate = `{
                 },
                 "repo": {
                     "type": "string"
+                },
+                "require_ci": {
+                    "description": "合并门禁：要求 head 的 CI 通过",
+                    "type": "boolean"
                 }
             }
         },

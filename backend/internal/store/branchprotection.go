@@ -14,6 +14,7 @@ type BranchProtection struct {
 	Repo           string `json:"repo"`
 	Branch         string `json:"branch"`
 	MinApprovals   int    `json:"min_approvals"`    // 合并门禁：需要的最少 approve 数（0 = 不设门禁）
+	RequireCI      bool   `json:"require_ci"`       // 合并门禁：要求 head 的 CI 通过
 	BlockDeletion  bool   `json:"block_deletion"`   // 禁止删除该分支
 	BlockForcePush bool   `json:"block_force_push"` // 禁止非快进（force push）
 	CreatedAt      string `json:"created_at"`
@@ -32,13 +33,14 @@ func (s *Store) SetBranchProtection(bp *BranchProtection) error {
 	}
 	row := branchProtectionRow{
 		Owner: bp.Owner, Repo: bp.Repo, Branch: bp.Branch,
-		MinApprovals: bp.MinApprovals, BlockDeletion: bp.BlockDeletion,
+		MinApprovals: bp.MinApprovals, RequireCI: bp.RequireCI, BlockDeletion: bp.BlockDeletion,
 		BlockForcePush: bp.BlockForcePush, CreatedAt: now(),
 	}
 	// upsert：SQLite/PG 通用写法（先删后插在事务里）会有唯一键间隙，用 gorm clause OnConflict
 	res := s.db.Where("owner = ? AND repo = ? AND branch = ?", bp.Owner, bp.Repo, bp.Branch).
 		Assign(map[string]any{
 			"min_approvals":    row.MinApprovals,
+			"require_ci":       row.RequireCI,
 			"block_deletion":   row.BlockDeletion,
 			"block_force_push": row.BlockForcePush,
 		}).FirstOrCreate(&row)

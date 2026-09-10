@@ -232,6 +232,23 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
 			head = h
 		}
+		// 要求的 CI 检查必须在当前 head 上通过。
+		if prot.RequireCI {
+			status := "missing"
+			passed := false
+			if run, has, cErr := a.store.LatestPipelineRunForSHA(owner, name, head); cErr != nil {
+				writeErr(w, http.StatusInternalServerError, cErr.Error())
+				return
+			} else if has {
+				status = run.Status
+				passed = run.Status == "success"
+			}
+			if !passed {
+				writeCode(w, http.StatusConflict, "ci_required",
+					fmt.Sprintf("merge blocked: branch %q requires a successful CI run on the current head (current: %s)", pr.TargetBranch, status))
+				return
+			}
+		}
 		reviews, _, lErr := a.store.ListReviews(owner, name, pr.Number)
 		if lErr != nil {
 			writeErr(w, http.StatusInternalServerError, lErr.Error())

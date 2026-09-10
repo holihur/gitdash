@@ -168,3 +168,54 @@ func TestBranchProtectionSSHPush(t *testing.T) {
 	gitDo(t, repo, key, "push", "-q", "--force", "origin", "free")
 	gitDo(t, repo, key, "push", "-q", "origin", ":free")
 }
+
+// TestBranchProtectionRequireCI 分支保护要求 CI 通过时，未通过则拒绝合并。
+func TestBranchProtectionRequireCI(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "gate"}, 201)
+
+	// main 基础提交，再从 main 拉出 feat 分支并提交。
+	writeCommit(t, alice, "alice", "gate", map[string]any{
+		"branch":  "main",
+		"message": "base",
+		"changes": []any{map[string]any{"path": "base.txt", "action": "create", "content": "base"}},
+	}, 201)
+	alice.mustStatus("POST", "/users/alice/repos/gate/refs",
+		map[string]string{"type": "branch", "name": "feat", "from": "main"}, 201)
+	writeCommit(t, alice, "alice", "gate", map[string]any{
+		"branch":  "feat",
+		"message": "feat",
+		"changes": []any{map[string]any{"path": "f.txt", "action": "create", "content": "f"}},
+	}, 201)
+
+	// 保护 main：要求 CI 通过（不要求 approve）。
+	alice.mustStatus("PUT", bpPath+"/main",
+		map[string]any{"min_approvals": 0, "require_ci": true, "block_deletion": false, "block_force_push": false}, 200)
+
+	m := alice.mustStatus("POST", prPath("alice", "gate", ""),
+		map[string]string{"title": "feat", "source_branch": "feat", "target_branch": "main"}, 201)
+	num := fmt.Sprintf("/%d", int(m["number"].(float64)))
+
+	// head 无成功 CI → 拒绝合并。
+	if code, v := mergeResult(t, alice, "alice", "gate", num); code != 409 || v["code"] != "ci_required" {
+		t.Fatalf("merge without CI = %d %v", code, v)
+	}
+
+	// gate 汇总包含 ci_required 且不可合并。
+	var gate struct {
+		Gate map[string]any `json:"gate"`
+	}
+	if err := json.Unmarshal([]byte(rawGet(t, alice, prPath("alice", "gate", num+"/reviews"))), &gate); err != nil {
+		t.Fatal(err)
+	}
+	if g := gate.Gate; g == nil || g["ci_required"] != true || g["mergeable"] != false {
+		t.Fatalf("gate = %v", gate.Gate)
+	}
+
+	// 关闭 CI 要求后可正常合并。
+	alice.mustStatus("PUT", bpPath+"/main",
+		map[string]any{"min_approvals": 0, "require_ci": false, "block_deletion": false, "block_force_push": false}, 200)
+	alice.mustStatus("POST", prPath("alice", "gate", num+"/merge"),
+		map[string]string{"method": "fast-forward"}, 200)
+}

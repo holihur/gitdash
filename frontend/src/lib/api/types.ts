@@ -267,6 +267,7 @@ export interface BranchProtection {
   repo: string;
   branch: string;
   min_approvals: number;
+  require_ci: boolean;
   block_deletion: boolean;
   block_force_push: boolean;
 }
@@ -275,6 +276,9 @@ export interface MergeGate {
   required: number;
   approvals: number;
   mergeable: boolean;
+  /** 分支保护要求 CI 通过时附带 */
+  ci_required?: boolean;
+  ci_status?: string;
 }
 
 export interface PullReview {

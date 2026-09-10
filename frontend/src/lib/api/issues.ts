@@ -95,7 +95,7 @@ export const issuesApi = {
     owner: string,
     name: string,
     branch: string,
-    rule: { min_approvals: number; block_deletion: boolean; block_force_push: boolean },
+    rule: { min_approvals: number; require_ci: boolean; block_deletion: boolean; block_force_push: boolean },
   ) =>
     req<BranchProtection>(
       `/users/${owner}/repos/${name}/branch-protections/${encodeURIComponent(branch)}`,

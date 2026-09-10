@@ -408,7 +408,8 @@ type branchProtectionRow struct {
 	Owner          string `gorm:"primaryKey;size:255;column:owner"`
 	Repo           string `gorm:"primaryKey;size:255;column:repo"`
 	Branch         string `gorm:"primaryKey;size:255;column:branch"`
-	MinApprovals   int    `gorm:"not null;default:0;column:min_approvals"` // 合并门禁：需要的最少 approve 数
+	MinApprovals   int    `gorm:"not null;default:0;column:min_approvals"`  // 合并门禁：需要的最少 approve 数
+	RequireCI      bool   `gorm:"not null;default:false;column:require_ci"` // 合并门禁：要求 head 的 CI 通过
 	BlockDeletion  bool   `gorm:"not null;default:true;column:block_deletion"`
 	BlockForcePush bool   `gorm:"not null;default:true;column:block_force_push"`
 	CreatedAt      string `gorm:"not null"`
