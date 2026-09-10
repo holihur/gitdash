@@ -479,12 +479,13 @@ export default function CodeTab({
 
       {!emptyRepo && !error && !blob && (
         <div className="overflow-x-auto rounded-lg border">
-          <Table className="min-w-[720px]">
+          <Table className="min-w-[860px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("common.name")}</TableHead>
                 <TableHead className="w-28 text-right">{t("common.size")}</TableHead>
                 <TableHead className="w-72">{t("fops.lastCommit")}</TableHead>
+                <TableHead className="w-32">{t("common.author")}</TableHead>
                 <TableHead className="w-40 whitespace-nowrap">{t("fops.lastCommitTime")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -545,31 +546,28 @@ export default function CodeTab({
                     {entry.type === "blob" ? formatSize(entry.size) : "-"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {entry.modified_at || entry.last_commit ? (
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex min-w-0 items-center gap-2">
-                          {entry.last_commit && (
-                            <code
-                              className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
-                              title={entry.last_commit}
-                            >
-                              {entry.last_commit.slice(0, 7)}
-                            </code>
-                          )}
-                          <span
-                            className="truncate"
-                            title={[entry.modified_by, entry.modified_msg].filter(Boolean).join(" · ")}
+                    {entry.last_commit || entry.modified_msg ? (
+                      <div className="flex min-w-0 items-center gap-2">
+                        {entry.last_commit && (
+                          <code
+                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
+                            title={entry.last_commit}
                           >
-                            {entry.modified_msg}
-                          </span>
-                        </div>
-                        <div className="truncate text-xs">
-                          {entry.modified_by && <span>{entry.modified_by}</span>}
-                        </div>
+                            {entry.last_commit.slice(0, 7)}
+                          </code>
+                        )}
+                        <span className="truncate" title={entry.modified_msg || undefined}>
+                          {entry.modified_msg}
+                        </span>
                       </div>
                     ) : (
                       "-"
                     )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    <span className="block truncate" title={entry.modified_by || undefined}>
+                      {entry.modified_by || "-"}
+                    </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                     {entry.modified_at ? formatDate(entry.modified_at, locale) : "-"}
@@ -580,7 +578,7 @@ export default function CodeTab({
               {entries.filter((e) => e.name !== ".gitkeep").length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={4}
+                    colSpan={5}
                     className="py-10 text-center text-sm text-muted-foreground"
                   >
                     {t("repo.emptyDir")}
