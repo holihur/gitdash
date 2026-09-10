@@ -31,7 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { cn, copyText } from "@/lib/utils";
@@ -352,6 +353,20 @@ export default function RepoView() {
     [name, branches],
   );
 
+  const overflowTabs = useMemo(
+    () => [
+      { value: "code", label: t("repo.code") },
+      { value: "commits", label: t("repo.commits") },
+      { value: "issues", label: t("issues.title") },
+      { value: "pulls", label: t("pulls.title") },
+      { value: "pipeline", label: t("pipeline.tab") },
+      { value: "releases", label: t("releases.tab") },
+      { value: "projects", label: t("projects.tab") },
+      ...(isOwner ? [{ value: "settings", label: t("repo.settings") }] : []),
+    ],
+    [t, isOwner],
+  );
+
   if (missing) {
     return (
       <Card className="border-destructive">
@@ -468,34 +483,12 @@ export default function RepoView() {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}>
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="code" className="flex-1 sm:flex-none">
-            {t("repo.code")}
-          </TabsTrigger>
-          <TabsTrigger value="commits" className="flex-1 sm:flex-none">
-            {t("repo.commits")}
-          </TabsTrigger>
-          <TabsTrigger value="issues" className="flex-1 sm:flex-none">
-            {t("issues.title")}
-          </TabsTrigger>
-          <TabsTrigger value="pulls" className="flex-1 sm:flex-none">
-            {t("pulls.title")}
-          </TabsTrigger>
-          <TabsTrigger value="pipeline" className="flex-1 sm:flex-none">
-            {t("pipeline.tab")}
-          </TabsTrigger>
-          <TabsTrigger value="releases" className="flex-1 sm:flex-none">
-            {t("releases.tab")}
-          </TabsTrigger>
-          <TabsTrigger value="projects" className="flex-1 sm:flex-none">
-            {t("projects.tab")}
-          </TabsTrigger>
-          {isOwner && (
-            <TabsTrigger value="settings" className="flex-1 sm:flex-none">
-              {t("repo.settings")}
-            </TabsTrigger>
-          )}
-        </TabsList>
+        <TabsListOverflow
+          tabs={overflowTabs}
+          value={tab}
+          onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}
+          listClassName="w-full sm:w-auto"
+        />
 
         <TabsContent value="code">
           <Suspense fallback={<TabFallback />}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Package as PackageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
@@ -12,7 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
+import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { formatDate } from "@/lib/utils";
@@ -51,6 +52,14 @@ export default function Packages() {
     void load();
   }, [load]);
 
+  const packageTabs = useMemo(
+    () => [
+      { value: "", label: t("packages.all") },
+      ...PKG_TYPES.map((tp) => ({ value: tp, label: tp })),
+    ],
+    [t],
+  );
+
   const remove = async (p: PackageEntry) => {
     try {
       await api.deletePackage(p.type, p.owner, p.name);
@@ -70,14 +79,7 @@ export default function Packages() {
       </div>
 
       <Tabs value={type} onValueChange={setType}>
-        <TabsList>
-          <TabsTrigger value="">{t("packages.all")}</TabsTrigger>
-          {PKG_TYPES.map((tp) => (
-            <TabsTrigger key={tp} value={tp}>
-              {tp}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <TabsListOverflow tabs={packageTabs} value={type} onValueChange={setType} />
       </Tabs>
 
       {loading ? (

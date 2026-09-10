@@ -170,3 +170,12 @@
 .markdown-body th { background: hsl(var(--muted) / 0.5); }
 .markdown-body hr { border: none; border-top: 1px solid hsl(var(--border)); margin: 1.2em 0; }
 .markdown-body img { max-width: 100%; border-radius: 6px; }
+
+/* 隐藏横向滚动条（用于可滑动的 tab 列表等） */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
