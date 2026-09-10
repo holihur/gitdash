@@ -364,8 +364,22 @@ func main() {
 		}
 	case os.Args[1] == "version" || os.Args[1] == "--version" || os.Args[1] == "-v":
 		fmt.Println("gitdash", version)
+	case os.Args[1] == "backup":
+		if err := backup(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "backup:", err)
+			os.Exit(1)
+		}
+	case os.Args[1] == "restore":
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "restore: missing archive path")
+			os.Exit(2)
+		}
+		if err := restore(os.Args[2], os.Args[3:]); err != nil {
+			fmt.Fprintln(os.Stderr, "restore:", err)
+			os.Exit(1)
+		}
 	default:
-		fmt.Fprintf(os.Stderr, "usage: gitdash [serve|update|version]\n")
+		fmt.Fprintf(os.Stderr, "usage: gitdash [serve|backup|restore|update|version]\n")
 		os.Exit(2)
 	}
 }
