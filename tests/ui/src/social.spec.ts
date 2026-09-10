@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures/browser";
 import { hasInstanceSource } from "./fixtures/browser";
-import { createRepoViaUi, registerViaUi, toast } from "./helpers/ui";
+import { createRepoViaUi, registerViaUi } from "./helpers/ui";
 
 // 对齐 tests/conftest.py：未配置实例来源（GITDASH_BIN / GITDASH_UI_URL）时整组 skip
 test.skip(
@@ -44,22 +44,15 @@ test.describe("@happy Star / Watch / Fork", () => {
     await expect(page.getByRole("link", { name: repoName, exact: true })).toBeVisible();
   });
 
-  test("Fork 生成自己的副本（需换个名字，同名 fork 被拒绝）", async ({ page }) => {
+  test("禁止 fork 自己的仓库（不显示 Fork 按钮）", async ({ page }) => {
     const { username } = await registerViaUi(page);
     const repoName = await createRepoViaUi(page, { template: "readme" });
 
     await page.getByRole("link", { name: repoName, exact: true }).click();
-    await page.getByRole("button", { name: "Fork" }).click();
-    const dialog = page.getByRole("dialog");
-    // 同名 fork 会 409（与 GitHub 一致），改一个新名字
-    await dialog.locator("#fork-name").fill(`${repoName}-fork`);
-    await dialog.getByRole("button", { name: "Fork" }).click();
-    await expect(toast(page)).toBeVisible();
-
-    // 跳转到 fork 出来的仓库
     await expect(
-      page.getByRole("heading", { name: `${username}/${repoName}-fork` }),
+      page.getByRole("heading", { name: `${username}/${repoName}` }),
     ).toBeVisible();
-    await expect(page.getByText("forked from")).toBeVisible();
+    // 自己的仓库不显示 Fork 按钮（后端也会拒绝）
+    await expect(page.getByRole("button", { name: "Fork", exact: true })).toHaveCount(0);
   });
 });

@@ -20,7 +20,8 @@ test.describe("@happy 个人资料 / 安全", () => {
     await page.locator("#pw-new").fill(next);
     await page.locator("#pw-confirm").fill(next);
     await page.getByRole("button", { name: "Change password" }).click();
-    await expect(toast(page)).toBeVisible();
+    // 等待本次改密的成功文案（而非任意 toast：注册遗留的欢迎 toast 会让断言提前通过）
+    await expect(page.getByText("Password updated")).toBeVisible();
 
     // 旧密码被拒（401 只弹错误 toast，留在登录页，不再整页跳转）
     await signOutViaUi(page);

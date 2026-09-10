@@ -30,6 +30,17 @@ export async function loginViaUi(page: Page, username: string, password: string)
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+/** 点击顶栏导航项：直接链接不可见（已折叠进「More」）时从下拉菜单打开。 */
+export async function gotoNav(page: Page, name: string) {
+  const link = page.getByRole("link", { name, exact: true });
+  if ((await link.count()) > 0 && (await link.first().isVisible())) {
+    await link.first().click();
+    return;
+  }
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
+
 /** 通过仓库页 "New repository" 对话框创建仓库 */
 export async function createRepoViaUi(
   page: Page,

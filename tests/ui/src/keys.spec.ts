@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test, expect } from "./fixtures/browser";
 import { hasInstanceSource } from "./fixtures/browser";
-import { registerViaUi, toast } from "./helpers/ui";
+import { registerViaUi, gotoNav, toast } from "./helpers/ui";
 
 // 对齐 tests/conftest.py：未配置实例来源（GITDASH_BIN / GITDASH_UI_URL）时整组 skip
 test.skip(
@@ -26,7 +26,7 @@ function genSshKey(): string {
 test.describe("@happy SSH 密钥 / 访问令牌", () => {
   test("添加 SSH 公钥并显示指纹，可删除", async ({ page }) => {
     await registerViaUi(page);
-    await page.getByRole("link", { name: "SSH Keys" }).click();
+    await gotoNav(page, "SSH Keys");
     await expect(page.getByRole("heading", { name: "SSH Keys" })).toBeVisible();
 
     await page.getByRole("button", { name: "Add key" }).click();
@@ -48,7 +48,7 @@ test.describe("@happy SSH 密钥 / 访问令牌", () => {
 
   test("创建 PAT：令牌只展示一次，列表可见", async ({ page }) => {
     await registerViaUi(page);
-    await page.getByRole("link", { name: "SSH Keys" }).click();
+    await gotoNav(page, "SSH Keys");
     await page.getByRole("tab", { name: "Personal access tokens" }).click();
 
     await page.getByRole("button", { name: "Create token" }).first().click();
