@@ -49,6 +49,21 @@ func TestRegisterLoginSession(t *testing.T) {
 	c.mustStatus("GET", "/me", nil, 200)
 }
 
+func TestRegisterPasswordStrength(t *testing.T) {
+	env := start(t)
+	c := &Client{env: env}
+
+	// 长度足够但字符类别不足（仅小写字母）
+	c.mustFail("POST", "/auth/register", map[string]string{"username": "weakuser", "password": "alllowercaseonly"}, 400)
+	// 长度不足
+	c.mustFail("POST", "/auth/register", map[string]string{"username": "weakuser", "password": "Ab1!x"}, 400)
+	// 至少 3 类字符且长度足够
+	m := c.mustStatus("POST", "/auth/register", map[string]string{"username": "stronguser", "password": "Passw0rd-123"}, 201)
+	if token, _ := m["token"].(string); token == "" {
+		t.Fatal("strong password register: empty token")
+	}
+}
+
 func TestSessionRequired(t *testing.T) {
 	env := start(t)
 

@@ -9963,7 +9963,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "new_password": {
-                    "description": "新密码（至少 8 位）",
+                    "description": "新密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）",
                     "type": "string"
                 }
             }
@@ -10037,7 +10037,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "new_password": {
-                    "description": "新密码（至少 8 位）",
+                    "description": "新密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）",
                     "type": "string"
                 }
             }
@@ -10424,7 +10424,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "password": {
-                    "description": "密码（至少 8 位）",
+                    "description": "密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）",
                     "type": "string"
                 },
                 "username": {

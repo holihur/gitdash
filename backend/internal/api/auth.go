@@ -51,9 +51,9 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}
-	if len(in.Password) < 8 {
+	if code, msg := passwordIssue(in.Password); code != "" {
 		a.rateFail(ipKey)
-		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
+		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
 	if _, err := a.store.GetByUsername(username); err == nil {
@@ -78,6 +78,38 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	}
 	a.rateReset(ipKey)
 	a.startSession(w, r, http.StatusCreated, u.Username)
+}
+
+// 密码强度策略：至少 8 位，且至少包含 4 类字符（小写字母、大写字母、数字、特殊字符）中的 3 类。
+var (
+	pwLowerRe   = regexp.MustCompile(`[a-z]`)
+	pwUpperRe   = regexp.MustCompile(`[A-Z]`)
+	pwDigitRe   = regexp.MustCompile(`[0-9]`)
+	pwSpecialRe = regexp.MustCompile(`[^a-zA-Z0-9]`)
+)
+
+// passwordIssue 校验密码强度；合规返回 ("", "")，否则返回错误码与用户提示。
+func passwordIssue(pw string) (string, string) {
+	if len(pw) < 8 {
+		return "password_too_short", "password must be at least 8 characters"
+	}
+	classes := 0
+	if pwLowerRe.MatchString(pw) {
+		classes++
+	}
+	if pwUpperRe.MatchString(pw) {
+		classes++
+	}
+	if pwDigitRe.MatchString(pw) {
+		classes++
+	}
+	if pwSpecialRe.MatchString(pw) {
+		classes++
+	}
+	if classes < 3 {
+		return "password_weak", "password must contain at least 3 of: lowercase, uppercase, digit, or special character"
+	}
+	return "", ""
 }
 
 // login 用户登录。

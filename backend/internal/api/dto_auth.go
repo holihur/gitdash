@@ -7,7 +7,7 @@ package api
 //nolint:unused // 仅供 swagger @Param 注解引用
 type registerReq struct {
 	Username string `json:"username"` // 用户名（2-32 位小写字母/数字/_/-，字母或数字开头）
-	Password string `json:"password"` // 密码（至少 8 位）
+	Password string `json:"password"` // 密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）
 }
 
 // loginReq 登录请求体。
@@ -31,7 +31,7 @@ type mfaVerifyReq struct {
 //nolint:unused // 仅供 swagger @Param 注解引用
 type changePasswordReq struct {
 	Current string `json:"current_password"` // 当前密码
-	New     string `json:"new_password"`     // 新密码（至少 8 位）
+	New     string `json:"new_password"`     // 新密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）
 }
 
 // updateProfileReq 更新个人资料请求体。
@@ -85,5 +85,5 @@ type adminLoginReq struct {
 //nolint:unused // 仅供 swagger @Param 注解引用
 type adminChangePasswordReq struct {
 	Current string `json:"current_password"` // 当前密码
-	New     string `json:"new_password"`     // 新密码（至少 8 位）
+	New     string `json:"new_password"`     // 新密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）
 }

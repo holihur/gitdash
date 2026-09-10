@@ -5,6 +5,7 @@ import { GitBranch, Github, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 import { takeReturnPath } from "@/lib/auth-expiry";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { Button } from "@/components/ui/button";
@@ -240,6 +241,7 @@ export default function Login({ onAuthed }: Props) {
                     setPassword={setPassword}
                     passwordHint={t("login.passwordMin")}
                   />
+                  <PasswordStrengthMeter password={password} />
                   <Button type="submit" className="w-full" disabled={busy}>
                     {t("login.registerAndSignIn")}
                   </Button>
@@ -315,6 +317,56 @@ function GoogleIcon({ className }: { className?: string }) {
         d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.29 6.62l3.98 3.09C6.22 6.86 8.87 4.75 12 4.75z"
       />
     </svg>
+  );
+}
+
+type StrengthKey = "weak" | "fair" | "good" | "strong";
+
+function passwordStrength(pw: string): { score: number; key: StrengthKey } {
+  if (!pw) return { score: 0, key: "weak" };
+  const len = pw.length;
+  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(pw)).length;
+  let score = 0;
+  if (len >= 8) score++;
+  if (classes >= 3) score++;
+  if (len >= 12) score++;
+  if (classes === 4) score++;
+  if (score <= 1) return { score: 1, key: "weak" };
+  if (score === 2) return { score: 2, key: "fair" };
+  if (score === 3) return { score: 3, key: "good" };
+  return { score: 4, key: "strong" };
+}
+
+function PasswordStrengthMeter({ password }: { password: string }) {
+  const { t } = useI18n();
+  const s = passwordStrength(password);
+  if (s.score === 0) return null;
+  const color: Record<StrengthKey, string> = {
+    weak: "bg-red-500",
+    fair: "bg-amber-500",
+    good: "bg-lime-500",
+    strong: "bg-emerald-500",
+  };
+  const label: Record<StrengthKey, string> = {
+    weak: t("login.passwordWeak"),
+    fair: t("login.passwordFair"),
+    good: t("login.passwordGood"),
+    strong: t("login.passwordStrong"),
+  };
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex gap-1" aria-hidden="true">
+        {[1, 2, 3, 4].map((i) => (
+          <span
+            key={i}
+            className={cn("h-1.5 flex-1 rounded-full", i <= s.score ? color[s.key] : "bg-muted")}
+          />
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {t("login.passwordStrength")}: <span className="font-medium">{label[s.key]}</span>
+      </p>
+    </div>
   );
 }
 

@@ -62,8 +62,8 @@ func (a *API) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}
-	if len(in.Password) < 8 {
-		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
+	if code, msg := passwordIssue(in.Password); code != "" {
+		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
 	email := strings.TrimSpace(in.Email)
@@ -116,8 +116,8 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if len(in.Password) < 8 {
-		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
+	if code, msg := passwordIssue(in.Password); code != "" {
+		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)

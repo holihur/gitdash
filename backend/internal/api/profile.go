@@ -40,8 +40,8 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusUnauthorized, "invalid_current_password", "current password is incorrect")
 		return
 	}
-	if len(in.New) < 8 {
-		writeCode(w, http.StatusBadRequest, "password_too_short", "password must be at least 8 characters")
+	if code, msg := passwordIssue(in.New); code != "" {
+		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(in.New), bcrypt.DefaultCost)

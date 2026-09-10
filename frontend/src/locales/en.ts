@@ -47,7 +47,12 @@ export const en = {
     usernamePlaceholder: "Lowercase letters, numbers, _ or -",
     password: "Password",
     passwordWithHint: "Password ({hint})",
-    passwordMin: "at least 8 characters",
+    passwordMin: "at least 8 characters, with 3 of: lowercase / uppercase / digit / symbol",
+    passwordStrength: "Password strength",
+    passwordWeak: "Weak",
+    passwordFair: "Fair",
+    passwordGood: "Good",
+    passwordStrong: "Strong",
     registerAndSignIn: "Register and sign in",
     hint: "After registering, add your public key on the SSH Keys page to access repositories via SSH.",
     apiDocs: "API Docs (Swagger)",
@@ -689,7 +694,8 @@ export const en = {
     usersCreate: "Create user",
     userCreated: "User {name} created",
     userExists: "Username already taken",
-    weakPassword: "Password is too weak (min 8 characters)",
+    weakPassword:
+      "Password is too weak (min 8 characters, with 3 of: lowercase / uppercase / digit / symbol)",
     resetPassword: "Reset password",
     resetPasswordTitle: "Reset password for {name}",
     resetPasswordNew: "New password",
@@ -761,6 +767,8 @@ export const en = {
     username_invalid:
       "Username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting with a letter or digit",
     password_too_short: "Password must be at least 8 characters",
+    password_weak:
+      "Password must contain at least 3 of: lowercase, uppercase, digit, or special character",
     username_taken: "This username is already taken",
     invalid_json_body: "Invalid request body",
     repo_name_invalid: "Invalid repository name",

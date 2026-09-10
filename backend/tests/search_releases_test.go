@@ -64,8 +64,8 @@ func uploadAssetReq(t *testing.T, env *Env, token, path, filename string, conten
 func TestSearchAndReleases(t *testing.T) {
 	requireBins(t, "git")
 	env := start(t)
-	alice := register(t, env, "alice", "password-alice")
-	bob := register(t, env, "bob", "password-bob")
+	alice := register(t, env, "alice", "password-alice-123")
+	bob := register(t, env, "bob", "password-bob-123")
 
 	alice.mustStatus("POST", "/repos", map[string]any{
 		"name": "demo", "template": "readme", "private": false,
