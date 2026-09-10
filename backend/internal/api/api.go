@@ -484,20 +484,45 @@ func (a *API) Handler(staticDir string) http.Handler {
 }
 
 // csrfGuard 校验跨站请求：带 Origin 的非安全方法必须与本站同源（cookie 会话的 CSRF 防线）。
-
+// 叠加浏览器强信号：Sec-Fetch-Site 为 cross-site 直接拒绝；无 Origin 时退回校验 Referer。
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
-			if origin := r.Header.Get("Origin"); origin != "" && origin != "null" {
-				u, err := url.Parse(origin)
-				if err != nil || !strings.EqualFold(u.Host, r.Host) {
-					writeCode(w, http.StatusForbidden, "invalid_origin", "cross-origin request rejected")
-					return
-				}
-			}
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
+			writeCode(w, http.StatusForbidden, "invalid_origin", "cross-origin request rejected")
+			return
+		}
+		if !sameOriginRequest(r) {
+			writeCode(w, http.StatusForbidden, "invalid_origin", "cross-origin request rejected")
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// sameOriginRequest 校验 Origin（优先）或 Referer 与请求 Host 同源；
+// 两者都缺失时放行（非浏览器客户端如 curl/CI，不构成 CSRF）。
+func sameOriginRequest(r *http.Request) bool {
+	match := func(raw string) bool {
+		if raw == "" || raw == "null" {
+			return true
+		}
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" {
+			return false
+		}
+		return strings.EqualFold(u.Host, r.Host)
+	}
+	if origin := r.Header.Get("Origin"); origin != "" {
+		return match(origin)
+	}
+	if referer := r.Header.Get("Referer"); referer != "" {
+		return match(referer)
+	}
+	return true
 }
 
 // secureHeaders 基础安全响应头（CSP 允许内联主题脚本，其 sha256 随 index.html 保持同步）。

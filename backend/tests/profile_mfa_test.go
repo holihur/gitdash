@@ -245,6 +245,33 @@ func TestSessionCookieAndCSRFGuard(t *testing.T) {
 	if r3.StatusCode != 403 {
 		t.Fatalf("csrf guard = %d", r3.StatusCode)
 	}
+	// Sec-Fetch-Site: cross-site（无 Origin）也被拒绝
+	post2, _ := http.NewRequest("POST", env.BaseURL+"/api/repos", strings.NewReader(`{"name":"y"}`))
+	post2.Header.Set("Content-Type", "application/json")
+	post2.Header.Set("Sec-Fetch-Site", "cross-site")
+	r6, _ := hc.Do(post2)
+	_ = r6.Body.Close()
+	if r6.StatusCode != 403 {
+		t.Fatalf("sec-fetch-site guard = %d", r6.StatusCode)
+	}
+	// 跳站 Referer（无 Origin）被拒绝
+	post3, _ := http.NewRequest("POST", env.BaseURL+"/api/repos", strings.NewReader(`{"name":"z"}`))
+	post3.Header.Set("Content-Type", "application/json")
+	post3.Header.Set("Referer", "http://evil.example/page")
+	r7, _ := hc.Do(post3)
+	_ = r7.Body.Close()
+	if r7.StatusCode != 403 {
+		t.Fatalf("referer guard = %d", r7.StatusCode)
+	}
+	// 同源 Referer 放行
+	post4, _ := http.NewRequest("POST", env.BaseURL+"/api/repos", strings.NewReader(`{"name":"ok"}`))
+	post4.Header.Set("Content-Type", "application/json")
+	post4.Header.Set("Referer", env.BaseURL+"/new")
+	r8, _ := hc.Do(post4)
+	_ = r8.Body.Close()
+	if r8.StatusCode != 201 {
+		t.Fatalf("same-origin referer = %d", r8.StatusCode)
+	}
 	// 登出清 cookie，会话失效
 	lo, _ := http.NewRequest("POST", env.BaseURL+"/api/auth/logout", nil)
 	r4, err := hc.Do(lo)
