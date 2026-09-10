@@ -45,7 +45,16 @@ type Event struct {
 	Comment string `json:"comment,omitempty"` // 评论内容摘要（截断）
 }
 
-var client = &http.Client{Timeout: 10 * time.Second}
+// client 使用 ssrf.DialContext：解析后直接拨已校验的 IP，消除 DNS 重绑定（TOCTOU）窗口。
+var client = &http.Client{
+	Timeout: 10 * time.Second,
+	Transport: &http.Transport{
+		DialContext:         ssrf.DialContext,
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	},
+}
 
 // boundStore 供队列 worker（HandleJob）查 hook 与落投递记录（main 启动时 Bind）。
 var boundStore *store.Store

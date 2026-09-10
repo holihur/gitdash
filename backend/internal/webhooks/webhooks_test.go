@@ -131,3 +131,15 @@ func TestWebhookSignatureHeader(t *testing.T) {
 		t.Fatal("no delivery")
 	}
 }
+
+func TestDeliverBlocksPrivateWhenNotAllowed(t *testing.T) {
+	t.Setenv("GITDASH_SSRF_ALLOW_PRIVATE", "")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if _, err := deliver(srv.URL, []byte("{}"), ""); err == nil {
+		t.Fatal("expected loopback delivery to be blocked by SSRF guard")
+	}
+}
