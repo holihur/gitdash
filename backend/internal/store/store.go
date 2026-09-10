@@ -58,6 +58,7 @@ type Repo struct {
 	Starred   bool   `json:"starred"`
 	Watchers  int    `json:"watchers"`
 	Watching  bool   `json:"watching"`
+	Size      int64  `json:"size"` // 仓库磁盘占用（字节），由 API 层按需填充
 	ForkOwner string `json:"fork_owner,omitempty"`
 	ForkRepo  string `json:"fork_repo,omitempty"`
 	ImportURL string `json:"import_url,omitempty"`

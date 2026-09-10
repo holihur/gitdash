@@ -6,6 +6,7 @@ import {
   Eye,
   GitBranch,
   GitFork,
+  HardDrive,
   MoreVertical,
   RefreshCw,
   Star,
@@ -35,7 +36,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { cn, copyText } from "@/lib/utils";
+import { cn, copyText, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
@@ -446,10 +447,21 @@ export default function RepoView() {
             {repo?.starred ? t("social.starredBtn") : t("social.star")}
             <span className="text-muted-foreground">{repo?.stars ?? 0}</span>
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={openFork}>
-            <GitFork className="h-4 w-4" />
-            {t("social.fork")}
-          </Button>
+          {typeof repo?.size === "number" && (
+            <span
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground"
+              title={t("common.size")}
+            >
+              <HardDrive className="h-4 w-4" />
+              {formatSize(repo.size)}
+            </span>
+          )}
+          {!isOwner && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={openFork}>
+              <GitFork className="h-4 w-4" />
+              {t("social.fork")}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

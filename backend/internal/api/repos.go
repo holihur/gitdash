@@ -207,6 +207,10 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	list := []store.Repo{repo}
 	a.attachStars(list, me)
 	repo = list[0]
+	// 仓库磁盘占用（代码体积）；仓库不在磁盘上（如导入中）时留 0。
+	if sz, err := gitsvc.RepoSize(owner, name); err == nil {
+		repo.Size = sz
+	}
 	if fo, fr, err := a.store.ForkSource(owner, name); err == nil {
 		repo.ForkOwner, repo.ForkRepo = fo, fr
 	}

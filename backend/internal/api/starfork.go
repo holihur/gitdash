@@ -117,6 +117,11 @@ func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	me := userFrom(r)
+	// 禁止 fork 自己的项目（无论目标是个人还是组织命名空间）。
+	if srcOwner == me {
+		writeCode(w, http.StatusBadRequest, "cannot_fork_own_repo", "you cannot fork your own repository")
+		return
+	}
 	targetOwner := me
 	if ns := strings.TrimSpace(in.Namespace); ns != "" && ns != me {
 		if !a.store.IsOrg(ns) || a.store.OrgRole(ns, me) == "" {

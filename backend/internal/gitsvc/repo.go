@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -202,4 +203,26 @@ func writeTempImportKey(privateKey string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// RepoSize 返回仓库磁盘占用（字节）：松散对象大小 + pack 大小（不含 refs/config 等零头）。
+func RepoSize(owner, name string) (int64, error) {
+	out, err := gitOut(RepoPath(owner, name), "count-objects", "-v")
+	if err != nil {
+		return 0, err
+	}
+	var kb int64
+	for _, line := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(k) {
+		case "size", "size-pack", "size-garbage":
+			if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil {
+				kb += n
+			}
+		}
+	}
+	return kb * 1024, nil
 }

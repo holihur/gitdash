@@ -778,6 +778,7 @@ export const zhCN: Messages = {
     invalid_json_body: "请求体格式错误",
     repo_name_invalid: "仓库名称不合法",
     repo_exists: "同名仓库已存在",
+    cannot_fork_own_repo: "不能 fork 自己的仓库",
     not_found: "未找到该资源",
     key_name_required: "名称和公钥不能为空",
     key_invalid: "公钥格式无效",

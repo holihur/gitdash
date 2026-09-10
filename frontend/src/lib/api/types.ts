@@ -70,6 +70,8 @@ export interface Repo {
   /** watch 数量与当前用户是否已 watch */
   watchers?: number;
   watching?: boolean;
+  /** 仓库磁盘占用（字节，仅仓库详情接口返回） */
+  size?: number;
   /** fork 来源（仅 fork 仓库） */
   fork_owner?: string;
   fork_repo?: string;

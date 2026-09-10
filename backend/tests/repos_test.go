@@ -131,3 +131,48 @@ func TestRepoListOnlyOwn(t *testing.T) {
 		t.Fatalf("bob repos = %+v", bRepos)
 	}
 }
+
+func TestCannotForkOwnRepo(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
+
+	// fork 自己的仓库被拒绝（不落盘、返回 cannot_fork_own_repo）
+	m := alice.mustStatus("POST", "/users/alice/repos/demo/fork",
+		map[string]string{"name": "demo-fork"}, 400)
+	if m["code"] != "cannot_fork_own_repo" {
+		t.Fatalf("fork own repo: code = %v", m["code"])
+	}
+	if repoExists(env, "alice", "demo-fork") {
+		t.Fatal("own-repo fork should not be created")
+	}
+}
+
+func TestRepoSize(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "sized"}, 201)
+
+	// 空仓库：size 字段存在且为 0
+	m := alice.mustStatus("GET", "/repos/sized", nil, 200)
+	if _, ok := m["size"]; !ok {
+		t.Fatalf("size missing on empty repo: %v", m)
+	}
+	if sz, _ := m["size"].(float64); sz != 0 {
+		t.Fatalf("empty repo size = %v, want 0", m["size"])
+	}
+
+	// 写入文件后：size > 0
+	writeCommit(t, alice, "alice", "sized", map[string]any{
+		"branch":  "main",
+		"message": "add readme",
+		"changes": []any{
+			map[string]any{"path": "README.md", "action": "create", "content": "# sized\n"},
+		},
+	}, 201)
+	m = alice.mustStatus("GET", "/repos/sized", nil, 200)
+	if sz, _ := m["size"].(float64); sz <= 0 {
+		t.Fatalf("repo size after commit = %v, want > 0", m["size"])
+	}
+}

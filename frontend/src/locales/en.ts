@@ -782,6 +782,7 @@ export const en = {
     invalid_json_body: "Invalid request body",
     repo_name_invalid: "Invalid repository name",
     repo_exists: "A repository with this name already exists",
+    cannot_fork_own_repo: "You cannot fork your own repository",
     not_found: "Not found",
     key_name_required: "Name and public key are required",
     key_invalid: "Invalid public key",

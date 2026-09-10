@@ -11673,6 +11673,10 @@ const docTemplate = `{
                     "description": "Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空",
                     "type": "string"
                 },
+                "size": {
+                    "description": "仓库磁盘占用（字节），由 API 层按需填充",
+                    "type": "integer"
+                },
                 "starred": {
                     "type": "boolean"
                 },
