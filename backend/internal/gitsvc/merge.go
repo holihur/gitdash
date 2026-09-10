@@ -79,4 +79,4 @@ func MergeRebase(owner, name, target, source, committer string) (string, error) 
 	return head, nil
 }
 
-// InitReadme 把刚创建的 bare 仓库初始化为默认模版：main 分支 + 以仓库名生成的 README.md。
+// InitTemplate 把刚创建的 bare 仓库初始化为默认模版：main 分支 + 以仓库名生成的 README.md + 示例流水线 .gitdash.yml。

@@ -109,7 +109,7 @@ export const en = {
     namespaceLabel: "Owner",
     namespacePersonal: "Personal",
     templateNone: "Empty repository",
-    templateReadme: "Default template: README.md (named after the repository)",
+    templateReadme: "Default template: README.md + .gitdash.yml (CI pipeline)",
     templateRepoLabel: "Template repository",
     templateRepoNone: "No template repository",
     templateBadge: "Template",

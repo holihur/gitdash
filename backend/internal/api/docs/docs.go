@@ -3040,7 +3040,7 @@ const docTemplate = `{
                 "summary": "创建仓库",
                 "parameters": [
                     {
-                        "description": "仓库名、描述、模板（readme）、是否私有、组织命名空间",
+                        "description": "仓库名、描述、模板（readme：README.md + .gitdash.yml）、是否私有、组织命名空间",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -6756,6 +6756,66 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/{owner}/repos/{name}/pipeline/dispatch": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "外部 dispatch 触发流水线",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "可选 ref/sha/inputs",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/api.createPipelineRunReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{owner}/repos/{name}/pipeline/runs": {
             "get": {
                 "security": [
@@ -6836,7 +6896,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "可选分支 ref，默认取默认分支",
+                        "description": "可选 ref/sha/inputs",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -6977,6 +7037,62 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/runs/{id}/rerun": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "重跑流水线运行",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "既有运行 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object"
                         }
                     },
                     "404": {
@@ -10150,8 +10266,19 @@ const docTemplate = `{
         "api.createPipelineRunReq": {
             "type": "object",
             "properties": {
+                "inputs": {
+                    "description": "可选（仅 dispatch）：注入为 INPUT_\u003cKEY\u003e 环境变量",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "ref": {
-                    "description": "可选分支名，为空时使用仓库默认分支",
+                    "description": "可选：分支或 tag 短名，为空且无 sha 时用默认分支",
+                    "type": "string"
+                },
+                "sha": {
+                    "description": "可选：直接指定提交（分支名/tag/SHA 均可）",
                     "type": "string"
                 }
             }
@@ -10272,7 +10399,7 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "template": {
-                    "description": "模板：空 = 空仓库；\"readme\" = 默认模版（README.md）",
+                    "description": "模板：空 = 空仓库；\"readme\" = 默认模版（README.md + .gitdash.yml）",
                     "type": "string"
                 },
                 "template_name": {

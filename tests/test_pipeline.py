@@ -67,8 +67,11 @@ def pl_env(user_factory):
     an, _, alice = user_factory("pa")
     bn, _, bob = user_factory("pb")
     repo = f"ci-{_uuid()}"
-    # 公开仓库：便于验证非 owner 只读行为
-    alice.post("/repos", json={"name": repo, "private": False, "template": "readme"}, expect=201)
+    # 公开仓库：便于验证非 owner 只读行为。
+    # 先建空仓库，再提交 README 建立 main 分支（不写 .gitdash.yml，
+    # 供 test_pipeline_trigger_requires_dsl_file 验证缺少 DSL 文件的报错）。
+    alice.post("/repos", json={"name": repo, "private": False}, expect=201)
+    _commit(alice, an, repo, "README.md", f"# {repo}\n")
     yield an, bn, alice, bob, repo
     try:
         alice.delete(f"/repos/{repo}", expect=204)

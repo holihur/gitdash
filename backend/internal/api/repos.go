@@ -67,7 +67,7 @@ func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 //	@Tags        repos
 //	@Accept      json
 //	@Produce     json
-//	@Param       body body createRepoReq true "仓库名、描述、模板（readme）、是否私有、组织命名空间"
+//	@Param       body body createRepoReq true "仓库名、描述、模板（readme：README.md + .gitdash.yml）、是否私有、组织命名空间"
 //	@Success     201 {object} store.Repo
 //	@Failure     400 {object} map[string]string
 //	@Failure     403 {object} map[string]string
@@ -169,7 +169,7 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Template == "readme" {
-		if err := gitsvc.InitReadme(owner, in.Name); err != nil {
+		if err := gitsvc.InitTemplate(owner, in.Name); err != nil {
 			_ = a.store.DeleteRepo(owner, in.Name)
 			_ = gitsvc.Delete(owner, in.Name)
 			internalError(w, err)

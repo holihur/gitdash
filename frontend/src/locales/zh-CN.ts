@@ -109,7 +109,7 @@ export const zhCN: Messages = {
     namespaceLabel: "归属",
     namespacePersonal: "个人",
     templateNone: "空仓库",
-    templateReadme: "默认模版：以仓库名生成 README.md",
+    templateReadme: "默认模版：README.md + .gitdash.yml（CI 流水线）",
     templateRepoLabel: "模版仓库",
     templateRepoNone: "不使用模版仓库",
     templateBadge: "模版",

@@ -75,7 +75,7 @@ func TestForkRepoPreservesRefs(t *testing.T) {
 	if err := CreateBare("alice", "src"); err != nil {
 		t.Fatal(err)
 	}
-	if err := InitReadme("alice", "src"); err != nil {
+	if err := InitTemplate("alice", "src"); err != nil {
 		t.Fatal(err)
 	}
 	if err := ForkRepo("alice", "src", "bob", "forked"); err != nil {
@@ -105,7 +105,7 @@ func TestImportRepoFromLocalPath(t *testing.T) {
 	if err := CreateBare("alice", "upstream"); err != nil {
 		t.Fatal(err)
 	}
-	if err := InitReadme("alice", "upstream"); err != nil {
+	if err := InitTemplate("alice", "upstream"); err != nil {
 		t.Fatal(err)
 	}
 	// 从本地 bare 路径导入（模拟远程 URL）
@@ -132,7 +132,7 @@ func TestPushMirror(t *testing.T) {
 	if err := CreateBare("alice", "src"); err != nil {
 		t.Fatal(err)
 	}
-	if err := InitReadme("alice", "src"); err != nil {
+	if err := InitTemplate("alice", "src"); err != nil {
 		t.Fatal(err)
 	}
 	// 目标：一个空 bare 仓库（模拟第三方远程）

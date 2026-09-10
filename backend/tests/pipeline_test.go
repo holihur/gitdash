@@ -106,7 +106,9 @@ func TestPipelineSettingsAndRuns(t *testing.T) {
 
 	alice := register(t, env, "pipea", "pipe-pass-123")
 	alice.mustStatus("POST", "/repos",
-		map[string]any{"name": "ci", "template": "readme", "private": false}, 201)
+		map[string]any{"name": "ci", "private": false}, 201)
+	// 建立一个只有 README、不含 .gitdash.yml 的 main 分支，用于验证缺少 DSL 文件的报错
+	commitFile(t, alice, "pipea", "ci", "README.md", "# ci\n")
 
 	// 默认关闭
 	m := alice.mustStatus("GET", "/users/pipea/repos/ci/pipeline", nil, 200)

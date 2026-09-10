@@ -11,7 +11,7 @@ import (
 )
 
 // 回归测试：默认配置（相对路径 data 目录）下，用 readme 模板创建仓库时
-// InitReadme 会在临时目录执行 git push，相对的 RepoPath 会指向不存在的路径。
+// InitTemplate 会在临时目录执行 git push，相对的 RepoPath 会指向不存在的路径。
 func TestRepoReadmeTemplateRelativeDataDir(t *testing.T) {
 	oldWd, err := os.Getwd()
 	if err != nil {
@@ -46,5 +46,11 @@ func TestRepoReadmeTemplateRelativeDataDir(t *testing.T) {
 	b := alice.mustStatus("GET", "/repos/relreadme/blob?ref=main&path=README.md", nil, 200)
 	if b["content"] != "# relreadme\n" {
 		t.Fatalf("readme content = %q", b["content"])
+	}
+
+	// 默认模版同时写入 .gitdash.yml
+	p := alice.mustStatus("GET", "/repos/relreadme/blob?ref=main&path=.gitdash.yml", nil, 200)
+	if !containsStr(p["content"].(string), "Hello from gitdash pipeline") {
+		t.Fatalf(".gitdash.yml content = %q", p["content"])
 	}
 }

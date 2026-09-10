@@ -6,7 +6,7 @@ import "gitdash/backend/internal/gitsvc"
 type createRepoReq struct {
 	Name        string `json:"name"`        // 仓库名
 	Description string `json:"description"` // 仓库描述
-	Template    string `json:"template"`    // 模板：空 = 空仓库；"readme" = 默认模版（README.md）
+	Template    string `json:"template"`    // 模板：空 = 空仓库；"readme" = 默认模版（README.md + .gitdash.yml）
 	Private     *bool  `json:"private"`     // 是否私有，默认 true
 	Namespace   string `json:"namespace"`   // 可选：组织名（成员可把仓库建到组织下）
 

@@ -7,7 +7,25 @@ import (
 	"strings"
 )
 
-func InitReadme(owner, name string) error {
+// DefaultPipelineYAML 是默认模版写入仓库根目录的 .gitdash.yml 示例流水线。
+// 开启仓库「流水线」开关后，push 即会触发；DSL 语法详见 README「CI 流水线」章节。
+const DefaultPipelineYAML = `# .gitdash.yml - gitdash CI pipeline configuration
+# Enable the pipeline in the repo's Pipeline tab, then push to trigger it.
+# See the README "CI Pipeline" section for the full DSL reference.
+image: alpine:3.19
+
+steps:
+  - name: hello
+    run: |
+      echo "Hello from gitdash pipeline"
+      echo "repo: ${GITDASH_REPO}"
+      echo "ref:  ${GITDASH_REF}"
+      echo "sha:  ${GITDASH_SHA}"
+`
+
+// InitTemplate 把刚创建的 bare 仓库初始化为默认模版：
+// main 分支 + 以仓库名生成的 README.md + 示例流水线 .gitdash.yml。
+func InitTemplate(owner, name string) error {
 	bare, err := filepath.Abs(RepoPath(owner, name))
 	if err != nil {
 		return err
@@ -38,13 +56,16 @@ func InitReadme(owner, name string) error {
 	if err := os.WriteFile(filepath.Join(tmp, "README.md"), []byte(readme), 0o644); err != nil {
 		return err
 	}
+	if err := os.WriteFile(filepath.Join(tmp, ".gitdash.yml"), []byte(DefaultPipelineYAML), 0o644); err != nil {
+		return err
+	}
 	if _, err := gitOut(tmp, "config", "user.name", "gitdash"); err != nil {
 		return err
 	}
 	if _, err := gitOut(tmp, "config", "user.email", "noreply@gitdash.local"); err != nil {
 		return err
 	}
-	if _, err := gitOut(tmp, "add", "README.md"); err != nil {
+	if _, err := gitOut(tmp, "add", "README.md", ".gitdash.yml"); err != nil {
 		return err
 	}
 	if _, err := gitOut(tmp, "commit", "-q", "-m", "Initial commit"); err != nil {

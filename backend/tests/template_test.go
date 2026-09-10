@@ -38,6 +38,12 @@ func TestRepoCreateFromReadmeTemplate(t *testing.T) {
 		t.Fatalf("readme content = %q", b["content"])
 	}
 
+	// 默认模版同时写入示例流水线 .gitdash.yml
+	p := alice.mustStatus("GET", "/repos/tpl/blob?ref=main&path=.gitdash.yml", nil, 200)
+	if !containsStr(p["content"].(string), "Hello from gitdash pipeline") {
+		t.Fatalf(".gitdash.yml content = %q", p["content"])
+	}
+
 	// commits 有一条 Initial commit
 	csRaw := rawGet(t, alice, "/repos/tpl/commits?ref=main")
 	if !containsStr(csRaw, "Initial commit") {
