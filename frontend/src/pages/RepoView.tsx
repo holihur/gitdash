@@ -47,9 +47,10 @@ const IssuesTab = lazy(() => import("./repoview/issues-tab"));
 const PullsTab = lazy(() => import("./repoview/pulls-tab"));
 const PipelineTab = lazy(() => import("./repoview/pipeline-tab"));
 const ReleasesTab = lazy(() => import("./repoview/releases-tab"));
+const ProjectsTab = lazy(() => import("./repoview/projects-tab"));
 const SettingsTab = lazy(() => import("./repoview/settings-tab"));
 
-const tabs = ["code", "commits", "issues", "pulls", "pipeline", "releases", "settings"] as const;
+const tabs = ["code", "commits", "issues", "pulls", "pipeline", "releases", "projects", "settings"] as const;
 type RepoTab = (typeof tabs)[number];
 
 export default function RepoView() {
@@ -486,6 +487,9 @@ export default function RepoView() {
           <TabsTrigger value="releases" className="flex-1 sm:flex-none">
             {t("releases.tab")}
           </TabsTrigger>
+          <TabsTrigger value="projects" className="flex-1 sm:flex-none">
+            {t("projects.tab")}
+          </TabsTrigger>
           {isOwner && (
             <TabsTrigger value="settings" className="flex-1 sm:flex-none">
               {t("repo.settings")}
@@ -553,6 +557,12 @@ export default function RepoView() {
               <ReleasesTab owner={owner} name={name} role={repo?.role} />
             </Suspense>
           </TabsContent>
+
+        <TabsContent value="projects">
+          <Suspense fallback={<TabFallback />}>
+            <ProjectsTab owner={owner} name={name} />
+          </Suspense>
+        </TabsContent>
 
         {isOwner && (
           <TabsContent value="settings">

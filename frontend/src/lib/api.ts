@@ -14,6 +14,7 @@ import { searchApi } from "./api/search";
 import { releasesApi } from "./api/releases";
 import { keysApi } from "./api/keys";
 import { packagesApi } from "./api/packages";
+import { projectsApi } from "./api/projects";
 
 export const api = {
   ...authApi,
@@ -27,4 +28,5 @@ export const api = {
   ...releasesApi,
   ...keysApi,
   ...packagesApi,
+  ...projectsApi,
 };

@@ -201,6 +201,50 @@ export interface Milestone {
   closed_issues: number;
 }
 
+export interface Project {
+  id: number;
+  owner: string;
+  repo: string;
+  name: string;
+  description: string;
+  card_count: number;
+  created_at: string;
+}
+
+export interface ProjectColumn {
+  id: number;
+  project_id: number;
+  name: string;
+  position: number;
+}
+
+export interface ProjectSwimlane {
+  id: number;
+  project_id: number;
+  name: string;
+  position: number;
+}
+
+export interface ProjectCard {
+  id: number;
+  project_id: number;
+  column_id: number;
+  swimlane_id: number;
+  issue_number: number | null;
+  issue_title: string | null;
+  issue_state: string | null;
+  note: string | null;
+  position: number;
+  created_at: string;
+}
+
+export interface ProjectBoard {
+  project: Project;
+  columns: ProjectColumn[];
+  swimlanes: ProjectSwimlane[];
+  cards: ProjectCard[];
+}
+
 export interface IssueComment {
   id: number;
   number: number;

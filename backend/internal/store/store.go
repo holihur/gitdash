@@ -213,6 +213,47 @@ type Milestone struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+// Project 仓库看板项目
+type Project struct {
+	ID          int64  `json:"id"`
+	Owner       string `json:"owner"`
+	Repo        string `json:"repo"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	CardCount   int    `json:"card_count"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// ProjectColumn 项目看板列
+type ProjectColumn struct {
+	ID        int64  `json:"id"`
+	ProjectID int64  `json:"project_id"`
+	Name      string `json:"name"`
+	Position  int    `json:"position"`
+}
+
+// ProjectSwimlane 项目看板泳道
+type ProjectSwimlane struct {
+	ID        int64  `json:"id"`
+	ProjectID int64  `json:"project_id"`
+	Name      string `json:"name"`
+	Position  int    `json:"position"`
+}
+
+// ProjectCard 看板卡片（issue 卡片或纯文本卡片）；issue 信息由聚合查询填充
+type ProjectCard struct {
+	ID          int64  `json:"id"`
+	ProjectID   int64  `json:"project_id"`
+	ColumnID    int64  `json:"column_id"`
+	SwimlaneID  int64  `json:"swimlane_id"` // 0 = 未分组泳道
+	IssueNumber int64  `json:"issue_number"`
+	IssueTitle  string `json:"issue_title"`
+	IssueState  string `json:"issue_state"`
+	Note        string `json:"note"`
+	Position    int    `json:"position"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type GPGKey struct {
 	ID          int64  `json:"id"`
 	Fingerprint string `json:"fingerprint"`

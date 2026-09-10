@@ -157,6 +157,50 @@ type milestoneRow struct {
 
 func (milestoneRow) TableName() string { return "milestones" }
 
+// ---- projects（看板 + 泳道）----
+
+type projectRow struct {
+	ID          int64  `gorm:"primaryKey;autoIncrement"`
+	Owner       string `gorm:"not null;uniqueIndex:uq_project;size:255"`
+	Repo        string `gorm:"not null;uniqueIndex:uq_project;size:255"`
+	Name        string `gorm:"not null;uniqueIndex:uq_project;size:255"`
+	Description string `gorm:"not null;default:''"`
+	CreatedAt   string `gorm:"not null"`
+}
+
+func (projectRow) TableName() string { return "projects" }
+
+type projectColumnRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	ProjectID int64  `gorm:"not null;index"`
+	Name      string `gorm:"not null;size:255"`
+	Position  int    `gorm:"not null;default:0"`
+}
+
+func (projectColumnRow) TableName() string { return "project_columns" }
+
+type projectSwimlaneRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	ProjectID int64  `gorm:"not null;index"`
+	Name      string `gorm:"not null;size:255"`
+	Position  int    `gorm:"not null;default:0"`
+}
+
+func (projectSwimlaneRow) TableName() string { return "project_swimlanes" }
+
+type projectCardRow struct {
+	ID         int64  `gorm:"primaryKey;autoIncrement"`
+	ProjectID  int64  `gorm:"not null;index"`
+	ColumnID   int64  `gorm:"not null;index"`
+	SwimlaneID int64  `gorm:"not null;default:0"`
+	IssueNum   int64  `gorm:"not null;default:0"` // >0 = 关联 issue；0 = 纯文本卡片
+	Note       string `gorm:"not null;default:''"`
+	Position   int    `gorm:"not null;default:0"`
+	CreatedAt  string `gorm:"not null"`
+}
+
+func (projectCardRow) TableName() string { return "project_cards" }
+
 // ---- collabs / orgs ----
 
 type collabRow struct {
