@@ -231,7 +231,7 @@ func (a *API) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
-	h, err := bcrypt.GenerateFromPassword([]byte(in.New), bcrypt.DefaultCost)
+	h, err := bcrypt.GenerateFromPassword([]byte(in.New), BcryptCost)
 	if err != nil {
 		internalError(w, err)
 		return

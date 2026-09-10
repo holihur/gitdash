@@ -44,7 +44,7 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.New), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.New), BcryptCost)
 	if err != nil {
 		internalError(w, err)
 		return

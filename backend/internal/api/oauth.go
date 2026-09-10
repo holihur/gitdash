@@ -238,7 +238,7 @@ func (a *API) loginOrCreateOAuthUser(r *http.Request, provider, externalID, logi
 		return username, nil
 	}
 	randPass := randomPassword()
-	hash, err := bcrypt.GenerateFromPassword([]byte(randPass), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(randPass), BcryptCost)
 	if err != nil {
 		return "", err
 	}

@@ -71,7 +71,7 @@ func (a *API) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "email_invalid", "invalid email address")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), BcryptCost)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -120,7 +120,7 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), BcryptCost)
 	if err != nil {
 		internalError(w, err)
 		return

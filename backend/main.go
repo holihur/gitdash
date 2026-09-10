@@ -174,7 +174,7 @@ func run() {
 			if adminUser == "" {
 				adminUser = "admin"
 			}
-			hash, err := bcrypt.GenerateFromPassword([]byte(adminPW), bcrypt.DefaultCost)
+			hash, err := bcrypt.GenerateFromPassword([]byte(adminPW), api.BcryptCost)
 			if err != nil {
 				log.Fatalf("admin bootstrap: %v", err)
 			}

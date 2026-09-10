@@ -61,7 +61,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), BcryptCost)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -79,6 +79,9 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	a.rateReset(ipKey)
 	a.startSession(w, r, http.StatusCreated, u.Username)
 }
+
+// BcryptCost 密码哈希 cost（12 兼顾安全与登录延迟；旧哈希按其内嵌 cost 校验不受影响）。
+const BcryptCost = 12
 
 // 密码强度策略：至少 8 位，且至少包含 4 类字符（小写字母、大写字母、数字、特殊字符）中的 3 类。
 var (
