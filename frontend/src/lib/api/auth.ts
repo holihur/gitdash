@@ -18,6 +18,11 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ mfa_token: mfaToken, code }),
     }),
+  mfaEmailResend: (mfaToken: string) =>
+    req<{ sent: boolean }>("/auth/mfa-email/resend", {
+      method: "POST",
+      body: JSON.stringify({ mfa_token: mfaToken }),
+    }),
   logout: () => req<null>("/auth/logout", { method: "POST" }),
   me: () => req<User>("/me"),
   verifyEmail: (token: string) =>
@@ -49,5 +54,9 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ password, code }),
     }),
-
+  mfaEmailEnroll: () =>
+    req<{ sent: boolean }>("/me/mfa/email/enroll", { method: "POST" }),
+  mfaEmailActivate: (code: string) =>
+    req<null>("/me/mfa/email/activate", { method: "POST", body: JSON.stringify({ code }) }),
+  mfaEmailSend: () => req<null>("/me/mfa/email/send", { method: "POST" }),
 };

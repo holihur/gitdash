@@ -187,7 +187,20 @@ func (s *Store) SetMFASecret(username, secret string, enabled bool) error {
 
 func (s *Store) ClearMFA(username string) error {
 	return s.db.Model(&userRow{}).Where("username = ?", username).
-		Updates(map[string]any{"mfa_secret": "", "mfa_enabled": false}).Error
+		Updates(map[string]any{"mfa_secret": "", "mfa_enabled": false, "mfa_method": "totp"}).Error
+}
+
+// SetMFAMethod 设置 MFA 方式与启用状态（email 方式绑定/激活时调用）。
+func (s *Store) SetMFAMethod(username, method string, enabled bool) error {
+	res := s.db.Model(&userRow{}).Where("username = ?", username).
+		Updates(map[string]any{"mfa_method": method, "mfa_enabled": enabled})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ---- repos ----

@@ -13,6 +13,7 @@ type userRow struct {
 	CreatedAt    string `gorm:"not null"`
 	MFASecret    string `gorm:"not null;default:''"`
 	MFAEnabled   bool   `gorm:"not null;default:false"`
+	MFAMethod    string `gorm:"not null;default:'totp';size:16"` // totp | email
 	NotifyEmail  bool   `gorm:"not null;default:false"`
 	// 邮箱验证：仅对非空邮箱生效；token 24h 有效
 	EmailVerified bool   `gorm:"not null;default:false"`

@@ -138,6 +138,8 @@ jobs:
         run: chmod +x /tmp/gitdash-server && uv run pytest -v
         env:
           GITDASH_BIN: /tmp/gitdash-server
+          GITDASH_SMTP_HOST: 127.0.0.1
+          GITDASH_SMTP_PORT: 8925
           GOCOVERDIR: /tmp/gocover-api
 
       - name: Run black-box API tests against PostgreSQL
@@ -146,6 +148,8 @@ jobs:
         env:
           GITDASH_BIN: /tmp/gitdash-server
           GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
+          GITDASH_SMTP_HOST: 127.0.0.1
+          GITDASH_SMTP_PORT: 8925
           GOCOVERDIR: /tmp/gocover-api
 
       - name: Report black-box (API) coverage

@@ -39,10 +39,12 @@ export interface LoginResult {
   username?: string;
   mfa_required?: boolean;
   mfa_token?: string;
+  mfa_method?: "totp" | "email";
 }
 
 export interface MFAStatus {
   enabled: boolean;
+  method?: "totp" | "email";
   pending_secret?: string;
   otpauth_url?: string;
 }

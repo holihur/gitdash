@@ -194,6 +194,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
 	mux.HandleFunc("POST /api/auth/mfa-verify", a.mfaVerify)
+	mux.HandleFunc("POST /api/auth/mfa-email/resend", a.mfaEmailResend)
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))
 	mux.HandleFunc("GET /api/me", a.auth(a.me))
 	mux.HandleFunc("GET /api/me/export", a.auth(a.exportMe))
@@ -205,6 +206,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/me/mfa/enroll", a.auth(a.mfaEnroll))
 	mux.HandleFunc("POST /api/me/mfa/activate", a.auth(a.mfaActivate))
 	mux.HandleFunc("POST /api/me/mfa/disable", a.auth(a.mfaDisable))
+	// email MFA（向已验证邮箱发送验证码的第二因素方式）
+	mux.HandleFunc("POST /api/me/mfa/email/enroll", a.auth(a.mfaEmailEnroll))
+	mux.HandleFunc("POST /api/me/mfa/email/activate", a.auth(a.mfaEmailActivate))
+	mux.HandleFunc("POST /api/me/mfa/email/send", a.auth(a.mfaEmailSend))
 
 	// repos
 	mux.HandleFunc("GET /api/repos", a.auth(a.listRepos))

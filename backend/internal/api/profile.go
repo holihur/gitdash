@@ -77,7 +77,11 @@ func (a *API) mfaStatus(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	resp := map[string]any{"enabled": ua.MFAEnabled}
+	method := ua.MFAMethod
+	if method == "" {
+		method = "totp"
+	}
+	resp := map[string]any{"enabled": ua.MFAEnabled, "method": method}
 	if !ua.MFAEnabled && ua.MFASecret != "" { // 待激活的 secret（页面刷新后仍可继续）
 		resp["pending_secret"] = ua.MFASecret
 		resp["otpauth_url"] = totp.URI("gitdash", ua.Username, ua.MFASecret)
@@ -208,7 +212,12 @@ func (a *API) mfaDisable(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusUnauthorized, "invalid_current_password", "current password is incorrect")
 		return
 	}
-	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+	if ua.MFAMethod == "email" { // email 方式：校验 /me/mfa/email/send 下发的验证码
+		if !a.checkEmailMFACode("disable:"+username, in.Code) {
+			writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid or expired verification code")
+			return
+		}
+	} else if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
 		writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid authenticator code")
 		return
 	}

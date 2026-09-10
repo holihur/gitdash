@@ -119,6 +119,10 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	}
 	a.rateReset(key)
 	if ua.MFAEnabled {
+		method := ua.MFAMethod
+		if method == "" {
+			method = "totp"
+		}
 		token, err := newSessionToken()
 		if err != nil {
 			internalError(w, err)
@@ -129,9 +133,21 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 			internalError(w, err)
 			return
 		}
+		if method == "email" {
+			if a.emailSender == nil {
+				_ = a.store.DeleteMFAChallenge(token)
+				writeCode(w, http.StatusServiceUnavailable, "mfa_unavailable", "email mfa requires SMTP to be configured")
+				return
+			}
+			if err := a.issueEmailMFACode(token, ua.Username, ua.Email, "gitdash: sign-in verification code"); err != nil {
+				internalError(w, err)
+				return
+			}
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"mfa_required": true,
 			"mfa_token":    token,
+			"mfa_method":   method,
 		})
 		return
 	}
@@ -170,7 +186,18 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
 	}
-	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+	nowStr := now.Format(time.RFC3339)
+	ok := false
+	if ua.MFAMethod == "email" { // email 方式：比对登录时下发的邮箱验证码
+		stored, expires, err := a.store.GetEmailMFACode(in.MFAToken)
+		if err == nil && expires > nowStr && stored == strings.TrimSpace(in.Code) {
+			ok = true
+			_ = a.store.DeleteEmailMFACode(in.MFAToken)
+		}
+	} else {
+		ok = totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1)
+	}
+	if !ok {
 		attempts++
 		expired := attempts >= 5
 		if expired {
@@ -389,5 +416,52 @@ func (a *API) resendEmailVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.sendEmailVerification(me, ua.Email, token, reqBase(r))
+	writeJSON(w, http.StatusOK, map[string]any{"sent": true})
+}
+
+// mfaEmailResend 重发登录阶段（email MFA）的验证码。
+//
+//	@Summary     重发 email MFA 登录验证码
+//	@Description 基于（未过期的）mfa_token 重新生成并发送验证码；旧验证码作废。
+//	@Tags        auth
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body map[string]string true "mfa_token"
+//	@Success     200 {object} map[string]any
+//	@Failure     401 {object} map[string]string
+//	@Failure     429 {object} map[string]string
+//	@Failure     503 {object} map[string]string
+//	@Router      /auth/mfa-email/resend [post]
+func (a *API) mfaEmailResend(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		MFAToken string `json:"mfa_token"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	key := "mfa-resend|" + in.MFAToken + "|" + clientIP(r)
+	if a.rateBlocked(key) {
+		writeCode(w, http.StatusTooManyRequests, "too_many_attempts", "too many attempts, try again later")
+		return
+	}
+	username, expires, _, err := a.store.GetMFAChallenge(in.MFAToken)
+	if err != nil || expires <= time.Now().UTC().Format(time.RFC3339) {
+		writeCode(w, http.StatusUnauthorized, "mfa_challenge_expired", "mfa challenge expired, sign in again")
+		return
+	}
+	ua, err := a.store.GetByUsername(username)
+	if err != nil || !ua.MFAEnabled || ua.MFAMethod != "email" {
+		writeCode(w, http.StatusUnauthorized, "mfa_challenge_expired", "mfa challenge expired, sign in again")
+		return
+	}
+	if a.emailSender == nil {
+		writeCode(w, http.StatusServiceUnavailable, "mfa_unavailable", "email mfa requires SMTP to be configured")
+		return
+	}
+	if err := a.issueEmailMFACode(in.MFAToken, ua.Username, ua.Email, "gitdash: sign-in verification code"); err != nil {
+		internalError(w, err)
+		return
+	}
+	a.rateFail(key)
 	writeJSON(w, http.StatusOK, map[string]any{"sent": true})
 }

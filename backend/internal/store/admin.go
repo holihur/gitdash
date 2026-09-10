@@ -164,7 +164,7 @@ func (s *Store) DeleteMFAChallenge(token string) error {
 func (s *Store) PruneMFAChallenges(nowStr string) (int64, error) {
 	// settings 表的 value 是 JSON（含 "e":"<expires>"），过期判断需在应用层做
 	var rows []settingRow
-	if err := s.db.Where("\"key\" LIKE 'mfa_challenge:%'").Find(&rows).Error; err != nil {
+	if err := s.db.Where("\"key\" LIKE 'mfa_challenge:%' OR \"key\" LIKE 'email_mfa:%'").Find(&rows).Error; err != nil {
 		return 0, err
 	}
 	var pruned int64
@@ -178,4 +178,38 @@ func (s *Store) PruneMFAChallenges(nowStr string) (int64, error) {
 		}
 	}
 	return pruned, nil
+}
+
+// ---- email MFA 验证码（6 位邮箱验证码，key 为 email_mfa:<username 或 mfa_token>）----
+
+type emailMFACodeData struct {
+	Code    string `json:"c"`
+	Expires string `json:"e"`
+}
+
+// PutEmailMFACode 写入（或覆盖）邮箱 MFA 验证码。
+func (s *Store) PutEmailMFACode(key, code, expiresAt string) error {
+	v, err := json.Marshal(emailMFACodeData{Code: code, Expires: expiresAt})
+	if err != nil {
+		return err
+	}
+	return s.SetSetting("email_mfa:"+key, string(v))
+}
+
+// GetEmailMFACode 读取邮箱 MFA 验证码（不消费）；不存在返回 ErrNotFound。
+func (s *Store) GetEmailMFACode(key string) (code, expiresAt string, err error) {
+	v := s.GetSetting("email_mfa:" + key)
+	if v == "" {
+		return "", "", ErrNotFound
+	}
+	var d emailMFACodeData
+	if err := json.Unmarshal([]byte(v), &d); err != nil {
+		return "", "", err
+	}
+	return d.Code, d.Expires, nil
+}
+
+// DeleteEmailMFACode 删除邮箱 MFA 验证码。
+func (s *Store) DeleteEmailMFACode(key string) error {
+	return s.db.Where("\"key\" = ?", "email_mfa:"+key).Delete(&settingRow{}).Error
 }

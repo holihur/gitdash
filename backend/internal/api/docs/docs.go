@@ -599,6 +599,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/mfa-email/resend": {
+            "post": {
+                "description": "基于（未过期的）mfa_token 重新生成并发送验证码；旧验证码作废。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "重发 email MFA 登录验证码",
+                "parameters": [
+                    {
+                        "description": "mfa_token",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/mfa-verify": {
             "post": {
                 "description": "校验 TOTP 代码后签发正式会话 token。",
@@ -790,50 +855,6 @@ const docTemplate = `{
             }
         },
         "/gpg": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "返回当前用户注册的所有 GPG 公钥。",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "列出 GPG 公钥",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/store.GPGKey"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -1499,6 +1520,40 @@ const docTemplate = `{
                 }
             }
         },
+        "/me/export": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "以 JSON 附件形式下载本账号在实例上的个人数据与自产内容。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "导出个人数据",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.UserExport"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/me/mfa": {
             "get": {
                 "security": [
@@ -1635,6 +1690,174 @@ const docTemplate = `{
                         }
                     }
                 ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/me/mfa/email/activate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "校验邮箱激活码后启用 MFA（方式为 email）。返回 204。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "激活 email MFA",
+                "parameters": [
+                    {
+                        "description": "code",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/me/mfa/email/enroll": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "要求已验证邮箱；发送 6 位激活码（10 分钟有效）。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "绑定 email MFA",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/me/mfa/email/send": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "向已验证邮箱发送验证码，用于 /me/mfa/disable 校验。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "发送 email MFA 验证码",
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -2901,53 +3124,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/store.Repo"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "仅仓库所有者可删除。",
-                "tags": [
-                    "repos"
-                ],
-                "summary": "删除仓库",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "仓库名",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content",
-                        "schema": {
-                            "type": "string"
                         }
                     },
                     "404": {
@@ -4426,59 +4602,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/store.Repo"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "仅仓库所有者可删除。",
-                "tags": [
-                    "repos"
-                ],
-                "summary": "删除仓库",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "仓库所有者（简写路由时省略）",
-                        "name": "owner",
-                        "in": "path"
-                    },
-                    {
-                        "type": "string",
-                        "description": "仓库名",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content",
-                        "schema": {
-                            "type": "string"
                         }
                     },
                     "404": {
@@ -9603,6 +9726,236 @@ const docTemplate = `{
                 }
             }
         },
+        "store.ExportComment": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "file_path": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "line": {
+                    "type": "integer"
+                },
+                "line_side": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportGPGKey": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportIssue": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportKey": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "public_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportPAT": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scopes": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportProfile": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "mfa_enabled": {
+                    "type": "boolean"
+                },
+                "notify_email": {
+                    "type": "boolean"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportPull": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                },
+                "source_branch": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "target_branch": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportRelease": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                },
+                "tag_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.ExportRepo": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "is_template": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "private": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "store.ExportReview": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "commit_sha": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
         "store.GPGKey": {
             "type": "object",
             "properties": {
@@ -9784,6 +10137,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "meta": {
+                    "description": "生态相关扩展元数据（JSON/文本），如 cargo deps/features、pypi Requires-Python",
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -10054,6 +10411,17 @@ const docTemplate = `{
                 }
             }
         },
+        "store.RepoRef": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                }
+            }
+        },
         "store.Runner": {
             "type": "object",
             "properties": {
@@ -10129,6 +10497,83 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "store.UserExport": {
+            "type": "object",
+            "properties": {
+                "comments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportComment"
+                    }
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "gpg_keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportGPGKey"
+                    }
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportIssue"
+                    }
+                },
+                "pats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportPAT"
+                    }
+                },
+                "profile": {
+                    "$ref": "#/definitions/store.ExportProfile"
+                },
+                "pulls": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportPull"
+                    }
+                },
+                "releases": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportRelease"
+                    }
+                },
+                "repos": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportRepo"
+                    }
+                },
+                "reviews": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportReview"
+                    }
+                },
+                "ssh_keys": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.ExportKey"
+                    }
+                },
+                "stars": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.RepoRef"
+                    }
+                },
+                "watches": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.RepoRef"
+                    }
                 }
             }
         }

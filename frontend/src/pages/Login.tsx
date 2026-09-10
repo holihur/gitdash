@@ -26,6 +26,7 @@ export default function Login({ onAuthed }: Props) {
   const [busy, setBusy] = useState(false);
   // MFA 二次验证阶段
   const [mfaToken, setMfaToken] = useState("");
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
   const [code, setCode] = useState("");
   const [githubEnabled, setGithubEnabled] = useState(false);
   const [oidc, setOidc] = useState<{ enabled: boolean; name: string }>({ enabled: false, name: "OIDC" });
@@ -66,6 +67,7 @@ export default function Login({ onAuthed }: Props) {
         const r = await api.login(username.trim(), password);
         if (r.mfa_required && r.mfa_token) {
           setMfaToken(r.mfa_token);
+          setMfaMethod(r.mfa_method === "email" ? "email" : "totp");
           setCode("");
           return; // 进入第二步
         }
@@ -94,6 +96,18 @@ export default function Login({ onAuthed }: Props) {
     }
   };
 
+  const resendCode = async () => {
+    setBusy(true);
+    try {
+      await api.mfaEmailResend(mfaToken);
+      toast.success(t("login.mfaCodeResent"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (mfaToken) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -108,7 +122,9 @@ export default function Login({ onAuthed }: Props) {
                 <ShieldCheck className="h-6 w-6" />
               </div>
               <CardTitle>{t("login.mfaTitle")}</CardTitle>
-              <CardDescription>{t("login.mfaSubtitle")}</CardDescription>
+              <CardDescription>
+                {mfaMethod === "email" ? t("login.mfaSubtitleEmail") : t("login.mfaSubtitle")}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <form
@@ -118,7 +134,9 @@ export default function Login({ onAuthed }: Props) {
                 }}
               >
                 <div className="grid gap-2">
-                  <Label htmlFor="mfa-code">{t("login.authenticatorCode")}</Label>
+                  <Label htmlFor="mfa-code">
+                    {mfaMethod === "email" ? t("login.emailCode") : t("login.authenticatorCode")}
+                  </Label>
                   <Input
                     id="mfa-code"
                     inputMode="numeric"
@@ -134,6 +152,17 @@ export default function Login({ onAuthed }: Props) {
                   {t("login.verify")}
                 </Button>
               </form>
+              {mfaMethod === "email" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  disabled={busy}
+                  onClick={resendCode}
+                >
+                  {t("login.resendCode")}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

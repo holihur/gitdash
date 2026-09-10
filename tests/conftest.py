@@ -97,6 +97,10 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_ADMIN_USER="gitdash-admin",
         GITDASH_ADMIN_PASSWORD="admin-test-pass-123456",
     )
+    # SMTP 透传：允许 email MFA / 邮箱验证黑盒测试注入本地 SMTP sink
+    for var in ("GITDASH_SMTP_HOST", "GITDASH_SMTP_PORT", "GITDASH_SMTP_USER", "GITDASH_SMTP_PASS", "GITDASH_SMTP_FROM"):
+        if os.environ.get(var):
+            env[var] = os.environ[var]
     _SPAWNED_SSH_PORT["port"] = ssh_port
     log_path = tmpdir / "server.log"
     log = open(log_path, "wb")
