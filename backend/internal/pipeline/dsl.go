@@ -35,6 +35,8 @@ package pipeline
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,7 +77,7 @@ type Config struct {
 	Image   string
 	Timeout time.Duration
 	Env     []string
-	Volumes []string // 额外挂载卷（host:container），沙箱会校验禁止挂载 docker socket
+	Volumes []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
 	RunsOn  []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
 	Steps   []Step
 	// On 可选：自动触发事件白名单。省略时仅 push 生效（手动触发始终允许）。
@@ -122,8 +124,51 @@ func parseCron(expr string, lineNo int) error {
 	return nil
 }
 
-// dockerSockPath 宿主 docker socket 路径（禁止挂载进流水线容器）。
-const dockerSockPath = "/var/run/docker.sock"
+// allowedVolumesRoot 允许 CI 挂载的宿主根目录（GITDASH_PIPELINE_VOLUMES_DIR）。
+// 为空表示一律禁止宿主卷挂载，避免有仓库写权限者通过 volumes 挂载 / 等路径逃逸容器。
+func allowedVolumesRoot() string { return strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_VOLUMES_DIR")) }
+
+// validateVolume 校验 DSL 声明的挂载卷 host:container[:opts]。
+// 规则：显式绝对宿主路径；禁止 /run、/var/run、docker.sock；且宿主路径（含符号链接解析）
+// 必须位于 GITDASH_PIPELINE_VOLUMES_DIR 之下（未配置则不充许任何宿主卷）。
+func validateVolume(spec string) error {
+	parts := strings.SplitN(spec, ":", 3)
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid volume %q (expected host:container[:opts])", spec)
+	}
+	src := strings.TrimSpace(parts[0])
+	dst := strings.TrimSpace(parts[1])
+	if src == "" || !strings.HasPrefix(src, "/") || dst == "" || !strings.HasPrefix(dst, "/") {
+		return fmt.Errorf("invalid volume %q: host and container paths must be absolute", spec)
+	}
+	clean := filepath.Clean(src)
+	if clean == "/run" || clean == "/var/run" || clean == "/" ||
+		strings.HasPrefix(clean, "/run/") || strings.HasPrefix(clean, "/var/run/") ||
+		strings.HasSuffix(clean, "docker.sock") {
+		return fmt.Errorf("mounting run/docker socket paths is not allowed")
+	}
+	root := allowedVolumesRoot()
+	if root == "" {
+		return fmt.Errorf("host volume mounts are disabled (set GITDASH_PIPELINE_VOLUMES_DIR to allow a directory)")
+	}
+	root = filepath.Clean(root)
+	if root == "/" {
+		return fmt.Errorf("GITDASH_PIPELINE_VOLUMES_DIR must not be /")
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("GITDASH_PIPELINE_VOLUMES_DIR %q not accessible: %v", root, err)
+	}
+	resolved := clean
+	if r, err := filepath.EvalSymlinks(clean); err == nil {
+		resolved = r
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolved)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("host path must be under %s", resolvedRoot)
+	}
+	return nil
+}
 
 var (
 	imageRe    = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._:/-]{0,127}$`)
@@ -307,9 +352,8 @@ func (c *Config) validate() error {
 		}
 	}
 	for i, v := range c.Volumes {
-		// 沙箱硬性限制：禁止把宿主 docker socket 挂进容器（等于交出宿主 root）
-		if strings.Contains(v, dockerSockPath) {
-			return fmt.Errorf("volume %d: mounting %s is not allowed", i+1, dockerSockPath)
+		if err := validateVolume(v); err != nil {
+			return fmt.Errorf("volume %d: %w", i+1, err)
 		}
 	}
 	return nil

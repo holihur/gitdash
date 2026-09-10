@@ -140,3 +140,35 @@ steps:
 		t.Errorf("run = %q", cfg.Steps[0].Run)
 	}
 }
+
+func TestValidateVolumeHostMount(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GITDASH_PIPELINE_VOLUMES_DIR", root)
+
+	// 允许：配置根目录之下的路径
+	if err := validateVolume(root + "/cache:/cache"); err != nil {
+		t.Fatalf("allowed volume rejected: %v", err)
+	}
+
+	// 拒绝：宿主根、系统目录、docker socket、相对路径、根目录之外
+	for _, v := range []string{
+		"/:/host",
+		"/etc:/etc",
+		"/var/run/docker.sock:/d.sock",
+		"/run/docker.sock:/d.sock",
+		"/var/run:/x",
+		"relative:/cache",
+		"/tmp:/cache",
+		"cache",
+	} {
+		if err := validateVolume(v); err == nil {
+			t.Errorf("volume %q should be rejected", v)
+		}
+	}
+
+	// 未配置根目录：一律拒绝宿主卷
+	t.Setenv("GITDASH_PIPELINE_VOLUMES_DIR", "")
+	if err := validateVolume(root + "/cache:/cache"); err == nil {
+		t.Fatal("volume should be rejected when GITDASH_PIPELINE_VOLUMES_DIR is unset")
+	}
+}

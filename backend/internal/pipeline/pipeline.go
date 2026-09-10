@@ -314,8 +314,8 @@ func executeRun(st *store.Store, job RunJob) {
 	}
 	cfg, perr := Parse([]byte(blob.Content))
 	if perr != nil {
-		// 拒绝运行（如挂载 docker socket）记审计日志
-		if strings.Contains(perr.Error(), dockerSockPath) {
+		// 拒绝运行（如挂载宿主路径/卷）记审计日志
+		if strings.Contains(perr.Error(), "volume") {
 			log.Printf("pipeline audit: REJECTED docker socket mount repo=%s/%s time=%s", owner, repo, time.Now().UTC().Format(time.RFC3339))
 		}
 		fail("invalid %s: %v", FileName, perr)
