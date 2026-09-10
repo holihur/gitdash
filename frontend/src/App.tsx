@@ -1,9 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { Bell, Compass, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, Building2, UserRound, Cpu, Package } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
@@ -123,6 +124,30 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
     return () => clearInterval(timer);
   }, [refreshUnread]);
 
+  const navItems = useMemo<NavOverflowItem[]>(
+    () => [
+      { key: "repos", to: "/", icon: <FolderGit2 className="h-4 w-4" />, label: t("nav.repos") },
+      { key: "explore", to: "/explore", icon: <Compass className="h-4 w-4" />, label: t("nav.explore") },
+      { key: "orgs", to: "/orgs", icon: <Building2 className="h-4 w-4" />, label: t("nav.orgs") },
+      {
+        key: "inbox",
+        to: "/inbox",
+        icon: <Bell className="h-4 w-4" />,
+        label: t("nav.inbox"),
+        badge:
+          unread > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground sm:static">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          ) : undefined,
+      },
+      { key: "runners", to: "/runners", icon: <Cpu className="h-4 w-4" />, label: t("nav.runners") },
+      { key: "keys", to: "/keys", icon: <KeyRound className="h-4 w-4" />, label: t("nav.keys") },
+      { key: "packages", to: "/packages", icon: <Package className="h-4 w-4" />, label: t("nav.packages") },
+    ],
+    [t, unread],
+  );
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -131,55 +156,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             <GitBranch className="h-5 w-5" />
             <span className="hidden sm:inline">gitdash</span>
           </Link>
-          <nav className="flex items-center gap-1">
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <NavLink to="/" className="flex items-center gap-2">
-                <FolderGit2 className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.repos")}</span>
-              </NavLink>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <NavLink to="/explore" className="flex items-center gap-2">
-                <Compass className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.explore")}</span>
-              </NavLink>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <NavLink to="/orgs" className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.orgs")}</span>
-              </NavLink>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="relative px-2 sm:px-3">
-              <NavLink to="/inbox" className="flex items-center gap-2">
-                <Bell className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.inbox")}</span>
-                {unread > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground sm:static">
-                    {unread > 99 ? "99+" : unread}
-                  </span>
-                )}
-              </NavLink>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <NavLink to="/runners" className="flex items-center gap-2">
-                <Cpu className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.runners")}</span>
-              </NavLink>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <NavLink to="/keys" className="flex items-center gap-2">
-                <KeyRound className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.keys")}</span>
-              </NavLink>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <NavLink to="/packages" className="flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                <span className="hidden sm:inline">{t("nav.packages")}</span>
-              </NavLink>
-            </Button>
-          </nav>
+          <NavOverflow items={navItems} />
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
             <ThemeToggle />
             <LangToggle />
