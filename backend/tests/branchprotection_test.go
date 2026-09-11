@@ -22,7 +22,7 @@ func TestBranchProtectionMergeGate(t *testing.T) {
 	requireBins(t, "git", "ssh", "ssh-keygen")
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123")
+	bob := register(t, env, "bobby", "bob-pass-123")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "gate"}, 201)
 
 	key, pub := genKey(t, env.DataDir, "alice_key")
@@ -88,7 +88,7 @@ func TestBranchProtectionMergeGate(t *testing.T) {
 
 	// bob（write 协作者，非作者）approve → 合并成功（reviews 需写权限）
 	alice.mustStatus("POST", "/users/alice/repos/gate/collabs",
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 	bob.mustStatus("POST", prPath("alice", "gate", num+"/reviews"),
 		map[string]string{"state": "approve"}, 201)
 	alice.mustStatus("POST", prPath("alice", "gate", num+"/merge"),

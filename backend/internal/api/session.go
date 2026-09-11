@@ -139,7 +139,7 @@ func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	}
 	if tok == "" {
 		if user, pass, ok := r.BasicAuth(); ok && pass != "" {
-			if name, scopes, err := a.store.ValidatePAT(pass); err == nil {
+			if name, scopes, err := a.store.ValidatePAT(pass, clientIP(r)); err == nil {
 				if user == "" || user == name {
 					return name, scopes, true
 				}
@@ -158,7 +158,7 @@ func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	if err == nil {
 		return username, nil, false
 	}
-	if name, scopes, err := a.store.ValidatePAT(tok); err == nil {
+	if name, scopes, err := a.store.ValidatePAT(tok, clientIP(r)); err == nil {
 		return name, scopes, true
 	}
 	return "", nil, false

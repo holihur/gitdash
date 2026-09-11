@@ -55,6 +55,8 @@ type ExportGPGKey struct {
 type ExportPAT struct {
 	Name       string `json:"name"`
 	Scopes     string `json:"scopes"`
+	CIDRs      string `json:"cidrs"`
+	ExpiresAt  string `json:"expires_at"`
 	CreatedAt  string `json:"created_at"`
 	LastUsedAt string `json:"last_used_at"`
 }
@@ -155,7 +157,7 @@ func (s *Store) ExportUserData(username string) (*UserExport, error) {
 	var pats []patRow
 	_ = s.db.Where("user_id = ?", u.ID).Find(&pats).Error
 	for _, p := range pats {
-		out.PATs = append(out.PATs, ExportPAT{Name: p.Name, Scopes: p.Scopes, CreatedAt: p.CreatedAt, LastUsedAt: p.LastUsedAt})
+		out.PATs = append(out.PATs, ExportPAT{Name: p.Name, Scopes: p.Scopes, CIDRs: p.CIDRs, ExpiresAt: p.ExpiresAt, CreatedAt: p.CreatedAt, LastUsedAt: p.LastUsedAt})
 	}
 
 	var repos []repoRow

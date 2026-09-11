@@ -121,10 +121,10 @@ func TestStoreDataIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _ = st.CreateUser("alice", "h")
-	_, _ = st.CreateUser("bob", "h")
+	_, _ = st.CreateUser("bobby", "h")
 
 	_, _ = st.CreateRepo("alice", "demo", "", true)
-	_, _ = st.CreateRepo("bob", "demo", "", true)
+	_, _ = st.CreateRepo("bobby", "demo", "", true)
 
 	if _, err := st.CreateRepo("alice", "demo", "", true); !errors.Is(err, store.ErrExists) {
 		t.Fatalf("dup repo = %v", err)
@@ -134,7 +134,7 @@ func TestStoreDataIsolation(t *testing.T) {
 	if err != nil || len(repos) != 1 || repos[0].Owner != "alice" {
 		t.Fatalf("alice repos = %+v, %v", repos, err)
 	}
-	if _, err := st.GetRepo("bob", "demo"); err != nil {
+	if _, err := st.GetRepo("bobby", "demo"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.GetRepo("carol", "demo"); !errors.Is(err, store.ErrNotFound) {
@@ -143,7 +143,7 @@ func TestStoreDataIsolation(t *testing.T) {
 
 	// key 按用户隔离
 	_, _ = st.CreateKey("alice", "k", "pub", "fp1")
-	_, _ = st.CreateKey("bob", "k2", "pub2", "fp2")
+	_, _ = st.CreateKey("bobby", "k2", "pub2", "fp2")
 	if keys, _ := st.ListKeys("alice"); len(keys) != 1 {
 		t.Fatal("alice should have 1 key")
 	}
@@ -151,8 +151,8 @@ func TestStoreDataIsolation(t *testing.T) {
 	if err != nil || len(pubKeys) != 2 {
 		t.Fatalf("public keys = %+v, %v", pubKeys, err)
 	}
-	bobKeyID := mustKeyID(t, st, "bob")
-	if err := st.DeleteKey("bob", bobKeyID); err != nil {
+	bobKeyID := mustKeyID(t, st, "bobby")
+	if err := st.DeleteKey("bobby", bobKeyID); err != nil {
 		t.Fatal(err)
 	}
 	// alice 无法删除 bob 的 key（已删，且 owner 不符时也返回 ErrNotFound）

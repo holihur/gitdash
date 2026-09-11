@@ -6,7 +6,7 @@ package api
 //
 //nolint:unused // 仅供 swagger @Param 注解引用
 type registerReq struct {
-	Username string `json:"username"` // 用户名（2-32 位小写字母/数字/_/-，字母或数字开头）
+	Username string `json:"username"` // 用户名（5-32 位小写字母/数字/_/-，字母或数字开头）
 	Password string `json:"password"` // 密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）
 }
 

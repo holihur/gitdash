@@ -9,7 +9,7 @@ import (
 func TestOrgNamespaceLifecycle(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	carol := register(t, env, "carol", "carol-pass-123456")
 
 	// 创建组织（creator 自动成为 owner）
@@ -20,7 +20,7 @@ func TestOrgNamespaceLifecycle(t *testing.T) {
 	// 用户名占用 / 重复组织名
 	alice.mustFail("POST", "/orgs", map[string]string{"name": "acme"}, 409)
 	// 已有用户名不能注册组织
-	alice.mustFail("POST", "/orgs", map[string]string{"name": "bob"}, 409)
+	alice.mustFail("POST", "/orgs", map[string]string{"name": "bobby"}, 409)
 	// 组织名不能再注册用户
 	bob.mustFail("POST", "/auth/register",
 		map[string]string{"username": "acme", "password": "pass12345678"}, 409)
@@ -42,7 +42,7 @@ func TestOrgNamespaceLifecycle(t *testing.T) {
 
 	// 加成员
 	alice.mustStatus("POST", "/orgs/acme/members",
-		map[string]string{"username": "bob", "role": "member"}, 200)
+		map[string]string{"username": "bobby", "role": "member"}, 200)
 	// bob 可读写组织仓库
 	bob.mustStatus("GET", "/users/acme/repos/web/issues", nil, 200)
 	bob.mustStatus("POST", "/users/acme/repos/web/issues", map[string]string{"title": "by bob"}, 201)
@@ -75,7 +75,7 @@ func TestOrgNamespaceLifecycle(t *testing.T) {
 	}
 
 	// owner 移除成员；删除组织前需先清空仓库（拒绝）
-	alice.mustStatus("DELETE", "/orgs/acme/members/bob", nil, 204)
+	alice.mustStatus("DELETE", "/orgs/acme/members/bobby", nil, 204)
 	bob.mustFail("GET", "/orgs/acme/repos", nil, 404)
 	alice.mustFail("DELETE", "/orgs/acme", nil, 409)
 

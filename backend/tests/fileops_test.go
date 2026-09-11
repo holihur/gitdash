@@ -127,7 +127,7 @@ func TestWebFileOps(t *testing.T) {
 func TestWebFileOpsPermissions(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "ops2"}, 201)
 
 	// 未授权 / 无写权限
@@ -138,7 +138,7 @@ func TestWebFileOpsPermissions(t *testing.T) {
 
 	// write 协作者可写；read 协作者不行
 	alice.mustStatus("POST", "/users/alice/repos/ops2/collabs",
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 	writeCommit(t, bob, "alice", "ops2", map[string]any{
 		"message": "bob edits",
 		"changes": []any{map[string]any{"path": "b.txt", "action": "create", "content": "by bob"}},
@@ -149,7 +149,7 @@ func TestWebFileOpsPermissions(t *testing.T) {
 	}
 	// 降级为 read 后不能提交
 	alice.mustStatus("POST", "/users/alice/repos/ops2/collabs",
-		map[string]string{"username": "bob", "permission": "read"}, 200)
+		map[string]string{"username": "bobby", "permission": "read"}, 200)
 	bob.mustFail("POST", "/users/alice/repos/ops2/commits",
 		map[string]any{"message": "x", "changes": []any{map[string]any{"path": "c.txt", "action": "create"}}}, 404)
 }

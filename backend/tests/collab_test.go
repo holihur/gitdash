@@ -42,17 +42,17 @@ func listCollabs(t *testing.T, c *Client, owner, repo string) []Collab {
 func TestCollabLifecycle(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "team"}, 201)
 
 	// owner 添加 bob 为 write 协作者
 	m := alice.mustStatus("POST", collabPath("alice", "team", "/collabs"),
-		map[string]string{"username": "bob", "permission": "write"}, 200)
-	if m["username"] != "bob" || m["permission"] != "write" {
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
+	if m["username"] != "bobby" || m["permission"] != "write" {
 		t.Fatalf("add collab = %v", m)
 	}
 	collabs := listCollabs(t, alice, "alice", "team")
-	if len(collabs) != 1 || collabs[0].Username != "bob" || collabs[0].Permission != "write" {
+	if len(collabs) != 1 || collabs[0].Username != "bobby" || collabs[0].Permission != "write" {
 		t.Fatalf("collabs = %+v", collabs)
 	}
 
@@ -76,13 +76,13 @@ func TestCollabLifecycle(t *testing.T) {
 
 	// 降级为 read
 	alice.mustStatus("POST", collabPath("alice", "team", "/collabs"),
-		map[string]string{"username": "bob", "permission": "read"}, 200)
+		map[string]string{"username": "bobby", "permission": "read"}, 200)
 	bob.mustStatus("GET", collabPath("alice", "team", "/issues"), nil, 200)
 	bob.mustFail("POST", collabPath("alice", "team", "/issues"),
 		map[string]string{"title": "no write"}, 404)
 
 	// 移除协作者后彻底失去访问
-	alice.mustStatus("DELETE", collabPath("alice", "team", "/collabs/bob"), nil, 204)
+	alice.mustStatus("DELETE", collabPath("alice", "team", "/collabs/bobby"), nil, 204)
 	bob.mustFail("GET", collabPath("alice", "team", ""), nil, 404)
 	bob.mustFail("GET", "/repos/team/branches", nil, 404)
 }
@@ -94,7 +94,7 @@ func TestCollabBadInputs(t *testing.T) {
 
 	// 非法 permission
 	alice.mustFail("POST", collabPath("alice", "team", "/collabs"),
-		map[string]string{"username": "bob", "permission": "admin"}, 400)
+		map[string]string{"username": "bobby", "permission": "admin"}, 400)
 	// 不存在的用户
 	alice.mustFail("POST", collabPath("alice", "team", "/collabs"),
 		map[string]string{"username": "ghost", "permission": "read"}, 404)
@@ -106,17 +106,17 @@ func TestCollabBadInputs(t *testing.T) {
 	// 仓库不存在
 	alice.mustFail("GET", collabPath("alice", "nope", "/collabs"), nil, 404)
 	// 非 owner 管理协作者
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	bob.mustFail("GET", collabPath("alice", "team", "/collabs"), nil, 404)
 }
 
 func TestCollabRepoDeleteCascades(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "team"}, 201)
 	alice.mustStatus("POST", collabPath("alice", "team", "/collabs"),
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 
 	alice.mustStatus("DELETE", "/repos/team", nil, 204)
 	// 删除仓库后 bob 列表不再包含它
@@ -129,13 +129,13 @@ func TestCollabRepoDeleteCascades(t *testing.T) {
 func TestCollabSameNameRepos(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	// bob 自己有一个同名仓库，同时是 alice 同名仓库的协作者
 	bob.mustStatus("POST", "/repos", map[string]string{"name": "app"}, 201)
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "app"}, 201)
 	alice.mustStatus("POST", collabPath("alice", "app", "/collabs"),
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 
 	// 未限定 owner 时解析到自己的仓库
 	bob.mustStatus("GET", "/repos/app/issues", nil, 200)

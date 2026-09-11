@@ -125,7 +125,7 @@ func TestMFAEnrollLoginDisable(t *testing.T) {
 func TestMFAIsolationAndCodes(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	// bob 启用 MFA 不影响 alice
 	enroll := bob.mustStatus("POST", "/me/mfa/enroll", nil, 200)
@@ -143,7 +143,7 @@ func TestMFAIsolationAndCodes(t *testing.T) {
 		map[string]string{"mfa_token": "bogus", "code": mfaCode(t, secret)}, 401)
 	// bob 仍可用 MFA 登录
 	bobLogin := bob.mustStatus("POST", "/auth/login",
-		map[string]string{"username": "bob", "password": "bob-pass-123456"}, 200)
+		map[string]string{"username": "bobby", "password": "bob-pass-123456"}, 200)
 	tok, _ := bobLogin["mfa_token"].(string)
 	bob.mustStatus("POST", "/auth/mfa-verify", map[string]string{"mfa_token": tok, "code": mfaCode(t, secret)}, 200)
 }

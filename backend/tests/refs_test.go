@@ -70,7 +70,7 @@ func TestBranchAndTagManagement(t *testing.T) {
 func TestRefsPermissions(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "refs2"}, 201)
 	writeCommit(t, alice, "alice", "refs2", map[string]any{
 		"message": "m",
@@ -81,13 +81,13 @@ func TestRefsPermissions(t *testing.T) {
 	(&Client{env: env}).mustFail("GET", refsPath("alice", "refs2", "/tags"), nil, 401)
 	bob.mustFail("GET", refsPath("alice", "refs2", "/tags"), nil, 404)
 	alice.mustStatus("POST", refsPath("alice", "refs2", "/collabs"),
-		map[string]string{"username": "bob", "permission": "read"}, 200)
+		map[string]string{"username": "bobby", "permission": "read"}, 200)
 	bob.mustStatus("GET", refsPath("alice", "refs2", "/tags"), nil, 200)
 	bob.mustFail("POST", refsPath("alice", "refs2", "/refs"),
 		map[string]any{"type": "tag", "name": "v1"}, 404)
 	// write 协作者可以创建
 	alice.mustStatus("POST", refsPath("alice", "refs2", "/collabs"),
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 	bob.mustStatus("POST", refsPath("alice", "refs2", "/refs"),
 		map[string]any{"type": "tag", "name": "v1"}, 201)
 }

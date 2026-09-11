@@ -150,7 +150,7 @@ func TestBrowsingOwnership(t *testing.T) {
 	requireBins(t, "git")
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "browsed"}, 201)
 	seedCommits(t, env, "alice", "browsed", map[string]string{"README.md": "x"})

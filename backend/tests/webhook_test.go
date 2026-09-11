@@ -73,7 +73,7 @@ type Webhook struct {
 func TestWebhookCRUD(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
 
 	// 创建
@@ -106,7 +106,7 @@ func TestWebhookCRUD(t *testing.T) {
 	bob.mustFail("GET", whPath("alice", "demo", ""), nil, 404)
 	bob.mustFail("POST", whPath("alice", "demo", ""), map[string]string{"url": "https://x"}, 404)
 	alice.mustStatus("POST", "/users/alice/repos/demo/collabs",
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 	bob.mustFail("GET", whPath("alice", "demo", ""), nil, 404)
 
 	// 仓库不存在
@@ -242,6 +242,6 @@ func TestWebhookDeliveries(t *testing.T) {
 	}
 
 	// 非 owner 查不到
-	bob := register(t, env, "bob2", "bob-pass-123456")
+	bob := register(t, env, "bobby2", "bob-pass-123456")
 	bob.mustFail("GET", whPath("alice", "deliv", fmt.Sprintf("/%d/deliveries", hook1)), nil, 404)
 }

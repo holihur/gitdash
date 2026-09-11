@@ -37,6 +37,20 @@ const SCOPE_LABEL_KEY: Record<string, string> = {
   keys: "pats.scopeKeys",
 };
 
+const EXPIRY_OPTIONS: { value: number | null; labelKey: string }[] = [
+  { value: null, labelKey: "pats.expiresNever" },
+  { value: 7, labelKey: "pats.expires7" },
+  { value: 30, labelKey: "pats.expires30" },
+  { value: 90, labelKey: "pats.expires90" },
+  { value: 180, labelKey: "pats.expires180" },
+  { value: 365, labelKey: "pats.expires365" },
+];
+
+function expiryRFC3339(days: number | null): string {
+  if (days == null) return "";
+  return new Date(Date.now() + days * 86400_000).toISOString();
+}
+
 export default function Keys() {
   const { t, lang, to } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
@@ -239,6 +253,8 @@ function PATSection({ t, to, locale }: SectionProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["repo"]);
+  const [cidrs, setCidrs] = useState("");
+  const [expiryDays, setExpiryDays] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PAT | null>(null);
   const [created, setCreated] = useState<CreatedPAT | null>(null);
@@ -266,10 +282,16 @@ function PATSection({ t, to, locale }: SectionProps) {
   const create = async () => {
     setBusy(true);
     try {
-      const pat = await api.createPAT(name.trim(), scopes);
+      const cidrList = cidrs
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const pat = await api.createPAT(name.trim(), scopes, cidrList, expiryRFC3339(expiryDays));
       setOpen(false);
       setName("");
       setScopes(["repo"]);
+      setCidrs("");
+      setExpiryDays(null);
       setCreated(pat);
       setCopied(false);
       load();
@@ -373,6 +395,34 @@ function PATSection({ t, to, locale }: SectionProps) {
                       ))}
                     </div>
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="pat-cidrs">{t("pats.cidrs")}</Label>
+                    <Input
+                      id="pat-cidrs"
+                      placeholder={t("pats.cidrsPlaceholder")}
+                      className="font-mono text-xs"
+                      value={cidrs}
+                      onChange={(e) => setCidrs(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">{t("pats.cidrsHint")}</p>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="pat-expiry">{t("pats.expires")}</Label>
+                    <select
+                      id="pat-expiry"
+                      className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={expiryDays === null ? "" : String(expiryDays)}
+                      onChange={(e) =>
+                        setExpiryDays(e.target.value === "" ? null : Number(e.target.value))
+                      }
+                    >
+                      {EXPIRY_OPTIONS.map((o) => (
+                        <option key={o.value === null ? "never" : o.value} value={o.value ?? ""}>
+                          {t(o.labelKey)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button onClick={create} disabled={busy || !name.trim() || scopes.length === 0}>
@@ -399,47 +449,72 @@ function PATSection({ t, to, locale }: SectionProps) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
-          <Table className="min-w-[680px]">
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("pats.name")}</TableHead>
                 <TableHead>{t("pats.scopes")}</TableHead>
+                <TableHead>{t("pats.expires")}</TableHead>
                 <TableHead>{t("pats.created")}</TableHead>
                 <TableHead>{t("pats.lastUsed")}</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pats.map((pat) => (
-                <TableRow key={pat.id}>
-                  <TableCell className="font-medium">{pat.name}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {pat.scopes.map((s) => (
-                        <Badge key={s} variant="secondary">
-                          {scopeLabel(s)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(pat.created_at, locale)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {pat.last_used_at ? formatDate(pat.last_used_at, locale) : t("pats.never")}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => setPendingDelete(pat)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {pats.map((pat) => {
+                const expired = pat.expires_at !== "" && new Date(pat.expires_at) <= new Date();
+                return (
+                  <TableRow key={pat.id}>
+                    <TableCell className="font-medium">{pat.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {pat.scopes.map((s) => (
+                          <Badge key={s} variant="secondary">
+                            {scopeLabel(s)}
+                          </Badge>
+                        ))}
+                        {pat.cidrs.length > 0 && (
+                          <span className="ml-1 flex flex-wrap gap-1">
+                            {pat.cidrs.map((c) => (
+                              <code
+                                key={c}
+                                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground"
+                              >
+                                {c}
+                              </code>
+                            ))}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {expired ? (
+                        <span className="font-medium text-destructive">{t("pats.expired")}</span>
+                      ) : pat.expires_at ? (
+                        <span className="text-muted-foreground">{formatDate(pat.expires_at, locale)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">{t("pats.neverExpires")}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDate(pat.created_at, locale)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {pat.last_used_at ? formatDate(pat.last_used_at, locale) : t("pats.never")}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setPendingDelete(pat)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

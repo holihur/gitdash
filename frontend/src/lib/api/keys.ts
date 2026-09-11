@@ -18,8 +18,11 @@ export const keysApi = {
 
   // personal access tokens
   listPATs: () => req<PAT[]>("/tokens"),
-  createPAT: (name: string, scopes: string[]) =>
-    req<CreatedPAT>("/tokens", { method: "POST", body: JSON.stringify({ name, scopes }) }),
+  createPAT: (name: string, scopes: string[], cidrs: string[], expiresAt: string) =>
+    req<CreatedPAT>("/tokens", {
+      method: "POST",
+      body: JSON.stringify({ name, scopes, cidrs, expires_at: expiresAt }),
+    }),
   deletePAT: (id: number) => req<null>(`/tokens/${id}`, { method: "DELETE" }),
 
 };

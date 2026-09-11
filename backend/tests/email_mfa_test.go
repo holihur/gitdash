@@ -59,7 +59,7 @@ func TestEmailMFAFlow(t *testing.T) {
 
 	// 未配置 SMTP 的实例不能绑定 email MFA
 	plain := start(t)
-	pa := register(t, plain, "bob", "bob-pass-1234")
+	pa := register(t, plain, "bobby", "bob-pass-1234")
 	pa.mustFail("POST", "/me/mfa/email/enroll", nil, 400)
 
 	// enroll：发送激活码

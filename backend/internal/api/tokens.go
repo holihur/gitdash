@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // listTokens 列出当前用户的个人访问令牌。
@@ -36,12 +37,12 @@ func (a *API) listTokens(w http.ResponseWriter, r *http.Request) {
 // createTokens 创建个人访问令牌；明文 token 仅此一次返回。
 //
 //	@Summary     创建个人访问令牌
-//	@Description 校验 name/scopes 后生成新 PAT，明文 token 只在本次响应中出现。
+//	@Description 校验 name/scopes/cidrs/expires_at 后生成新 PAT，明文 token 只在本次响应中出现。
 //	@Tags        tokens
 //	@Accept      json
 //	@Produce     json
 //	@Security    BearerAuth
-//	@Param       body body createPATReq true "名称与授权范围"
+//	@Param       body body createPATReq true "名称、授权范围、来源 IP 白名单与过期时间"
 //	@Success     201 {object} store.CreatedPAT
 //	@Failure     400 {object} map[string]string
 //	@Failure     401 {object} map[string]string
@@ -66,12 +67,30 @@ func (a *API) createTokens(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_scope", "scopes must be repo/inbox/keys")
 		return
 	}
+	cidrStr, ok := store.NormalizePATCIDRs(in.CIDRs)
+	if !ok {
+		writeCode(w, http.StatusBadRequest, "invalid_cidr", "cidrs must be valid IP addresses or CIDR ranges")
+		return
+	}
+	expiresAt := strings.TrimSpace(in.ExpiresAt)
+	if expiresAt != "" {
+		exp, err := time.Parse(time.RFC3339, expiresAt)
+		if err != nil {
+			writeCode(w, http.StatusBadRequest, "invalid_expires_at", "expires_at must be an RFC3339 timestamp")
+			return
+		}
+		if !exp.After(time.Now().UTC()) {
+			writeCode(w, http.StatusBadRequest, "invalid_expires_at", "expires_at must be in the future")
+			return
+		}
+		expiresAt = exp.UTC().Format(time.RFC3339)
+	}
 	uid, err := a.store.UserID(userFrom(r))
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	token, pat, err := a.store.CreatePAT(uid, in.Name, scopeStr)
+	token, pat, err := a.store.CreatePAT(uid, in.Name, scopeStr, cidrStr, expiresAt)
 	if err != nil {
 		internalError(w, err)
 		return

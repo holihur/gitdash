@@ -48,7 +48,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 	}
 	if !usernameRe.MatchString(username) {
 		a.rateFail(ipKey)
-		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
+		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 5-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}
 	if code, msg := passwordIssue(in.Password); code != "" {

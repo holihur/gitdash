@@ -51,7 +51,7 @@ func TestSSHKeyCRUD(t *testing.T) {
 func TestSSHKeyUserBinding(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/keys", map[string]string{"name": "a", "public_key": testPublicKey}, 201)
 

@@ -99,7 +99,10 @@ func WriteCommit(owner, name, branch, message, author string, changes []FileChan
 	if len(changes) == 0 {
 		return "", fmt.Errorf("no changes to commit")
 	}
-	bare := RepoPath(owner, name)
+	bare, err := filepath.Abs(RepoPath(owner, name))
+	if err != nil {
+		return "", err
+	}
 	if fi, err := os.Stat(bare); err != nil || !fi.IsDir() {
 		return "", fmt.Errorf("repo %s/%s not on disk", owner, name)
 	}

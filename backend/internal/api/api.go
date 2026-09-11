@@ -55,7 +55,10 @@ func setTotal(w http.ResponseWriter, n int) {
 	w.Header().Set("X-Total-Count", strconv.Itoa(n))
 }
 
-var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
+var usernameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{4,31}$`) // 用户名 5-32 位
+
+// orgNameRe 组织名规则（2-32 位，与用户名共用命名空间但长度下限不同）。
+var orgNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,31}$`)
 
 type API struct {
 	store   *store.Store

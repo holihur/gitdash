@@ -11,7 +11,7 @@ import (
 func TestGlobalSearch(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]any{"name": "needle-pub", "private": false}, 201)
 	alice.mustStatus("POST", "/repos", map[string]any{"name": "needle-priv"}, 201)
@@ -54,7 +54,7 @@ func TestGlobalSearch(t *testing.T) {
 		t.Fatalf("bob search = repos %d issues %d", countRepos(m), countIssues(m))
 	}
 	// 用户搜索
-	m = global(alice, "bob")
+	m = global(alice, "bobby")
 	if countUsers(m) != 1 {
 		t.Fatalf("user search = %d", countUsers(m))
 	}

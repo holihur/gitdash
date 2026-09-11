@@ -84,7 +84,7 @@ func TestRepoLifecycle(t *testing.T) {
 func TestRepoUserIsolation(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
 
@@ -94,7 +94,7 @@ func TestRepoUserIsolation(t *testing.T) {
 
 	// 不同用户允许同名仓库
 	bob.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
-	if !repoExists(env, "bob", "demo") || !repoExists(env, "alice", "demo") {
+	if !repoExists(env, "bobby", "demo") || !repoExists(env, "alice", "demo") {
 		t.Fatal("same-name repos across users missing")
 	}
 
@@ -110,7 +110,7 @@ func TestRepoUserIsolation(t *testing.T) {
 func TestRepoListOnlyOwn(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "a1"}, 201)
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "a2"}, 201)
@@ -127,7 +127,7 @@ func TestRepoListOnlyOwn(t *testing.T) {
 	}
 
 	bRepos := listRepos(t, bob)
-	if len(bRepos) != 1 || bRepos[0].Name != "b1" || bRepos[0].Owner != "bob" {
+	if len(bRepos) != 1 || bRepos[0].Name != "b1" || bRepos[0].Owner != "bobby" {
 		t.Fatalf("bob repos = %+v", bRepos)
 	}
 }

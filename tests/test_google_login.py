@@ -167,7 +167,7 @@ def test_google_login_flow(google_env, admin_session):
     sess.get(f"{google_env}/api/auth/google", timeout=15)
     me = sess.get(f"{google_env}/api/me", timeout=15)
     assert me.status_code == 200, me.text
-    assert me.json()["username"] == "bob"
+    assert me.json()["username"] == "bob-g-1"
 
     # 关闭后 start 端点恢复 404
     admin_session.post(

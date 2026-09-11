@@ -28,7 +28,7 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Name = strings.ToLower(strings.TrimSpace(in.Name))
-	if !usernameRe.MatchString(in.Name) {
+	if !orgNameRe.MatchString(in.Name) {
 		writeCode(w, http.StatusBadRequest, "username_invalid", "org name must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}

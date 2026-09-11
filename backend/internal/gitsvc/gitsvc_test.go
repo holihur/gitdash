@@ -1,6 +1,7 @@
 package gitsvc
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,6 +122,40 @@ func TestImportRepoFromLocalPath(t *testing.T) {
 	}
 	if len(bs) != 1 || bs[0].Name != "main" {
 		t.Fatalf("imported branches = %+v, want [main]", bs)
+	}
+}
+
+func TestWriteCommitWithRelativeDataDir(t *testing.T) {
+	// 回归：GITDASH_DATA 为相对路径时 reposDir 也是相对路径，
+	// WriteCommit 在临时工作区 fetch origin，origin 若为相对路径会在临时目录下解析失败。
+	rel := filepath.Join("testdata-relative", t.Name())
+	if err := os.MkdirAll(rel, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll("testdata-relative") }()
+	if err := Init(rel); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	sha, err := WriteCommit("alice", "src", "main", "add file", "alice",
+		[]FileChange{{Path: "a.txt", Action: "create", Content: "hello"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sha == "" {
+		t.Fatal("empty commit sha")
+	}
+	bs, err := Branches("alice", "src")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bs) != 1 || bs[0].Name != "main" {
+		t.Fatalf("branches = %+v, want [main]", bs)
 	}
 }
 

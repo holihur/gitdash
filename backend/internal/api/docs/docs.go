@@ -4450,7 +4450,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "校验 name/scopes 后生成新 PAT，明文 token 只在本次响应中出现。",
+                "description": "校验 name/scopes/cidrs/expires_at 后生成新 PAT，明文 token 只在本次响应中出现。",
                 "consumes": [
                     "application/json"
                 ],
@@ -4463,7 +4463,7 @@ const docTemplate = `{
                 "summary": "创建个人访问令牌",
                 "parameters": [
                     {
-                        "description": "名称与授权范围",
+                        "description": "名称、授权范围、来源 IP 白名单与过期时间",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -10250,6 +10250,17 @@ const docTemplate = `{
         "api.createPATReq": {
             "type": "object",
             "properties": {
+                "cidrs": {
+                    "description": "来源 IP/CIDR 白名单（可选，IPv4/IPv6 或 CIDR；空 = 不限）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "expires_at": {
+                    "description": "过期时间 RFC3339 UTC（可选；空 = 永不过期）",
+                    "type": "string"
+                },
                 "name": {
                     "description": "令牌名称（必填，\u003c=100 字符）",
                     "type": "string"
@@ -10555,7 +10566,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "username": {
-                    "description": "用户名（2-32 位小写字母/数字/_/-，字母或数字开头）",
+                    "description": "用户名（5-32 位小写字母/数字/_/-，字母或数字开头）",
                     "type": "string"
                 }
             }
@@ -11017,7 +11028,18 @@ const docTemplate = `{
         "store.CreatedPAT": {
             "type": "object",
             "properties": {
+                "cidrs": {
+                    "description": "来源 IP/CIDR 白名单；空 = 不限",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "description": "RFC3339 UTC；空 = 永不过期",
                     "type": "string"
                 },
                 "id": {
@@ -11130,7 +11152,13 @@ const docTemplate = `{
         "store.ExportPAT": {
             "type": "object",
             "properties": {
+                "cidrs": {
+                    "type": "string"
+                },
                 "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
                     "type": "string"
                 },
                 "last_used_at": {
@@ -11414,7 +11442,18 @@ const docTemplate = `{
         "store.PAT": {
             "type": "object",
             "properties": {
+                "cidrs": {
+                    "description": "来源 IP/CIDR 白名单；空 = 不限",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "description": "RFC3339 UTC；空 = 永不过期",
                     "type": "string"
                 },
                 "id": {

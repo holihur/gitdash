@@ -119,13 +119,13 @@ func TestIssueMilestonesManagement(t *testing.T) {
 func TestLabelsMilestonesPermissions(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "lm"}, 201)
 
 	(&Client{env: env}).mustFail("GET", lmPath("alice", "lm", "labels", ""), nil, 401)
 	bob.mustFail("GET", lmPath("alice", "lm", "labels", ""), nil, 404)
 	alice.mustStatus("POST", "/users/alice/repos/lm/collabs",
-		map[string]string{"username": "bob", "permission": "read"}, 200)
+		map[string]string{"username": "bobby", "permission": "read"}, 200)
 	bob.mustStatus("GET", lmPath("alice", "lm", "labels", ""), nil, 200)
 	bob.mustStatus("GET", lmPath("alice", "lm", "milestones", ""), nil, 200)
 	bob.mustFail("POST", lmPath("alice", "lm", "labels", ""), map[string]string{"name": "x"}, 404)

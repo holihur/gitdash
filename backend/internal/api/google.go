@@ -148,15 +148,47 @@ func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {
 	a.oauthIssueSession(w, r, username)
 }
 
-// sanitizeOAuthLogin 由第三方资料（邮箱 / 昵称）推断合法用户名：
-// 取邮箱 @ 前的部分，非法字符替换为 '-'，仍不合法时回退为 g<externalID>。
+// sanitizeOAuthLogin 由第三方资料（邮箱 / 昵称）推断 5-32 位合法用户名：
+// 优先用 login（@ 前部分）；过短时拼接 externalID 补足；仍不合法则回退 g<externalID>。
 func sanitizeOAuthLogin(login, externalID string) string {
-	u := strings.ToLower(strings.TrimSpace(login))
-	if i := strings.IndexByte(u, '@'); i > 0 {
-		u = u[:i]
+	if u := sanitizeLoginPart(login); usernameRe.MatchString(u) {
+		return u
+	}
+	// 拼接 externalID 补足长度（保持可读）
+	if base := sanitizeLoginPart(login); base != "" {
+		cand := strings.TrimRight(base+"-"+sanitizeLoginPart(externalID), "-_")
+		if len(cand) > 32 {
+			cand = strings.TrimRight(cand[:32], "-_")
+		}
+		for len(cand) < 5 {
+			cand += "0"
+		}
+		if usernameRe.MatchString(cand) {
+			return cand
+		}
+	}
+	// 回退：g<externalID>，补足到 5 位
+	u := "g" + sanitizeLoginPart(externalID)
+	if len(u) > 32 {
+		u = strings.TrimRight(u[:32], "-_")
+	}
+	for len(u) < 5 {
+		u += "0"
+	}
+	if !usernameRe.MatchString(u) {
+		u = "g0000" // 极端兜底（externalID 也非法）
+	}
+	return u
+}
+
+// sanitizeLoginPart 取 @ 前部分并只保留合法用户名字符，去除首尾 -_。
+func sanitizeLoginPart(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if i := strings.IndexByte(s, '@'); i > 0 {
+		s = s[:i]
 	}
 	var b strings.Builder
-	for _, r := range u {
+	for _, r := range s {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
 			b.WriteRune(r)
@@ -164,16 +196,5 @@ func sanitizeOAuthLogin(login, externalID string) string {
 			b.WriteByte('-')
 		}
 	}
-	u = strings.Trim(b.String(), "-_")
-	if len(u) > 32 {
-		u = u[:32]
-	}
-	u = strings.TrimRight(u, "-_")
-	if !usernameRe.MatchString(u) {
-		u = "g" + externalID
-		if len(u) > 32 {
-			u = u[:32]
-		}
-	}
-	return u
+	return strings.Trim(b.String(), "-_")
 }

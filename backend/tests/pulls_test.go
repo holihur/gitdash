@@ -105,7 +105,7 @@ func TestPullRequestBadPaths(t *testing.T) {
 	requireBins(t, "git", "ssh", "ssh-keygen")
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "pr"}, 201)
 
 	key, pub := genKey(t, env.DataDir, "alice_key")

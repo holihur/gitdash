@@ -65,7 +65,7 @@ func TestSearchAndReleases(t *testing.T) {
 	requireBins(t, "git")
 	env := start(t)
 	alice := register(t, env, "alice", "password-alice-123")
-	bob := register(t, env, "bob", "password-bob-123")
+	bob := register(t, env, "bobby", "password-bob-123")
 
 	alice.mustStatus("POST", "/repos", map[string]any{
 		"name": "demo", "template": "readme", "private": false,

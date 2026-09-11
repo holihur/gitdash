@@ -52,7 +52,7 @@ func (a *API) adminAuth(next http.HandlerFunc) http.HandlerFunc {
 //	@Router      /admin/login [post]
 func (a *API) adminLogin(w http.ResponseWriter, r *http.Request) {
 	if bt := bearerToken(r); bt != "" {
-		if _, _, err := a.store.ValidatePAT(bt); err == nil {
+		if _, _, err := a.store.ValidatePAT(bt, ""); err == nil {
 			writeCode(w, http.StatusForbidden, "pat_not_allowed", "personal access tokens cannot be used for the admin panel")
 			return
 		}

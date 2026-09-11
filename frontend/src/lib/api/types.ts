@@ -112,6 +112,8 @@ export interface PAT {
   id: number;
   name: string;
   scopes: string[];
+  cidrs: string[];
+  expires_at: string;
   created_at: string;
   last_used_at: string;
 }

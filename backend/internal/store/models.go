@@ -75,6 +75,8 @@ type patRow struct {
 	Name       string `gorm:"not null"`
 	TokenHash  string `gorm:"not null;uniqueIndex;size:255"`
 	Scopes     string `gorm:"not null;default:'repo'"` // 逗号分隔: repo,inbox,keys
+CIDRs     string `gorm:"column:cidrs;not null;default:''"`     // 逗号分隔 IP/CIDR 白名单（去重、规范化）；空 = 不限来源
+	ExpiresAt string `gorm:"column:expires_at;not null;default:''"` // RFC3339 UTC 过期时间；空 = 永不过期
 	CreatedAt  string `gorm:"not null"`
 	LastUsedAt string `gorm:"not null;default:''"`
 }

@@ -18,7 +18,7 @@ func TestRegisterLoginSession(t *testing.T) {
 	c.mustFail("POST", "/auth/register", map[string]string{"username": "alice", "password": "alice-pass-123"}, 409)
 
 	// 弱密码 / 非法用户名
-	c.mustFail("POST", "/auth/register", map[string]string{"username": "bob", "password": "short"}, 400)
+	c.mustFail("POST", "/auth/register", map[string]string{"username": "bobby", "password": "short"}, 400)
 	c.mustFail("POST", "/auth/register", map[string]string{"username": "-bad", "password": "long-enough-pw"}, 400)
 	c.mustFail("POST", "/auth/register", map[string]string{"username": "a", "password": "long-enough-pw"}, 400)
 	c.mustFail("POST", "/auth/register", map[string]string{"username": "has space", "password": "long-enough-pw"}, 400)
@@ -57,6 +57,8 @@ func TestRegisterPasswordStrength(t *testing.T) {
 	c.mustFail("POST", "/auth/register", map[string]string{"username": "weakuser", "password": "alllowercaseonly"}, 400)
 	// 长度不足
 	c.mustFail("POST", "/auth/register", map[string]string{"username": "weakuser", "password": "Ab1!x"}, 400)
+	// 用户名过短（<5 位）被拒绝
+	c.mustFail("POST", "/auth/register", map[string]string{"username": "abcd", "password": "Passw0rd-123"}, 400)
 	// 至少 3 类字符且长度足够
 	m := c.mustStatus("POST", "/auth/register", map[string]string{"username": "stronguser", "password": "Passw0rd-123"}, 201)
 	if token, _ := m["token"].(string); token == "" {

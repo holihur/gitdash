@@ -66,7 +66,7 @@ func TestSSHAccessControl(t *testing.T) {
 	requireBins(t, "git", "ssh", "ssh-keygen")
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "private"}, 201)
 	keyA, pubA := genKey(t, env.DataDir, "alice_key")

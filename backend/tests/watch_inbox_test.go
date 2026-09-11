@@ -39,7 +39,7 @@ func actionsOf(items []Notif) []string {
 func TestWatchLifecycle(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	// 新建仓库：创建者自动 watch
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
@@ -93,14 +93,14 @@ func TestWatchLifecycle(t *testing.T) {
 func TestInboxIssueNotifications(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
 	alice.mustStatus("POST", "/users/alice/repos/demo/visibility", map[string]bool{"private": false}, 200)
 	bob.mustStatus("PUT", "/users/alice/repos/demo/watch", nil, 200)
 	// bob 获得写权限以便开 issue / 改状态
 	alice.mustStatus("POST", "/users/alice/repos/demo/collabs",
-		map[string]string{"username": "bob", "permission": "write"}, 200)
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
 
 	// alice 开 issue → 通知 watcher bob（actor alice 不通知自己）
 	alice.mustStatus("POST", "/repos/demo/issues", map[string]string{"title": "t1"}, 201)
@@ -122,7 +122,7 @@ func TestInboxIssueNotifications(t *testing.T) {
 	// bob 开 issue → 通知 alice（owner，即使未 watch）
 	bob.mustStatus("POST", "/users/alice/repos/demo/issues", map[string]string{"title": "t2"}, 201)
 	aliceItems := getJSON[[]Notif](t, alice, "/inbox", 200)
-	if len(aliceItems) != 1 || aliceItems[0].Action != "opened" || aliceItems[0].Actor != "bob" ||
+	if len(aliceItems) != 1 || aliceItems[0].Action != "opened" || aliceItems[0].Actor != "bobby" ||
 		aliceItems[0].Number != 2 {
 		t.Fatalf("alice inbox = %+v", aliceItems)
 	}
@@ -142,7 +142,7 @@ func TestInboxIssueNotifications(t *testing.T) {
 	// bob 重新打开 #2 → 通知 alice（reopened）
 	bob.mustStatus("PATCH", "/users/alice/repos/demo/issues/2", map[string]string{"state": "open"}, 200)
 	aliceItems = getJSON[[]Notif](t, alice, "/inbox", 200)
-	if len(aliceItems) != 2 || aliceItems[0].Action != "reopened" || aliceItems[0].Actor != "bob" {
+	if len(aliceItems) != 2 || aliceItems[0].Action != "reopened" || aliceItems[0].Actor != "bobby" {
 		t.Fatalf("alice inbox after reopen = %+v", aliceItems)
 	}
 
@@ -196,7 +196,7 @@ func TestInboxPullNotifications(t *testing.T) {
 	requireBins(t, "git")
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
-	bob := register(t, env, "bob", "bob-pass-123456")
+	bob := register(t, env, "bobby", "bob-pass-123456")
 
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "prd"}, 201)
 	alice.mustStatus("POST", "/users/alice/repos/prd/visibility", map[string]bool{"private": false}, 200)
