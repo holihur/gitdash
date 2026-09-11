@@ -148,6 +148,21 @@ Environment variables (all optional):
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
+| `GITDASH_ADMIN_PASSWORD` | empty (off) | Set to create an admin on **first boot** and enable the `/admin` panel |
+| `GITDASH_ADMIN_USER` | `admin` | Admin username (used with the above) |
+| `GITDASH_SMTP_HOST` | empty (off) | SMTP host; enables email notifications / address verification |
+| `GITDASH_SMTP_PORT` | `587` | SMTP port |
+| `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | empty | SMTP username / password |
+| `GITDASH_SMTP_FROM` | SMTP user | From address |
+| `GITDASH_TRUSTED_PROXIES` | empty (loopback only) | Comma-separated proxy IP/CIDR allowed to set `X-Forwarded-For` |
+| `GITDASH_SECURE_COOKIES` | off | Set to `1` behind a TLS-terminating proxy so session/admin cookies get `Secure` |
+| `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | empty | Built-in HTTPS certificate/key paths |
+| `GITDASH_ACME_DOMAINS` | empty | Comma-separated domains; obtain certificates automatically via ACME (see `GITDASH_ACME_EMAIL`) |
+| `GITDASH_PIPELINE_VOLUMES_DIR` | empty (denied) | Host directory CI may mount; unset denies all host volume mounts |
+
+> With deb/rpm packages the service reads these optional variables from `EnvironmentFile=-/etc/gitdash/gitdash.env` (the package post-install script creates a commented sample, mode 0600). Add `GITDASH_ADMIN_PASSWORD` etc. there, then `sudo systemctl restart gitdash`.
+
+Admin panel: set `GITDASH_ADMIN_PASSWORD` (optionally `GITDASH_ADMIN_USER`); it is created on the first boot when no admin exists. Log in at `http://<host>:8080/admin` to manage users, global runners and OAuth/OIDC login settings.
 
 Runner (self-hosted CI agent) support requires Redis (`GITDASH_QUEUE=redis`); WS endpoint `/api/runner/ws`, registration `POST /api/runner/register`, management `GET/DELETE /api/runners`.
 
@@ -157,7 +172,7 @@ Runner (self-hosted CI agent) support requires Redis (`GITDASH_QUEUE=redis`); WS
 GITDASH_HTTP_ADDR=:9090 GITDASH_SSH_ADDR=:2322 gitdash serve
 ```
 
-- For systemd: edit the corresponding `Environment=` lines in `packaging/gitdash.service`, then `systemctl daemon-reload && systemctl restart gitdash`
+- For systemd: put variables in `/etc/gitdash/gitdash.env` (created by the package post-install, or add an `EnvironmentFile=` via `systemctl edit gitdash`), then `systemctl daemon-reload && systemctl restart gitdash`
 - Note: the clone URL shown in the web UI is hardcoded to port 2222; if you change the SSH port, adjust clone commands manually
 
 ### 2. Start the frontend (development)

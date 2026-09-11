@@ -148,6 +148,21 @@ go run .
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | asynq 队列使用的 Redis 地址 |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
+| `GITDASH_ADMIN_PASSWORD` | 空（关闭） | 设置后在**首次启动**创建管理员并启用 `/admin` 管理面板 |
+| `GITDASH_ADMIN_USER` | `admin` | 管理员用户名（配合上者） |
+| `GITDASH_SMTP_HOST` | 空（关闭） | SMTP 主机；设置后启用邮件通知/邮箱验证 |
+| `GITDASH_SMTP_PORT` | `587` | SMTP 端口 |
+| `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | 空 | SMTP 账号 / 密码 |
+| `GITDASH_SMTP_FROM` | SMTP 用户名 | 发件人地址 |
+| `GITDASH_TRUSTED_PROXIES` | 空（仅回环） | 信任 `X-Forwarded-For` 的反代 IP/CIDR 列表（逗号分隔） |
+| `GITDASH_SECURE_COOKIES` | 关闭 | 反代终止 TLS 时设为 `1`，让会话/管理 cookie 带 `Secure` |
+| `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | 空 | 内置 HTTPS 证书/私钥路径 |
+| `GITDASH_ACME_DOMAINS` | 空 | 逗号分隔域名；设置后用 ACME 自动申请证书（另见 `GITDASH_ACME_EMAIL`） |
+| `GITDASH_PIPELINE_VOLUMES_DIR` | 空（禁止） | CI 允许挂载的宿主目录；未设置则禁止流水线挂载宿主卷 |
+
+> 用 deb/rpm 安装时，服务通过 `EnvironmentFile=-/etc/gitdash/gitdash.env` 读取上述可选变量（包安装脚本会生成带注释的示例文件，权限 0600）。把 `GITDASH_ADMIN_PASSWORD` 等写进去后执行 `sudo systemctl restart gitdash` 即生效。
+
+管理面板：设置 `GITDASH_ADMIN_PASSWORD`（可选 `GITDASH_ADMIN_USER`）后在**无管理员**的首次启动时创建，访问 `http://<host>:8080/admin` 登录，可管理用户、全局 Runner 与 OAuth/OIDC 登录配置。
 
 Runner（自托管 CI agent）功能需要 Redis（`GITDASH_QUEUE=redis`）；WS 端点 `/api/runner/ws`，注册 `POST /api/runner/register`，管理 `GET/DELETE /api/runners`。
 
@@ -157,7 +172,7 @@ Runner（自托管 CI agent）功能需要 Redis（`GITDASH_QUEUE=redis`）；WS
 GITDASH_HTTP_ADDR=:9090 GITDASH_SSH_ADDR=:2322 gitdash serve
 ```
 
-- systemd 方式：修改 `packaging/gitdash.service` 中对应的 `Environment=` 行后 `systemctl daemon-reload && systemctl restart gitdash`
+- systemd 方式：把变量写进 `/etc/gitdash/gitdash.env`（由包安装生成，或 `systemctl edit gitdash` 加 `EnvironmentFile=`），然后 `systemctl daemon-reload && systemctl restart gitdash`
 - 注意：网页上显示的 clone 地址端口固定为 2222，SSH 端口改动后 clone 命令需手动调整
 
 ### 2. 启动前端（开发）

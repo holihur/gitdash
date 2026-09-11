@@ -81,6 +81,10 @@ nfpms:
         file_info:
           mode: 0755
         dst: /var/lib/gitdash
+      - type: dir
+        file_info:
+          mode: 0755
+        dst: /etc/gitdash
     scripts:
       # rpm 的 post 脚本同样适用于 deb/apk（goreleaser 会按格式使用）
       postinstall: packaging/postinstall.sh

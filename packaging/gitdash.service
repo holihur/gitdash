@@ -6,11 +6,12 @@ After=network.target
 Type=simple
 # 按需修改运行用户与目录
 # User=gitdash
-# 自动更新默认关闭，如需开启：
-# Environment=GITDASH_AUTO_UPDATE=1
 Environment=GITDASH_DATA=/var/lib/gitdash
 Environment=GITDASH_HTTP_ADDR=:8080
 Environment=GITDASH_SSH_ADDR=:2222
+# 可选配置（管理员密码、SMTP、OAuth、自动更新等）写在这里；不存在时忽略。
+# 示例文件由包安装脚本生成于 /etc/gitdash/gitdash.env，修改后 systemctl restart gitdash。
+EnvironmentFile=-/etc/gitdash/gitdash.env
 ExecStartPre=/usr/bin/env mkdir -p /var/lib/gitdash
 ExecStart=/usr/local/bin/gitdash serve
 Restart=always
