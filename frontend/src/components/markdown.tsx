@@ -1,38 +1,68 @@
-import { useEffect, useMemo, useRef } from "react";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
-// lib/common 只注册常用语言（~40 种），全量包体积约 4 倍于此
-import hljs from "highlight.js/lib/common";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { extractHeadings } from "@/lib/md-headings";
 
-marked.setOptions({ gfm: true, breaks: false });
+export { extractHeadings };
+export type { MdHeading } from "@/lib/md-headings";
 
-/** Markdown 渲染（DOMPurify 消毒后展示；代码块由 highlight.js 高亮）。 */
+/**
+ * Markdown 渲染（marked 解析 + DOMPurify 消毒；代码块由 highlight.js 高亮）。
+ *
+ * 性能：marked / dompurify / highlight.js 均为动态 import，
+ * 仅在真正展示 Markdown 时才加载，highlight.js（约 150KB）更是在确有代码块时才请求，
+ * 避免拖大公共 chunk 与首屏。
+ */
 export function MarkdownView({ text, className }: { text: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [html, setHtml] = useState("");
 
-  const html = useMemo(() => {
-    const raw = marked.parse(text ?? "", { async: false }) as string;
-    return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+  // 解析 + 消毒：延迟到组件挂载后再拉取 marked / dompurify
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [{ marked }, { default: DOMPurify }] = await Promise.all([
+        import("marked"),
+        import("dompurify"),
+      ]);
+      const raw = marked.parse(text ?? "", { async: false, gfm: true, breaks: false }) as string;
+      const clean = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+      if (alive) setHtml(clean);
+    })();
+    return () => {
+      alive = false;
+    };
   }, [text]);
 
+  // 标题锚点 + 代码块高亮（highlight.js 仅在存在代码块时加载）
   useEffect(() => {
     const root = ref.current;
-    if (!root) return;
-    root.querySelectorAll("pre code").forEach((el) => {
-      if (el.textContent && el.textContent.length <= 200_000) {
-        try {
-          hljs.highlightElement(el as HTMLElement);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
+    if (!root || !html) return;
+
     // 为 h1-h3 生成锚点 id（顺序与 extractHeadings 一致），供目录导航
     root.querySelectorAll("h1, h2, h3").forEach((el, i) => {
       if (!el.id) el.id = `md-heading-${i}`;
     });
+
+    const codes = Array.from(root.querySelectorAll<HTMLElement>("pre code")).filter(
+      (el) => el.textContent && el.textContent.length <= 200_000,
+    );
+    if (codes.length === 0) return;
+
+    let alive = true;
+    void import("highlight.js/lib/common").then(({ default: hljs }) => {
+      if (!alive) return;
+      codes.forEach((el) => {
+        try {
+          hljs.highlightElement(el);
+        } catch {
+          /* ignore */
+        }
+      });
+    });
+    return () => {
+      alive = false;
+    };
   }, [html]);
 
   return (
@@ -42,31 +72,6 @@ export function MarkdownView({ text, className }: { text: string; className?: st
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
-}
-
-export interface MdHeading {
-  level: 1 | 2 | 3;
-  text: string;
-  id: string;
-}
-
-/** 从 markdown 源文本解析 #/##/### 标题（跳过代码块），id 与 MarkdownView 渲染后的锚点一一对应。 */
-export function extractHeadings(text: string): MdHeading[] {
-  const out: MdHeading[] = [];
-  let inCode = false;
-  for (const rawLine of (text ?? "").split("\n")) {
-    if (/^\s*```/.test(rawLine)) inCode = !inCode;
-    if (inCode) continue;
-    const m = /^(#{1,3})\s+(.+?)\s*#*\s*$/.exec(rawLine.trim());
-    if (!m) continue;
-    const text = m[2]
-      .replace(/`([^`]*)`/g, "$1")
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/[*_~]/g, "")
-      .trim();
-    if (text) out.push({ level: m[1].length as 1 | 2 | 3, text, id: `md-heading-${out.length}` });
-  }
-  return out;
 }
 
 /** Markdown + 右侧标题目录（lg 以上显示），锚点平滑滚动。 */
@@ -103,32 +108,4 @@ export function MarkdownWithToc({ text }: { text: string }) {
       </nav>
     </div>
   );
-}
-
-/** 普通代码文件渲染：整段高亮后注入。 */
-export function CodeText({ text, lang }: { text: string; lang?: string }) {
-  const html = useMemo(() => {
-    const code = text.length > 300_000 ? "" : highlight(text, lang);
-    return code !== "" ? code : escapeHtml(text);
-  }, [text, lang]);
-  return (
-    <pre className="overflow-auto text-xs leading-5">
-      <code className="hljs block p-0" dangerouslySetInnerHTML={{ __html: html }} />
-    </pre>
-  );
-}
-
-function highlight(code: string, lang?: string): string {
-  try {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang }).value;
-    }
-    return hljs.highlightAuto(code).value;
-  } catch {
-    return "";
-  }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
