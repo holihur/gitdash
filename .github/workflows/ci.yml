@@ -184,6 +184,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: recursive
       - name: Build image
         run: docker build -t gitdash:ci .
       - name: Smoke test container
