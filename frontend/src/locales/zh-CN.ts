@@ -17,6 +17,7 @@ export const zhCN: Messages = {
     cmdRepos: "仓库",
     cmdHint: "↑↓ 选择 · ↵ 确认 · Esc 关闭",
     signedInAs: "已登录为",
+    accountMenu: "账号菜单",
   },
   nav: {
     repos: "仓库",

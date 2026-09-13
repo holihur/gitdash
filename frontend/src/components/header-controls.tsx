@@ -70,8 +70,17 @@ export function UserMenu({ user, onLogout }: { user: string; onLogout: () => voi
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2 px-1.5 sm:px-2" title={user}>
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-2 px-1.5 sm:px-2"
+          title={user}
+          aria-label={t("app.accountMenu")}
+        >
+          <span
+            aria-hidden="true"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
+          >
             {user.slice(0, 1).toUpperCase()}
           </span>
           <span className="hidden max-w-32 truncate font-medium md:inline">{user}</span>

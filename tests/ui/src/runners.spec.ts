@@ -1,6 +1,6 @@
 import { test, expect } from "./fixtures/browser";
 import { hasInstanceSource } from "./fixtures/browser";
-import { registerViaUi } from "./helpers/ui";
+import { gotoProfileViaUi, registerViaUi } from "./helpers/ui";
 
 test.skip(
   !hasInstanceSource(),
@@ -9,10 +9,10 @@ test.skip(
 
 test.describe("Runners（自托管 CI agent）", () => {
   test("个人设置页可见 Runners 卡片：空列表 + 签发一次性注册 token", async ({ page }) => {
-    const { username } = await registerViaUi(page);
+    await registerViaUi(page);
 
-    // 导航栏用户名 → /profile
-    await page.getByRole("link", { name: username }).click();
+    // 账号菜单 → /profile
+    await gotoProfileViaUi(page);
     await expect(page.getByText("Self-hosted CI agents connect to this server")).toBeVisible();
     await expect(page.getByText("No runners registered yet.")).toBeVisible();
 

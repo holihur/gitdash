@@ -15,6 +15,7 @@ export const en = {
     cmdRepos: "Repositories",
     cmdHint: "↑↓ navigate · ↵ select · Esc close",
     signedInAs: "Signed in as",
+    accountMenu: "Account menu",
   },
   nav: {
     repos: "Repositories",

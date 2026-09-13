@@ -61,9 +61,22 @@ export async function openRepoViaUi(page: Page, owner: string, name: string) {
   await expect(page.getByRole("heading", { name: `${owner}/${name}` })).toBeVisible();
 }
 
-/** 顶栏 "Sign out"，回到登录页 */
+/** 打开顶栏账号下拉菜单（用户 / 主题 / 语言 / 退出）。 */
+export async function openUserMenu(page: Page) {
+  await page.getByRole("button", { name: "Account menu" }).click();
+}
+
+/** 通过账号菜单进入个人资料页 /profile。 */
+export async function gotoProfileViaUi(page: Page) {
+  await openUserMenu(page);
+  await page.getByRole("menuitem", { name: "Profile", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+}
+
+/** 顶栏账号菜单 "Sign out"，回到登录页 */
 export async function signOutViaUi(page: Page) {
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await openUserMenu(page);
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.locator("#username")).toBeVisible();
 }
 

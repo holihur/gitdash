@@ -10,9 +10,9 @@ test.skip(
 
 test.describe("@happy 认证 / 会话", () => {
   test("注册即自动登录，进入仓库页", async ({ page }) => {
-    const { username } = await registerViaUi(page);
-    // 顶栏显示当前用户
-    await expect(page.getByRole("link", { name: username })).toBeVisible();
+    await registerViaUi(page);
+    // 顶栏显示当前用户（账号菜单）
+    await expect(page.getByRole("button", { name: "Account menu" })).toBeVisible();
   });
 
   test("登出后回到登录页，可重新登录", async ({ page }) => {
