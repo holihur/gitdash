@@ -54,7 +54,7 @@ export const en = {
     signIn: "Sign in",
     register: "Register",
     username: "Username",
-    usernamePlaceholder: "5+ chars: lowercase letters, numbers, _ or -",
+    usernamePlaceholder: "4+ chars: lowercase letters, numbers, _ or -",
     password: "Password",
     passwordWithHint: "Password ({hint})",
     passwordMin: "at least 8 characters, with 3 of: lowercase / uppercase / digit / symbol",
@@ -222,6 +222,7 @@ export const en = {
     copyCloneCommand: "Copy clone command",
     noBranch: "No branch",
     code: "Code",
+    files: "Files",
     commits: "Commits",
     emptyRepo: "Empty repository",
     settings: "Settings",
@@ -612,6 +613,10 @@ export const en = {
   toc: {
     title: "On this page",
   },
+  outline: {
+    title: "Outline",
+    empty: "No outline",
+  },
   releases: {
     tab: "Releases",
     count: "{count} releases",
@@ -799,7 +804,7 @@ export const en = {
     unauthorized: "Not signed in or session expired",
     invalid_credentials: "Invalid username or password",
     username_invalid:
-      "Username must be 5-32 chars: lowercase letters, digits, '_' or '-', starting with a letter or digit",
+      "Username must be 4-32 chars: lowercase letters, digits, '_' or '-', starting with a letter or digit",
     password_too_short: "Password must be at least 8 characters",
     password_weak:
       "Password must contain at least 3 of: lowercase, uppercase, digit, or special character",

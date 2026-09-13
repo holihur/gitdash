@@ -7,8 +7,10 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  FolderTree,
   GitBranch,
   GitBranchPlus,
+  List,
   Pencil,
   Search,
   Tag as TagIcon,
@@ -38,8 +40,11 @@ import {
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import { MarkdownWithToc } from "@/components/markdown";
+import { MarkdownView, MarkdownWithToc } from "@/components/markdown";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
+import FileTree from "@/components/file-tree";
+import Outline from "@/components/outline";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
@@ -230,21 +235,59 @@ export default function CodeTab({
   copy,
 }: CodeTabProps) {
   const { t, to } = useI18n();
+  // 窄屏下文件树 / 大纲以左右抽屉形式呈现
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
 
   const openEntry = (entry: TreeEntry) => {
     if (entry.type === "tree") {
-      setParams({ path: [...path, entry.name].join("/") });
+      setParams({ path: [...path, entry.name].join("/"), file: null, line: null, blame: null });
       return;
     }
-    setParams({ file: [...path, entry.name].join("/") });
+    setParams({ file: [...path, entry.name].join("/"), line: null, blame: null });
   };
 
-  const jumpTo = (depth: number) => {
-    const next = depth < 0 ? [] : path.slice(0, depth + 1);
-    setParams({ path: next.length ? next.join("/") : null });
+  const openDir = (dir: string) => {
+    setParams({ path: dir || null, file: null, line: null, blame: null });
+  };
+
+  const openFile = (file: string) => {
+    setParams({ file, line: null, blame: null });
+  };
+
+  const jumpToId = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const jumpToLine = (line: number) => {
+    setParams({ line: String(line) });
+  };
+
+  // 大纲内容仅在文本文件（非 blame）时才有意义
+  const showOutline = !emptyRepo && !blameParam && !!blob && blob.encoding === "utf-8";
+
+  // 抽屉内的跳转：操作后自动收起，避免遮挡内容
+  const openDirFromTree = (dir: string) => {
+    setTreeOpen(false);
+    openDir(dir);
+  };
+  const openFileFromTree = (file: string) => {
+    setTreeOpen(false);
+    openFile(file);
+  };
+  const jumpFromOutlineId = (id: string) => {
+    setOutlineOpen(false);
+    jumpToId(id);
+  };
+  const jumpFromOutlineLine = (line: number) => {
+    setOutlineOpen(false);
+    jumpToLine(line);
   };
 
   const readmeEntry = readmeEntryName ? { name: readmeEntryName } : null;
+
+  // 面包屑：打开文件时按文件完整路径显示，避免与当前目录不同步
+  const crumbs = blob ? blob.path.split("/") : path;
 
   // 搜索结果带行号跳转：滚动到目标行并短暂高亮
   const codeHostRef = useRef<HTMLDivElement>(null);
@@ -264,19 +307,73 @@ export default function CodeTab({
   }, [lineParam, blob]);
 
   return (
-    <div className="space-y-4">
+    <div
+      className={cn(
+        "grid gap-4",
+        !emptyRepo &&
+          (showOutline
+            ? "lg:grid-cols-[220px_minmax(0,1fr)_220px] xl:grid-cols-[230px_minmax(0,1fr)_250px]"
+            : "lg:grid-cols-[230px_minmax(0,1fr)]"),
+      )}
+    >
+      {!emptyRepo && (
+        <aside className="sticky top-20 hidden self-start rounded-lg border bg-card lg:block">
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">{t("repo.files")}</span>
+          </div>
+          <div className="max-h-[calc(100vh-14rem)] overflow-auto">
+            <FileTree
+              owner={owner}
+              name={name}
+              refName={refName}
+              currentDir={currentDir}
+              activeFile={blob?.path ?? ""}
+              emptyRepo={emptyRepo}
+              onOpenDir={openDir}
+              onOpenFile={openFile}
+            />
+          </div>
+        </aside>
+      )}
+
+      <div className="min-w-0 space-y-4">
       {!emptyRepo && (
         <CodeSearch owner={owner} name={name} refName={refName} setParams={setParams} />
       )}
-      <div className="flex items-center justify-end gap-2">
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
-          <FilePlus2 className="h-4 w-4" />
-          {t("fops.newFile")}
-        </Button>
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-dir")}>
-          <FolderPlus className="h-4 w-4" />
-          {t("fops.newFolder")}
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {!emptyRepo && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 lg:hidden"
+            onClick={() => setTreeOpen(true)}
+          >
+            <FolderTree className="h-4 w-4" />
+            {t("repo.files")}
+          </Button>
+        )}
+        {showOutline && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 lg:hidden"
+            onClick={() => setOutlineOpen(true)}
+          >
+            <List className="h-4 w-4" />
+            {t("outline.title")}
+          </Button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
+            <FilePlus2 className="h-4 w-4" />
+            {t("fops.newFile")}
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-dir")}>
+            <FolderPlus className="h-4 w-4" />
+            {t("fops.newFolder")}
+          </Button>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
@@ -332,35 +429,30 @@ export default function CodeTab({
 
         {!emptyRepo && (
           <nav className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
-            <button
-              className={cn(
-                "font-medium hover:underline",
-                path.length === 0 || blob ? "" : "text-muted-foreground",
-              )}
-              onClick={() => jumpTo(-1)}
-            >
+            <button className="font-medium hover:underline" onClick={() => openDir("")}>
               {name}
             </button>
-            {path.map((seg, i) => (
-              <span key={i} className="flex items-center gap-1">
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                <button
-                  className={cn(
-                    "hover:underline",
-                    i === path.length - 1 && !blob ? "font-medium" : "text-muted-foreground",
+            {crumbs.map((seg, i) => {
+              const isFile = blob != null && i === crumbs.length - 1;
+              return (
+                <span key={`${seg}-${i}`} className="flex items-center gap-1">
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  {isFile ? (
+                    <span className="font-medium">{seg}</span>
+                  ) : (
+                    <button
+                      className={cn(
+                        "hover:underline",
+                        i === crumbs.length - 1 ? "font-medium" : "text-muted-foreground",
+                      )}
+                      onClick={() => openDir(crumbs.slice(0, i + 1).join("/"))}
+                    >
+                      {seg}
+                    </button>
                   )}
-                  onClick={() => jumpTo(i)}
-                >
-                  {seg}
-                </button>
-              </span>
-            ))}
-            {blob && (
-              <span className="flex items-center gap-1">
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium">{blob.path.split("/").pop()}</span>
-              </span>
-            )}
+                </span>
+              );
+            })}
           </nav>
         )}
       </div>
@@ -461,7 +553,7 @@ export default function CodeTab({
             ) : blob.encoding === "utf-8" ? (
               isMarkdown(blob.path) ? (
                 <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
-                  <MarkdownWithToc text={blob.content} />
+                  <MarkdownView text={blob.content} />
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-md border">
@@ -596,10 +688,74 @@ export default function CodeTab({
             <FileText className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground">{readmeEntry.name}</span>
           </div>
-          <div className="max-h-[60vh] overflow-auto p-4">
+          <div className="p-4">
             <MarkdownWithToc text={readmeContent} />
           </div>
         </div>
+      )}
+      </div>
+
+      {showOutline && blob && (
+        <aside className="sticky top-20 hidden self-start rounded-lg border bg-card lg:block">
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <List className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">{t("outline.title")}</span>
+          </div>
+          <div className="max-h-[calc(100vh-14rem)] overflow-auto p-1">
+            <Outline
+              path={blob.path}
+              content={blob.content}
+              onJumpToId={jumpToId}
+              onJumpToLine={jumpToLine}
+            />
+          </div>
+        </aside>
+      )}
+
+      {/* 窄屏：左侧文件树抽屉 */}
+      <Sheet open={treeOpen} onOpenChange={setTreeOpen}>
+        <SheetContent side="left" aria-describedby={undefined} className="w-72 gap-0 p-0">
+          <SheetHeader className="border-b px-3 py-2 pr-10">
+            <SheetTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <FolderTree className="h-3.5 w-3.5 shrink-0" />
+              {t("repo.files")}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <FileTree
+              owner={owner}
+              name={name}
+              refName={refName}
+              currentDir={currentDir}
+              activeFile={blob?.path ?? ""}
+              emptyRepo={emptyRepo}
+              onOpenDir={openDirFromTree}
+              onOpenFile={openFileFromTree}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* 窄屏：右侧大纲抽屉 */}
+      {showOutline && blob && (
+        <Sheet open={outlineOpen} onOpenChange={setOutlineOpen}>
+          <SheetContent side="right" aria-describedby={undefined} className="w-72 gap-0 p-0">
+            <SheetHeader className="border-b px-3 py-2 pr-10">
+              <SheetTitle className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <List className="h-3.5 w-3.5 shrink-0" />
+                {t("outline.title")}
+              </SheetTitle>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-auto p-1">
+              <Outline
+                path={blob.path}
+                content={blob.content}
+                onJumpToId={jumpFromOutlineId}
+                onJumpToLine={jumpFromOutlineLine}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
     </div>
   );

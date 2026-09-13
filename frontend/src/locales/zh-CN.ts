@@ -56,7 +56,7 @@ export const zhCN: Messages = {
     signIn: "登录",
     register: "注册",
     username: "用户名",
-    usernamePlaceholder: "5 位以上：小写字母、数字、_ 或 -",
+    usernamePlaceholder: "4 位以上：小写字母、数字、_ 或 -",
     password: "密码",
     passwordWithHint: "密码（{hint}）",
     passwordMin: "至少 8 位，并包含小写字母/大写字母/数字/特殊字符中的 3 类",
@@ -222,6 +222,7 @@ export const zhCN: Messages = {
     copyCloneCommand: "复制 clone 命令",
     noBranch: "无分支",
     code: "代码",
+    files: "文件",
     commits: "提交记录",
     emptyRepo: "空仓库",
     settings: "设置",
@@ -611,6 +612,10 @@ export const zhCN: Messages = {
   toc: {
     title: "本页目录",
   },
+  outline: {
+    title: "大纲",
+    empty: "无大纲",
+  },
   releases: {
     tab: "版本发布",
     count: "{count} 个版本",
@@ -796,7 +801,7 @@ export const zhCN: Messages = {
     gpg_key_not_found: "GPG 公钥不存在",
     unauthorized: "未登录或会话已过期",
     invalid_credentials: "用户名或密码错误",
-    username_invalid: "用户名需 5-32 位小写字母/数字，可含 _ -，字母或数字开头",
+    username_invalid: "用户名需 4-32 位小写字母/数字，可含 _ -，字母或数字开头",
     password_too_short: "密码至少 8 位",
     password_weak: "密码需包含小写字母、大写字母、数字、特殊字符中的至少 3 类",
     username_taken: "用户名已被注册",
