@@ -1434,6 +1434,133 @@ const docTemplate = `{
                 }
             }
         },
+        "/me/byok": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "返回当前用户配置的全部 BYOK（bring your own key）密钥，不含明文。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "byok"
+                ],
+                "summary": "列出 BYOK 密钥",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.ByokKey"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "byok"
+                ],
+                "summary": "创建 BYOK 密钥",
+                "parameters": [
+                    {
+                        "description": "name/provider/api_key/base_url/model",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.byokReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.ByokKey"
+                        }
+                    }
+                }
+            }
+        },
+        "/me/byok/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "byok"
+                ],
+                "summary": "更新 BYOK 密钥",
+                "parameters": [
+                    {
+                        "description": "name/provider/api_key(留空保留)/base_url/model",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.byokReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.ByokKey"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "byok"
+                ],
+                "summary": "删除 BYOK 密钥",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/me/email/resend": {
             "post": {
                 "security": [
@@ -5384,6 +5511,166 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "列出 copilot 会话",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.CopilotSession"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "创建 copilot 会话",
+                "parameters": [
+                    {
+                        "description": "byok_id/image/prompt/command",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.copilotCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.CopilotSession"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "获取 copilot 会话",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.CopilotSession"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "删除 copilot 会话",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}/start": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "启动 copilot 会话",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.CopilotSession"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}/stop": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "停止 copilot 会话",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.CopilotSession"
                         }
                     }
                 }
@@ -10490,6 +10777,26 @@ const docTemplate = `{
                 }
             }
         },
+        "api.byokReq": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                }
+            }
+        },
         "api.changePasswordReq": {
             "type": "object",
             "properties": {
@@ -10523,6 +10830,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "sha": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.copilotCreateReq": {
+            "type": "object",
+            "properties": {
+                "byok_id": {
+                    "type": "integer"
+                },
+                "command": {
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "prompt": {
                     "type": "string"
                 }
             }
@@ -11325,6 +11649,35 @@ const docTemplate = `{
                 }
             }
         },
+        "store.ByokKey": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "key_set": {
+                    "type": "boolean"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "store.Collab": {
             "type": "object",
             "properties": {
@@ -11373,6 +11726,41 @@ const docTemplate = `{
                 },
                 "number": {
                     "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.CopilotSession": {
+            "type": "object",
+            "properties": {
+                "byok_id": {
+                    "type": "integer"
+                },
+                "command": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "prompt": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"

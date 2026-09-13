@@ -424,6 +424,34 @@ export interface RepoEnvVar {
   created_at: string;
 }
 
+export interface ByokKey {
+  id: number;
+  name: string;
+  provider: string;
+  base_url?: string;
+  model?: string;
+  key_set: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CopilotStatus = "created" | "running" | "stopped" | "failed";
+
+export interface CopilotSession {
+  id: number;
+  created_by: string;
+  byok_id: number;
+  image: string;
+  prompt: string;
+  command?: string;
+  status: CopilotStatus;
+  error?: string;
+  created_at: string;
+  updated_at: string;
+  /** 仅详情返回 */
+  log?: string;
+}
+
 export type NotifKind = "issue" | "pull";
 export type NotifAction = "opened" | "closed" | "reopened" | "merged";
 

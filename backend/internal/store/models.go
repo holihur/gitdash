@@ -511,3 +511,42 @@ type releaseAssetRow struct {
 }
 
 func (releaseAssetRow) TableName() string { return "release_assets" }
+
+// ---- byok（bring your own key：用户自带的 LLM 密钥）----
+
+// byokKeyRow 用户配置的一个 BYOK 密钥（provider + api_key + 可选 base_url/model）。
+// api_key 只存库，任何读接口都不回传。
+type byokKeyRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Username  string `gorm:"not null;index;size:255"`
+	Name      string `gorm:"not null;size:64"`
+	Provider  string `gorm:"not null;size:32"`
+	APIKey    string `gorm:"not null;size:1024"`
+	BaseURL   string `gorm:"not null;default:'';size:1024"`
+	Model     string `gorm:"not null;default:'';size:255"`
+	CreatedAt string `gorm:"not null"`
+	UpdatedAt string `gorm:"not null"`
+}
+
+func (byokKeyRow) TableName() string { return "byok_keys" }
+
+// ---- copilot sessions（每个会话 = 一个独立的 Docker 容器）----
+
+// copilotSessionRow 仓库内的一个 AI copilot 会话，绑定到某个 BYOK 密钥，
+// 运行时以独立 Docker 容器承载（容器名由 id 派生，不存 DB）。
+type copilotSessionRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Owner     string `gorm:"not null;index;size:255"`
+	Repo      string `gorm:"not null;index;size:255"`
+	CreatedBy string `gorm:"not null;size:255"`
+	ByokID    int64  `gorm:"not null;default:0"`
+	Image     string `gorm:"not null;size:255"`
+	Prompt    string `gorm:"not null;default:''"`
+	Command   string `gorm:"not null;default:''"`
+	Status    string `gorm:"not null;default:'created'"`
+	Error     string `gorm:"not null;default:''"`
+	CreatedAt string `gorm:"not null"`
+	UpdatedAt string `gorm:"not null"`
+}
+
+func (copilotSessionRow) TableName() string { return "copilot_sessions" }

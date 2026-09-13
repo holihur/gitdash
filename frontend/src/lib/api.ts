@@ -16,6 +16,7 @@ import { keysApi } from "./api/keys";
 import { packagesApi } from "./api/packages";
 import { projectsApi } from "./api/projects";
 import { usersApi } from "./api/users";
+import { copilotApi } from "./api/copilot";
 
 export const api = {
   ...authApi,
@@ -31,4 +32,5 @@ export const api = {
   ...packagesApi,
   ...projectsApi,
   ...usersApi,
+  ...copilotApi,
 };

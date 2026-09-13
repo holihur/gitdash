@@ -56,6 +56,8 @@ func (s *Store) migrate() error {
 		&packageAuditRow{},
 		&runnerRow{},
 		&runnerTokenRow{},
+		&byokKeyRow{},
+		&copilotSessionRow{},
 	); err != nil {
 		return err
 	}

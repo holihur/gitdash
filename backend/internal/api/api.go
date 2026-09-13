@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"gitdash/backend/internal/api/docs"
+	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/metrics"
 	"gitdash/backend/internal/notify"
@@ -66,6 +67,9 @@ type API struct {
 
 	// runnerHub runner WS Hub（main 注入；nil = runner 功能未启用）
 	runnerHub *runner.Hub
+
+	// copilotMgr BYOK copilot 会话的 Docker 编排器（main 注入）
+	copilotMgr *copilot.Manager
 
 	// sshPort SSH 服务端口（clone 地址展示用；main 启动时注入，默认 2222）
 	sshPort string
@@ -216,6 +220,12 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/me/mfa/email/enroll", a.auth(a.mfaEmailEnroll))
 	mux.HandleFunc("POST /api/me/mfa/email/activate", a.auth(a.mfaEmailActivate))
 	mux.HandleFunc("POST /api/me/mfa/email/send", a.auth(a.mfaEmailSend))
+
+	// byok（bring your own key：用户自带 LLM 密钥）
+	mux.HandleFunc("GET /api/me/byok", a.auth(a.listByok))
+	mux.HandleFunc("POST /api/me/byok", a.auth(a.createByok))
+	mux.HandleFunc("PUT /api/me/byok/{id}", a.auth(a.updateByok))
+	mux.HandleFunc("DELETE /api/me/byok/{id}", a.auth(a.deleteByok))
 
 	// repos
 	mux.HandleFunc("GET /api/repos", a.auth(a.listRepos))
@@ -399,6 +409,14 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("DELETE /api/runners/{name}", a.auth(a.deleteRunner))
 	mux.HandleFunc("POST /api/runner/register", a.registerRunner)
 	mux.HandleFunc("GET /api/runner/ws", a.runnerWS)
+
+	// copilot（BYOK AI copilot 会话，每个会话一个独立 Docker 容器）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots", a.auth(a.listCopilots))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots", a.auth(a.createCopilot))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.getCopilot))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots/{id}/start", a.auth(a.startCopilot))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots/{id}/stop", a.auth(a.stopCopilot))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.deleteCopilot))
 
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))

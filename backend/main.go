@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"gitdash/backend/internal/api"
+	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/notify"
@@ -93,6 +94,9 @@ func run() {
 	}
 	if err := pipeline.Init(dataDir); err != nil {
 		log.Fatalf("init pipeline: %v", err)
+	}
+	if err := copilot.Init(dataDir); err != nil {
+		log.Fatalf("init copilot: %v", err)
 	}
 
 	// 数据库：GITDASH_DB 为 postgres:// 连接串时用 PG，否则用 SQLite 文件（默认 data/gitdash.db）
@@ -187,6 +191,7 @@ func run() {
 
 	a := api.New(st, version)
 	a.SetSSHPort(sshAddr)
+	a.SetCopilotManager(copilot.NewManager(st))
 	sender := notify.NewSender()
 	a.SetEmailSender(sender)
 

@@ -48,11 +48,12 @@ const CommitsTab = lazy(() => import("./repoview/commits-tab"));
 const IssuesTab = lazy(() => import("./repoview/issues-tab"));
 const PullsTab = lazy(() => import("./repoview/pulls-tab"));
 const PipelineTab = lazy(() => import("./repoview/pipeline-tab"));
+const CopilotTab = lazy(() => import("./repoview/copilot-tab"));
 const ReleasesTab = lazy(() => import("./repoview/releases-tab"));
 const ProjectsTab = lazy(() => import("./repoview/projects-tab"));
 const SettingsTab = lazy(() => import("./repoview/settings-tab"));
 
-const tabs = ["code", "commits", "issues", "pulls", "pipeline", "releases", "projects", "settings"] as const;
+const tabs = ["code", "commits", "issues", "pulls", "pipeline", "copilot", "releases", "projects", "settings"] as const;
 type RepoTab = (typeof tabs)[number];
 
 export default function RepoView() {
@@ -361,6 +362,7 @@ export default function RepoView() {
       { value: "issues", label: t("issues.title") },
       { value: "pulls", label: t("pulls.title") },
       { value: "pipeline", label: t("pipeline.tab") },
+      { value: "copilot", label: t("copilot.tab") },
       { value: "releases", label: t("releases.tab") },
       { value: "projects", label: t("projects.tab") },
       ...(isOwner ? [{ value: "settings", label: t("repo.settings") }] : []),
@@ -558,6 +560,12 @@ export default function RepoView() {
           <TabsContent value="pipeline">
             <Suspense fallback={<TabFallback />}>
               <PipelineTab owner={owner} name={name} role={repo?.role} />
+            </Suspense>
+          </TabsContent>
+
+          <TabsContent value="copilot">
+            <Suspense fallback={<TabFallback />}>
+              <CopilotTab owner={owner} name={name} role={repo?.role} />
             </Suspense>
           </TabsContent>
 
