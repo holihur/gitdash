@@ -5,12 +5,12 @@ package runner
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/coder/websocket"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/ssrf"
 )
 
@@ -116,7 +116,7 @@ func (h *Hub) reverseDialLoop(ctx context.Context, name, url string) {
 		_ = h.rdb.Del(context.Background(), lockKey).Err()
 
 		if err != nil && ctx.Err() == nil {
-			log.Printf("runner: reverse dial %s (%s): %v (retry in %s)", name, url, err, reverseReconnect)
+			logx.Infof("runner: reverse dial %s (%s): %v (retry in %s)", name, url, err, reverseReconnect)
 		}
 		select {
 		case <-ctx.Done():
@@ -141,7 +141,7 @@ func (h *Hub) dialReverse(ctx context.Context, name, url string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("runner audit: REVERSE CONNECT runner=%s url=%s time=%s", name, url, time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: REVERSE CONNECT runner=%s url=%s time=%s", name, url, time.Now().UTC().Format(time.RFC3339))
 	h.serveConn(ctx, name, ws)
 	return nil
 }

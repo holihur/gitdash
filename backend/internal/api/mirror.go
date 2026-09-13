@@ -133,7 +133,7 @@ func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if err := jobs.EnqueueMirror(owner, name, m.URL, m.PrivateKey); err != nil {
+	if err := a.enqueueMirror(owner, name, m.URL, m.PrivateKey); err != nil {
 		_ = a.store.SetMirrorStatus(owner, name, jobs.StatusFailed, "enqueue: "+err.Error())
 		internalError(w, err)
 		return

@@ -8,12 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"strings"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/store"
 )
@@ -97,7 +97,7 @@ func (d *dispatchExecutor) Execute(ctx context.Context, job RunJob, cfg *Config,
 	}
 	defer done()
 
-	log.Printf("pipeline audit: REMOTE runner=%s image=%s repo=%s/%s time=%s",
+	logx.Infof("pipeline audit: REMOTE runner=%s image=%s repo=%s/%s time=%s",
 		r.Name, cfg.Image, job.Owner, job.Repo, time.Now().UTC().Format(time.RFC3339))
 	return boundHub.RunRemote(ctx, r.Name, rjob, workspace, logSink, progress)
 }

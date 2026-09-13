@@ -3,11 +3,11 @@ package notify
 
 import (
 	"fmt"
-	"log"
 	"net/smtp"
 	"os"
 	"strings"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 )
@@ -104,7 +104,7 @@ func EmailHandler(st *store.Store, sender *Sender) func(webhooks.Event) {
 		}
 		for _, t := range targets {
 			if err := sender.Send(t.Email, subject, body); err != nil {
-				log.Printf("notify: email to %s: %v", t.Username, err)
+				logx.Infof("notify: email to %s: %v", t.Username, err)
 			}
 		}
 	}

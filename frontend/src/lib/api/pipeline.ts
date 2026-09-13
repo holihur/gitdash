@@ -1,10 +1,14 @@
 import { req } from "./core";
-import type { PipelineRun, RepoEnvVar, Runner } from "./types";
+import type { PipelineGraph, PipelineRun, RepoEnvVar, Runner } from "./types";
 
 export const pipelineApi = {
   // pipeline（CI）
   getPipeline: (owner: string, name: string) =>
     req<{ enabled: boolean; file: string }>(`/users/${owner}/repos/${name}/pipeline`),
+  getPipelineGraph: (owner: string, name: string, ref?: string) =>
+    req<PipelineGraph>(
+      `/users/${owner}/repos/${name}/pipeline/graph${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
+    ),
   setPipeline: (owner: string, name: string, enabled: boolean) =>
     req<{ enabled: boolean }>(`/users/${owner}/repos/${name}/pipeline`, {
       method: "PUT",

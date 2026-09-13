@@ -1,10 +1,10 @@
 package api
 
 import (
-	"log"
 	"net/http"
 	"time"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/webhooks"
 )
 
@@ -80,7 +80,7 @@ func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 func (a *API) notify(owner, repo, kind, action, actor string, number int64, title, comment string) {
 	users := a.store.NotifyRecipients(owner, repo, actor)
 	if err := a.store.AddNotifications(users, kind, action, owner, repo, number, title, actor); err != nil {
-		log.Printf("notify %s/%s: %v", owner, repo, err)
+		logx.Infof("notify %s/%s: %v", owner, repo, err)
 	}
 	if a.Publish == nil {
 		return

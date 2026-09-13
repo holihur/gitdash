@@ -425,6 +425,25 @@ export interface RepoEnvVar {
   created_at: string;
 }
 
+export interface PipelineGraphNode {
+  id: string;
+  label: string;
+  kind: "start" | "step" | "parallel" | "sub" | "end";
+  when?: string;
+}
+
+export interface PipelineGraphEdge {
+  from: string;
+  to: string;
+}
+
+export interface PipelineGraph {
+  ref: string;
+  image?: string;
+  timeout?: string;
+  graph: { image?: string; nodes: PipelineGraphNode[]; edges: PipelineGraphEdge[] };
+}
+
 export interface ByokKey {
   id: number;
   name: string;

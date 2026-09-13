@@ -517,6 +517,7 @@ export const zhCN: Messages = {
     dslHint: "自定义 YAML DSL：镜像 + 顺序步骤（省略 image 则直接在宿主 sh 执行，需服务端开启 host 执行）；`on` 指定自动触发事件（push/pull_request/schedule/workflow_dispatch，默认 push），`schedule` 为 cron 表达式；任一步骤失败即终止；仓库工作区挂载在 /workspace。",
     cancel: "取消",
     cancelled: "已请求取消",
+    visualize: "可视化",
   },
   runnerGuide: {
     title: "Runner 使用引导",

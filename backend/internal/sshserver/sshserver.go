@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -21,6 +20,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
 
@@ -70,7 +70,7 @@ func (s *Server) ServeOn(ln net.Listener) error {
 			if errors.Is(err, net.ErrClosed) {
 				return nil
 			}
-			log.Printf("ssh accept: %v", err)
+			logx.Infof("ssh accept: %v", err)
 			continue
 		}
 		go s.handleConn(conn, s.config)
@@ -92,11 +92,11 @@ func buildConfig(st *store.Store) *ssh.ServerConfig {
 				}
 				if parsed.Type() == key.Type() && bytes.Equal(parsed.Marshal(), key.Marshal()) {
 					fp := ssh.FingerprintSHA256(key)
-					log.Printf("ssh: %s authenticated as user %q with key %s", meta.User(), ka.Username, fp)
+					logx.Infof("ssh: %s authenticated as user %q with key %s", meta.User(), ka.Username, fp)
 					return &ssh.Permissions{Extensions: map[string]string{"username": ka.Username}}, nil
 				}
 			}
-			log.Printf("ssh: rejected %s, unknown key %s", meta.User(), ssh.FingerprintSHA256(key))
+			logx.Infof("ssh: rejected %s, unknown key %s", meta.User(), ssh.FingerprintSHA256(key))
 			return nil, fmt.Errorf("unknown public key")
 		},
 	}
@@ -105,7 +105,7 @@ func buildConfig(st *store.Store) *ssh.ServerConfig {
 func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
 	sconn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
-		log.Printf("ssh handshake from %s: %v", conn.RemoteAddr(), err)
+		logx.Infof("ssh handshake from %s: %v", conn.RemoteAddr(), err)
 		return
 	}
 	defer func() { _ = sconn.Close() }()
@@ -259,7 +259,7 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 			code = ee.ExitCode()
 		} else {
 			code = 1
-			log.Printf("ssh exec %s %s/%s: %v", sub, owner, name, err)
+			logx.Infof("ssh exec %s %s/%s: %v", sub, owner, name, err)
 		}
 	}
 	sendExit(ch, code)

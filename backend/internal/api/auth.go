@@ -3,9 +3,9 @@ package api
 import (
 	"errors"
 	"fmt"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/totp"
-	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -379,7 +379,7 @@ func (a *API) sendEmailVerification(username, email, token, base string) {
 	subject := "gitdash: verify your email / 邮箱验证"
 	body := fmt.Sprintf("Hi %s,\n\nPlease verify your email address:\n%s\n\nThis link expires in 24 hours.\n\n-- gitdash", username, link)
 	if err := a.emailSender.Send(email, subject, body); err != nil {
-		log.Printf("email verification to %s: %v", email, err)
+		logx.Infof("email verification to %s: %v", email, err)
 	}
 }
 

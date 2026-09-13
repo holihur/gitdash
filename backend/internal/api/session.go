@@ -3,8 +3,8 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
-	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -27,7 +27,7 @@ func (a *API) rateBlocked(key string) bool {
 	}
 	blocked, err := a.store.RateBlocked(key, loginMaxFails)
 	if err != nil {
-		log.Printf("rate check %s: %v", key, err)
+		logx.Infof("rate check %s: %v", key, err)
 		return false
 	}
 	return blocked
@@ -38,13 +38,13 @@ func (a *API) rateFail(key string) {
 		return
 	}
 	if err := a.store.RateFail(key, loginWindow); err != nil {
-		log.Printf("rate fail record %s: %v", key, err)
+		logx.Infof("rate fail record %s: %v", key, err)
 	}
 }
 
 func (a *API) rateReset(key string) {
 	if err := a.store.RateReset(key); err != nil {
-		log.Printf("rate reset %s: %v", key, err)
+		logx.Infof("rate reset %s: %v", key, err)
 	}
 }
 

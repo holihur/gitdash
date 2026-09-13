@@ -3,7 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"fmt"
-	"log"
+	"gitdash/backend/internal/logx"
 	"math/big"
 	"net/http"
 	"strings"
@@ -34,7 +34,7 @@ func (a *API) issueEmailMFACode(key, username, email, subject string) (err error
 	}
 	body := fmt.Sprintf("Hi %s,\n\nYour gitdash verification code is:\n\n%s\n\nIt expires in 10 minutes. If you did not request it, ignore this email.\n\n-- gitdash", username, code)
 	if serr := a.emailSender.Send(email, subject, body); serr != nil {
-		log.Printf("email mfa to %s: %v", email, serr)
+		logx.Infof("email mfa to %s: %v", email, serr)
 	}
 	return nil
 }

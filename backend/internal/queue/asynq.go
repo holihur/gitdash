@@ -3,7 +3,7 @@ package queue
 import (
 	"context"
 	"errors"
-	"log"
+	"gitdash/backend/internal/logx"
 	"sync"
 	"time"
 
@@ -88,7 +88,7 @@ func (a *AsynqQueue) Start(ctx context.Context, kinds []JobKind, h Handler) {
 		}()
 		go func() {
 			if err := srv.Run(mux); err != nil {
-				log.Printf("queue: asynq server stopped: %v", err)
+				logx.Infof("queue: asynq server stopped: %v", err)
 			}
 		}()
 	})

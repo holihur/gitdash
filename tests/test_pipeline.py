@@ -129,6 +129,28 @@ def test_pipeline_trigger_requires_dsl_file(pl_env):
     assert resp["code"] == "pipeline_file_missing"
 
 
+def test_pipeline_graph_endpoint(pl_env):
+    """流水线可视化：返回步骤 DAG（start/step/end + 边）；公开仓库他人只读可见。"""
+    an, _, alice, bob, repo = pl_env
+    _commit(alice, an, repo, ".gitdash.yml", PIPELINE_YAML)
+
+    g = alice.get(_p(an, repo, "/graph"), expect=200).json()
+    kinds = {n["kind"] for n in g["graph"]["nodes"]}
+    assert {"start", "end", "step"} <= kinds
+    assert len(g["graph"]["edges"]) >= 3
+    assert g["ref"] == "main"
+
+    # 公开仓库：非 owner 只读也可查看
+    bob.get(_p(an, repo, "/graph"), expect=200)
+
+
+def test_pipeline_graph_missing_dsl(pl_env):
+    an, _, alice, _, repo = pl_env
+    r = alice.get(_p(an, repo, "/graph"))
+    assert r.status_code == 404
+    assert r.json()["code"] == "pipeline_not_found"
+
+
 def test_pipeline_bad_dsl_recorded_failed(pl_env):
     an, _, alice, _, repo = pl_env
     _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)

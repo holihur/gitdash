@@ -23,7 +23,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -36,6 +35,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/runner"
 )
@@ -81,7 +81,7 @@ func saveConfig(c config) error {
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.LUTC)
+	logx.Setup()
 	sub := ""
 	if len(os.Args) > 1 {
 		sub = os.Args[1]
@@ -133,7 +133,7 @@ func cmdRegister() {
 	body, _ := json.Marshal(map[string]any{"name": *name, "labels": labelsOut, "token": *token, "mode": mode, "url": *url})
 	resp, err := http.Post(strings.TrimRight(*server, "/")+"/api/runner/register", "application/json", strings.NewReader(string(body)))
 	if err != nil {
-		log.Fatalf("register: %v", err)
+		logx.Fatalf("register: %v", err)
 	}
 	var out struct {
 		Runner struct {
@@ -149,10 +149,10 @@ func cmdRegister() {
 	decodeErr := json.NewDecoder(resp.Body).Decode(&out)
 	_ = resp.Body.Close()
 	if decodeErr != nil || resp.StatusCode >= 300 {
-		log.Fatalf("register failed: status=%d err=%s", resp.StatusCode, out.Error)
+		logx.Fatalf("register failed: status=%d err=%s", resp.StatusCode, out.Error)
 	}
 	if err := saveConfig(config{Server: *server, Name: out.Runner.Name, Secret: out.Secret, Labels: labelsOut, Concurrency: 2, Mode: mode, URL: *url}); err != nil {
-		log.Fatalf("save config: %v", err)
+		logx.Fatalf("save config: %v", err)
 	}
 	if mode == runner.ModeReverse {
 		fmt.Printf("已注册反向 runner %q (scope=%q, id=%d)\nsecret 已写入 %s\n启动：gitdash-runner serve（监听 %s）\n", out.Runner.Name, out.Runner.Scope, out.Runner.ID, configPath(), *url)
@@ -177,14 +177,14 @@ func cmdRun() {
 	_ = fs.Parse(os.Args[2:])
 	if *execMode == "host" {
 		pipeline.SetHostAllowed(true)
-		log.Printf("host 执行模式已开启（无容器沙箱，谨慎使用）")
+		logx.Infof("host 执行模式已开启（无容器沙箱，谨慎使用）")
 	}
 	c, err := loadConfig()
 	if err != nil {
-		log.Fatalf("读取配置失败（先执行 register）: %v", err)
+		logx.Fatalf("读取配置失败（先执行 register）: %v", err)
 	}
 	if c.Mode == runner.ModeReverse {
-		log.Fatalf("当前 runner 为反向模式：请用 gitdash-runner serve（监听等待服务端拨号），而非 run")
+		logx.Fatalf("当前 runner 为反向模式：请用 gitdash-runner serve（监听等待服务端拨号），而非 run")
 	}
 	if c.Concurrency <= 0 {
 		c.Concurrency = 2
@@ -195,7 +195,7 @@ func cmdRun() {
 	defer stop()
 	for ctx.Err() == nil {
 		if err := a.session(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("连接断开: %v（5s 后重连）", err)
+			logx.Infof("连接断开: %v（5s 后重连）", err)
 		}
 		select {
 		case <-ctx.Done():
@@ -214,14 +214,14 @@ func cmdServe() {
 	_ = fs.Parse(os.Args[2:])
 	if *execMode == "host" {
 		pipeline.SetHostAllowed(true)
-		log.Printf("host 执行模式已开启（无容器沙箱，谨慎使用）")
+		logx.Infof("host 执行模式已开启（无容器沙箱，谨慎使用）")
 	}
 	c, err := loadConfig()
 	if err != nil {
-		log.Fatalf("读取配置失败（先执行 register -reverse）: %v", err)
+		logx.Fatalf("读取配置失败（先执行 register -reverse）: %v", err)
 	}
 	if c.Mode != runner.ModeReverse {
-		log.Fatalf("当前 runner 非反向模式（mode=%q）：请先 register -reverse -url ...；普通模式用 gitdash-runner run", c.Mode)
+		logx.Fatalf("当前 runner 非反向模式（mode=%q）：请先 register -reverse -url ...；普通模式用 gitdash-runner run", c.Mode)
 	}
 	if c.Concurrency <= 0 {
 		c.Concurrency = 2
@@ -244,7 +244,7 @@ func cmdServe() {
 		_ = srv.Shutdown(sctx)
 	}()
 
-	log.Printf("gitdash-runner %s 反向监听 %s（等待 gitdash 服务端拨号，url=%s）", version, addr, c.URL)
+	logx.Infof("gitdash-runner %s 反向监听 %s（等待 gitdash 服务端拨号，url=%s）", version, addr, c.URL)
 	var serveErr error
 	if *tlsCert != "" && *tlsKey != "" {
 		serveErr = srv.ListenAndServeTLS(*tlsCert, *tlsKey)
@@ -253,7 +253,7 @@ func cmdServe() {
 	}
 	stop()
 	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-		log.Fatalf("listen: %v", serveErr)
+		logx.Fatalf("listen: %v", serveErr)
 	}
 }
 
@@ -273,7 +273,7 @@ func (a *agent) serveWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	log.Printf("gitdash-runner %s 服务端已拨入", version)
+	logx.Infof("gitdash-runner %s 服务端已拨入", version)
 	_ = a.runConn(r.Context(), ws)
 }
 
@@ -309,7 +309,7 @@ func (a *agent) session(ctx context.Context) error {
 		return err
 	}
 	_ = wresp // coder/websocket v1.8: 成功握手时 resp 非 nil，Body 由连接管理，不应外部关闭
-	log.Printf("gitdash-runner %s 已连接 %s", version, a.cfg.Server)
+	logx.Infof("gitdash-runner %s 已连接 %s", version, a.cfg.Server)
 	return a.runConn(wsCtx, ws)
 }
 
@@ -397,7 +397,7 @@ func (a *agent) runConn(ctx context.Context, ws *websocket.Conn) error {
 		case runner.TypeError:
 			var s string
 			_ = json.Unmarshal(msg.Payload, &s)
-			log.Printf("server error: %s", s)
+			logx.Infof("server error: %s", s)
 		}
 	}
 }
@@ -463,7 +463,7 @@ func (a *agent) execJob(ctx context.Context, job runner.Job, st *jobState) {
 			}
 		}()
 	}()
-	log.Printf("job %s: run=%d repo=%s/%s ref=%s", job.JobID, job.RunID, job.Owner, job.Repo, job.Ref)
+	logx.Infof("job %s: run=%d repo=%s/%s ref=%s", job.JobID, job.RunID, job.Owner, job.Repo, job.Ref)
 
 	status := func(s, errMsg string, steps int) {
 		a.send(runner.Message{Type: runner.TypeJobStatus, Payload: mustJSON(runner.JobStatus{
@@ -515,7 +515,7 @@ func (a *agent) execJob(ctx context.Context, job runner.Job, st *jobState) {
 	}
 	lw.flush()
 	status("success", "", 0)
-	log.Printf("job %s: success", job.JobID)
+	logx.Infof("job %s: success", job.JobID)
 }
 
 // recvWorkspace 消费 session 读循环路由来的 job_data 分块直到 eof，写入临时 tar.gz 文件。

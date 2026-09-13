@@ -1,11 +1,11 @@
 package pipeline
 
 import (
-	"log"
 	"strings"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
 
@@ -82,7 +82,7 @@ func runRepoSchedule(st *store.Store, owner, repo string, now time.Time) {
 			Owner: owner, Repo: repo, SHA: sha, Ref: branch,
 			By: "schedule", Event: "schedule",
 		}); terr != nil && !ignorableTriggerErr(terr) {
-			log.Printf("pipeline: schedule trigger %s/%s (%s): %v", owner, repo, expr, terr)
+			logx.Infof("pipeline: schedule trigger %s/%s (%s): %v", owner, repo, expr, terr)
 		}
 	}
 }

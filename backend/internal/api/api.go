@@ -7,14 +7,16 @@ import (
 	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gpgsig"
+	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/metrics"
 	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/telemetry"
 	"gitdash/backend/internal/webhooks"
 	"gitdash/backend/internal/webui"
 	"io/fs"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -70,6 +72,9 @@ type API struct {
 
 	// copilotMgr BYOK copilot 会话的 Docker 编排器（main 注入）
 	copilotMgr *copilot.Manager
+
+	// jobsMgr 异步任务管理器（导入 / 镜像 / webhook 投递；main 注入）
+	jobsMgr *jobs.Manager
 
 	// sshPort SSH 服务端口（clone 地址展示用；main 启动时注入，默认 2222）
 	sshPort string
@@ -142,6 +147,25 @@ func New(s *store.Store, version string) *API {
 
 // SetEmailSender 注入 SMTP 发送器（nil = 未配置）。
 func (a *API) SetEmailSender(s *notify.Sender) { a.emailSender = s }
+
+// SetJobsManager 注入异步任务管理器（导入 / 镜像 / webhook 投递）。
+func (a *API) SetJobsManager(m *jobs.Manager) { a.jobsMgr = m }
+
+// enqueueImport 通过注入的任务队列排队导入；队列未启用时返回错误。
+func (a *API) enqueueImport(owner, repo, url, privateKey string) error {
+	if a.jobsMgr == nil {
+		return errors.New("task queue not configured")
+	}
+	return a.jobsMgr.EnqueueImport(owner, repo, url, privateKey)
+}
+
+// enqueueMirror 通过注入的任务队列排队镜像推送；队列未启用时返回错误。
+func (a *API) enqueueMirror(owner, repo, url, privateKey string) error {
+	if a.jobsMgr == nil {
+		return errors.New("task queue not configured")
+	}
+	return a.jobsMgr.EnqueueMirror(owner, repo, url, privateKey)
+}
 
 // SetSSHPort 注入 SSH 监听端口（clone 地址展示用）。
 func (a *API) SetSSHPort(addr string) {
@@ -395,6 +419,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// pipeline（CI）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline", a.auth(a.getPipeline))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/graph", a.auth(a.getPipelineGraph))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/pipeline", a.auth(a.setPipeline))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.listPipelineRuns))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.createPipelineRun))
@@ -512,7 +537,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 		mux.HandleFunc("/", a.embeddedHandler())
 	}
 
-	return secureHeaders(logMiddleware(csrfGuard(mux)))
+	return telemetry.Middleware(secureHeaders(logMiddleware(csrfGuard(mux))))
 }
 
 // csrfGuard 校验跨站请求：带 Origin 的非安全方法必须与本站同源（cookie 会话的 CSRF 防线）。
@@ -638,9 +663,17 @@ func logMiddleware(next http.Handler) http.Handler {
 		rw := &statusWriter{ResponseWriter: w, status: 200}
 		start := time.Now()
 		next.ServeHTTP(rw, r)
-		log.Printf("%s %s -> %d", r.Method, r.URL.Path, rw.status)
+		dur := time.Since(start)
+		// 结构化访问日志（字段可被日志采集器直接索引）
+		logx.Info("http request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", rw.status,
+			"duration_ms", float64(dur.Microseconds())/1000.0,
+			"remote", r.RemoteAddr,
+		)
 		if r.URL.Path != "/metrics" {
-			metrics.Observe(r.Method, r.URL.Path, rw.status, time.Since(start))
+			metrics.Observe(r.Method, r.URL.Path, rw.status, dur)
 		}
 	})
 }
@@ -727,7 +760,7 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 // GORM/驱动/文件系统错误（表结构、路径等）泄漏进 HTTP 响应。
 // 请求上下文（方法/路径/状态码）由 logMiddleware 统一记录。
 func internalError(w http.ResponseWriter, err error) {
-	log.Printf("internal error: %v", err)
+	logx.Infof("internal error: %v", err)
 	writeCode(w, http.StatusInternalServerError, "internal_error", "internal server error")
 }
 

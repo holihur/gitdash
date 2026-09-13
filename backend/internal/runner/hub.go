@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/redis/go-redis/v9"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
 
@@ -159,7 +159,7 @@ func (h *Hub) sweepOffline(ctx context.Context) {
 		if err != nil || len(ids) == 0 {
 			continue
 		}
-		log.Printf("runner audit: OFFLINE runner=%s time=%s", n, time.Now().UTC().Format(time.RFC3339))
+		logx.Infof("runner audit: OFFLINE runner=%s time=%s", n, time.Now().UTC().Format(time.RFC3339))
 		for _, id := range ids {
 			_ = h.st.FinishPipelineRun(id, "failed", "runner "+n+" went offline")
 		}
@@ -214,17 +214,17 @@ func (h *Hub) serveConn(ctx context.Context, name string, ws *websocket.Conn) {
 	}()
 
 	if err := h.st.SetRunnerStatus(name, "online"); err != nil {
-		log.Printf("runner: mark online %s: %v", name, err)
+		logx.Infof("runner: mark online %s: %v", name, err)
 	}
 	_ = h.rdb.Set(ctx, lastSeenKey(name), time.Now().Unix(), heartbeatTTL).Err()
-	log.Printf("runner audit: CONNECT runner=%s time=%s", name, time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: CONNECT runner=%s time=%s", name, time.Now().UTC().Format(time.RFC3339))
 
 	// 同步建立 Redis 订阅：保证随后的 Dispatch 不会因订阅未就绪而丢失
 	liveCtx, cancelLive := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelLive()
 	sub := h.rdb.Subscribe(liveCtx, RedisChannel(name))
 	if err := sub.Subscribe(liveCtx, RedisChannel(name)); err != nil {
-		log.Printf("runner: subscribe %s: %v", name, err)
+		logx.Infof("runner: subscribe %s: %v", name, err)
 		return
 	}
 	defer func() { _ = sub.Close() }()
@@ -239,7 +239,7 @@ func (h *Hub) readPump(ctx context.Context, name string, conn *agentConn) {
 	for {
 		_, data, err := conn.ws.Read(ctx)
 		if err != nil {
-			log.Printf("runner: readPump %s exit: %v", name, err)
+			logx.Infof("runner: readPump %s exit: %v", name, err)
 			return
 		}
 		if len(data) > logShardMax {

@@ -80,11 +80,6 @@ const docTemplate = `{
         },
         "/admin/logout": {
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -96,16 +91,16 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            }
-        },
-        "/admin/me": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/me": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -132,16 +127,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/admin/password": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/password": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -185,16 +180,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/admin/settings": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/settings": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -219,14 +214,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -275,16 +270,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/admin/users": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -331,14 +326,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -394,16 +389,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{username}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{username}": {
+            "delete": {
                 "description": "级联删除用户的会话/密钥/PAT/OAuth/仓库等归属数据。返回 204。",
                 "produces": [
                     "application/json"
@@ -452,16 +447,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/admin/users/{username}/reset_password": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/admin/users/{username}/reset_password": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -521,7 +516,12 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/auth/login": {
@@ -579,11 +579,6 @@ const docTemplate = `{
         },
         "/auth/logout": {
             "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "作废当前 token（或 cookie 会话）并清除 cookie。返回 204。",
                 "produces": [
                     "application/json"
@@ -596,7 +591,12 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/auth/mfa-email/resend": {
@@ -806,11 +806,6 @@ const docTemplate = `{
         },
         "/explore/repos": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -851,16 +846,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/gpg": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/gpg": {
+            "post": {
                 "description": "解析 armored 公钥并注册。返回 201 与新键。",
                 "consumes": [
                     "application/json"
@@ -917,16 +912,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/gpg/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/gpg/{id}": {
+            "delete": {
                 "description": "按 id 删除当前用户的 GPG 公钥。返回 204。",
                 "produces": [
                     "application/json"
@@ -975,16 +970,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/imports": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/imports": {
+            "post": {
                 "description": "支持 http(s)/ssh/git 地址；URL 校验失败返回 400。导入异步执行，成功返回 202，通过 GET repo 的 import_status 轮询进度。",
                 "consumes": [
                     "application/json"
@@ -1050,16 +1045,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/inbox": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/inbox": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -1091,16 +1086,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/inbox/read": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/inbox/read": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -1115,16 +1110,16 @@ const docTemplate = `{
                             "type": "object"
                         }
                     }
-                }
-            }
-        },
-        "/inbox/read/{id}": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/inbox/read/{id}": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -1148,16 +1143,16 @@ const docTemplate = `{
                             "type": "object"
                         }
                     }
-                }
-            }
-        },
-        "/inbox/unread": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/inbox/unread": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -1172,16 +1167,16 @@ const docTemplate = `{
                             "type": "object"
                         }
                     }
-                }
-            }
-        },
-        "/inbox/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/inbox/{id}": {
+            "delete": {
                 "tags": [
                     "inbox"
                 ],
@@ -1199,7 +1194,12 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/instance": {
@@ -1224,11 +1224,6 @@ const docTemplate = `{
         },
         "/keys": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "返回当前用户注册的所有 SSH 公钥。",
                 "produces": [
                     "application/json"
@@ -1265,14 +1260,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "校验并规范化公钥后注册。返回 201 与新键。",
                 "consumes": [
                     "application/json"
@@ -1329,16 +1324,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/keys/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/keys/{id}": {
+            "delete": {
                 "description": "按 id 删除当前用户的 SSH 公钥。返回 204。",
                 "produces": [
                     "application/json"
@@ -1387,16 +1382,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me": {
+            "get": {
                 "description": "返回当前会话用户的用户名、邮箱、创建时间与 MFA 状态。",
                 "produces": [
                     "application/json"
@@ -1431,16 +1426,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/avatar": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/avatar": {
+            "post": {
                 "description": "multipart 字段 avatar；支持 png/jpeg/gif/webp，最大 2MB。",
                 "consumes": [
                     "multipart/form-data"
@@ -1480,14 +1475,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -1505,16 +1500,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/byok": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/byok": {
+            "get": {
                 "description": "返回当前用户配置的全部 BYOK（bring your own key）密钥，不含明文。",
                 "produces": [
                     "application/json"
@@ -1533,14 +1528,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -1569,16 +1564,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.ByokKey"
                         }
                     }
-                }
-            }
-        },
-        "/me/byok/{id}": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/byok/{id}": {
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -1607,14 +1602,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.ByokKey"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -1632,16 +1627,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/email/resend": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/email/resend": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -1666,16 +1661,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/email/verify": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/email/verify": {
+            "post": {
                 "description": "用验证令牌完成邮箱验证（令牌来自验证邮件链接）。",
                 "consumes": [
                     "application/json"
@@ -1718,16 +1713,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/export": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/export": {
+            "get": {
                 "description": "以 JSON 附件形式下载本账号在实例上的个人数据与自产内容。",
                 "produces": [
                     "application/json"
@@ -1752,16 +1747,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa": {
+            "get": {
                 "description": "返回是否已启用；若存在待激活的 secret，则附带 pending_secret 与 otpauth_url。",
                 "produces": [
                     "application/json"
@@ -1796,16 +1791,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa/activate": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa/activate": {
+            "post": {
                 "description": "校验 TOTP 代码后启用 MFA。返回 204。",
                 "consumes": [
                     "application/json"
@@ -1859,16 +1854,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa/disable": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa/disable": {
+            "post": {
                 "description": "需提供当前密码与有效 TOTP 代码。返回 204。",
                 "consumes": [
                     "application/json"
@@ -1922,16 +1917,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa/email/activate": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa/email/activate": {
+            "post": {
                 "description": "校验邮箱激活码后启用 MFA（方式为 email）。返回 204。",
                 "consumes": [
                     "application/json"
@@ -1988,16 +1983,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa/email/enroll": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa/email/enroll": {
+            "post": {
                 "description": "要求已验证邮箱；发送 6 位激活码（10 分钟有效）。",
                 "produces": [
                     "application/json"
@@ -2041,16 +2036,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa/email/send": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa/email/send": {
+            "post": {
                 "description": "向已验证邮箱发送验证码，用于 /me/mfa/disable 校验。",
                 "produces": [
                     "application/json"
@@ -2090,16 +2085,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/mfa/enroll": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/mfa/enroll": {
+            "post": {
                 "description": "返回 secret 与 otpauth URL，供认证器扫码；尚未激活。",
                 "produces": [
                     "application/json"
@@ -2143,16 +2138,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/password": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/password": {
+            "post": {
                 "description": "校验当前密码后更新，并撤销其它会话（仅保留当前会话）。返回 204。",
                 "consumes": [
                     "application/json"
@@ -2197,16 +2192,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/me/profile": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/me/profile": {
+            "post": {
                 "description": "更新当前用户邮箱与邮件通知开关；邮箱空串表示清除。返回 200 与更新后的资料。",
                 "consumes": [
                     "application/json"
@@ -2264,16 +2259,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/orgs": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/orgs": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -2291,14 +2286,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2348,16 +2343,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/orgs/{org}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/orgs/{org}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -2393,14 +2388,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -2439,16 +2434,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/orgs/{org}/members": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/orgs/{org}/members": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -2484,14 +2479,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -2548,16 +2543,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/orgs/{org}/members/{username}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/orgs/{org}/members/{username}": {
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -2603,16 +2598,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/orgs/{org}/repos": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/orgs/{org}/repos": {
+            "get": {
                 "description": "返回组织仓库列表与当前用户在组织中的角色。",
                 "produces": [
                     "application/json"
@@ -2656,7 +2651,12 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/packages/cargo/{owner}/api/v1/crates/new": {
@@ -3183,11 +3183,6 @@ const docTemplate = `{
         },
         "/repos": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "description": "返回当前用户可访问的全部仓库（含 star/watch 状态）。",
                 "produces": [
                     "application/json"
@@ -3220,14 +3215,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "创建成功返回 201。namespace 可选，指定组织名可将仓库建到组织下。",
                 "consumes": [
                     "application/json"
@@ -3293,16 +3288,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}": {
+            "get": {
                 "description": "返回仓库信息（含 fork/导入来源、star/watch 状态与当前用户角色）。",
                 "produces": [
                     "application/json"
@@ -3345,16 +3340,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/blame": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/blame": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -3400,16 +3395,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/blob": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/blob": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -3455,16 +3450,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/branches": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/branches": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -3500,16 +3495,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/comments/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/comments/{id}": {
+            "delete": {
                 "tags": [
                     "comments"
                 ],
@@ -3552,16 +3547,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/commits": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/commits": {
+            "get": {
                 "description": "返回提交列表，含 GPG 验证结果（对已注册公钥）。",
                 "produces": [
                     "application/json"
@@ -3610,16 +3605,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/issues": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/issues": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -3658,14 +3653,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -3701,16 +3696,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Issue"
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/issues/{number}": {
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/issues/{number}": {
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -3753,16 +3748,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Issue"
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/repos/{name}/issues/{number}/comments": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3817,14 +3812,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "需要仓库写权限；成功返回 201 并向关注者推送通知。",
                 "consumes": [
                     "application/json"
@@ -3886,16 +3881,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/repos/{name}/pulls/{number}/comments": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -3950,14 +3945,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "需要仓库写权限；成功返回 201 并向关注者推送通知。",
                 "consumes": [
                     "application/json"
@@ -4019,16 +4014,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/releases": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/releases": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4076,14 +4071,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "tag 必须已存在（不存在返回 400 tag_not_found）；同 tag 重复创建返回 409。",
                 "consumes": [
                     "application/json"
@@ -4147,16 +4142,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/releases/{tag}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/releases/{tag}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4205,14 +4200,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "tags": [
                     "repos"
                 ],
@@ -4258,16 +4253,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/search": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/search": {
+            "get": {
                 "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。",
                 "produces": [
                     "application/json"
@@ -4323,16 +4318,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/repos/{name}/tree": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/repos/{name}/tree": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4378,7 +4373,12 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/runner/register": {
@@ -4425,11 +4425,6 @@ const docTemplate = `{
         },
         "/runners": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4447,16 +4442,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/runners/registration-token": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/runners/registration-token": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -4485,16 +4480,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.RunnerToken"
                         }
                     }
-                }
-            }
-        },
-        "/search": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/search": {
+            "get": {
                 "description": "按 q 模糊搜索公开仓库、issue（公开仓库 + 自己仓库）与用户/组织，返回 {repos, issues, users}。",
                 "produces": [
                     "application/json"
@@ -4534,16 +4529,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/starred": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/starred": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4570,16 +4565,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/templates": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/templates": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4597,16 +4592,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/tokens": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/tokens": {
+            "get": {
                 "description": "返回当前用户创建的所有 PAT（不含明文 token）。",
                 "produces": [
                     "application/json"
@@ -4643,14 +4638,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "校验 name/scopes/cidrs/expires_at 后生成新 PAT，明文 token 只在本次响应中出现。",
                 "consumes": [
                     "application/json"
@@ -4707,16 +4702,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/tokens/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/tokens/{id}": {
+            "delete": {
                 "description": "按 id 删除当前用户的 PAT，令牌立即失效。返回 204。",
                 "produces": [
                     "application/json"
@@ -4765,16 +4760,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}": {
+            "get": {
                 "description": "返回仓库信息（含 fork/导入来源、star/watch 状态与当前用户角色）。",
                 "produces": [
                     "application/json"
@@ -4823,16 +4818,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/blame": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/blame": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4884,16 +4879,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/blob": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/blob": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4945,16 +4940,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/branch-protections": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/branch-protections": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -4988,16 +4983,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/branch-protections/{branch}": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/branch-protections/{branch}": {
+            "put": {
                 "description": "需要 owner 权限；min_approvals\u003e0 时合并该分支的 PR 需要对应数量的 approve。",
                 "consumes": [
                     "application/json"
@@ -5054,14 +5049,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "tags": [
                     "branch-protection"
                 ],
@@ -5102,16 +5097,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/branches": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/branches": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5153,16 +5148,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/collabs": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/collabs": {
+            "get": {
                 "description": "仅仓库所有者可查看。",
                 "produces": [
                     "application/json"
@@ -5206,14 +5201,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "permission 为 read 或 write；仅仓库所有者可操作。",
                 "consumes": [
                     "application/json"
@@ -5284,16 +5279,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/collabs/{username}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/collabs/{username}": {
+            "delete": {
                 "tags": [
                     "repos"
                 ],
@@ -5346,16 +5341,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/comments/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/comments/{id}": {
+            "delete": {
                 "tags": [
                     "comments"
                 ],
@@ -5405,16 +5400,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/commits": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/commits": {
+            "get": {
                 "description": "返回提交列表，含 GPG 验证结果（对已注册公钥）。",
                 "produces": [
                     "application/json"
@@ -5469,14 +5464,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "支持批量文件变更（create/update/delete/delete_tree），总内容不超过 2MB。",
                 "consumes": [
                     "application/json"
@@ -5530,16 +5525,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/commits/{sha}/diff": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/commits/{sha}/diff": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5587,16 +5582,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/copilots": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5614,14 +5609,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -5650,16 +5645,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.CopilotSession"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/copilots/{id}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5674,14 +5669,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.CopilotSession"
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -5699,16 +5694,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/copilots/{id}/start": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}/start": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -5723,16 +5718,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.CopilotSession"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/copilots/{id}/stop": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}/stop": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -5747,16 +5742,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.CopilotSession"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/description": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/description": {
+            "post": {
                 "description": "仅仓库所有者可修改；描述可置空。",
                 "consumes": [
                     "application/json"
@@ -5818,16 +5813,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/env": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/env": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -5861,14 +5856,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -5923,16 +5918,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/env/{key}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/env/{key}": {
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -5980,16 +5975,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/fork": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/fork": {
+            "post": {
                 "description": "fork 保持源仓库可见性，创建成功返回 201。",
                 "consumes": [
                     "application/json"
@@ -6069,16 +6064,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/issues": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6124,14 +6119,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6174,16 +6169,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Issue"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/issues/{number}": {
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues/{number}": {
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6233,16 +6228,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Issue"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/issues/{number}/comments": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues/{number}/comments": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6304,14 +6299,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "需要仓库写权限；成功返回 201 并向关注者推送通知。",
                 "consumes": [
                     "application/json"
@@ -6380,16 +6375,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/issues/{number}/labels": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues/{number}/labels": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6439,16 +6434,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Issue"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/issues/{number}/milestone": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues/{number}/milestone": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6498,16 +6493,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Issue"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/labels": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/labels": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6541,14 +6536,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6591,16 +6586,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Label"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/labels/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/labels/{id}": {
+            "delete": {
                 "tags": [
                     "issues"
                 ],
@@ -6632,14 +6627,14 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6689,16 +6684,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Label"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/milestones": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/milestones": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6732,14 +6727,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6782,16 +6777,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Milestone"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/milestones/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/milestones/{id}": {
+            "delete": {
                 "tags": [
                     "issues"
                 ],
@@ -6823,14 +6818,14 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6880,16 +6875,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Milestone"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/mirror": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/mirror": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -6930,14 +6925,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -6999,14 +6994,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "tags": [
                     "repos"
                 ],
@@ -7043,16 +7038,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/mirror/sync": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/mirror/sync": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -7093,16 +7088,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pipeline": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -7134,14 +7129,14 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     }
-                }
-            },
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "put": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7185,16 +7180,16 @@ const docTemplate = `{
                             "additionalProperties": true
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pipeline/dispatch": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/dispatch": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7245,16 +7240,71 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pipeline/runs": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/graph": {
+            "get": {
+                "produces": [
+                    "application/json"
                 ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "流水线可视化图",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "分支或 tag（默认仓库默认分支）",
+                        "name": "ref",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/pipeline.Graph"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/runs": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -7294,14 +7344,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7361,16 +7411,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pipeline/runs/{id}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/runs/{id}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -7426,16 +7476,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel": {
+            "post": {
                 "tags": [
                     "pipeline"
                 ],
@@ -7480,16 +7530,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pipeline/runs/{id}/rerun": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pipeline/runs/{id}/rerun": {
+            "post": {
                 "produces": [
                     "application/json"
                 ],
@@ -7536,16 +7586,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -7579,14 +7629,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7629,16 +7679,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Project"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}": {
+            "delete": {
                 "tags": [
                     "projects"
                 ],
@@ -7670,14 +7720,14 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7727,16 +7777,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.Project"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/board": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/board": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -7774,16 +7824,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/api.boardResp"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/cards": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/cards": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -7824,14 +7874,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7881,16 +7931,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.ProjectCard"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/cards/{card}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/cards/{card}": {
+            "delete": {
                 "tags": [
                     "projects"
                 ],
@@ -7929,14 +7979,14 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -7990,16 +8040,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.ProjectCard"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/columns": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/columns": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8040,14 +8090,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -8097,16 +8147,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.ProjectColumn"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/columns/{cid}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/columns/{cid}": {
+            "delete": {
                 "tags": [
                     "projects"
                 ],
@@ -8145,14 +8195,14 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -8203,16 +8253,16 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/swimlanes": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/swimlanes": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8253,14 +8303,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -8310,16 +8360,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.ProjectSwimlane"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/projects/{id}/swimlanes/{lid}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/swimlanes/{lid}": {
+            "delete": {
                 "tags": [
                     "projects"
                 ],
@@ -8358,14 +8408,14 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            },
-            "patch": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "patch": {
                 "consumes": [
                     "application/json"
                 ],
@@ -8416,16 +8466,16 @@ const docTemplate = `{
                     "204": {
                         "description": "No Content"
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8477,14 +8527,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -8527,16 +8577,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.PullRequest"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls/{number}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls/{number}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8574,16 +8624,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.PullRequest"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls/{number}/comments": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls/{number}/comments": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8645,14 +8695,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "需要仓库写权限；成功返回 201 并向关注者推送通知。",
                 "consumes": [
                     "application/json"
@@ -8721,16 +8771,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls/{number}/diff": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls/{number}/diff": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8768,16 +8818,16 @@ const docTemplate = `{
                             "type": "object"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls/{number}/merge": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls/{number}/merge": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -8827,16 +8877,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.PullRequest"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls/{number}/reviews": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls/{number}/reviews": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -8874,14 +8924,14 @@ const docTemplate = `{
                             "type": "object"
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "需要仓库写权限；同一 reviewer 重复提交插入新行（保留历史）。成功返回 201 并向关注者推送通知与 webhook 事件。",
                 "consumes": [
                     "application/json"
@@ -8950,16 +9000,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/pulls/{number}/state": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/pulls/{number}/state": {
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -9009,16 +9059,16 @@ const docTemplate = `{
                             "$ref": "#/definitions/store.PullRequest"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/refs": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/refs": {
+            "post": {
                 "description": "type 必须为 branch 或 tag；from 缺省为 HEAD。",
                 "consumes": [
                     "application/json"
@@ -9081,16 +9131,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/refs/{kind}/{refname}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/refs/{kind}/{refname}": {
+            "delete": {
                 "description": "不能删除默认（HEAD）分支。",
                 "tags": [
                     "repos"
@@ -9160,16 +9210,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/releases": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/releases": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -9223,14 +9273,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "tag 必须已存在（不存在返回 400 tag_not_found）；同 tag 重复创建返回 409。",
                 "consumes": [
                     "application/json"
@@ -9300,16 +9350,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/releases/{tag}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/releases/{tag}": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -9364,14 +9414,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "tags": [
                     "repos"
                 ],
@@ -9423,16 +9473,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/releases/{tag}/assets": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/releases/{tag}/assets": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -9491,14 +9541,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "description": "单文件最大 10MB，每个 release 最多 10 个附件；同 release 内文件名重复返回 409。",
                 "consumes": [
                     "multipart/form-data"
@@ -9583,16 +9633,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}": {
+            "get": {
                 "produces": [
                     "application/octet-stream"
                 ],
@@ -9655,14 +9705,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "tags": [
                     "repos"
                 ],
@@ -9722,16 +9772,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/search": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/search": {
+            "get": {
                 "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。",
                 "produces": [
                     "application/json"
@@ -9793,16 +9843,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/star": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/star": {
+            "put": {
                 "description": "幂等；返回当前收藏状态与 star 数。",
                 "produces": [
                     "application/json"
@@ -9844,14 +9894,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "返回当前收藏状态与 star 数。",
                 "produces": [
                     "application/json"
@@ -9893,16 +9943,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/tags": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/tags": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -9945,16 +9995,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/template": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/template": {
+            "post": {
                 "description": "仅仓库所有者可设置。模版仓库可作为创建新仓库的源。",
                 "consumes": [
                     "application/json"
@@ -10016,16 +10066,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/tree": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/tree": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -10077,16 +10127,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/visibility": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/visibility": {
+            "post": {
                 "description": "仅仓库所有者可设置。",
                 "consumes": [
                     "application/json"
@@ -10148,16 +10198,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/watch": {
-            "put": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/watch": {
+            "put": {
                 "produces": [
                     "application/json"
                 ],
@@ -10188,16 +10238,16 @@ const docTemplate = `{
                             "type": "object"
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/webhooks": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/webhooks": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -10231,14 +10281,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "post": {
                 "consumes": [
                     "application/json"
                 ],
@@ -10299,16 +10349,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/webhooks/{id}": {
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/webhooks/{id}": {
+            "delete": {
                 "produces": [
                     "application/json"
                 ],
@@ -10352,16 +10402,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{owner}/repos/{name}/webhooks/{id}/deliveries": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/webhooks/{id}/deliveries": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -10417,16 +10467,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{username}": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{username}": {
+            "get": {
                 "description": "返回用户公开资料、followers/following 数量、当前用户是否已关注，以及其可见仓库（他人仅公开仓库）。",
                 "produces": [
                     "application/json"
@@ -10470,16 +10520,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{username}/avatar": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{username}/avatar": {
+            "get": {
                 "description": "返回用户头像图片；未设置头像返回 404。",
                 "produces": [
                     "image/png"
@@ -10513,16 +10563,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{username}/follow": {
-            "post": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{username}/follow": {
+            "post": {
                 "description": "幂等；不能关注自己。返回关注状态与统计。",
                 "produces": [
                     "application/json"
@@ -10575,14 +10625,14 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            },
-            "delete": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            },
+            "delete": {
                 "description": "幂等。返回关注状态与统计。",
                 "produces": [
                     "application/json"
@@ -10626,16 +10676,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{username}/followers": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{username}/followers": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -10680,16 +10730,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/users/{username}/following": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/users/{username}/following": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -10734,16 +10784,16 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
-            }
-        },
-        "/watched": {
-            "get": {
+                },
                 "security": [
                     {
                         "BearerAuth": []
                     }
-                ],
+                ]
+            }
+        },
+        "/watched": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
@@ -10761,7 +10811,12 @@ const docTemplate = `{
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         }
     },
@@ -11729,6 +11784,55 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "sha": {
+                    "type": "string"
+                }
+            }
+        },
+        "pipeline.Graph": {
+            "type": "object",
+            "properties": {
+                "edges": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pipeline.GraphEdge"
+                    }
+                },
+                "image": {
+                    "type": "string"
+                },
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/pipeline.GraphNode"
+                    }
+                }
+            }
+        },
+        "pipeline.GraphEdge": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "pipeline.GraphNode": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "description": "start | step | parallel | sub | end",
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "when": {
                     "type": "string"
                 }
             }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/queue"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
@@ -163,7 +163,7 @@ func PushHandler(st *store.Store) func(webhooks.Event) {
 		}
 		if _, err := Trigger(st, TriggerOpts{Owner: ev.Owner, Repo: ev.Repo, SHA: ev.New, Ref: ref, By: ev.User, Event: "push"}); err != nil &&
 			!ignorableTriggerErr(err) {
-			log.Printf("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
+			logx.Infof("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
 		}
 		// 分支 push：若该分支是某个 open PR 的源分支，按 pull_request 事件再触发一次（synchronize）
 		if branch, ok := strings.CutPrefix(ev.Ref, "refs/heads/"); ok {
@@ -316,7 +316,7 @@ func executeRun(st *store.Store, job RunJob) {
 	if perr != nil {
 		// 拒绝运行（如挂载宿主路径/卷）记审计日志
 		if strings.Contains(perr.Error(), "volume") {
-			log.Printf("pipeline audit: REJECTED docker socket mount repo=%s/%s time=%s", owner, repo, time.Now().UTC().Format(time.RFC3339))
+			logx.Infof("pipeline audit: REJECTED docker socket mount repo=%s/%s time=%s", owner, repo, time.Now().UTC().Format(time.RFC3339))
 		}
 		fail("invalid %s: %v", FileName, perr)
 		return

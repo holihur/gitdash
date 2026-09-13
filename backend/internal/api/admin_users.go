@@ -4,8 +4,8 @@ package api
 
 import (
 	"errors"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
-	"log"
 	"net/http"
 	"strings"
 
@@ -92,7 +92,7 @@ func (a *API) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 		u.Email = email
 	}
-	log.Printf("admin %q created user %q", userFrom(r), username)
+	logx.Infof("admin %q created user %q", userFrom(r), username)
 	a.provisionProfileRepo(username)
 	writeJSON(w, http.StatusCreated, u)
 }
@@ -139,7 +139,7 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	log.Printf("admin %q reset password of user %q", userFrom(r), username)
+	logx.Infof("admin %q reset password of user %q", userFrom(r), username)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -166,7 +166,7 @@ func (a *API) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	log.Printf("admin %q deleted user %q", userFrom(r), username)
+	logx.Infof("admin %q deleted user %q", userFrom(r), username)
 	w.WriteHeader(http.StatusNoContent)
 }
 

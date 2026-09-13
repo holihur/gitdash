@@ -19,12 +19,21 @@ import (
 	"gitdash/backend/internal/store"
 )
 
+// testDispatcher 当前测试绑定的 Dispatcher（测试内单实例）。
+var testDispatcher *Dispatcher
+
 // bindQueue 为异步 webhook 投递绑定内存队列 + worker（drain 只负责入队）。
 func bindQueue(t *testing.T, st *store.Store) {
 	t.Helper()
-	Bind(st)
-	jobs.SetWebhookHandler(HandleJob)
-	jobs.Bind(st, queue.NewMemory(64, 2))
+	mgr := jobs.New(st, queue.NewMemory(64, 2))
+	testDispatcher = New(st, mgr)
+	mgr.SetWebhookHandler(testDispatcher.HandleJob)
+	mgr.Start()
+}
+
+// drain 测试包装：委托给已绑定的 Dispatcher。
+func drain(spoolDir string, _ *store.Store, handlers []func(Event)) {
+	testDispatcher.drain(spoolDir, handlers)
 }
 
 func TestDrainDeliversAndCleansSpool(t *testing.T) {

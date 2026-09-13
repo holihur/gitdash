@@ -27,6 +27,9 @@ English | 简体中文
 - **BYOK Copilot (MVP)**：在仓库上运行 AI copilot 会话；每个会话运行在独立 Docker 容器中，使用你自己的 Anthropic 兼容 API 密钥（自带密钥）——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
 - **用户头像**：上传 / 移除头像（PNG/JPEG/GIF/WebP，最大 2MB）；显示在顶栏、用户主页与个人资料页，未设置时回退为首字母
 - **同名仓库**：用户首次创建（注册 / 管理端 / OAuth）时自动创建公开的 `<用户名>/<用户名>` 仓库并初始化 README（`GITDASH_PROFILE_REPO=0` 关闭）
+- **结构化日志与链路追踪**：基于 `log/slog` 的日志（级别 + text/JSON 格式），支持滚动文件输出（`GITDASH_LOG_FILE`）；通过 OTLP 导出 OpenTelemetry trace（`OTEL_EXPORTER_OTLP_ENDPOINT`）
+- **流水线可视化**：流水线页渲染 `.gitdash.yml` 的步骤 DAG（含并行组）
+- **Markdown 支持 Mermaid**：` ```mermaid ` 代码块渲染为图表（按需懒加载）
 - **自托管 Runner**：部署 `gitdash-runner` agent 主动连接服务端执行流水线；`.gitdash.yml` 用 `runs-on` 标签指定目标 agent（个人/组织 scope、工作区快照流、日志回传、取消、掉线检测），详见 [docs/runners.zh-CN.md](docs/runners.zh-CN.md)
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
@@ -154,6 +157,14 @@ go run .
 | `GITDASH_PROFILE_REPO` | `1` | 用户首次创建时自动创建公开的 `<用户名>/<用户名>` 仓库（`0` 关闭） |
 | `GITDASH_COPILOT_IMAGE` | 空 | copilot 会话默认 Docker 镜像（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
 | `GITDASH_COPILOT_NETWORK` | `bridge` | copilot 会话容器网络（`none` 会禁用 LLM 访问） |
+| `GITDASH_LOG_LEVEL` | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
+| `GITDASH_LOG_FORMAT` | `text` | 日志格式：`text` 或 `json` |
+| `GITDASH_LOG_FILE` | 空 | 启用滚动文件日志（路径）；空则仅输出 stderr |
+| `GITDASH_LOG_MAX_SIZE_MB` | `100` | 单个日志文件达到该大小后滚动 |
+| `GITDASH_LOG_MAX_BACKUPS` | `7` | 保留的历史日志文件数 |
+| `GITDASH_LOG_MAX_AGE_DAYS` | `28` | 历史日志文件最长保留天数 |
+| `GITDASH_LOG_COMPRESS` | `true` | 压缩历史日志文件（gzip） |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | 启用 OpenTelemetry trace 导出（OTLP/HTTP，如 `http://localhost:4318`） |
 | `GITDASH_ADMIN_PASSWORD` | 空（关闭） | 设置后在**首次启动**创建管理员并启用 `/admin` 管理面板 |
 | `GITDASH_ADMIN_USER` | `admin` | 管理员用户名（配合上者） |
 | `GITDASH_SMTP_HOST` | 空（关闭） | SMTP 主机；设置后启用邮件通知/邮箱验证 |

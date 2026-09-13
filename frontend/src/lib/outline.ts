@@ -131,7 +131,7 @@ function cLikeOutline(lines: string[]): OutlineItem[] {
   // 类型声明
   const typeRe = /^\s*(?:public\s+|private\s+|protected\s+|internal\s+|static\s+|abstract\s+|sealed\s+)*(?:class|struct|enum|interface|record)\s+([A-Za-z_][A-Za-z0-9_]*)/;
   // 函数：返回类型 + 名称( 或 构造函数；避免 if/for/while/switch/catch
-  const funcRe = /^\s*(?:public\s+|private\s+|protected\s+|internal\s+|static\s+|virtual\s+|override\s+|final\s+|abstract\s+|async\s+|synchronized\s+)*(?:[A-Za-z_:][A-Za-z0-9_:<>,\[\]*&\s]*?)\s+([A-Za-z_~][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:\{|$)/;
+  const funcRe = /^\s*(?:public\s+|private\s+|protected\s+|internal\s+|static\s+|virtual\s+|override\s+|final\s+|abstract\s+|async\s+|synchronized\s+)*(?:[A-Za-z_:][A-Za-z0-9_:<>,[\]*&\s]*?)\s+([A-Za-z_~][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*(?:const\s*)?(?:\{|$)/;
   const keyword = /^\s*(if|for|while|switch|catch|return|new|sizeof|typeof)\b/;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

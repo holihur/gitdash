@@ -27,6 +27,9 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **BYOK copilot (MVP)**: run AI copilot sessions on a repo; each session runs in its own isolated Docker container and uses your own Anthropic-compatible API key (bring your own key) — see [docs/copilot.md](docs/copilot.md)
 - **User avatars**: upload / remove a profile picture (PNG/JPEG/GIF/WebP, max 2MB); shown in the header, user page and profile, with an initials fallback
 - **Profile repo**: a public `<username>/<username>` repo is created when an account is first created (register / admin / OAuth), initialized with a README (`GITDASH_PROFILE_REPO=0` disables)
+- **Structured logging & tracing**: `log/slog`-based logs with levels + text/JSON format, optional rotating file output (`GITDASH_LOG_FILE`), and OpenTelemetry tracing via OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`)
+- **Pipeline visualization**: the Pipeline tab renders the `.gitdash.yml` step DAG (parallel groups included)
+- **Mermaid in markdown**: ` ```mermaid ` code blocks render as diagrams (lazily loaded)
 - **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection) — see [docs/runners.md](docs/runners.md)
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
@@ -154,6 +157,14 @@ Environment variables (all optional):
 | `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<username>/<username>` repo on first account creation (`0` disables) |
 | `GITDASH_COPILOT_IMAGE` | empty | Default Docker image for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
 | `GITDASH_COPILOT_NETWORK` | `bridge` | Container network for copilot sessions (`none` disables LLM access) |
+| `GITDASH_LOG_LEVEL` | `info` | Log level: `debug` / `info` / `warn` / `error` |
+| `GITDASH_LOG_FORMAT` | `text` | Log format: `text` or `json` |
+| `GITDASH_LOG_FILE` | empty | Enable rotating file logging (path); empty logs to stderr only |
+| `GITDASH_LOG_MAX_SIZE_MB` | `100` | Rotate a log file once it reaches this size |
+| `GITDASH_LOG_MAX_BACKUPS` | `7` | Number of rotated files to keep |
+| `GITDASH_LOG_MAX_AGE_DAYS` | `28` | Maximum age of rotated files |
+| `GITDASH_LOG_COMPRESS` | `true` | gzip rotated log files |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Enable OpenTelemetry trace export (OTLP/HTTP, e.g. `http://localhost:4318`) |
 | `GITDASH_ADMIN_PASSWORD` | empty (off) | Set to create an admin on **first boot** and enable the `/admin` panel |
 | `GITDASH_ADMIN_USER` | `admin` | Admin username (used with the above) |
 | `GITDASH_SMTP_HOST` | empty (off) | SMTP host; enables email notifications / address verification |

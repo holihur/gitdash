@@ -518,6 +518,7 @@ export const en = {
     dslHint: "Custom YAML DSL: image + ordered steps (omit image to run directly on the host — requires the server to enable host execution). `on` selects automatic triggers (push/pull_request/schedule/workflow_dispatch, default push) and `schedule` holds cron expressions. Any failing step stops the run. The repository workspace is mounted at /workspace.",
     cancel: "Cancel",
     cancelled: "Cancel requested",
+    visualize: "Visualize",
   },
   runnerGuide: {
     title: "Runner setup guide",

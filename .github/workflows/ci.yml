@@ -209,6 +209,10 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      - name: Lint (eslint)
+        working-directory: frontend
+        run: pnpm run lint
+
       - name: Test (vitest)
         working-directory: frontend
         run: pnpm run test

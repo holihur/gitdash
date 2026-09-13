@@ -156,7 +156,6 @@ export default function CodeMirrorEditor({
     if (value !== current) {
       view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   return <div ref={host} className={className} style={{ overflow: "hidden" }} />;

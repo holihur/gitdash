@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,12 +21,14 @@ import (
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/queue"
 	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/sshserver"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/telemetry"
 	"gitdash/backend/internal/updater"
 	"gitdash/backend/internal/webhooks"
 )
@@ -77,26 +78,28 @@ func spoolWrite(dir string, ev webhooks.Event) {
 }
 
 func run() {
+	logx.Setup()
+	defer logx.Close()
 	dataDir := getenv("GITDASH_DATA", "./data")
 	httpAddr := getenv("GITDASH_HTTP_ADDR", ":8080")
 	sshAddr := getenv("GITDASH_SSH_ADDR", ":2222")
 	staticDir := getenv("GITDASH_STATIC", "")
 
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		log.Fatalf("create data dir: %v", err)
+		logx.Fatalf("create data dir: %v", err)
 	}
 	if err := gitsvc.Init(dataDir); err != nil {
-		log.Fatalf("init git service: %v", err)
+		logx.Fatalf("init git service: %v", err)
 	}
 	// 存量仓库补装 pre-receive hook（分支保护）
 	if err := gitsvc.EnsureHooks(); err != nil {
-		log.Printf("ensure hooks: %v", err)
+		logx.Infof("ensure hooks: %v", err)
 	}
 	if err := pipeline.Init(dataDir); err != nil {
-		log.Fatalf("init pipeline: %v", err)
+		logx.Fatalf("init pipeline: %v", err)
 	}
 	if err := copilot.Init(dataDir); err != nil {
-		log.Fatalf("init copilot: %v", err)
+		logx.Fatalf("init copilot: %v", err)
 	}
 
 	// 数据库：GITDASH_DB 为 postgres:// 连接串时用 PG，否则用 SQLite 文件（默认 data/gitdash.db）
@@ -109,7 +112,7 @@ func run() {
 		st, err = store.Open(filepath.Join(dataDir, "gitdash.db"))
 	}
 	if err != nil {
-		log.Fatalf("open store: %v", err)
+		logx.Fatalf("open store: %v", err)
 	}
 	// 包文件内容寻址 blob 存储
 	store.SetBlobDir(filepath.Join(dataDir, "packages-blobs"))
@@ -118,55 +121,55 @@ func run() {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("login-fails cleanup panic: %v", r)
+				logx.Infof("login-fails cleanup panic: %v", r)
 			}
 		}()
 		for {
 			if n, err := st.CleanupLoginFails(24 * time.Hour); err != nil {
-				log.Printf("login-fails cleanup: %v", err)
+				logx.Infof("login-fails cleanup: %v", err)
 			} else if n > 0 {
-				log.Printf("login-fails cleanup: removed %d expired rows", n)
+				logx.Infof("login-fails cleanup: removed %d expired rows", n)
 			}
 			if n, err := st.PruneDeliveries(time.Now().UTC().Add(-7 * 24 * time.Hour).Format(time.RFC3339)); err != nil {
-				log.Printf("webhook-deliveries cleanup: %v", err)
+				logx.Infof("webhook-deliveries cleanup: %v", err)
 			} else if n > 0 {
-				log.Printf("webhook-deliveries cleanup: removed %d old rows", n)
+				logx.Infof("webhook-deliveries cleanup: removed %d old rows", n)
 			}
 			if n, err := st.PruneOAuthStates(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				log.Printf("oauth-state cleanup: %v", err)
+				logx.Infof("oauth-state cleanup: %v", err)
 			} else if n > 0 {
-				log.Printf("oauth-state cleanup: removed %d expired states", n)
+				logx.Infof("oauth-state cleanup: removed %d expired states", n)
 			}
 			if n, err := st.PruneMFAChallenges(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				log.Printf("mfa-challenge cleanup: %v", err)
+				logx.Infof("mfa-challenge cleanup: %v", err)
 			} else if n > 0 {
-				log.Printf("mfa-challenge cleanup: removed %d expired challenges", n)
+				logx.Infof("mfa-challenge cleanup: removed %d expired challenges", n)
 			}
 			if n, err := st.PruneSessions(); err != nil {
-				log.Printf("session cleanup: %v", err)
+				logx.Infof("session cleanup: %v", err)
 			} else if n > 0 {
-				log.Printf("session cleanup: removed %d expired sessions", n)
+				logx.Infof("session cleanup: removed %d expired sessions", n)
 			}
 			if n, err := st.PruneNotifications(90 * 24 * time.Hour); err != nil {
-				log.Printf("notification cleanup: %v", err)
+				logx.Infof("notification cleanup: %v", err)
 			} else if n > 0 {
-				log.Printf("notification cleanup: removed %d old read notifications", n)
+				logx.Infof("notification cleanup: removed %d old read notifications", n)
 			}
 			time.Sleep(time.Hour)
 		}
 	}()
 
 	go func() {
-		log.Printf("git ssh server listening on %s", sshAddr)
+		logx.Infof("git ssh server listening on %s", sshAddr)
 		if err := sshserver.Serve(sshAddr, st, gitsvc.ReposDir(), dataDir); err != nil {
-			log.Fatalf("ssh server: %v", err)
+			logx.Fatalf("ssh server: %v", err)
 		}
 	}()
 
 	// 自动更新默认关闭；需显式 GITDASH_AUTO_UPDATE=1 且非 dev 版本
 	if autoUpdateEnabled() && version != "dev" {
 		interval := autoUpdateInterval()
-		log.Printf("auto-update enabled (interval %s)", interval)
+		logx.Infof("auto-update enabled (interval %s)", interval)
 		go autoUpdateLoop(interval)
 	}
 
@@ -180,39 +183,30 @@ func run() {
 			}
 			hash, err := bcrypt.GenerateFromPassword([]byte(adminPW), api.BcryptCost)
 			if err != nil {
-				log.Fatalf("admin bootstrap: %v", err)
+				logx.Fatalf("admin bootstrap: %v", err)
 			}
 			if err := st.CreateAdminUser(adminUser, string(hash)); err != nil {
-				log.Fatalf("admin bootstrap: %v", err)
+				logx.Fatalf("admin bootstrap: %v", err)
 			}
-			log.Printf("admin panel enabled: username %q (GITDASH_ADMIN_PASSWORD)", adminUser)
+			logx.Infof("admin panel enabled: username %q (GITDASH_ADMIN_PASSWORD)", adminUser)
 		}
 	}
 
 	a := api.New(st, version)
 	a.SetSSHPort(sshAddr)
 	a.SetCopilotManager(copilot.NewManager(st))
+	if shutdown, terr := telemetry.Setup(context.Background(), "gitdash", version); terr != nil {
+		logx.Warnf("telemetry setup: %v", terr)
+	} else {
+		defer func() { _ = shutdown(context.Background()) }()
+	}
 	sender := notify.NewSender()
 	a.SetEmailSender(sender)
 
-	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发）
-	go webhooks.Run(gitsvc.SpoolDir(), st, 2*time.Second, pipeline.PushHandler(st))
-
-	// API 侧事件 spool：issue/pull/评论事件（webhook 投递 + 邮件通知）
-	apiSpool := filepath.Join(dataDir, "webhooks-spool-api")
-	if err := os.MkdirAll(apiSpool, 0o755); err != nil {
-		log.Fatalf("create api spool dir: %v", err)
-	}
-	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
-	go webhooks.Run(apiSpool, st, 2*time.Second, notify.EmailHandler(st, sender), pipeline.PullHandler(st))
-
-	// webhook 投递异步化：spool 只负责入队，投递由任务队列 worker 执行。
-	webhooks.Bind(st)
-	jobs.SetWebhookHandler(webhooks.HandleJob)
-
-	// 流水线任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
+	// 流水线 / 任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
 	// runner（自托管 CI agent）功能需要 redis（跨实例派发与心跳）
 	var runnerHub *runner.Hub
+	var jobsQueue queue.Queue
 	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
 	if queueMode == "redis" || queueMode == "asynq" {
 		redisAddr := getenv("GITDASH_REDIS_ADDR", "127.0.0.1:6379")
@@ -220,21 +214,40 @@ func run() {
 		password := os.Getenv("GITDASH_REDIS_PASSWORD")
 		concurrency, _ := strconv.Atoi(getenv("GITDASH_QUEUE_CONCURRENCY", "4"))
 		pipeline.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, concurrency), nil)
-		// 导入 / mirror 任务独立 asynq 实例（Start 一次性注册 kinds，不能与 pipeline 共用）
-		jobs.Bind(st, queue.NewAsynq(redisAddr, password, redisDB, 2))
+		// 导入 / mirror / webhook 任务独立 asynq 实例（Start 一次性注册 kinds，不能与 pipeline 共用）
+		jobsQueue = queue.NewAsynq(redisAddr, password, redisDB, 2)
 		runnerHub = runner.NewHub(st, queue.NewRedisClient(redisAddr, password, redisDB))
 		pipeline.BindHub(runnerHub)
-		log.Printf("task queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
+		logx.Infof("task queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
 	} else {
 		pipeline.Bind(st, nil, nil)
-		jobs.Bind(st, queue.NewMemory(256, 2)) // 并发的 git 网络操作限 2
-		log.Printf("task queue: in-process")
+		jobsQueue = queue.NewMemory(256, 2) // 并发的 git 网络操作限 2
+		logx.Infof("task queue: in-process")
 	}
 	a.SetRunnerHub(runnerHub)
+
+	// 异步任务与 webhook 派发：依赖显式注入（无包级可变状态）
+	jobsMgr := jobs.New(st, jobsQueue)
+	dispatcher := webhooks.New(st, jobsMgr)
+	jobsMgr.SetWebhookHandler(dispatcher.HandleJob)
+	jobsMgr.Start()
+	a.SetJobsManager(jobsMgr)
+
+	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发）
+	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st))
+
+	// API 侧事件 spool：issue/pull/评论事件（webhook 投递 + 邮件通知）
+	apiSpool := filepath.Join(dataDir, "webhooks-spool-api")
+	if err := os.MkdirAll(apiSpool, 0o755); err != nil {
+		logx.Fatalf("create api spool dir: %v", err)
+	}
+	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
+	go dispatcher.Run(apiSpool, 2*time.Second, notify.EmailHandler(st, sender), pipeline.PullHandler(st))
+
 	// 定时触发：扫描已开启流水线的仓库，按 .gitdash.yml 的 schedule（cron）触发
 	go pipeline.StartScheduler(st, 30*time.Second)
 	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
-	jobs.RequeuePending()
+	jobsMgr.RequeuePending()
 
 	// 孤儿 pipeline run 回收：memory 队列重启后 pending/running 不会再执行，标记 failed；
 	// asynq（redis）模式任务持久化，只回收明显超时（>1h）的残留。
@@ -243,9 +256,9 @@ func run() {
 		orphanCutoff = time.Now().UTC().Add(time.Minute)
 	}
 	if n, err := st.FailStalePipelineRuns(orphanCutoff.Format(time.RFC3339)); err != nil {
-		log.Printf("pipeline orphan recovery: %v", err)
+		logx.Infof("pipeline orphan recovery: %v", err)
 	} else if n > 0 {
-		log.Printf("pipeline orphan recovery: marked %d stale runs as failed", n)
+		logx.Infof("pipeline orphan recovery: marked %d stale runs as failed", n)
 	}
 
 	if staticDir == "" {
@@ -260,7 +273,7 @@ func run() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigCh
-		log.Printf("received %s, shutting down...", sig)
+		logx.Infof("received %s, shutting down...", sig)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(ctx)
@@ -284,20 +297,20 @@ func run() {
 		go func() {
 			httpSrv := &http.Server{Addr: getenv("GITDASH_ACME_HTTP_ADDR", ":80"), Handler: m.HTTPHandler(nil)}
 			if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Printf("acme http server: %v", err)
+				logx.Infof("acme http server: %v", err)
 			}
 		}()
-		log.Printf("gitdash %s: https on %s (ACME %s) | ssh on %s | data in %s", version, httpAddr, strings.Join(acmeDomains, ","), sshAddr, dataDir)
+		logx.Infof("gitdash %s: https on %s (ACME %s) | ssh on %s | data in %s", version, httpAddr, strings.Join(acmeDomains, ","), sshAddr, dataDir)
 		serveErr = srv.ListenAndServeTLS("", "")
 	case tlsCert != "" && tlsKey != "":
-		log.Printf("gitdash %s: https on %s | ssh on %s | data in %s", version, httpAddr, sshAddr, dataDir)
+		logx.Infof("gitdash %s: https on %s | ssh on %s | data in %s", version, httpAddr, sshAddr, dataDir)
 		serveErr = srv.ListenAndServeTLS(tlsCert, tlsKey)
 	default:
-		log.Printf("gitdash %s: http on %s | ssh on %s | data in %s (set GITDASH_TLS_CERT/KEY or GITDASH_ACME_DOMAINS for HTTPS)", version, httpAddr, sshAddr, dataDir)
+		logx.Infof("gitdash %s: http on %s | ssh on %s | data in %s (set GITDASH_TLS_CERT/KEY or GITDASH_ACME_DOMAINS for HTTPS)", version, httpAddr, sshAddr, dataDir)
 		serveErr = srv.ListenAndServe()
 	}
 	if serveErr != nil && serveErr != http.ErrServerClosed {
-		log.Fatalf("server: %v", serveErr)
+		logx.Fatalf("server: %v", serveErr)
 	}
 }
 
@@ -412,9 +425,9 @@ func autoUpdateLoop(interval time.Duration) {
 		newVer, updated, err := updater.SelfUpdate(ctx, version)
 		cancel()
 		if err != nil {
-			log.Printf("auto-update: %v", err)
+			logx.Infof("auto-update: %v", err)
 		} else if updated {
-			log.Printf("auto-update: 已更新到 %s，进程退出以便重启加载新版本", newVer)
+			logx.Infof("auto-update: 已更新到 %s，进程退出以便重启加载新版本", newVer)
 			os.Exit(0)
 		}
 		time.Sleep(interval)

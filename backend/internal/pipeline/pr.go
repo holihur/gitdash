@@ -1,9 +1,8 @@
 package pipeline
 
 import (
-	"log"
-
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 )
@@ -55,6 +54,6 @@ func triggerPull(st *store.Store, pr store.PullRequest, by string) {
 		Ref: pr.SourceBranch, By: by, Event: "pull_request",
 	})
 	if err != nil && !ignorableTriggerErr(err) {
-		log.Printf("pipeline: pull_request trigger %s/%s#%d: %v", pr.Owner, pr.Repo, pr.Number, err)
+		logx.Infof("pipeline: pull_request trigger %s/%s#%d: %v", pr.Owner, pr.Repo, pr.Number, err)
 	}
 }

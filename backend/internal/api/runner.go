@@ -4,12 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/ssrf"
 	"gitdash/backend/internal/store"
@@ -73,7 +73,7 @@ func (a *API) createGlobalRunnerToken(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	log.Printf("runner audit: GLOBAL TOKEN issued by admin time=%s", time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: GLOBAL TOKEN issued by admin time=%s", time.Now().UTC().Format(time.RFC3339))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"token":      token,
 		"scope":      dto.Scope,
@@ -168,7 +168,7 @@ func (a *API) registerRunner(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	log.Printf("runner audit: REGISTER runner=%s scope=%q mode=%q url=%q time=%s", in.Name, scope, mode, reverseURL, time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: REGISTER runner=%s scope=%q mode=%q url=%q time=%s", in.Name, scope, mode, reverseURL, time.Now().UTC().Format(time.RFC3339))
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"runner": runnerDTO,
 		"secret": secret, // 仅此一次
@@ -228,7 +228,7 @@ func (a *API) deleteRunner(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	log.Printf("runner audit: DELETE runner=%s by=%s time=%s", name, me, time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: DELETE runner=%s by=%s time=%s", name, me, time.Now().UTC().Format(time.RFC3339))
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
 }
 
@@ -267,7 +267,7 @@ func (a *API) adminDeleteRunner(w http.ResponseWriter, r *http.Request) {
 		writeNotFound(w, "runner")
 		return
 	}
-	log.Printf("runner audit: DELETE runner=%s by=admin time=%s", name, time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: DELETE runner=%s by=admin time=%s", name, time.Now().UTC().Format(time.RFC3339))
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
 }
 

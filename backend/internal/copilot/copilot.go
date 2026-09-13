@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
 
@@ -111,7 +111,7 @@ func (m *Manager) Start(ctx context.Context, session store.CopilotSession) error
 		args = append(args, "sh", "-ec", cmd)
 	}
 
-	log.Printf("copilot audit: START session=%d repo=%s/%s image=%s byok=%d time=%s",
+	logx.Infof("copilot audit: START session=%d repo=%s/%s image=%s byok=%d time=%s",
 		session.ID, session.Owner, session.Repo, image, session.ByokID, time.Now().UTC().Format(time.RFC3339))
 	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
 	if err != nil {
@@ -123,7 +123,7 @@ func (m *Manager) Start(ctx context.Context, session store.CopilotSession) error
 // Stop 停止并删除会话容器（保留工作区，便于再次启动）。
 func (m *Manager) Stop(ctx context.Context, session store.CopilotSession) error {
 	name := ContainerName(session.ID)
-	log.Printf("copilot audit: STOP session=%d repo=%s/%s time=%s",
+	logx.Infof("copilot audit: STOP session=%d repo=%s/%s time=%s",
 		session.ID, session.Owner, session.Repo, time.Now().UTC().Format(time.RFC3339))
 	if err := dockerRmContext(ctx, name); err != nil {
 		// 容器不存在视为已停止

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 )
 
 // Executor 执行一次完整流水线（多步）：日志写入 logSink，返回 error 即整体失败。
@@ -212,7 +212,7 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	args = append(args, cfg.Image, "sh", "-ec", step.Run)
 
 	// 镜像拉取/运行审计日志
-	log.Printf("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
+	logx.Infof("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
 		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdout = logSink
@@ -240,7 +240,7 @@ func runHostStep(parent context.Context, workdir string, cfg *Config, step Step,
 	ctx, cancel := context.WithTimeout(parent, cfg.Timeout)
 	defer cancel()
 
-	log.Printf("pipeline audit: exec=host repo=%s/%s step=%q time=%s",
+	logx.Infof("pipeline audit: exec=host repo=%s/%s step=%q time=%s",
 		owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
 	cmd := exec.CommandContext(ctx, "sh", "-ec", step.Run)
 	cmd.Dir = workdir

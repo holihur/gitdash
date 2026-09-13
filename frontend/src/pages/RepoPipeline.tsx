@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, PauseCircle, Play, Terminal, XCircle } from "lucide-react";
-import { api, type PipelineRun, type PipelineRunStatus } from "@/lib/api";
+import { CheckCircle2, Loader2, PauseCircle, Play, Terminal, Workflow, XCircle } from "lucide-react";
+import { api, type PipelineGraph, type PipelineRun, type PipelineRunStatus } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import {
 import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
+import { MermaidDiagram } from "@/components/mermaid";
 
 export const PIPELINE_EXAMPLE = `image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行（需服务端开启）
 # on: [push, pull_request, schedule, workflow_dispatch]  # 自动触发白名单（默认仅 push）
@@ -57,6 +58,38 @@ function StatusBadge({ status }: { status: PipelineRunStatus }) {
   );
 }
 
+/** 把流水线图转为 Mermaid flowchart（mermaid 内部用 dagre 布局引擎排版，与 D2 默认引擎一致）。 */
+function toMermaid(g: PipelineGraph): string {
+  const id = (s: string) => "n" + s.replace(/[^a-zA-Z0-9]/g, "_");
+  const esc = (s: string) => s.replace(/"/g, "'");
+  const lines = ["flowchart TD"];
+  const terminals: string[] = [];
+  const parallels: string[] = [];
+  for (const n of g.graph.nodes) {
+    const lid = id(n.id);
+    const label = n.when ? `${n.label} (when: ${n.when})` : n.label;
+    if (n.kind === "start" || n.kind === "end") {
+      lines.push(`  ${lid}(["${esc(n.label)}"])`);
+      terminals.push(lid);
+    } else if (n.kind === "parallel") {
+      lines.push(`  ${lid}{{"${esc(label)}"}}`);
+      parallels.push(lid);
+    } else {
+      lines.push(`  ${lid}["${esc(label)}"]`);
+    }
+  }
+  for (const e of g.graph.edges) lines.push(`  ${id(e.from)} --> ${id(e.to)}`);
+  if (terminals.length) {
+    lines.push("  classDef gitdashTerminal fill:#6b7280,stroke:#374151,color:#fff;");
+    lines.push(`  class ${terminals.join(",")} gitdashTerminal;`);
+  }
+  if (parallels.length) {
+    lines.push("  classDef gitdashParallel fill:#2563eb,stroke:#1e40af,color:#fff;");
+    lines.push(`  class ${parallels.join(",")} gitdashParallel;`);
+  }
+  return lines.join("\n");
+}
+
 export default function RepoPipeline({ owner, name, role }: Props) {
   const { t, to, lang } = useI18n();
   const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
@@ -71,6 +104,9 @@ export default function RepoPipeline({ owner, name, role }: Props) {
   const [ref, setRef] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [runDetail, setRunDetail] = useState<PipelineRun | null>(null);
+  const [graph, setGraph] = useState<PipelineGraph | null>(null);
+  const [graphBusy, setGraphBusy] = useState(false);
+  const [graphErr, setGraphErr] = useState("");
   const timerRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
@@ -115,6 +151,19 @@ export default function RepoPipeline({ owner, name, role }: Props) {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setToggling(false);
+    }
+  };
+
+  const loadGraph = async () => {
+    setGraphBusy(true);
+    setGraphErr("");
+    try {
+      setGraph(await api.getPipelineGraph(owner, name, ref.trim() || undefined));
+    } catch (e) {
+      setGraphErr(apiErrorMsg(to, e));
+      setGraph(null);
+    } finally {
+      setGraphBusy(false);
     }
   };
 
@@ -220,6 +269,20 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                   </Button>
                 </div>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                disabled={graphBusy}
+                onClick={loadGraph}
+              >
+                {graphBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Workflow className="h-3.5 w-3.5" />
+                )}
+                {t("pipeline.visualize")}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -232,6 +295,26 @@ export default function RepoPipeline({ owner, name, role }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {(graph || graphErr || graphBusy) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t("pipeline.visualize")}</CardTitle>
+            <CardDescription>
+              {graph ? `${graph.ref}${graph.image ? " · " + graph.image : ""}` : t("pipeline.hint")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            {graphBusy ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">…</p>
+            ) : graphErr ? (
+              <p className="text-sm text-destructive">{graphErr}</p>
+            ) : graph ? (
+              <MermaidDiagram chart={toMermaid(graph)} />
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">

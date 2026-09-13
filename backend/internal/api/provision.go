@@ -1,11 +1,11 @@
 package api
 
 import (
-	"log"
 	"os"
 	"strings"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/logx"
 )
 
 // profileRepoEnabled 是否为新用户自动创建同名仓库。
@@ -26,23 +26,23 @@ func (a *API) provisionProfileRepo(username string) {
 	}
 	// git 服务未初始化（如未调用 gitsvc.Init）时跳过，避免在进程工作目录下建仓。
 	if gitsvc.ReposDir() == "" {
-		log.Printf("profile repo: git service not initialized; skip %s", username)
+		logx.Infof("profile repo: git service not initialized; skip %s", username)
 		return
 	}
 	if _, err := a.store.GetRepo(username, username); err == nil {
 		return
 	}
 	if _, err := a.store.CreateRepo(username, username, "", false); err != nil {
-		log.Printf("profile repo: create %s/%s: %v", username, username, err)
+		logx.Infof("profile repo: create %s/%s: %v", username, username, err)
 		return
 	}
 	_ = a.store.WatchRepo(username, username, username)
 	if err := gitsvc.CreateBare(username, username); err != nil {
 		_ = a.store.DeleteRepo(username, username)
-		log.Printf("profile repo: create bare %s/%s: %v", username, username, err)
+		logx.Infof("profile repo: create bare %s/%s: %v", username, username, err)
 		return
 	}
 	if err := gitsvc.InitTemplate(username, username); err != nil {
-		log.Printf("profile repo: init template %s/%s: %v", username, username, err)
+		logx.Infof("profile repo: init template %s/%s: %v", username, username, err)
 	}
 }

@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/ssrf"
 	"gitdash/backend/internal/store"
 )
@@ -56,11 +56,20 @@ var client = &http.Client{
 	},
 }
 
-// boundStore 供队列 worker（HandleJob）查 hook 与落投递记录（main 启动时 Bind）。
-var boundStore *store.Store
+// Enqueuer 异步任务入队接口（由 jobs.Manager 实现），避免与具体实现耦合。
+type Enqueuer interface {
+	EnqueueWebhook(jobs.WebhookPayload) error
+	EnqueueMirror(owner, repo, url, privateKey string) error
+}
 
-// Bind 绑定 store，供异步投递 worker 使用。必须在队列开始消费前调用。
-func Bind(st *store.Store) { boundStore = st }
+// Dispatcher 消费事件 spool 并调度投递。所有依赖显式注入（无包级可变状态）。
+type Dispatcher struct {
+	st *store.Store
+	q  Enqueuer
+}
+
+// New 创建 Dispatcher。q 为 nil 时仅记录日志、不入队。
+func New(st *store.Store, q Enqueuer) *Dispatcher { return &Dispatcher{st: st, q: q} }
 
 // allowHTTP 进程启动时读取一次，避免每次投递都查环境变量。
 var allowHTTP = os.Getenv("GITDASH_WEBHOOK_ALLOW_HTTP") != ""
@@ -94,19 +103,20 @@ func lookupIP(host string) ([]net.IP, error) {
 // Run 循环扫描 spool 目录并投递（main 中 go 启动）。
 // 投递失败落 webhook_deliveries 记录并按退避策略自动重试（最多 5 次）。
 // handlers 为额外的 push 事件消费者（如 pipeline），在删除 spool 文件前依次调用。
-func Run(spoolDir string, st *store.Store, interval time.Duration, handlers ...func(Event)) {
+func (d *Dispatcher) Run(spoolDir string, interval time.Duration, handlers ...func(Event)) {
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		drain(spoolDir, st, handlers)
+		d.drain(spoolDir, handlers)
 	}
 }
 
-func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
-	processRetries(st)
+func (d *Dispatcher) drain(spoolDir string, handlers []func(Event)) {
+	st := d.st
+	d.processRetries()
 	files, err := filepath.Glob(filepath.Join(spoolDir, "*.json"))
 	if err != nil {
 		return
@@ -129,20 +139,23 @@ func drain(spoolDir string, st *store.Store, handlers []func(Event)) {
 			// 异步投递：入队后立即返回，由队列 worker 投递（不阻塞 spool 排空与 CI 触发）
 			body, merr := json.Marshal(ev)
 			if merr != nil {
-				log.Printf("webhook: marshal event %s/%s: %v", ev.Owner, ev.Repo, merr)
+				logx.Infof("webhook: marshal event %s/%s: %v", ev.Owner, ev.Repo, merr)
 			} else {
 				for _, h := range hooks {
-					if err := jobs.EnqueueWebhook(jobs.WebhookPayload{HookID: h.ID, Body: body}); err != nil {
-						log.Printf("webhook: enqueue %s/%s hook %d: %v", ev.Owner, ev.Repo, h.ID, err)
+					if d.q == nil {
+						break
+					}
+					if err := d.q.EnqueueWebhook(jobs.WebhookPayload{HookID: h.ID, Body: body}); err != nil {
+						logx.Infof("webhook: enqueue %s/%s hook %d: %v", ev.Owner, ev.Repo, h.ID, err)
 					}
 				}
 			}
 		}
 		// push mirror 自动同步（仅 push 事件，走异步任务队列，避免无界 goroutine）
-		if ev.Event == "push" {
+		if ev.Event == "push" && d.q != nil {
 			if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
-				if err := jobs.EnqueueMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey); err != nil {
-					log.Printf("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, m.URL, err)
+				if err := d.q.EnqueueMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey); err != nil {
+					logx.Infof("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, m.URL, err)
 				}
 			}
 		}
@@ -202,21 +215,22 @@ const (
 )
 
 // HandleJob 队列 worker：投递一条 webhook（异步队列处理）。
-func HandleJob(payload []byte) error {
-	if boundStore == nil {
+func (d *Dispatcher) HandleJob(payload []byte) error {
+	st := d.st
+	if st == nil {
 		return nil
 	}
 	var p jobs.WebhookPayload
 	if err := json.Unmarshal(payload, &p); err != nil {
 		return nil //nolint:nilerr // 非法载荷直接丢弃
 	}
-	hook, ok, err := boundStore.GetWebhookByID(p.HookID)
+	hook, ok, err := st.GetWebhookByID(p.HookID)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		if p.DeliveryID > 0 {
-			_ = boundStore.UpdateDelivery(p.DeliveryID, "failed", 0, "webhook deleted", "")
+			_ = st.UpdateDelivery(p.DeliveryID, "failed", 0, "webhook deleted", "")
 		}
 		return nil
 	}
@@ -224,7 +238,7 @@ func HandleJob(payload []byte) error {
 	if err := json.Unmarshal(p.Body, &ev); err != nil {
 		return nil //nolint:nilerr // 非法载荷直接丢弃
 	}
-	deliverAndRecord(boundStore, hook, ev, p.DeliveryID, p.Attempts)
+	deliverAndRecord(st, hook, ev, p.DeliveryID, p.Attempts)
 	return nil
 }
 
@@ -275,29 +289,33 @@ func backoff(attempts int) (string, bool) {
 }
 
 // processRetries 处理到期的重试投递（每轮 drain 最多 50 条）。
-func processRetries(st *store.Store) {
+func (d *Dispatcher) processRetries() {
+	st := d.st
 	due, err := st.DueRetries(time.Now().UTC().Format(time.RFC3339), 50)
 	if err != nil {
 		return
 	}
-	for _, d := range due {
-		if _, ok, err := st.GetWebhookByID(d.HookID); err != nil {
+	for _, dly := range due {
+		if _, ok, err := st.GetWebhookByID(dly.HookID); err != nil {
 			continue
 		} else if !ok {
-			_ = st.UpdateDelivery(d.ID, "failed", 0, "webhook deleted", "")
+			_ = st.UpdateDelivery(dly.ID, "failed", 0, "webhook deleted", "")
 			continue
 		}
-		payload, err := st.GetDeliveryPayload(d.ID)
+		payload, err := st.GetDeliveryPayload(dly.ID)
 		if err != nil || payload == "" {
-			_ = st.UpdateDelivery(d.ID, "failed", 0, "payload missing", "")
+			_ = st.UpdateDelivery(dly.ID, "failed", 0, "payload missing", "")
 			continue
 		}
 		// 推后 next_retry，避免 worker 处理完成前被重复取出（不递增 attempts）。
-		_ = st.DeferDelivery(d.ID, time.Now().UTC().Add(2*baseBackoff).Format(time.RFC3339))
-		if err := jobs.EnqueueWebhook(jobs.WebhookPayload{
-			HookID: d.HookID, DeliveryID: d.ID, Attempts: d.Attempts, Body: []byte(payload),
+		_ = st.DeferDelivery(dly.ID, time.Now().UTC().Add(2*baseBackoff).Format(time.RFC3339))
+		if d.q == nil {
+			continue
+		}
+		if err := d.q.EnqueueWebhook(jobs.WebhookPayload{
+			HookID: dly.HookID, DeliveryID: dly.ID, Attempts: dly.Attempts, Body: []byte(payload),
 		}); err != nil {
-			log.Printf("webhook: enqueue retry %d: %v", d.ID, err)
+			logx.Infof("webhook: enqueue retry %d: %v", dly.ID, err)
 		}
 	}
 }
@@ -306,16 +324,16 @@ func processRetries(st *store.Store) {
 func deliver(url string, body []byte, secret string) (int, error) {
 	u, perr := urlpkg.Parse(url)
 	if perr != nil || blockedLinkLocal(u) {
-		log.Printf("webhook: blocked delivery to %q (ssrf guard)", url)
+		logx.Infof("webhook: blocked delivery to %q (ssrf guard)", url)
 		return 0, errors.New("blocked by ssrf guard")
 	}
 	if u.Scheme != "https" && !httpAllowed(u) {
-		log.Printf("webhook: rejected plaintext delivery to %q (use https or GITDASH_WEBHOOK_ALLOW_HTTP=1)", url)
+		logx.Infof("webhook: rejected plaintext delivery to %q (use https or GITDASH_WEBHOOK_ALLOW_HTTP=1)", url)
 		return 0, errors.New("plaintext http not allowed")
 	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		log.Printf("webhook: invalid url %q: %v", url, err)
+		logx.Infof("webhook: invalid url %q: %v", url, err)
 		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -327,7 +345,7 @@ func deliver(url string, body []byte, secret string) (int, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("webhook: deliver failed: %v", err)
+		logx.Infof("webhook: deliver failed: %v", err)
 		return 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()

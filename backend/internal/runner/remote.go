@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
 
@@ -86,7 +86,7 @@ func (h *Hub) RunRemote(ctx context.Context, runnerName string, job Job, workspa
 	if !acked {
 		return ErrAckTimeout
 	}
-	log.Printf("runner audit: DISPATCH runner=%s run=%d time=%s", runnerName, job.RunID, time.Now().UTC().Format(time.RFC3339))
+	logx.Infof("runner audit: DISPATCH runner=%s run=%d time=%s", runnerName, job.RunID, time.Now().UTC().Format(time.RFC3339))
 
 	// 流式推送工作区快照
 	if workspace != nil {

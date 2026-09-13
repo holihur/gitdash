@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { extractHeadings } from "@/lib/md-headings";
+import { renderMermaid } from "@/components/mermaid";
 
 export { extractHeadings };
 export type { MdHeading } from "@/lib/md-headings";
@@ -34,7 +35,7 @@ export function MarkdownView({ text, className }: { text: string; className?: st
     };
   }, [text]);
 
-  // 标题锚点 + 代码块高亮（highlight.js 仅在存在代码块时加载）
+  // 标题锚点 + Mermaid 图表 + 代码块高亮（highlight.js / mermaid 均按需加载）
   useEffect(() => {
     const root = ref.current;
     if (!root || !html) return;
@@ -44,12 +45,42 @@ export function MarkdownView({ text, className }: { text: string; className?: st
       if (!el.id) el.id = `md-heading-${i}`;
     });
 
-    const codes = Array.from(root.querySelectorAll<HTMLElement>("pre code")).filter(
-      (el) => el.textContent && el.textContent.length <= 200_000,
+    // Mermaid：把 ```mermaid 代码块换成图表容器；仅确有图表时才加载 mermaid（体积较大）。
+    const mermaidCodes = Array.from(
+      root.querySelectorAll<HTMLElement>("pre > code.language-mermaid"),
     );
-    if (codes.length === 0) return;
+    const mermaidNodes: HTMLElement[] = [];
+    for (const code of mermaidCodes) {
+      const pre = code.parentElement;
+      if (!pre) continue;
+      const div = document.createElement("div");
+      div.className = "mermaid";
+      // 用 textContent 写入源码（不解析 HTML，避免注入）
+      div.textContent = code.textContent ?? "";
+      pre.replaceWith(div);
+      mermaidNodes.push(div);
+    }
 
     let alive = true;
+    if (mermaidNodes.length > 0) {
+      void renderMermaid(mermaidNodes).catch(() => {
+        /* 非法图表：mermaid 会在容器内渲染错误提示 */
+      });
+    }
+
+    // 其余代码块高亮（mermaid 块已被换成 div，不在其中）
+    const codes = Array.from(root.querySelectorAll<HTMLElement>("pre code")).filter(
+      (el) =>
+        el.textContent &&
+        el.textContent.length <= 200_000 &&
+        !el.classList.contains("language-mermaid"),
+    );
+    if (codes.length === 0) {
+      return () => {
+        alive = false;
+      };
+    }
+
     void import("highlight.js/lib/common").then(({ default: hljs }) => {
       if (!alive) return;
       codes.forEach((el) => {
