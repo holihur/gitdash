@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -55,17 +56,17 @@ func TestValidatePATRestrictions(t *testing.T) {
 	if _, _, err := s.ValidatePAT(cidrTok, "192.0.2.9"); err != nil {
 		t.Fatalf("cidr pat allowed ip failed: %v", err)
 	}
-	if _, _, err := s.ValidatePAT(cidrTok, "10.1.2.3"); err != ErrPATIPDenied {
+	if _, _, err := s.ValidatePAT(cidrTok, "10.1.2.3"); !errors.Is(err, ErrPATIPDenied) {
 		t.Fatalf("cidr pat denied ip = %v, want ErrPATIPDenied", err)
 	}
 	// 空 ip（admin 检测路径）应跳过 IP 限制
 	if _, _, err := s.ValidatePAT(cidrTok, ""); err != nil {
 		t.Fatalf("cidr pat with empty ip should pass: %v", err)
 	}
-	if _, _, err := s.ValidatePAT(expiredTok, ""); err != ErrPATExpired {
+	if _, _, err := s.ValidatePAT(expiredTok, ""); !errors.Is(err, ErrPATExpired) {
 		t.Fatalf("expired pat = %v, want ErrPATExpired", err)
 	}
-	if _, _, err := s.ValidatePAT("bogus", ""); err != ErrNotFound {
+	if _, _, err := s.ValidatePAT("bogus", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("bogus token = %v, want ErrNotFound", err)
 	}
 }

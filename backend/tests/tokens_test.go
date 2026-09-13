@@ -41,7 +41,7 @@ func TestPATCreateValidation(t *testing.T) {
 	// 合法：CIDR + 未来过期时间
 	m := alice.mustStatus("POST", "/tokens",
 		map[string]any{"name": "ci", "scopes": []string{"repo"},
-			"cidrs": []string{" 192.0.2.0/24 ", "192.0.2.0/24", "2001:db8::1"},
+			"cidrs":      []string{" 192.0.2.0/24 ", "192.0.2.0/24", "2001:db8::1"},
 			"expires_at": time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)}, 201)
 	if m["token"] == nil || m["expires_at"] == nil || m["cidrs"] == nil {
 		t.Fatalf("created response missing fields: %v", m)
