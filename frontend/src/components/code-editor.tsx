@@ -1,13 +1,18 @@
 import { useEffect, useRef } from "react";
 import { EditorView, basicSetup } from "codemirror";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import { StreamLanguage } from "@codemirror/language";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { useTheme } from "@/lib/theme";
 
 // 语言包按需动态加载：仅在编辑对应扩展名的文件时才拉取对应 chunk
 async function loadLanguage(path: string): Promise<Extension | undefined> {
   const name = path.split("/").pop() ?? "";
-  if (name.toLowerCase() === "dockerfile") return undefined;
+  if (name.toLowerCase() === "dockerfile") {
+    return StreamLanguage.define(
+      (await import("@codemirror/legacy-modes/mode/dockerfile")).dockerFile,
+    );
+  }
   const ext = (name.split(".").pop() ?? "").toLowerCase();
   switch (ext) {
     case "ts":
@@ -22,6 +27,30 @@ async function loadLanguage(path: string): Promise<Extension | undefined> {
       return (await import("@codemirror/lang-javascript")).javascript();
     case "py":
       return (await import("@codemirror/lang-python")).python();
+    case "go":
+      return (await import("@codemirror/lang-go")).go();
+    case "yaml":
+    case "yml":
+      return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/yaml")).yaml);
+    case "sh":
+    case "bash":
+    case "zsh":
+      return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/shell")).shell);
+    case "toml":
+      return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/toml")).toml);
+    case "dockerfile":
+      return StreamLanguage.define(
+        (await import("@codemirror/legacy-modes/mode/dockerfile")).dockerFile,
+      );
+    case "ini":
+    case "cfg":
+    case "conf":
+    case "properties":
+      return StreamLanguage.define(
+        (await import("@codemirror/legacy-modes/mode/properties")).properties,
+      );
+    case "rb":
+      return StreamLanguage.define((await import("@codemirror/legacy-modes/mode/ruby")).ruby);
     case "md":
     case "markdown":
     case "mkd":
