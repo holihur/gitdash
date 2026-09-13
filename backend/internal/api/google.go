@@ -148,7 +148,7 @@ func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {
 	a.oauthIssueSession(w, r, username)
 }
 
-// sanitizeOAuthLogin 由第三方资料（邮箱 / 昵称）推断 5-32 位合法用户名：
+// sanitizeOAuthLogin 由第三方资料（邮箱 / 昵称）推断 4-32 位合法用户名：
 // 优先用 login（@ 前部分）；过短时拼接 externalID 补足；仍不合法则回退 g<externalID>。
 func sanitizeOAuthLogin(login, externalID string) string {
 	if u := sanitizeLoginPart(login); usernameRe.MatchString(u) {
@@ -160,19 +160,19 @@ func sanitizeOAuthLogin(login, externalID string) string {
 		if len(cand) > 32 {
 			cand = strings.TrimRight(cand[:32], "-_")
 		}
-		for len(cand) < 5 {
+		for len(cand) < 4 {
 			cand += "0"
 		}
 		if usernameRe.MatchString(cand) {
 			return cand
 		}
 	}
-	// 回退：g<externalID>，补足到 5 位
+	// 回退：g<externalID>，补足到 4 位
 	u := "g" + sanitizeLoginPart(externalID)
 	if len(u) > 32 {
 		u = strings.TrimRight(u[:32], "-_")
 	}
-	for len(u) < 5 {
+	for len(u) < 4 {
 		u += "0"
 	}
 	if !usernameRe.MatchString(u) {

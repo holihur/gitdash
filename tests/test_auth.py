@@ -28,6 +28,15 @@ def test_register_success(client_factory):
     assert len(body["token"]) > 20
 
 
+def test_register_min_username_length(client_factory):
+    # 用户名最少 4 位，4 位应注册成功
+    name = f"u{uuid4hex()[:3]}"
+    r = client_factory().post(
+        "/auth/register", json={"username": name, "password": PASSWORD}, expect=201
+    )
+    assert r.json()["username"] == name
+
+
 def test_register_then_me_then_logout(user_factory):
     username, token, client = user_factory()
     me = client.get("/me", expect=200).json()

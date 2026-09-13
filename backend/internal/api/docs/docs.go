@@ -10566,7 +10566,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "username": {
-                    "description": "用户名（5-32 位小写字母/数字/_/-，字母或数字开头）",
+                    "description": "用户名（4-32 位小写字母/数字/_/-，字母或数字开头）",
                     "type": "string"
                 }
             }
