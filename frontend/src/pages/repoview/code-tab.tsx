@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -85,11 +85,14 @@ function CodeSearch({
   name,
   refName,
   setParams,
+  actions,
 }: {
   owner: string;
   name: string;
   refName: string;
   setParams: (patch: Record<string, string | null>) => void;
+  /** 与搜索框同行的操作按钮（新建文件/文件夹等） */
+  actions?: ReactNode;
 }) {
   const { t } = useI18n();
   const [q, setQ] = useState("");
@@ -130,20 +133,23 @@ function CodeSearch({
 
   return (
     <div className="space-y-2">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={q}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              if (timer.current) clearTimeout(timer.current);
-              run(q);
-            }
-          }}
-          placeholder={t("search.placeholder")}
-          className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1 basis-52">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (timer.current) clearTimeout(timer.current);
+                run(q);
+              }
+            }}
+            placeholder={t("search.placeholder")}
+            className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+        {actions}
       </div>
       {results !== null && (
         <div className="rounded-lg border bg-card">
@@ -265,6 +271,16 @@ export default function CodeTab({
 
   // 大纲内容仅在文本文件（非 blame）时才有意义
   const showOutline = !emptyRepo && !blameParam && !!blob && blob.encoding === "utf-8";
+  // 目录列表默认不展示侧栏；打开文件后才显示左侧文件树（大纲同样需打开文件）
+  const showTree = !emptyRepo && !!blob;
+
+  // 回到目录列表（未打开文件）时关闭窄屏抽屉，避免残留
+  useEffect(() => {
+    if (!showTree) {
+      setTreeOpen(false);
+      setOutlineOpen(false);
+    }
+  }, [showTree]);
 
   // 抽屉内的跳转：操作后自动收起，避免遮挡内容
   const openDirFromTree = (dir: string) => {
@@ -306,17 +322,53 @@ export default function CodeTab({
     }
   }, [lineParam, blob]);
 
+  // 搜索框同行的操作区：窄屏的文件树/大纲按钮 + 新建文件/文件夹
+  const toolbarActions = (
+    <>
+      {showTree && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 lg:hidden"
+          onClick={() => setTreeOpen(true)}
+        >
+          <FolderTree className="h-4 w-4" />
+          {t("repo.files")}
+        </Button>
+      )}
+      {showOutline && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5 lg:hidden"
+          onClick={() => setOutlineOpen(true)}
+        >
+          <List className="h-4 w-4" />
+          {t("outline.title")}
+        </Button>
+      )}
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
+        <FilePlus2 className="h-4 w-4" />
+        {t("fops.newFile")}
+      </Button>
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-dir")}>
+        <FolderPlus className="h-4 w-4" />
+        {t("fops.newFolder")}
+      </Button>
+    </>
+  );
+
   return (
     <div
       className={cn(
         "grid gap-4",
-        !emptyRepo &&
+        showTree &&
           (showOutline
             ? "lg:grid-cols-[220px_minmax(0,1fr)_220px] xl:grid-cols-[230px_minmax(0,1fr)_250px]"
             : "lg:grid-cols-[230px_minmax(0,1fr)]"),
       )}
     >
-      {!emptyRepo && (
+      {showTree && (
         <aside className="sticky top-20 hidden self-start rounded-lg border bg-card lg:block">
           <div className="flex items-center gap-2 border-b px-3 py-2">
             <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -338,43 +390,17 @@ export default function CodeTab({
       )}
 
       <div className="min-w-0 space-y-4">
-      {!emptyRepo && (
-        <CodeSearch owner={owner} name={name} refName={refName} setParams={setParams} />
+      {!emptyRepo ? (
+        <CodeSearch
+          owner={owner}
+          name={name}
+          refName={refName}
+          setParams={setParams}
+          actions={toolbarActions}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center justify-end gap-2">{toolbarActions}</div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        {!emptyRepo && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 lg:hidden"
-            onClick={() => setTreeOpen(true)}
-          >
-            <FolderTree className="h-4 w-4" />
-            {t("repo.files")}
-          </Button>
-        )}
-        {showOutline && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 lg:hidden"
-            onClick={() => setOutlineOpen(true)}
-          >
-            <List className="h-4 w-4" />
-            {t("outline.title")}
-          </Button>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
-            <FilePlus2 className="h-4 w-4" />
-            {t("fops.newFile")}
-          </Button>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-dir")}>
-            <FolderPlus className="h-4 w-4" />
-            {t("fops.newFolder")}
-          </Button>
-        </div>
-      </div>
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
