@@ -14,6 +14,7 @@ export const en = {
     cmdNav: "Navigation",
     cmdRepos: "Repositories",
     cmdHint: "↑↓ navigate · ↵ select · Esc close",
+    signedInAs: "Signed in as",
   },
   nav: {
     repos: "Repositories",
@@ -757,6 +758,7 @@ export const en = {
     follow: "Follow",
     unfollow: "Unfollow",
     editProfile: "Edit profile",
+    yourProfile: "Your profile",
     repositories: "Repositories",
     noRepos: "No public repositories",
     noFollowers: "No followers yet",

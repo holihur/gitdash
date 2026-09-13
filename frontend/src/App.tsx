@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { Bell, Compass, GitBranch, KeyRound, Loader2, LogOut, FolderGit2, Building2, UserRound, Cpu, Package, Search } from "lucide-react";
+import { Bell, Compass, GitBranch, KeyRound, Loader2, FolderGit2, Building2, Cpu, Package, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
 import { CommandPalette } from "@/components/command-palette";
-import { ThemeToggle, LangToggle } from "@/components/header-controls";
+import { UserMenu } from "@/components/header-controls";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -224,20 +224,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             >
               <Search className="h-4 w-4" />
             </Button>
-            <ThemeToggle />
-            <LangToggle />
-            <Button asChild variant="ghost" size="sm" className="px-2 sm:px-3">
-              <Link to="/profile" className="flex items-center gap-2">
-                <UserRound className="h-4 w-4" />
-                <span className="hidden max-w-32 truncate font-medium text-foreground md:inline">
-                  {user}
-                </span>
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2 px-2 sm:px-3" onClick={onLogout}>
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">{t("app.logout")}</span>
-            </Button>
+            <UserMenu user={user} onLogout={onLogout} />
           </div>
         </div>
       </header>

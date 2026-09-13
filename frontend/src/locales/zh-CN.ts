@@ -16,6 +16,7 @@ export const zhCN: Messages = {
     cmdNav: "导航",
     cmdRepos: "仓库",
     cmdHint: "↑↓ 选择 · ↵ 确认 · Esc 关闭",
+    signedInAs: "已登录为",
   },
   nav: {
     repos: "仓库",
@@ -755,6 +756,7 @@ export const zhCN: Messages = {
     follow: "关注",
     unfollow: "取消关注",
     editProfile: "编辑资料",
+    yourProfile: "我的主页",
     repositories: "仓库",
     noRepos: "暂无公开仓库",
     noFollowers: "暂无粉丝",
