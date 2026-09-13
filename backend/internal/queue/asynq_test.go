@@ -98,6 +98,10 @@ func TestAsynqQueueTaskIDDedupe(t *testing.T) {
 
 	var count int
 	var mu sync.Mutex
+	// 首个任务阻塞在 release 上，保证 5 次入队都发生在任务仍 pending/active（task ID 仍存在）时，
+	// 否则任务可能在前几次入队完成前就执行完毕、ID 被清理，导致同 ID 再次入队而无法去重（竞态）。
+	release := make(chan struct{})
+	started := make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	q.Start(ctx, []JobKind{kind}, func(_ context.Context, j Job) error {
@@ -105,6 +109,11 @@ func TestAsynqQueueTaskIDDedupe(t *testing.T) {
 		count++
 		mu.Unlock()
 		_ = j
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		<-release
 		return nil
 	})
 
@@ -113,6 +122,13 @@ func TestAsynqQueueTaskIDDedupe(t *testing.T) {
 			t.Fatalf("enqueue: %v", err)
 		}
 	}
+	// 确认首个任务已开始处理后再放行，确保上面的入队全部在任务存活期间完成
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		t.Fatal("task never started")
+	}
+	close(release)
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		mu.Lock()
