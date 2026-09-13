@@ -99,21 +99,21 @@ curl -sf -H "$(auth_header "$TOKEN_A")" "$API/repos/demo/tree?ref=main&path=src"
 curl -sf -H "$(auth_header "$TOKEN_A")" "$API/repos/demo/blob?ref=main&path=README.md" | grep -q '# demo'
 curl -sf -H "$(auth_header "$TOKEN_A")" "$API/repos/demo/commits?ref=main" | grep -q 'initial commit'
 
-echo "== register bob, add his key"
-TOKEN_B="$(curl -sf -X POST -d '{"username":"bob","password":"bob-pass-1234"}' "$API/auth/register" | json_field token)"
+echo "== register bobby, add his key"
+TOKEN_B="$(curl -sf -X POST -d '{"username":"bobby","password":"bobby-pass-1234"}' "$API/auth/register" | json_field token)"
 [ -n "$TOKEN_B" ]
-ssh-keygen -q -t ed25519 -N "" -f "$TMP/key-bob"
+ssh-keygen -q -t ed25519 -N "" -f "$TMP/key-bobby"
 curl -sf -H "$(auth_header "$TOKEN_B")" -X POST \
-  -d "$(printf '{"name":"e2e","public_key":"%s"}' "$(cat "$TMP/key-bob.pub")")" "$API/keys" | grep -q 'SHA256'
+  -d "$(printf '{"name":"e2e","public_key":"%s"}' "$(cat "$TMP/key-bobby.pub")")" "$API/keys" | grep -q 'SHA256'
 
-echo "== bob cannot clone alice's repo via ssh"
-if GIT_SSH_COMMAND="ssh -i $TMP/key-bob -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-  git clone -q "ssh://git@$SSH_ADDR/alice/demo.git" "$TMP/bob-alice-demo" 2>/dev/null; then
+echo "== bobby cannot clone alice's repo via ssh"
+if GIT_SSH_COMMAND="ssh -i $TMP/key-bobby -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+  git clone -q "ssh://git@$SSH_ADDR/alice/demo.git" "$TMP/bobby-alice-demo" 2>/dev/null; then
   echo "expected clone failure for other user's repo" >&2
   exit 1
 fi
 
-echo "== bob cannot touch alice's repo via api"
+echo "== bobby cannot touch alice's repo via api"
 if curl -sf -H "$(auth_header "$TOKEN_B")" "$API/repos/demo" >/dev/null 2>&1; then
   echo "expected 404 for other user's repo" >&2
   exit 1
@@ -123,10 +123,10 @@ if curl -sf -H "$(auth_header "$TOKEN_B")" -X DELETE "$API/repos/demo" >/dev/nul
   exit 1
 fi
 
-echo "== same repo name across users is allowed (bob/demo)"
-curl -sf -H "$(auth_header "$TOKEN_B")" -X POST -d '{"name":"demo"}' "$API/repos" | grep -q '"owner":"bob"'
-GIT_SSH_COMMAND="ssh -i $TMP/key-bob -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-  git clone -q "ssh://git@$SSH_ADDR/bob/demo.git" "$TMP/bob-demo"
+echo "== same repo name across users is allowed (bobby/demo)"
+curl -sf -H "$(auth_header "$TOKEN_B")" -X POST -d '{"name":"demo"}' "$API/repos" | grep -q '"owner":"bobby"'
+GIT_SSH_COMMAND="ssh -i $TMP/key-bobby -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+  git clone -q "ssh://git@$SSH_ADDR/bobby/demo.git" "$TMP/bobby-demo"
 
 echo "== keys are per-user"
 curl -sf -H "$(auth_header "$TOKEN_A")" "$API/keys" | grep -q '"name":"e2e"'
