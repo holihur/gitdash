@@ -103,6 +103,9 @@ def _spawn_server(binary: Path, tmpdir: Path):
     for var in ("GITDASH_SMTP_HOST", "GITDASH_SMTP_PORT", "GITDASH_SMTP_USER", "GITDASH_SMTP_PASS", "GITDASH_SMTP_FROM"):
         if os.environ.get(var):
             env[var] = os.environ[var]
+    # copilot agent 运行时：允许测试显式指定（否则 gitdash 找同目录的 agent / PATH）
+    if os.environ.get("GITDASH_AGENT_BIN"):
+        env["GITDASH_COPILOT_AGENT_BIN"] = os.environ["GITDASH_AGENT_BIN"]
     _SPAWNED_SSH_PORT["port"] = ssh_port
     log_path = tmpdir / "server.log"
     log = open(log_path, "wb")

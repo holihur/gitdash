@@ -31,7 +31,7 @@ tasks:
 
   backend:
     desc: 构建后端二进制（不内嵌前端）
-    deps: [swagger]
+    deps: [swagger, agent]
     cmds:
       - go build -o {{.BIN}} .
     dir: backend
@@ -41,6 +41,16 @@ tasks:
       - go.sum
     generates:
       - /tmp/gitdash-server
+
+  agent:
+    desc: 构建 copilot agent 运行时（deps/agent）到 /tmp/agent
+    dir: deps/agent
+    cmds:
+      - go build -o /tmp/agent ./cmd/agent
+    sources:
+      - "**/*.go"
+    generates:
+      - /tmp/agent
 
   # ---------- 测试 ----------
   test:go:
@@ -52,12 +62,13 @@ tasks:
 
   test:api:
     desc: 黑盒 API 测试（pytest，需 uv；单独构建被测二进制）
-    deps: [build:pytest-bin]
+    deps: [build:pytest-bin, agent]
     dir: tests
     cmds:
       - uv run pytest -q
     env:
       GITDASH_BIN: "{{.PYTEST_BIN}}"
+      GITDASH_AGENT_BIN: /tmp/agent
 
   build:pytest-bin:
     deps: [swagger]
@@ -132,6 +143,7 @@ tasks:
     cmds:
       - bash scripts/embed-frontend.sh
       - go build -trimpath -o gitdash-server .
+      - cd ../deps/agent && go build -o ../../backend/agent ./cmd/agent
     dir: backend
 
   run:

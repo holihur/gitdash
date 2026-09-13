@@ -2,55 +2,18 @@ package copilot
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
 )
 
-// testBYOK 从仓库根目录的 assets.md 读取测试密钥；
-// 不存在时跳过（t.Skip），存在返回 (apiKey, baseURL, model)。
-func testBYOK(t *testing.T) (string, string, string) {
+func setup(t *testing.T) (*store.Store, store.CopilotSession) {
 	t.Helper()
-	candidates := []string{"../../../assets.md", "../../assets.md", "assets.md"}
-	for _, p := range candidates {
-		b, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		var key, base, model string
-		for _, line := range strings.Split(string(b), "\n") {
-			line = strings.TrimSpace(line)
-			switch {
-			case strings.HasPrefix(line, "LLM_APIKEY="):
-				key = strings.Trim(strings.TrimPrefix(line, "LLM_APIKEY="), `"'`)
-			case strings.HasPrefix(line, "LLM_BASE_URL="):
-				base = strings.Trim(strings.TrimPrefix(line, "LLM_BASE_URL="), `"'`)
-			case strings.HasPrefix(line, "LLM_MODEL="):
-				model = strings.Trim(strings.TrimPrefix(line, "LLM_MODEL="), `"'`)
-			}
-		}
-		if key != "" {
-			return key, base, model
-		}
-	}
-	t.Skip("no BYOK test key in assets.md (LLM_APIKEY=...); skipping")
-	return "", "", ""
-}
-
-// TestStartWithRealKey 有测试密钥 + docker 时执行真实编排：
-// 创建仓库/用户/BYOK 密钥 → Start 容器 → 校验注入的环境变量与工作区 → Stop/清理。
-func TestStartWithRealKey(t *testing.T) {
-	apiKey, baseURL, model := testBYOK(t)
-	if err := dockerAvailable(); err != nil {
-		t.Skipf("docker not available: %v", err)
-	}
-
 	dataDir := t.TempDir()
 	if err := gitsvc.Init(dataDir); err != nil {
 		t.Fatal(err)
@@ -58,66 +21,87 @@ func TestStartWithRealKey(t *testing.T) {
 	if err := Init(dataDir); err != nil {
 		t.Fatal(err)
 	}
-	owner, repo := "alice", "copilot-it"
+	owner, repo := "alice", "demo"
 	if err := gitsvc.CreateBare(owner, repo); err != nil {
 		t.Fatal(err)
 	}
 	if err := gitsvc.InitTemplate(owner, repo); err != nil {
 		t.Fatal(err)
 	}
-
-	st, err := store.Open(filepath.Join(dataDir, "gitdash.db"))
+	st, err := store.Open(filepath.Join(dataDir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.CreateUser(owner, "alice-pass-123"); err != nil {
 		t.Fatal(err)
 	}
-	byok, err := st.CreateByokKey(owner, "test", "anthropic", apiKey, baseURL, model)
+	byok, err := st.CreateByokKey(owner, "k", "anthropic", "sk-test", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	session, err := st.CreateCopilotSession(owner, repo, owner, byok.ID, "alpine:3.19",
-		"echo injected env", "echo base=$LLM_BASE_URL; echo model=$LLM_MODEL; echo keylen=${#LLM_APIKEY}; ls /workspace")
+	session, err := st.CreateCopilotSession(owner, repo, owner, byok.ID, "fix the bug")
 	if err != nil {
 		t.Fatal(err)
 	}
+	return st, session
+}
 
+// TestWorkspaceCloneAndClosedLoop 验证工作区克隆、会话分支与提交推送（闭环）。
+func TestWorkspaceCloneAndClosedLoop(t *testing.T) {
+	st, session := setup(t)
 	m := NewManager(st)
-	t.Cleanup(func() {
-		_ = m.Stop(context.Background(), session)
-		_ = m.RemoveWorkspace(session)
-	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-	if err := m.Start(ctx, session); err != nil {
-		t.Fatalf("start: %v", err)
-	}
-
-	// 轮询等容器结束（echo 命令立即退出）
-	deadline := time.Now().Add(30 * time.Second)
-	for time.Now().Before(deadline) {
-		if s, _ := m.DockerStatus(ctx, session); s == "exited" {
-			break
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	logs, err := m.Logs(ctx, session)
+	ws, branch, err := m.ensureWorkspace(session)
 	if err != nil {
-		t.Fatalf("logs: %v", err)
+		t.Fatalf("ensureWorkspace: %v", err)
 	}
-	if baseURL != "" && !strings.Contains(logs, baseURL) {
-		t.Fatalf("logs missing LLM_BASE_URL: %s", logs)
+	if branch != BranchName(session.ID) {
+		t.Fatalf("branch = %q", branch)
 	}
-	if model != "" && !strings.Contains(logs, model) {
-		t.Fatalf("logs missing LLM_MODEL: %s", logs)
+	if _, err := os.Stat(filepath.Join(ws, "README.md")); err != nil {
+		t.Fatalf("workspace not cloned: %v", err)
 	}
-	if !strings.Contains(logs, "keylen="+strconv.Itoa(len(apiKey))) {
-		t.Fatalf("logs missing LLM_APIKEY length: %s", logs)
+
+	// 模拟 agent 改动 → 提交推送。
+	if err := os.WriteFile(filepath.Join(ws, "hello.txt"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(logs, "README.md") {
-		t.Fatalf("workspace not mounted: %s", logs)
+	sha, err := m.commitAndPush(ws, branch, "add hello")
+	if err != nil {
+		t.Fatalf("commitAndPush: %v", err)
+	}
+	if sha == "" {
+		t.Fatal("empty head sha")
+	}
+
+	branches, err := gitsvc.Branches(session.Owner, session.Repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, b := range branches {
+		if b.Name == branch {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("branch %q not pushed: %+v", branch, branches)
+	}
+	out, err := gitsvc.GitOut(gitsvc.RepoPath(session.Owner, session.Repo), "show", branch+":hello.txt")
+	if err != nil || !strings.Contains(out, "hi") {
+		t.Fatalf("pushed content = %q, %v", out, err)
+	}
+}
+
+// TestRunTurnWithoutAgentBinary 验证找不到 agent 运行时时的清晰报错。
+func TestRunTurnWithoutAgentBinary(t *testing.T) {
+	t.Setenv("GITDASH_COPILOT_AGENT_BIN", filepath.Join(t.TempDir(), "does-not-exist"))
+	t.Setenv("GITDASH_COPILOT_AGENT_URL", "")
+	st, session := setup(t)
+	m := NewManager(st)
+
+	err := m.RunTurn(context.Background(), session, "hi", nil)
+	if !errors.Is(err, ErrAgentUnavailable) {
+		t.Fatalf("err = %v, want ErrAgentUnavailable", err)
 	}
 }

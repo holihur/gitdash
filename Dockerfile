@@ -13,10 +13,14 @@ RUN pnpm run build
 FROM golang:1.26-bookworm AS backend
 WORKDIR /src
 COPY backend/ backend/
+COPY deps/agent/ deps/agent/
 COPY --from=frontend /src/frontend/dist/ backend/internal/webui/dist/
 WORKDIR /src/backend
 ENV CGO_ENABLED=0
 RUN go build -trimpath -ldflags "-s -w" -o /out/gitdash .
+
+WORKDIR /src/deps/agent
+RUN go build -trimpath -ldflags "-s -w" -o /out/agent ./cmd/agent
 
 # ---------- 3) 运行时 ----------
 FROM debian:bookworm-slim
@@ -30,6 +34,7 @@ ENV GITDASH_DATA=/data \
     GITDASH_SSH_ADDR=:2222
 
 COPY --from=backend /out/gitdash /usr/local/bin/gitdash
+COPY --from=backend /out/agent /usr/local/bin/agent
 
 RUN mkdir -p /data && chown -R gitdash:gitdash /data
 

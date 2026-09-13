@@ -24,7 +24,7 @@ English | 简体中文
 - **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）提供私有包发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md)
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；任务默认进程内执行，也可走 Redis（asynq）持久化队列
-- **BYOK Copilot (MVP)**：在仓库上运行 AI copilot 会话；每个会话运行在独立 Docker 容器中，使用你自己的 Anthropic 兼容 API 密钥（自带密钥）——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
+- **BYOK Copilot**：与运行在仓库检出副本中的独立 agent 运行时（由 `deps/agent` 子模块构建的 `agent` 二进制）对话；它能读、改、执行命令，每轮结束后 gitdash 会把改动提交并推送到 `copilot/session-<id>` 分支——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
 - **用户头像**：上传 / 移除头像（PNG/JPEG/GIF/WebP，最大 2MB）；显示在顶栏、用户主页与个人资料页，未设置时回退为首字母
 - **同名仓库**：用户首次创建（注册 / 管理端 / OAuth）时自动创建公开的 `<用户名>/<用户名>` 仓库并初始化 README（`GITDASH_PROFILE_REPO=0` 关闭）
 - **结构化日志与链路追踪**：基于 `log/slog` 的日志（级别 + text/JSON 格式），支持滚动文件输出（`GITDASH_LOG_FILE`）；通过 OTLP 导出 OpenTelemetry trace（`OTEL_EXPORTER_OTLP_ENDPOINT`）
@@ -155,8 +155,8 @@ go run .
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
 | `GITDASH_PROFILE_REPO` | `1` | 用户首次创建时自动创建公开的 `<用户名>/<用户名>` 仓库（`0` 关闭） |
-| `GITDASH_COPILOT_IMAGE` | 空 | copilot 会话默认 Docker 镜像（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
-| `GITDASH_COPILOT_NETWORK` | `bridge` | copilot 会话容器网络（`none` 会禁用 LLM 访问） |
+| `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent` / PATH | copilot 会话使用的 agent 运行时路径（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
+| `GITDASH_COPILOT_AGENT_URL` | 空 | 使用已在运行的 agent（`http://host:port`），而不是每会话拉起一个 |
 | `GITDASH_LOG_LEVEL` | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
 | `GITDASH_LOG_FORMAT` | `text` | 日志格式：`text` 或 `json` |
 | `GITDASH_LOG_FILE` | 空 | 启用滚动文件日志（路径）；空则仅输出 stderr |

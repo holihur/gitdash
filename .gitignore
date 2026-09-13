@@ -3,6 +3,7 @@ node_modules/
 frontend/dist/
 backend/gitdash-server
 backend/gitdash-server-e2e
+backend/agent
 backend/static/
 backend/internal/webui/dist/*
 !backend/internal/webui/dist/.gitkeep

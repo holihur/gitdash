@@ -455,21 +455,34 @@ export interface ByokKey {
   updated_at: string;
 }
 
-export type CopilotStatus = "created" | "running" | "stopped" | "failed";
+export type CopilotStatus = "idle" | "running" | "failed" | "created" | "stopped";
 
 export interface CopilotSession {
   id: number;
   created_by: string;
   byok_id: number;
-  image: string;
   prompt: string;
-  command?: string;
+  branch?: string;
+  head_sha?: string;
   status: CopilotStatus;
   error?: string;
   created_at: string;
   updated_at: string;
-  /** 仅详情返回 */
-  log?: string;
+}
+
+/** 一次工具调用（对话历史里展示）。 */
+export interface CopilotTool {
+  name: string;
+  input?: string;
+  result?: string;
+  is_error?: boolean;
+}
+
+/** copilot 对话历史里的一条消息。 */
+export interface CopilotMessage {
+  role: "user" | "assistant";
+  text?: string;
+  tools?: CopilotTool[];
 }
 
 export type NotifKind = "issue" | "pull";

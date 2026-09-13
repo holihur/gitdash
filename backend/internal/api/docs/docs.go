@@ -5629,7 +5629,7 @@ const docTemplate = `{
                 "summary": "创建 copilot 会话",
                 "parameters": [
                     {
-                        "description": "byok_id/image/prompt/command",
+                        "description": "byok_id/prompt",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -5702,20 +5702,37 @@ const docTemplate = `{
                 ]
             }
         },
-        "/users/{owner}/repos/{name}/copilots/{id}/start": {
-            "post": {
+        "/users/{owner}/repos/{name}/copilots/{id}/chat": {
+            "get": {
+                "tags": [
+                    "copilot"
+                ],
+                "summary": "copilot 双向聊天（WebSocket）",
+                "responses": {},
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/copilots/{id}/messages": {
+            "get": {
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "copilot"
                 ],
-                "summary": "启动 copilot 会话",
+                "summary": "获取 copilot 对话历史",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/store.CopilotSession"
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/copilot.ChatMessage"
+                            }
                         }
                     }
                 },
@@ -5734,7 +5751,7 @@ const docTemplate = `{
                 "tags": [
                     "copilot"
                 ],
-                "summary": "停止 copilot 会话",
+                "summary": "取消 copilot 当前轮次",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11012,12 +11029,6 @@ const docTemplate = `{
                 "byok_id": {
                     "type": "integer"
                 },
-                "command": {
-                    "type": "string"
-                },
-                "image": {
-                    "type": "string"
-                },
                 "prompt": {
                     "type": "string"
                 }
@@ -11666,6 +11677,40 @@ const docTemplate = `{
                 }
             }
         },
+        "copilot.ChatMessage": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "tools": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/copilot.ToolEvent"
+                    }
+                }
+            }
+        },
+        "copilot.ToolEvent": {
+            "type": "object",
+            "properties": {
+                "input": {
+                    "type": "string"
+                },
+                "is_error": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                }
+            }
+        },
         "gitsvc.Blame": {
             "type": "object",
             "properties": {
@@ -11956,11 +12001,11 @@ const docTemplate = `{
         "store.CopilotSession": {
             "type": "object",
             "properties": {
+                "branch": {
+                    "type": "string"
+                },
                 "byok_id": {
                     "type": "integer"
-                },
-                "command": {
-                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -11971,11 +12016,11 @@ const docTemplate = `{
                 "error": {
                     "type": "string"
                 },
+                "head_sha": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
-                },
-                "image": {
-                    "type": "string"
                 },
                 "prompt": {
                     "type": "string"

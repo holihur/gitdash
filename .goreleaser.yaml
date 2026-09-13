@@ -37,6 +37,22 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.version={{ .Version }}
+  # Copilot agent 运行时（deps/agent 子模块，实现 copilot-api/1）
+  - id: agent
+    dir: deps/agent
+    main: ./cmd/agent
+    binary: agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
 
 archives:
   - formats: [tar.gz]

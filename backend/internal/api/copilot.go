@@ -1,16 +1,21 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/coder/websocket"
 
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/store"
 )
 
-// SetCopilotManager 注入 copilot Docker 编排器（main 启动时注入）。
+// SetCopilotManager 注入 copilot 编排器（main 启动时注入）。
 func (a *API) SetCopilotManager(m *copilot.Manager) { a.copilotMgr = m }
 
 // ---- BYOK（bring your own key）----
@@ -158,10 +163,8 @@ func (a *API) deleteByok(w http.ResponseWriter, r *http.Request) {
 // ---- copilot sessions ----
 
 type copilotCreateReq struct {
-	ByokID  int64  `json:"byok_id"`
-	Image   string `json:"image"`
-	Prompt  string `json:"prompt"`
-	Command string `json:"command"`
+	ByokID int64  `json:"byok_id"`
+	Prompt string `json:"prompt"`
 }
 
 // listCopilots 列出仓库的 copilot 会话。
@@ -182,29 +185,16 @@ func (a *API) listCopilots(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	// 尽力而为地回读容器状态，保持 UI 准确（docker 不可用时保持 DB 状态）
-	for i := range sessions {
-		if a.copilotMgr == nil {
-			continue
-		}
-		if s, err := a.copilotMgr.DockerStatus(r.Context(), sessions[i]); err == nil && s != "" {
-			next := dockerToStatus(s)
-			if next != "" && next != sessions[i].Status {
-				_ = a.store.SetCopilotSessionStatus(owner, name, sessions[i].ID, next, sessions[i].Error)
-				sessions[i].Status = next
-			}
-		}
-	}
 	writeJSON(w, http.StatusOK, sessions)
 }
 
-// createCopilot 创建并启动一个 copilot 会话（独立 Docker 容器）。
+// createCopilot 创建一个 copilot 会话（嵌入式 agent，无需镜像）。
 //
 //	@Summary     创建 copilot 会话
 //	@Tags        copilot
 //	@Accept      json
 //	@Produce     json
-//	@Param       body body copilotCreateReq true "byok_id/image/prompt/command"
+//	@Param       body body copilotCreateReq true "byok_id/prompt"
 //	@Success     201 {object} store.CopilotSession
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/copilots [post]
@@ -218,16 +208,9 @@ func (a *API) createCopilot(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	in.Image = strings.TrimSpace(in.Image)
-	if in.Image == "" {
-		in.Image = copilot.DefaultImage()
-	}
-	if in.Image == "" {
-		writeCode(w, http.StatusBadRequest, "image_required", "image is required (set GITDASH_COPILOT_IMAGE on the server or provide image)")
-		return
-	}
-	if len(in.Prompt) > 32<<10 || len(in.Command) > 32<<10 {
-		writeCode(w, http.StatusBadRequest, "too_long", "prompt/command too long")
+	in.Prompt = strings.TrimSpace(in.Prompt)
+	if len(in.Prompt) > 32<<10 {
+		writeCode(w, http.StatusBadRequest, "too_long", "prompt too long")
 		return
 	}
 	byok, err := a.store.GetByokKey(me, in.ByokID)
@@ -243,17 +226,17 @@ func (a *API) createCopilot(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "byok_key_empty", "byok key has no api_key")
 		return
 	}
-
-	session, err := a.store.CreateCopilotSession(owner, name, me, in.ByokID, in.Image, in.Prompt, in.Command)
+	session, err := a.store.CreateCopilotSession(owner, name, me, in.ByokID, in.Prompt)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	session = a.startCopilotSession(r, session)
+	_ = a.store.SetCopilotSessionGit(owner, name, session.ID, copilot.BranchName(session.ID), "")
+	session.Branch = copilot.BranchName(session.ID)
 	writeJSON(w, http.StatusCreated, session)
 }
 
-// getCopilot 获取会话详情（含容器日志）。
+// getCopilot 获取会话详情。
 //
 //	@Summary     获取 copilot 会话
 //	@Tags        copilot
@@ -270,29 +253,51 @@ func (a *API) getCopilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	resp := map[string]any{
-		"id": session.ID, "created_by": session.CreatedBy, "byok_id": session.ByokID,
-		"image": session.Image, "prompt": session.Prompt, "command": session.Command,
-		"status": session.Status, "error": session.Error,
-		"created_at": session.CreatedAt, "updated_at": session.UpdatedAt,
-	}
-	if a.copilotMgr != nil {
-		if log, err := a.copilotMgr.Logs(r.Context(), session); err == nil {
-			resp["log"] = log
-		}
-	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, session)
 }
 
-// startCopilot 启动会话容器。
+// copilotMessages 返回会话的对话历史（前端进入会话时回放）。
 //
-//	@Summary     启动 copilot 会话
+//	@Summary     获取 copilot 对话历史
 //	@Tags        copilot
 //	@Produce     json
-//	@Success     200 {object} store.CopilotSession
 //	@Security    BearerAuth
-//	@Router      /users/{owner}/repos/{name}/copilots/{id}/start [post]
-func (a *API) startCopilot(w http.ResponseWriter, r *http.Request) {
+//	@Success     200 {array} copilot.ChatMessage
+//	@Router      /users/{owner}/repos/{name}/copilots/{id}/messages [get]
+func (a *API) copilotMessages(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	session, ok := a.loadCopilotSession(w, r, owner, name)
+	if !ok {
+		return
+	}
+	if a.copilotMgr == nil {
+		writeJSON(w, http.StatusOK, []copilot.ChatMessage{})
+		return
+	}
+	msgs, err := a.copilotMgr.Messages(r.Context(), session)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, msgs)
+}
+
+type copilotChatIn struct {
+	Type string `json:"type"` // user | cancel
+	Text string `json:"text"`
+}
+
+// copilotChat 是会话的双向聊天 WebSocket：客户端发送 user/cancel 消息，
+// 服务端流式回传 delta / tool_start / tool_end / done / error / status。
+//
+//	@Summary     copilot 双向聊天（WebSocket）
+//	@Tags        copilot
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/copilots/{id}/chat [get]
+func (a *API) copilotChat(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
 		return
@@ -301,13 +306,64 @@ func (a *API) startCopilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	session = a.startCopilotSession(r, session)
-	writeJSON(w, http.StatusOK, session)
+	mgr := a.copilotMgr
+	if mgr == nil {
+		writeCode(w, http.StatusServiceUnavailable, "copilot_unavailable", "copilot manager not configured")
+		return
+	}
+
+	ws, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer func() { _ = ws.Close(websocket.StatusNormalClosure, "") }()
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	incoming := make(chan string, 8)
+	go readCopilotChat(ctx, ws, incoming, func() { mgr.Cancel(ctx, session) })
+
+	if history, err := mgr.Messages(ctx, session); err == nil {
+		_ = writeCopilotChat(ctx, ws, map[string]any{"type": copilot.EventHistory, "messages": history})
+	}
+	_ = writeCopilotChat(ctx, ws, copilot.Event{Type: copilot.EventStatus, Status: "idle"})
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case text, open := <-incoming:
+			if !open {
+				return
+			}
+			text = strings.TrimSpace(text)
+			if text == "" {
+				continue
+			}
+			_ = a.store.SetCopilotSessionStatus(owner, name, session.ID, "running", "")
+			_ = writeCopilotChat(ctx, ws, copilot.Event{Type: copilot.EventStatus, Status: "running"})
+			runErr := mgr.RunTurn(ctx, session, text, func(ev copilot.Event) {
+				_ = writeCopilotChat(ctx, ws, ev)
+			})
+			status, errMsg := "idle", ""
+			if runErr != nil {
+				if errors.Is(runErr, context.Canceled) {
+					_ = writeCopilotChat(ctx, ws, copilot.Event{Type: copilot.EventError, Error: "canceled"})
+				} else {
+					status, errMsg = "failed", runErr.Error()
+					_ = writeCopilotChat(ctx, ws, copilot.Event{Type: copilot.EventError, Error: errMsg})
+				}
+			}
+			_ = a.store.SetCopilotSessionStatus(owner, name, session.ID, status, errMsg)
+			_ = writeCopilotChat(ctx, ws, copilot.Event{Type: copilot.EventStatus, Status: status})
+		}
+	}
 }
 
-// stopCopilot 停止会话容器（保留工作区）。
+// stopCopilot 取消会话正在运行的一轮对话。
 //
-//	@Summary     停止 copilot 会话
+//	@Summary     取消 copilot 当前轮次
 //	@Tags        copilot
 //	@Produce     json
 //	@Success     200 {object} store.CopilotSession
@@ -323,18 +379,15 @@ func (a *API) stopCopilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.copilotMgr != nil {
-		if err := a.copilotMgr.Stop(r.Context(), session); err != nil {
-			internalError(w, err)
-			return
-		}
+		a.copilotMgr.Cancel(r.Context(), session)
 	}
-	_ = a.store.SetCopilotSessionStatus(owner, name, session.ID, "stopped", "")
-	session.Status = "stopped"
+	_ = a.store.SetCopilotSessionStatus(owner, name, session.ID, "idle", "")
+	session.Status = "idle"
 	session.Error = ""
 	writeJSON(w, http.StatusOK, session)
 }
 
-// deleteCopilot 删除会话（容器 + 工作区 + 记录）。
+// deleteCopilot 删除会话（工作区 + 对话历史 + 记录）。
 //
 //	@Summary     删除 copilot 会话
 //	@Tags        copilot
@@ -352,8 +405,7 @@ func (a *API) deleteCopilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.copilotMgr != nil {
-		_ = a.copilotMgr.Stop(r.Context(), session)
-		_ = a.copilotMgr.RemoveWorkspace(session)
+		a.copilotMgr.RemoveWorkspace(session)
 	}
 	if err := a.store.DeleteCopilotSession(owner, name, session.ID); err != nil {
 		internalError(w, err)
@@ -362,7 +414,7 @@ func (a *API) deleteCopilot(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
-// loadCopilotSession 加载会话并按容器状态回写 DB。
+// loadCopilotSession 加载会话。
 func (a *API) loadCopilotSession(w http.ResponseWriter, r *http.Request, owner, name string) (store.CopilotSession, bool) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -378,45 +430,47 @@ func (a *API) loadCopilotSession(w http.ResponseWriter, r *http.Request, owner, 
 		internalError(w, err)
 		return store.CopilotSession{}, false
 	}
-	if a.copilotMgr != nil {
-		if s, err := a.copilotMgr.DockerStatus(r.Context(), session); err == nil && s != "" {
-			if next := dockerToStatus(s); next != "" && next != session.Status {
-				_ = a.store.SetCopilotSessionStatus(owner, name, id, next, session.Error)
-				session.Status = next
-			}
-		}
-	}
 	return session, true
 }
 
-// startCopilotSession 启动会话并回写状态（失败时标记 failed）；返回更新后的会话。
-func (a *API) startCopilotSession(r *http.Request, session store.CopilotSession) store.CopilotSession {
-	if a.copilotMgr == nil {
-		_ = a.store.SetCopilotSessionStatus(session.Owner, session.Repo, session.ID, "failed", "copilot manager not configured")
-		session.Status = "failed"
-		session.Error = "copilot manager not configured"
-		return session
+// ---- WebSocket 助手 ----
+
+// readCopilotChat 读取客户端消息；收到 user 文本投入 out，收到 cancel 调用 onCancel。
+// 连接关闭或出错时关闭 out。
+func readCopilotChat(ctx context.Context, ws *websocket.Conn, out chan<- string, onCancel func()) {
+	defer close(out)
+	for {
+		typ, data, err := ws.Read(ctx)
+		if err != nil {
+			return
+		}
+		if typ != websocket.MessageText {
+			continue
+		}
+		var in copilotChatIn
+		if json.Unmarshal(data, &in) != nil {
+			continue
+		}
+		switch in.Type {
+		case "cancel":
+			onCancel()
+		case "user":
+			select {
+			case out <- in.Text:
+			case <-ctx.Done():
+				return
+			}
+		}
 	}
-	if err := a.copilotMgr.Start(r.Context(), session); err != nil {
-		msg := err.Error()
-		_ = a.store.SetCopilotSessionStatus(session.Owner, session.Repo, session.ID, "failed", msg)
-		session.Status = "failed"
-		session.Error = msg
-		return session
-	}
-	_ = a.store.SetCopilotSessionStatus(session.Owner, session.Repo, session.ID, "running", "")
-	session.Status = "running"
-	session.Error = ""
-	return session
 }
 
-// dockerToStatus 把 docker inspect 的状态映射到会话状态。
-func dockerToStatus(s string) string {
-	switch s {
-	case "running":
-		return "running"
-	case "exited", "created", "paused", "dead", "removing", "":
-		return "stopped"
+// writeCopilotChat 序列化并写入一条下行消息（带写超时）。
+func writeCopilotChat(ctx context.Context, ws *websocket.Conn, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
 	}
-	return ""
+	wctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return ws.Write(wctx, websocket.MessageText, b)
 }

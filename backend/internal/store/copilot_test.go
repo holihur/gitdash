@@ -85,18 +85,26 @@ func TestCopilotSessionsCRUD(t *testing.T) {
 	_, _ = s.CreateUser("alice", "alice-pass-123")
 	key, _ := s.CreateByokKey("alice", "k", "openai", "sk-a", "", "")
 
-	cs, err := s.CreateCopilotSession("alice", "repo1", "alice", key.ID, "some/image:latest", "fix the bug", "")
+	cs, err := s.CreateCopilotSession("alice", "repo1", "alice", key.ID, "fix the bug")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cs.Status != "created" || cs.ByokID != key.ID || cs.CreatedBy != "alice" {
+	if cs.Status != "idle" || cs.ByokID != key.ID || cs.CreatedBy != "alice" {
 		t.Fatalf("unexpected session: %+v", cs)
+	}
+
+	if err := s.SetCopilotSessionGit("alice", "repo1", cs.ID, "copilot/session-1", "deadbeef"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetCopilotSession("alice", "repo1", cs.ID)
+	if err != nil || got.Branch != "copilot/session-1" || got.HeadSHA != "deadbeef" {
+		t.Fatalf("get = %+v, %v", got, err)
 	}
 
 	if err := s.SetCopilotSessionStatus("alice", "repo1", cs.ID, "running", ""); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.GetCopilotSession("alice", "repo1", cs.ID)
+	got, err = s.GetCopilotSession("alice", "repo1", cs.ID)
 	if err != nil || got.Status != "running" {
 		t.Fatalf("get = %+v, %v", got, err)
 	}

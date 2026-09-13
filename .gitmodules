@@ -1,0 +1,3 @@
+[submodule "deps/agent"]
+	path = deps/agent
+	url = https://github.com/holihur/agent.git

@@ -1,5 +1,5 @@
 import { req } from "./core";
-import type { ByokKey, CopilotSession } from "./types";
+import type { ByokKey, CopilotMessage, CopilotSession } from "./types";
 
 export const copilotApi = {
   // byok（bring your own key：用户自带 LLM 密钥）
@@ -19,24 +19,26 @@ export const copilotApi = {
     req<ByokKey>(`/me/byok/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteByok: (id: number) => req<{ deleted: boolean }>(`/me/byok/${id}`, { method: "DELETE" }),
 
-  // copilot 会话（每个会话一个独立 Docker 容器）
+  // copilot 会话（每个会话一个 agent 运行时，双向聊天 + 自动提交推送）
   listCopilots: (owner: string, repo: string) =>
     req<CopilotSession[]>(`/users/${owner}/repos/${repo}/copilots`),
-  createCopilot: (
-    owner: string,
-    repo: string,
-    body: { byok_id: number; image?: string; prompt?: string; command?: string },
-  ) =>
+  createCopilot: (owner: string, repo: string, body: { byok_id: number; prompt?: string }) =>
     req<CopilotSession>(`/users/${owner}/repos/${repo}/copilots`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
   getCopilot: (owner: string, repo: string, id: number) =>
     req<CopilotSession>(`/users/${owner}/repos/${repo}/copilots/${id}`),
-  startCopilot: (owner: string, repo: string, id: number) =>
-    req<CopilotSession>(`/users/${owner}/repos/${repo}/copilots/${id}/start`, { method: "POST" }),
+  copilotMessages: (owner: string, repo: string, id: number) =>
+    req<CopilotMessage[]>(`/users/${owner}/repos/${repo}/copilots/${id}/messages`),
   stopCopilot: (owner: string, repo: string, id: number) =>
     req<CopilotSession>(`/users/${owner}/repos/${repo}/copilots/${id}/stop`, { method: "POST" }),
   deleteCopilot: (owner: string, repo: string, id: number) =>
     req<{ deleted: boolean }>(`/users/${owner}/repos/${repo}/copilots/${id}`, { method: "DELETE" }),
+
+  /** 双向聊天 WebSocket 地址（同源 Cookie 自动携带）。 */
+  copilotChatUrl: (owner: string, repo: string, id: number) => {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}/api/users/${owner}/repos/${repo}/copilots/${id}/chat`;
+  },
 };

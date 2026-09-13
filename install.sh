@@ -3,6 +3,9 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash           # 安装 gitdash 服务端 CLI
 #   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- runner  # 安装自托管 CI runner
+#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- agent   # 安装 copilot agent 运行时
+#
+# 安装 gitdash 时会一并安装同压缩包内的 agent（若存在），使 copilot 可直接使用。
 #
 # 环境变量:
 #   GITDASH_VERSION      指定版本 (如 v0.1.0)，默认最新 release
@@ -12,6 +15,8 @@ set -euo pipefail
 REPO="holihur/gitdash"
 if [ "${1:-}" = "runner" ]; then
   BIN_NAME="gitdash-runner"
+elif [ "${1:-}" = "agent" ]; then
+  BIN_NAME="agent"
 else
   BIN_NAME="gitdash"
 fi
@@ -60,8 +65,8 @@ if [ -z "$VERSION" ]; then
   [ -n "$VERSION" ] || err "无法获取最新版本，可设置 GITDASH_VERSION 重试"
 fi
 VER="${VERSION#v}"
-# release 压缩包按项目名（gitdash）命名，且同时包含 gitdash 与 gitdash-runner 两个二进制；
-# 安装 runner 时同样下载该压缩包，再取出 $BIN_NAME（与 install.ps1 一致）。
+# release 压缩包按项目名（gitdash）命名，且同时包含 gitdash / gitdash-runner / agent
+# 三个二进制；安装时同样下载该压缩包，再取出 $BIN_NAME（与 install.ps1 一致）。
 URL="https://github.com/$REPO/releases/download/$VERSION/gitdash_${VER}_${OS}_${ARCH}.tar.gz"
 
 TMP="$(mktemp -d)"
@@ -82,11 +87,22 @@ if [ -z "$INSTALL_DIR" ]; then
 fi
 mkdir -p "$INSTALL_DIR"
 
-if [ -e "$INSTALL_DIR/$BIN_NAME" ] && [ ! -w "$INSTALL_DIR" ] && [ "$(id -u)" != "0" ]; then
-  log "需要 sudo 覆盖 $INSTALL_DIR/$BIN_NAME"
-  sudo install -m 0755 "$TMP/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
-else
-  install -m 0755 "$TMP/$BIN_NAME" "$INSTALL_DIR/$BIN_NAME"
+install_bin() {
+  local name="$1"
+  [ -f "$TMP/$name" ] || return 0
+  if [ -e "$INSTALL_DIR/$name" ] && [ ! -w "$INSTALL_DIR" ] && [ "$(id -u)" != "0" ]; then
+    log "需要 sudo 覆盖 $INSTALL_DIR/$name"
+    sudo install -m 0755 "$TMP/$name" "$INSTALL_DIR/$name"
+  else
+    install -m 0755 "$TMP/$name" "$INSTALL_DIR/$name"
+  fi
+  log "已安装 ${name} ${VERSION} -> $INSTALL_DIR/$name"
+}
+
+install_bin "$BIN_NAME"
+# 安装 gitdash 时顺带带上同压缩包内的 copilot agent（不存在则跳过）。
+if [ "$BIN_NAME" = "gitdash" ] && [ "$BIN_NAME" != "agent" ]; then
+  install_bin agent
 fi
 
 case ":$PATH:" in
@@ -102,3 +118,6 @@ echo "快速开始:"
 echo "  ${BIN_NAME} serve                          # 默认 http://localhost:8080 / ssh :2222"
 echo "  GITDASH_TOKEN=自定义token ${BIN_NAME} serve # 修改 Web API token"
 echo "  systemd: 参考仓库 packaging/gitdash.service"
+if [ "$BIN_NAME" = "gitdash" ]; then
+  echo "  copilot: 已同时安装 agent（GITDASH_COPILOT_AGENT_BIN 可覆盖路径）"
+fi

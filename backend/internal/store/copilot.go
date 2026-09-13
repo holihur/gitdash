@@ -105,16 +105,18 @@ func (s *Store) DeleteByokKey(username string, id int64) error {
 
 // ---- copilot sessions ----
 
-// CopilotSession 仓库内的一个 copilot 会话（一个会话 = 一个独立 Docker 容器）。
+// CopilotSession 仓库内的一个 AI copilot 会话。会话由进程内嵌的
+// github.com/holihur/agent 驱动，工作区为仓库的本地克隆副本；每轮对话
+// 结束后 gitdash 自动提交并推送改动到 Branch（闭环）。
 type CopilotSession struct {
 	ID        int64  `json:"id"`
 	Owner     string `json:"-"`
 	Repo      string `json:"-"`
 	CreatedBy string `json:"created_by"`
 	ByokID    int64  `json:"byok_id"`
-	Image     string `json:"image"`
 	Prompt    string `json:"prompt"`
-	Command   string `json:"command,omitempty"`
+	Branch    string `json:"branch,omitempty"`
+	HeadSHA   string `json:"head_sha,omitempty"`
 	Status    string `json:"status"`
 	Error     string `json:"error,omitempty"`
 	CreatedAt string `json:"created_at"`
@@ -122,15 +124,19 @@ type CopilotSession struct {
 }
 
 func copilotRowToDTO(r copilotSessionRow) CopilotSession {
-	return CopilotSession(r)
+	return CopilotSession{
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo, CreatedBy: r.CreatedBy, ByokID: r.ByokID,
+		Prompt: r.Prompt, Branch: r.Branch, HeadSHA: r.HeadSHA, Status: r.Status, Error: r.Error,
+		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+	}
 }
 
-// CreateCopilotSession 创建 copilot 会话（初始状态 created，由调用方决定是否立即启动）。
-func (s *Store) CreateCopilotSession(owner, repo, createdBy string, byokID int64, image, prompt, command string) (CopilotSession, error) {
+// CreateCopilotSession 创建一个 copilot 会话（初始 idle）。
+func (s *Store) CreateCopilotSession(owner, repo, createdBy string, byokID int64, prompt string) (CopilotSession, error) {
 	ts := now()
 	row := copilotSessionRow{
 		Owner: owner, Repo: repo, CreatedBy: createdBy, ByokID: byokID,
-		Image: image, Prompt: prompt, Command: command, Status: "created",
+		Prompt: prompt, Status: "idle",
 		CreatedAt: ts, UpdatedAt: ts,
 	}
 	if err := s.db.Create(&row).Error; err != nil {
@@ -165,6 +171,19 @@ func (s *Store) ListCopilotSessions(owner, repo string) ([]CopilotSession, error
 func (s *Store) SetCopilotSessionStatus(owner, repo string, id int64, status, errMsg string) error {
 	res := s.db.Model(&copilotSessionRow{}).Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).
 		Updates(map[string]any{"status": status, "error": errMsg, "updated_at": now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetCopilotSessionGit 记录会话工作区分支与最近推送的提交。
+func (s *Store) SetCopilotSessionGit(owner, repo string, id int64, branch, headSHA string) error {
+	res := s.db.Model(&copilotSessionRow{}).Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).
+		Updates(map[string]any{"branch": branch, "head_sha": headSHA, "updated_at": now()})
 	if res.Error != nil {
 		return res.Error
 	}

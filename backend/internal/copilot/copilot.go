@@ -1,16 +1,26 @@
-// Package copilot 实现 BYOK copilot 会话的 Docker 编排：
-// 每个会话运行在独立的 Docker 容器里，工作区为仓库的只读克隆副本，
-// 用户自带的 LLM 密钥（BYOK）以环境变量注入容器。
+// Package copilot 是 gitdash 侧的 copilot 编排器：它把独立的 agent 运行时
+// （实现 copilot-api/1，见 deps/agent/docs/copilot-api.md）作为会话工作区的
+// 聊天后端，负责工作区克隆、进程生命周期、双向转发与闭环提交推送。
+//
+// 与 agent 的耦合只有 HTTP+SSE 协议本身：agent 可换实现，路径/命令均可经
+// 环境变量配置，gitdash 不链接 agent 代码、不解析其内部存储格式。
 package copilot
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
@@ -18,14 +28,52 @@ import (
 	"gitdash/backend/internal/store"
 )
 
-// ErrDockerMissing docker 不可用。
-var ErrDockerMissing = errors.New("docker not available")
+// ProtocolVersion 是 gitdash 期望的 agent 聊天协议版本。
+const ProtocolVersion = "copilot-api/1"
 
 // ErrByokMissing 会话没有可用的 BYOK 密钥。
 var ErrByokMissing = errors.New("byok key not configured")
 
-// ErrImageRequired 未提供镜像且服务端未配置默认镜像。
-var ErrImageRequired = errors.New("image is required (set GITDASH_COPILOT_IMAGE or provide image)")
+// ErrAgentUnavailable 找不到/起不来 agent 运行时。
+var ErrAgentUnavailable = errors.New("agent runtime unavailable")
+
+// 流式事件类型（与协议 copilot-api/1 一致）。
+const (
+	EventDelta     = "delta"
+	EventToolStart = "tool_start"
+	EventToolEnd   = "tool_end"
+	EventDone      = "done"
+	EventError     = "error"
+	EventStatus    = "status"
+	EventHistory   = "history"
+)
+
+// Event 是转发给前端的单条流式消息。
+type Event struct {
+	Type    string `json:"type"`
+	Text    string `json:"text,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Input   string `json:"input,omitempty"`
+	Result  string `json:"result,omitempty"`
+	Error   string `json:"error,omitempty"`
+	IsError bool   `json:"is_error,omitempty"`
+	Status  string `json:"status,omitempty"`
+}
+
+// ChatMessage 是回放给前端的单条对话。
+type ChatMessage struct {
+	Role  string      `json:"role"`
+	Text  string      `json:"text,omitempty"`
+	Tools []ToolEvent `json:"tools,omitempty"`
+}
+
+// ToolEvent 是 ChatMessage 中的一次工具调用。
+type ToolEvent struct {
+	Name    string `json:"name"`
+	Input   string `json:"input,omitempty"`
+	Result  string `json:"result,omitempty"`
+	IsError bool   `json:"is_error,omitempty"`
+}
 
 var workspacesDir string
 
@@ -35,193 +83,479 @@ func Init(dataDir string) error {
 	return os.MkdirAll(workspacesDir, 0o755)
 }
 
-// Manager 编排 copilot 会话的 Docker 生命周期。
-type Manager struct {
-	st *store.Store
-}
-
-// NewManager 创建 Manager。
-func NewManager(st *store.Store) *Manager { return &Manager{st: st} }
-
-// DefaultImage 服务端默认镜像（GITDASH_COPILOT_IMAGE），未配置返回空串。
-func DefaultImage() string { return strings.TrimSpace(os.Getenv("GITDASH_COPILOT_IMAGE")) }
-
-// ContainerName 会话容器名（由 id 派生，确定且唯一）。
-func ContainerName(id int64) string { return fmt.Sprintf("gitdash-copilot-%d", id) }
-
 // WorkspacePath 会话工作区目录（仓库克隆副本）。
 func WorkspacePath(owner, repo string, id int64) string {
 	return filepath.Join(workspacesDir, owner, repo, fmt.Sprintf("ws-%d", id))
 }
 
-// Start 启动会话容器：确保工作区克隆 → 注入 BYOK 密钥 → docker run -d。
-func (m *Manager) Start(ctx context.Context, session store.CopilotSession) error {
-	if err := dockerAvailable(); err != nil {
-		return err
-	}
-	secret, err := m.st.GetByokSecret(session.CreatedBy, session.ByokID)
-	if err != nil || secret.APIKey == "" {
-		return ErrByokMissing
-	}
-	image := strings.TrimSpace(session.Image)
-	if image == "" {
-		image = strings.TrimSpace(os.Getenv("GITDASH_COPILOT_IMAGE"))
-	}
-	if image == "" {
-		return ErrImageRequired
-	}
+// BranchName 会话工作区分支名。
+func BranchName(id int64) string { return fmt.Sprintf("copilot/session-%d", id) }
 
+// Manager 管理每个会话的 agent 运行时进程与工作区。
+type Manager struct {
+	st    *store.Store
+	mu    sync.Mutex
+	procs map[int64]*proc
+	locks map[int64]*sync.Mutex
+}
+
+type proc struct {
+	cmd     *exec.Cmd
+	baseURL string
+	ws      string
+	branch  string
+	dead    chan struct{}
+}
+
+// NewManager 创建 Manager。
+func NewManager(st *store.Store) *Manager {
+	return &Manager{st: st, procs: map[int64]*proc{}, locks: map[int64]*sync.Mutex{}}
+}
+
+func (m *Manager) sessionLock(id int64) *sync.Mutex {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	l := m.locks[id]
+	if l == nil {
+		l = &sync.Mutex{}
+		m.locks[id] = l
+	}
+	return l
+}
+
+// ---- 运行时配置（可替换，不写死）----
+
+// agentBinary 解析 agent 可执行文件：显式 env > 与 gitdash 同目录的 agent > PATH。
+func agentBinary() (string, error) {
+	if p := strings.TrimSpace(os.Getenv("GITDASH_COPILOT_AGENT_BIN")); p != "" {
+		return p, nil
+	}
+	if exe, err := os.Executable(); err == nil {
+		cand := filepath.Join(filepath.Dir(exe), "agent")
+		if fi, err := os.Stat(cand); err == nil && !fi.IsDir() {
+			return cand, nil
+		}
+	}
+	if p, err := exec.LookPath("agent"); err == nil {
+		return p, nil
+	}
+	return "", fmt.Errorf("%w: set GITDASH_COPILOT_AGENT_BIN or install `agent` in PATH", ErrAgentUnavailable)
+}
+
+// agentBaseURL 返回外部托管的 agent 地址（GITDASH_COPILOT_AGENT_URL）；
+// 未配置时返回空串，表示由 gitdash 按会话拉起本地进程。
+func agentBaseURL() string {
+	return strings.TrimRight(strings.TrimSpace(os.Getenv("GITDASH_COPILOT_AGENT_URL")), "/")
+}
+
+// ---- 工作区 ----
+
+// ensureWorkspace 确保会话工作区存在；首次克隆并切出会话分支。返回 (ws, branch)。
+func (m *Manager) ensureWorkspace(session store.CopilotSession) (string, string, error) {
 	ws := WorkspacePath(session.Owner, session.Repo, session.ID)
-	ref, err := m.ensureWorkspace(session, ws)
-	if err != nil {
-		return err
+	branch := strings.TrimSpace(session.Branch)
+	if branch == "" {
+		branch = BranchName(session.ID)
 	}
-
-	// 幂等：先清掉同名残留容器
-	_ = dockerRm(ContainerName(session.ID))
-
-	args := []string{
-		"run", "-d",
-		"--name", ContainerName(session.ID),
-		"--workdir", "/workspace",
-		"-v", ws + ":/workspace",
-		"--network", copilotNetwork(),
-		"--memory", "512m",
-		"--memory-swap", "512m",
-		"--cpus", "1.0",
-		"--pids-limit", "128",
-		"--security-opt", "no-new-privileges",
-		"--cap-drop", "ALL",
-		"-e", "GITDASH=true",
-		"-e", "GITDASH_COPILOT_ID=" + fmt.Sprint(session.ID),
-		"-e", "GITDASH_OWNER=" + session.Owner,
-		"-e", "GITDASH_REPO=" + session.Repo,
-		"-e", "GITDASH_REF=" + ref,
-		"-e", "GITDASH_TASK=" + session.Prompt,
-		"-e", "LLM_APIKEY=" + secret.APIKey,
+	if fi, err := os.Stat(ws); err == nil && fi.IsDir() {
+		excludeAgentState(ws)
+		return ws, branch, nil
 	}
-	if secret.BaseURL != "" {
-		args = append(args, "-e", "LLM_BASE_URL="+secret.BaseURL)
+	if err := os.MkdirAll(filepath.Dir(ws), 0o755); err != nil {
+		return "", "", fmt.Errorf("create workspace dir: %w", err)
 	}
-	if secret.Model != "" {
-		args = append(args, "-e", "LLM_MODEL="+secret.Model)
+	if out, err := gitsvc.GitOut("", "clone", "--quiet", gitsvc.RepoPath(session.Owner, session.Repo), ws); err != nil {
+		return "", "", fmt.Errorf("clone repo: %w: %s", err, strings.TrimSpace(out))
 	}
-	args = append(args, image)
-	if cmd := strings.TrimSpace(session.Command); cmd != "" {
-		args = append(args, "sh", "-ec", cmd)
+	if out, err := gitsvc.GitOut(ws, "checkout", "-B", branch); err != nil {
+		return "", "", fmt.Errorf("checkout %s: %w: %s", branch, err, strings.TrimSpace(out))
 	}
-
-	logx.Infof("copilot audit: START session=%d repo=%s/%s image=%s byok=%d time=%s",
-		session.ID, session.Owner, session.Repo, image, session.ByokID, time.Now().UTC().Format(time.RFC3339))
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	setGitIdentity(ws)
+	excludeAgentState(ws)
+	return ws, branch, nil
 }
 
-// Stop 停止并删除会话容器（保留工作区，便于再次启动）。
-func (m *Manager) Stop(ctx context.Context, session store.CopilotSession) error {
-	name := ContainerName(session.ID)
-	logx.Infof("copilot audit: STOP session=%d repo=%s/%s time=%s",
-		session.ID, session.Owner, session.Repo, time.Now().UTC().Format(time.RFC3339))
-	if err := dockerRmContext(ctx, name); err != nil {
-		// 容器不存在视为已停止
-		if strings.Contains(err.Error(), "No such container") {
-			return nil
-		}
-		return err
+// excludeAgentState 让 agent 自己写在 `.agent/` 下的会话历史不进提交/推送。
+func excludeAgentState(ws string) {
+	p := filepath.Join(ws, ".git", "info", "exclude")
+	data, _ := os.ReadFile(p)
+	add := ""
+	if !strings.Contains(string(data), ".agent/") {
+		add += ".agent/\n"
 	}
-	return nil
-}
-
-// Logs 读取容器日志（含已退出容器的日志；截断到最近 500 行）。
-func (m *Manager) Logs(ctx context.Context, session store.CopilotSession) (string, error) {
-	cmd := exec.CommandContext(ctx, "docker", "logs", "--tail", "500", ContainerName(session.ID))
-	out, err := cmd.CombinedOutput()
-	// 容器不存在时返回空日志
-	if err != nil && strings.Contains(string(out), "No such container") {
-		return "", nil
+	if !strings.Contains(string(data), ".agents/") {
+		add += ".agents/\n"
 	}
-	return string(out), nil
-}
-
-// DockerStatus 返回容器运行状态（docker inspect）。
-func (m *Manager) DockerStatus(ctx context.Context, session store.CopilotSession) (string, error) {
-	cmd := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{.State.Status}}", ContainerName(session.ID))
-	out, err := cmd.CombinedOutput()
+	if add == "" {
+		return
+	}
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		if strings.Contains(string(out), "No such object") {
-			return "exited", nil
-		}
+		return
+	}
+	_, _ = f.WriteString(add)
+	_ = f.Close()
+}
+
+func setGitIdentity(ws string) {
+	_, _ = gitsvc.GitOut(ws, "config", "user.name", "gitdash-copilot")
+	_, _ = gitsvc.GitOut(ws, "config", "user.email", "copilot@gitdash.local")
+}
+
+// syncUpstream 拉取远端并在工作区干净时把会话分支 rebase 到默认分支之上。
+func (m *Manager) syncUpstream(session store.CopilotSession, ws string) {
+	if _, err := gitsvc.GitOut(ws, "fetch", "--quiet", "origin"); err != nil {
+		return
+	}
+	def, err := gitsvc.HeadBranch(session.Owner, session.Repo)
+	if err != nil || def == "" {
+		return
+	}
+	if out, err := gitsvc.GitOut(ws, "status", "--porcelain"); err != nil || strings.TrimSpace(out) != "" {
+		return
+	}
+	if _, err := gitsvc.GitOut(ws, "rebase", "--quiet", "origin/"+def); err != nil {
+		_, _ = gitsvc.GitOut(ws, "rebase", "--abort")
+	}
+}
+
+// commitAndPush 提交工作区改动并推送到会话分支（闭环）。
+func (m *Manager) commitAndPush(ws, branch, prompt string) (string, error) {
+	status, err := gitsvc.GitOut(ws, "status", "--porcelain")
+	if err != nil {
 		return "", err
 	}
-	s := strings.TrimSpace(string(out))
-	if s == "" {
-		return "exited", nil
+	if strings.TrimSpace(status) != "" {
+		if _, err := gitsvc.GitOut(ws, "add", "-A"); err != nil {
+			return "", err
+		}
+		if _, err := gitsvc.GitOut(ws, "commit", "-m", commitMessage(prompt)); err != nil {
+			return "", err
+		}
 	}
-	return s, nil
+	sha, _ := gitsvc.GitOut(ws, "rev-parse", "HEAD")
+	sha = strings.TrimSpace(sha)
+	if _, err := gitsvc.GitOut(ws, "push", "--quiet", "origin", "HEAD:refs/heads/"+branch); err != nil {
+		return sha, fmt.Errorf("push %s: %w", branch, err)
+	}
+	return sha, nil
 }
 
-// RemoveWorkspace 删除会话工作区（删除会话时调用）。
+// ---- 运行时生命周期 ----
+
+// ensureRuntime 返回会话的 agent 运行时（必要时拉起本地进程并健康检查）。
+func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSession) (*proc, error) {
+	if p := m.getProc(session.ID); p != nil {
+		return p, nil
+	}
+	ws, branch, err := m.ensureWorkspace(session)
+	if err != nil {
+		return nil, err
+	}
+
+	// 外部托管：直接使用给定地址，不管理工作区进程。
+	if base := agentBaseURL(); base != "" {
+		p := &proc{baseURL: base, ws: ws, branch: branch, dead: make(chan struct{})}
+		m.setProc(session.ID, p)
+		return p, nil
+	}
+
+	secret, err := m.st.GetByokSecret(session.CreatedBy, session.ByokID)
+	if err != nil || strings.TrimSpace(secret.APIKey) == "" {
+		return nil, ErrByokMissing
+	}
+	bin, err := agentBinary()
+	if err != nil {
+		return nil, err
+	}
+	port, err := freePort()
+	if err != nil {
+		return nil, err
+	}
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+
+	cmd := exec.Command(bin, "-C", ws, "-api-addr", addr)
+	cmd.Dir = ws
+	cmd.Env = append(os.Environ(),
+		"LLM_API_KEY="+secret.APIKey,
+		"LLM_BASE_URL="+firstNonEmpty(secret.BaseURL, "https://api.anthropic.com"),
+		"LLM_MODEL="+firstNonEmpty(secret.Model, "claude-sonnet-4-5"),
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("%w: start agent: %v", ErrAgentUnavailable, err)
+	}
+
+	p := &proc{cmd: cmd, baseURL: "http://" + addr, ws: ws, branch: branch, dead: make(chan struct{})}
+	go func() {
+		_ = cmd.Wait()
+		close(p.dead)
+		m.mu.Lock()
+		if m.procs[session.ID] == p {
+			delete(m.procs, session.ID)
+		}
+		m.mu.Unlock()
+	}()
+
+	if err := waitHealthy(ctx, p.baseURL, 20*time.Second); err != nil {
+		_ = cmd.Process.Kill()
+		return nil, fmt.Errorf("%w: %v: %s", ErrAgentUnavailable, err, strings.TrimSpace(stderr.String()))
+	}
+	logx.Infof("copilot audit: AGENT START session=%d repo=%s/%s addr=%s bin=%s",
+		session.ID, session.Owner, session.Repo, addr, bin)
+	m.setProc(session.ID, p)
+	return p, nil
+}
+
+func (m *Manager) getProc(id int64) *proc {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p := m.procs[id]
+	if p == nil {
+		return nil
+	}
+	select {
+	case <-p.dead:
+		delete(m.procs, id)
+		return nil
+	default:
+		return p
+	}
+}
+
+func (m *Manager) setProc(id int64, p *proc) {
+	m.mu.Lock()
+	m.procs[id] = p
+	m.mu.Unlock()
+}
+
+// Stop 停止会话的 agent 进程（保留工作区与对话历史）。
+func (m *Manager) Stop(session store.CopilotSession) {
+	m.mu.Lock()
+	p := m.procs[session.ID]
+	delete(m.procs, session.ID)
+	m.mu.Unlock()
+	if p == nil || p.cmd == nil || p.cmd.Process == nil {
+		return
+	}
+	logx.Infof("copilot audit: AGENT STOP session=%d repo=%s/%s", session.ID, session.Owner, session.Repo)
+	_ = p.cmd.Process.Kill()
+}
+
+// RemoveWorkspace 停止进程并删除工作区（删除会话时调用）。
 func (m *Manager) RemoveWorkspace(session store.CopilotSession) error {
+	m.Stop(session)
+	m.mu.Lock()
+	delete(m.locks, session.ID)
+	m.mu.Unlock()
 	if workspacesDir == "" {
 		return nil
 	}
 	return os.RemoveAll(WorkspacePath(session.Owner, session.Repo, session.ID))
 }
 
-// ensureWorkspace 确保工作区存在（首次克隆）；返回默认分支短名。
-func (m *Manager) ensureWorkspace(session store.CopilotSession, ws string) (string, error) {
-	if fi, err := os.Stat(ws); err == nil && fi.IsDir() {
-		return worktreeRef(ws), nil
+// Cancel 取消会话正在运行的一轮（经 agent 的 /api/cancel）。
+func (m *Manager) Cancel(ctx context.Context, session store.CopilotSession) {
+	p := m.getProc(session.ID)
+	if p == nil {
+		return
 	}
-	if err := os.MkdirAll(filepath.Dir(ws), 0o755); err != nil {
-		return "", fmt.Errorf("create workspace dir: %w", err)
-	}
-	if out, err := gitsvc.GitOut("", "clone", "--quiet", gitsvc.RepoPath(session.Owner, session.Repo), ws); err != nil {
-		return "", fmt.Errorf("clone repo: %w: %s", err, strings.TrimSpace(out))
-	}
-	return worktreeRef(ws), nil
-}
-
-// worktreeRef 返回工作区当前检出的分支短名（clone 后即默认分支）。
-func worktreeRef(ws string) string {
-	out, err := gitsvc.GitOut(ws, "rev-parse", "--abbrev-ref", "HEAD")
+	in, _ := json.Marshal(map[string]string{"session": sessionName(session.ID)})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/api/cancel", bytes.NewReader(in))
 	if err != nil {
-		return ""
+		return
 	}
-	return strings.TrimSpace(out)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}
 }
 
-func dockerRm(name string) error {
-	return dockerRmContext(context.Background(), name)
-}
+// ---- 对话 ----
 
-func dockerRmContext(ctx context.Context, name string) error {
-	out, err := exec.CommandContext(ctx, "docker", "rm", "-f", name).CombinedOutput()
+// RunTurn 执行一轮对话：确保运行时 → 同步上游 → 转发 SSE → 收到 done 后提交推送。
+func (m *Manager) RunTurn(ctx context.Context, session store.CopilotSession, text string, emit func(Event)) error {
+	lock := m.sessionLock(session.ID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	p, err := m.ensureRuntime(ctx, session)
 	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+		return err
+	}
+	if p.cmd != nil {
+		m.syncUpstream(session, p.ws)
+	}
+
+	body, _ := json.Marshal(map[string]string{"session": sessionName(session.ID), "text": text})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("agent chat: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return fmt.Errorf("agent chat: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 0, 64<<10), 4<<20)
+	sawDone := false
+	for sc.Scan() {
+		line := sc.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		var ev Event
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev); err != nil {
+			continue
+		}
+		switch ev.Type {
+		case EventDone:
+			sawDone = true
+			if sha, pushErr := m.commitAndPush(p.ws, p.branch, text); pushErr != nil {
+				logx.Warnf("copilot: push session %d: %v", session.ID, pushErr)
+				if emit != nil {
+					emit(Event{Type: EventError, Error: "changes not pushed: " + pushErr.Error()})
+				}
+			} else {
+				_ = m.st.SetCopilotSessionGit(session.Owner, session.Repo, session.ID, p.branch, sha)
+			}
+		}
+		if emit != nil {
+			emit(ev)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		if ctx.Err() != nil {
+			return context.Canceled
+		}
+		return fmt.Errorf("agent stream: %w", err)
+	}
+	if !sawDone {
+		if ctx.Err() != nil {
+			return context.Canceled
+		}
+		return errors.New("agent stream ended without done event")
 	}
 	return nil
 }
 
-func copilotNetwork() string {
-	if n := strings.TrimSpace(os.Getenv("GITDASH_COPILOT_NETWORK")); n != "" {
-		return n
+// Messages 拉取会话历史（经 agent 的 /api/messages）。
+func (m *Manager) Messages(ctx context.Context, session store.CopilotSession) ([]ChatMessage, error) {
+	p, err := m.ensureRuntime(ctx, session)
+	if err != nil {
+		return nil, err
 	}
-	return "bridge"
+	url := p.baseURL + "/api/messages?session=" + sessionName(session.ID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, fmt.Errorf("agent messages: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	var out struct {
+		Messages []ChatMessage `json:"messages"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out.Messages, nil
 }
 
-func dockerAvailable() error {
-	if _, err := exec.LookPath("docker"); err != nil {
-		return ErrDockerMissing
+// ---- 小工具 ----
+
+func sessionName(id int64) string { return fmt.Sprintf("%d", id) }
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput()
+	return ""
+}
+
+func freePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("%w: %s", ErrDockerMissing, strings.TrimSpace(string(out)))
+		return 0, err
 	}
-	return nil
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+// waitHealthy 轮询 /healthz 直到协议版本匹配或超时。
+func waitHealthy(ctx context.Context, baseURL string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var last error
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/healthz", nil)
+		if err != nil {
+			return err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			var h struct {
+				OK       bool   `json:"ok"`
+				Protocol string `json:"protocol"`
+			}
+			if decErr := json.NewDecoder(resp.Body).Decode(&h); decErr == nil {
+				_ = resp.Body.Close()
+				if h.OK && h.Protocol == ProtocolVersion {
+					return nil
+				}
+				last = fmt.Errorf("unexpected healthz: ok=%v protocol=%q", h.OK, h.Protocol)
+			} else {
+				_ = resp.Body.Close()
+				last = decErr
+			}
+		} else {
+			last = err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	if last == nil {
+		last = errors.New("timeout")
+	}
+	return last
+}
+
+// commitMessage 由用户提示生成简洁的提交标题（单行，最长 72 字符）。
+func commitMessage(prompt string) string {
+	s := strings.TrimSpace(prompt)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		s = "copilot update"
+	}
+	r := []rune(s)
+	if len(r) > 72 {
+		s = string(r[:72]) + "…"
+	}
+	return "copilot: " + s
 }

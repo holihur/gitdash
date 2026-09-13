@@ -4,6 +4,10 @@
 #   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1)))
 # Self-hosted CI runner:
 #   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) runner
+# Copilot agent runtime:
+#   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) agent
+#
+# Installing gitdash also installs the bundled agent runtime (if present), so copilot works out of the box.
 #
 # Environment variables:
 #   GITDASH_VERSION      pin a version (e.g. v0.1.0), defaults to latest release
@@ -12,7 +16,9 @@
 $ErrorActionPreference = "Stop"
 
 $Repo = "holihur/gitdash"
-if ($args.Count -gt 0 -and $args[0] -eq "runner") { $BinName = "gitdash-runner.exe" } else { $BinName = "gitdash.exe" }
+if ($args.Count -gt 0 -and $args[0] -eq "runner") { $BinName = "gitdash-runner.exe" }
+elseif ($args.Count -gt 0 -and $args[0] -eq "agent") { $BinName = "agent.exe" }
+else { $BinName = "gitdash.exe" }
 $Version = $env:GITDASH_VERSION
 $InstallDir = if ($env:GITDASH_INSTALL_DIR) { $env:GITDASH_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\gitdash" }
 
@@ -51,6 +57,14 @@ try {
     Write-Step "Installing to $InstallDir"
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     Copy-Item -Path $Exe -Destination (Join-Path $InstallDir $BinName) -Force
+    # gitdash 同时装上同压缩包内的 copilot agent（存在则装）
+    if ($BinName -eq "gitdash.exe") {
+        $AgentExe = Join-Path $Tmp "agent.exe"
+        if (Test-Path $AgentExe) {
+            Copy-Item -Path $AgentExe -Destination (Join-Path $InstallDir "agent.exe") -Force
+            Write-Step "Installed agent.exe (copilot runtime; override path with GITDASH_COPILOT_AGENT_BIN)"
+        }
+    }
 
     # Add to user PATH if not present
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")

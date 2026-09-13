@@ -24,7 +24,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust) and Maven (Java) under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md)
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
-- **BYOK copilot (MVP)**: run AI copilot sessions on a repo; each session runs in its own isolated Docker container and uses your own Anthropic-compatible API key (bring your own key) — see [docs/copilot.md](docs/copilot.md)
+- **BYOK copilot**: chat with a standalone agent runtime (the `agent` binary built from the `deps/agent` submodule) inside a checkout of the repo; it can read, edit and run commands, and gitdash commits + pushes its changes to a `copilot/session-<id>` branch after every turn — see [docs/copilot.md](docs/copilot.md)
 - **User avatars**: upload / remove a profile picture (PNG/JPEG/GIF/WebP, max 2MB); shown in the header, user page and profile, with an initials fallback
 - **Profile repo**: a public `<username>/<username>` repo is created when an account is first created (register / admin / OAuth), initialized with a README (`GITDASH_PROFILE_REPO=0` disables)
 - **Structured logging & tracing**: `log/slog`-based logs with levels + text/JSON format, optional rotating file output (`GITDASH_LOG_FILE`), and OpenTelemetry tracing via OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`)
@@ -155,8 +155,8 @@ Environment variables (all optional):
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
 | `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<username>/<username>` repo on first account creation (`0` disables) |
-| `GITDASH_COPILOT_IMAGE` | empty | Default Docker image for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
-| `GITDASH_COPILOT_NETWORK` | `bridge` | Container network for copilot sessions (`none` disables LLM access) |
+| `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash / in PATH | Path to the agent runtime for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
+| `GITDASH_COPILOT_AGENT_URL` | empty | Use an already-running agent (`http://host:port`) instead of spawning one per session |
 | `GITDASH_LOG_LEVEL` | `info` | Log level: `debug` / `info` / `warn` / `error` |
 | `GITDASH_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 | `GITDASH_LOG_FILE` | empty | Enable rotating file logging (path); empty logs to stderr only |

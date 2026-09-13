@@ -438,11 +438,12 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/runner/register", a.registerRunner)
 	mux.HandleFunc("GET /api/runner/ws", a.runnerWS)
 
-	// copilot（BYOK AI copilot 会话，每个会话一个独立 Docker 容器）
+	// copilot（BYOK AI copilot 会话，嵌入式 agent + 双向聊天 + 自动提交推送闭环）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots", a.auth(a.listCopilots))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots", a.auth(a.createCopilot))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.getCopilot))
-	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots/{id}/start", a.auth(a.startCopilot))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}/messages", a.auth(a.copilotMessages))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}/chat", a.auth(a.copilotChat))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots/{id}/stop", a.auth(a.stopCopilot))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.deleteCopilot))
 

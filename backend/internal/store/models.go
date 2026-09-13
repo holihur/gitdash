@@ -542,21 +542,26 @@ type userAvatarRow struct {
 
 func (userAvatarRow) TableName() string { return "user_avatars" }
 
-// ---- copilot sessions（每个会话 = 一个独立的 Docker 容器）----
+// ---- copilot sessions（嵌入式 agent，工作区为仓库的本地克隆副本）----
 
-// copilotSessionRow 仓库内的一个 AI copilot 会话，绑定到某个 BYOK 密钥，
-// 运行时以独立 Docker 容器承载（容器名由 id 派生，不存 DB）。
+// copilotSessionRow 仓库内的一个 AI copilot 会话，绑定到某个 BYOK 密钥。
+// 会话由进程内嵌的 holihur/agent 驱动，无需 Docker；gitdash 在每轮
+// 对话结束后自动把工作区改动提交并推送到 CopilotBranch。
 type copilotSessionRow struct {
 	ID        int64  `gorm:"primaryKey;autoIncrement"`
 	Owner     string `gorm:"not null;index;size:255"`
 	Repo      string `gorm:"not null;index;size:255"`
 	CreatedBy string `gorm:"not null;size:255"`
 	ByokID    int64  `gorm:"not null;default:0"`
-	Image     string `gorm:"not null;size:255"`
-	Prompt    string `gorm:"not null;default:''"`
+	Prompt    string `gorm:"not null;default:''"` // 额外 system 指令（可选）
+	// Branch 为会话工作区分支（copilot/session-<id>），HeadSHA 为最近推送的提交。
+	Branch  string `gorm:"not null;default:'';size:255"`
+	HeadSHA string `gorm:"not null;default:'';size:64"`
+	Status  string `gorm:"not null;default:'idle'"` // idle | running | failed
+	Error   string `gorm:"not null;default:''"`
+	// 旧字段保留以兼容既有 SQLite/PG 库，嵌入式 agent 不再使用。
+	Image     string `gorm:"not null;default:'';size:255"`
 	Command   string `gorm:"not null;default:''"`
-	Status    string `gorm:"not null;default:'created'"`
-	Error     string `gorm:"not null;default:''"`
 	CreatedAt string `gorm:"not null"`
 	UpdatedAt string `gorm:"not null"`
 }

@@ -117,12 +117,13 @@ def test_copilot_session_lifecycle(env):
 
     created = client.post(
         f"/users/{owner}/repos/{repo}/copilots",
-        json={"byok_id": byok["id"], "image": "alpine:3.19", "prompt": "hello"},
+        json={"byok_id": byok["id"], "prompt": "hello"},
         expect=201,
     ).json()
     assert created["id"] > 0
     assert created["created_by"] == owner
-    assert created["status"] in ("created", "running", "failed")
+    assert created["status"] == "idle"
+    assert created["branch"] == f"copilot/session-{created['id']}"
 
     listed = client.get(f"/users/{owner}/repos/{repo}/copilots", expect=200).json()
     assert any(s["id"] == created["id"] for s in listed)
@@ -130,67 +131,10 @@ def test_copilot_session_lifecycle(env):
     detail = client.get(f"/users/{owner}/repos/{repo}/copilots/{created['id']}", expect=200).json()
     assert detail["id"] == created["id"]
 
-    # 停止 / 删除（无论容器是否存在，均应成功）
+    # 新会话历史为空
+    assert client.get(f"/users/{owner}/repos/{repo}/copilots/{created['id']}/messages", expect=200).json() == []
+
+    # 停止（取消当前轮次；无运行轮次也应成功）；删除会清掉工作区与记录
     client.post(f"/users/{owner}/repos/{repo}/copilots/{created['id']}/stop", expect=200)
     client.delete(f"/users/{owner}/repos/{repo}/copilots/{created['id']}", expect=200)
     assert client.get(f"/users/{owner}/repos/{repo}/copilots", expect=200).json() == []
-
-
-def _commit(c, owner, repo, path, content):
-    c.post(
-        f"/users/{owner}/repos/{repo}/commits",
-        json={"message": f"add {path}", "changes": [{"path": path, "action": "create", "content": content}]},
-        expect=201,
-    )
-
-
-def test_copilot_session_with_real_key(user_factory):
-    """有测试密钥 + docker 时：真实启动容器并校验注入的 LLM 环境变量。"""
-    test_key = _read_test_key()
-    if not test_key:
-        pytest.skip("no BYOK test key in assets.md; skipping")
-    api_key, base_url, model = test_key
-
-    owner, _token, client = user_factory("byk")
-    repo = f"byrepo-{_uuid()}"
-    client.post("/repos", json={"name": repo, "private": False}, expect=201)
-    _commit(client, owner, repo, "README.md", f"# {repo}\n")
-
-    byok = client.post(
-        "/me/byok",
-        json={"name": "test", "provider": "anthropic", "api_key": api_key, "base_url": base_url, "model": model},
-        expect=201,
-    ).json()
-
-    session = client.post(
-        f"/users/{owner}/repos/{repo}/copilots",
-        json={
-            "byok_id": byok["id"],
-            "image": "alpine:3.19",
-            "prompt": "echo injected env",
-            "command": "echo base=$LLM_BASE_URL; echo model=$LLM_MODEL; echo keylen=${#LLM_APIKEY}; ls /workspace",
-        },
-        expect=201,
-    ).json()
-
-    # 容器 echo 完即退出；无 docker 时终态为 failed，视为环境不具备真实执行条件
-    import time
-    deadline = time.time() + 60
-    detail = None
-    while time.time() < deadline:
-        detail = client.get(f"/users/{owner}/repos/{repo}/copilots/{session['id']}", expect=200).json()
-        if detail["status"] in ("failed", "stopped"):
-            break
-        time.sleep(1)
-
-    if detail["status"] == "failed" and "docker" in (detail.get("error") or "").lower():
-        pytest.skip("docker not available in this environment")
-
-    logs = detail.get("log") or ""
-    assert base_url in logs, logs
-    assert model in logs, logs
-    assert f"keylen={len(api_key)}" in logs, logs
-    assert "README.md" in logs, logs
-
-    client.delete(f"/users/{owner}/repos/{repo}/copilots/{session['id']}", expect=200)
-    client.delete(f"/repos/{repo}", expect=204)
