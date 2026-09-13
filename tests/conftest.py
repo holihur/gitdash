@@ -96,6 +96,8 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
         GITDASH_ADMIN_USER="gitdash-admin",
         GITDASH_ADMIN_PASSWORD="admin-test-pass-123456",
+        # 关闭“注册自动建同名仓库”，保持黑盒用例对仓库数量的确定性
+        GITDASH_PROFILE_REPO="0",
     )
     # SMTP 透传：允许 email MFA / 邮箱验证黑盒测试注入本地 SMTP sink
     for var in ("GITDASH_SMTP_HOST", "GITDASH_SMTP_PORT", "GITDASH_SMTP_USER", "GITDASH_SMTP_PASS", "GITDASH_SMTP_FROM"):

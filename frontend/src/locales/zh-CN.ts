@@ -812,6 +812,12 @@ export const zhCN: Messages = {
     gpgRemoved: "GPG 公钥已删除",
     gpgAdd: "添加 GPG 公钥",
     gpgEmpty: "还没有 GPG 公钥",
+    avatar: "头像",
+    avatarHint: "上传头像图片（PNG/JPEG/GIF/WebP，最大 2MB）。",
+    avatarUpload: "上传",
+    avatarRemove: "移除",
+    avatarUpdated: "头像已更新",
+    avatarRemoved: "头像已移除",
   },
   errors: {
     gpg_key_required: "请粘贴 armored 公钥",
@@ -871,6 +877,10 @@ export const zhCN: Messages = {
     import_failed: "导入失败",
     mirror_not_configured: "未配置镜像目标",
     mirror_sync_failed: "同步失败",
+    avatar_type_invalid: "不支持的图片格式（仅限 PNG/JPEG/GIF/WebP）",
+    avatar_too_large: "图片过大（最大 2MB）",
+    avatar_empty: "所选文件为空",
+    file_required: "请选择文件",
   },
   packages: {
     title: "包仓库",

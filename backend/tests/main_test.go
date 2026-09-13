@@ -41,5 +41,8 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
+	// 集成测试默认关闭“注册/建用户自动建同名仓库”，保持用例对仓库数量的确定性。
+	// 需要验证该行为的用例用 t.Setenv("GITDASH_PROFILE_REPO", "1") 覆盖（见 profile_repo_test.go）。
+	_ = os.Setenv("GITDASH_PROFILE_REPO", "0")
 	os.Exit(m.Run())
 }

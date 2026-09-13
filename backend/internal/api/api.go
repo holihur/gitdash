@@ -250,6 +250,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// user page & follow
 	mux.HandleFunc("GET /api/users/{username}", a.auth(a.getUserProfile))
+	mux.HandleFunc("GET /api/users/{username}/avatar", a.auth(a.getAvatar))
+	mux.HandleFunc("POST /api/me/avatar", a.auth(a.uploadAvatar))
+	mux.HandleFunc("DELETE /api/me/avatar", a.auth(a.deleteAvatar))
 	mux.HandleFunc("POST /api/users/{username}/follow", a.auth(a.followUser))
 	mux.HandleFunc("DELETE /api/users/{username}/follow", a.auth(a.unfollowUser))
 	mux.HandleFunc("GET /api/users/{username}/followers", a.auth(a.listFollowers))

@@ -262,6 +262,7 @@ func (a *API) loginOrCreateOAuthUser(r *http.Request, provider, externalID, logi
 	if err := a.store.LinkOAuth(provider, externalID, u.ID); err != nil {
 		return "", err
 	}
+	a.provisionProfileRepo(u.Username)
 	return u.Username, nil
 }
 

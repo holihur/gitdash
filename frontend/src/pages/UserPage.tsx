@@ -8,6 +8,7 @@ import { apiErrorMsg } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Avatar } from "@/components/avatar";
 import { cn, formatDate } from "@/lib/utils";
 
 type View = "repos" | "followers" | "following";
@@ -77,8 +78,6 @@ export default function UserPage() {
   }
   if (!profile) return <p className="py-10 text-center text-sm text-muted-foreground">…</p>;
 
-  const initial = profile.username.slice(0, 1).toUpperCase();
-
   const tabs: { key: View; label: string; count: number }[] = [
     { key: "repos", label: t("user.repositories"), count: profile.repos.length },
     { key: "followers", label: t("user.followers"), count: profile.followers },
@@ -88,9 +87,7 @@ export default function UserPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-muted text-2xl font-semibold text-muted-foreground">
-          {initial}
-        </div>
+        <Avatar username={profile.username} size={80} />
         <div className="min-w-0 flex-1 space-y-1">
           <h1 className="truncate text-2xl font-bold">{profile.username}</h1>
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">

@@ -77,6 +77,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.rateReset(ipKey)
+	a.provisionProfileRepo(u.Username)
 	a.startSession(w, r, http.StatusCreated, u.Username)
 }
 
@@ -279,6 +280,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		"mfa_enabled":    ua.MFAEnabled,
 		"notify_email":   ua.NotifyEmail,
 		"email_verified": ua.EmailVerified,
+		"avatar_url":     a.avatarURL(ua.Username),
 	})
 }
 

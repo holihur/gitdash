@@ -6,6 +6,7 @@ export interface User {
   created_at: string;
   mfa_enabled: boolean;
   email_verified?: boolean;
+  avatar_url?: string;
 }
 
 export interface PackageEntry {
@@ -485,6 +486,7 @@ export interface UserProfile {
   is_following: boolean;
   /** 可见仓库：本人含私有，他人仅公开 */
   repos: Repo[];
+  avatar_url?: string;
 }
 
 export interface FollowState {

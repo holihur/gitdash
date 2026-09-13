@@ -814,6 +814,12 @@ export const en = {
     gpgRemoved: "GPG key removed",
     gpgAdd: "Add GPG key",
     gpgEmpty: "No GPG keys yet",
+    avatar: "Avatar",
+    avatarHint: "Upload a profile picture (PNG/JPEG/GIF/WebP, max 2MB).",
+    avatarUpload: "Upload",
+    avatarRemove: "Remove",
+    avatarUpdated: "Avatar updated",
+    avatarRemoved: "Avatar removed",
   },
   errors: {
     gpg_key_required: "Armored public key is required",
@@ -875,6 +881,10 @@ export const en = {
     import_failed: "Import failed",
     mirror_not_configured: "No mirror target configured",
     mirror_sync_failed: "Sync failed",
+    avatar_type_invalid: "Unsupported image type (PNG/JPEG/GIF/WebP only)",
+    avatar_too_large: "Image too large (max 2MB)",
+    avatar_empty: "The selected file is empty",
+    file_required: "Please choose a file",
   },
   packages: {
     title: "Package Registry",

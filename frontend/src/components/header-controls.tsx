@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTheme, type Theme } from "@/lib/theme";
 import { useI18n, LANGS, type Lang } from "@/lib/i18n";
+import { Avatar } from "@/components/avatar";
 
 export function ThemeToggle() {
   const { theme, resolved, setTheme } = useTheme();
@@ -77,12 +78,7 @@ export function UserMenu({ user, onLogout }: { user: string; onLogout: () => voi
           title={user}
           aria-label={t("app.accountMenu")}
         >
-          <span
-            aria-hidden="true"
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground"
-          >
-            {user.slice(0, 1).toUpperCase()}
-          </span>
+          <Avatar username={user} size={24} />
           <span className="hidden max-w-32 truncate font-medium md:inline">{user}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
         </Button>

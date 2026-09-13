@@ -52,6 +52,8 @@ async function spawnServer(binary: string): Promise<GitdashInstance> {
       GITDASH_DISABLE_RATE_LIMIT: "1",
       GITDASH_HTTP_ADDR: `127.0.0.1:${httpPort}`,
       GITDASH_SSH_ADDR: `127.0.0.1:${sshPort}`,
+      // 关闭“注册自动建同名仓库”，保持 UI 用例对仓库列表的确定性
+      GITDASH_PROFILE_REPO: "0",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

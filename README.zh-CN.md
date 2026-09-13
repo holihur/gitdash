@@ -25,6 +25,8 @@ English | 简体中文
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；任务默认进程内执行，也可走 Redis（asynq）持久化队列
 - **BYOK Copilot (MVP)**：在仓库上运行 AI copilot 会话；每个会话运行在独立 Docker 容器中，使用你自己的 Anthropic 兼容 API 密钥（自带密钥）——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
+- **用户头像**：上传 / 移除头像（PNG/JPEG/GIF/WebP，最大 2MB）；显示在顶栏、用户主页与个人资料页，未设置时回退为首字母
+- **同名仓库**：用户首次创建（注册 / 管理端 / OAuth）时自动创建公开的 `<用户名>/<用户名>` 仓库并初始化 README（`GITDASH_PROFILE_REPO=0` 关闭）
 - **自托管 Runner**：部署 `gitdash-runner` agent 主动连接服务端执行流水线；`.gitdash.yml` 用 `runs-on` 标签指定目标 agent（个人/组织 scope、工作区快照流、日志回传、取消、掉线检测），详见 [docs/runners.zh-CN.md](docs/runners.zh-CN.md)
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
@@ -149,6 +151,9 @@ go run .
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | asynq 队列使用的 Redis 地址 |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
+| `GITDASH_PROFILE_REPO` | `1` | 用户首次创建时自动创建公开的 `<用户名>/<用户名>` 仓库（`0` 关闭） |
+| `GITDASH_COPILOT_IMAGE` | 空 | copilot 会话默认 Docker 镜像（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
+| `GITDASH_COPILOT_NETWORK` | `bridge` | copilot 会话容器网络（`none` 会禁用 LLM 访问） |
 | `GITDASH_ADMIN_PASSWORD` | 空（关闭） | 设置后在**首次启动**创建管理员并启用 `/admin` 管理面板 |
 | `GITDASH_ADMIN_USER` | `admin` | 管理员用户名（配合上者） |
 | `GITDASH_SMTP_HOST` | 空（关闭） | SMTP 主机；设置后启用邮件通知/邮箱验证 |

@@ -25,6 +25,8 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
 - **BYOK copilot (MVP)**: run AI copilot sessions on a repo; each session runs in its own isolated Docker container and uses your own Anthropic-compatible API key (bring your own key) — see [docs/copilot.md](docs/copilot.md)
+- **User avatars**: upload / remove a profile picture (PNG/JPEG/GIF/WebP, max 2MB); shown in the header, user page and profile, with an initials fallback
+- **Profile repo**: a public `<username>/<username>` repo is created when an account is first created (register / admin / OAuth), initialized with a README (`GITDASH_PROFILE_REPO=0` disables)
 - **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection) — see [docs/runners.md](docs/runners.md)
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
@@ -149,6 +151,9 @@ Environment variables (all optional):
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
+| `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<username>/<username>` repo on first account creation (`0` disables) |
+| `GITDASH_COPILOT_IMAGE` | empty | Default Docker image for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
+| `GITDASH_COPILOT_NETWORK` | `bridge` | Container network for copilot sessions (`none` disables LLM access) |
 | `GITDASH_ADMIN_PASSWORD` | empty (off) | Set to create an admin on **first boot** and enable the `/admin` panel |
 | `GITDASH_ADMIN_USER` | `admin` | Admin username (used with the above) |
 | `GITDASH_SMTP_HOST` | empty (off) | SMTP host; enables email notifications / address verification |

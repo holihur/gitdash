@@ -93,6 +93,7 @@ func (a *API) adminCreateUser(w http.ResponseWriter, r *http.Request) {
 		u.Email = email
 	}
 	log.Printf("admin %q created user %q", userFrom(r), username)
+	a.provisionProfileRepo(username)
 	writeJSON(w, http.StatusCreated, u)
 }
 

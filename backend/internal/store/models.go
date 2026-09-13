@@ -530,6 +530,18 @@ type byokKeyRow struct {
 
 func (byokKeyRow) TableName() string { return "byok_keys" }
 
+// ---- user avatars ----
+
+// userAvatarRow 用户头像图片（单独表，避免 users 常规查询加载大字段）。
+type userAvatarRow struct {
+	Username    string `gorm:"primaryKey;size:255"`
+	ContentType string `gorm:"not null;default:'';size:64"`
+	Data        []byte `gorm:"not null"`
+	UpdatedAt   string `gorm:"not null"`
+}
+
+func (userAvatarRow) TableName() string { return "user_avatars" }
+
 // ---- copilot sessions（每个会话 = 一个独立的 Docker 容器）----
 
 // copilotSessionRow 仓库内的一个 AI copilot 会话，绑定到某个 BYOK 密钥，

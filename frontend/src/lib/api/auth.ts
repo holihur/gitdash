@@ -1,4 +1,4 @@
-import { req } from "./core";
+import { req, sendForm } from "./core";
 import type { LoginResult, MFAEnroll, MFAStatus, User } from "./types";
 
 export const authApi = {
@@ -32,6 +32,14 @@ export const authApi = {
     }),
   resendEmailVerification: () =>
     req<{ sent: boolean }>("/me/email/resend", { method: "POST" }),
+
+  // avatar
+  uploadAvatar: (file: File) => {
+    const form = new FormData();
+    form.append("avatar", file);
+    return sendForm<{ avatar_url: string }>("/me/avatar", form);
+  },
+  deleteAvatar: () => req<{ deleted: boolean }>("/me/avatar", { method: "DELETE" }),
 
 
   // profile

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn, copyText, formatDate } from "@/lib/utils";
+import { Avatar } from "@/components/avatar";
 
 interface Profile {
   username: string;
@@ -61,6 +62,7 @@ export default function ProfilePage() {
         verified={profile.email_verified ?? false}
         onChanged={loadProfile}
       />
+      <AvatarSection username={profile.username} />
       <ByokSection />
       <PasswordSection />
       <MFASection mfaEnabled={profile.mfa_enabled} onChanged={loadProfile} />
@@ -259,6 +261,73 @@ function GPGKeySection() {
           <KeyRound className="h-4 w-4" />
           {t("profile.gpgAdd")}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AvatarSection({ username }: { username: string }) {
+  const { t, to } = useI18n();
+  const [version, setVersion] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      await api.uploadAvatar(file);
+      setVersion(Date.now());
+      toast.success(t("profile.avatarUpdated"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.deleteAvatar();
+      setVersion(Date.now());
+      toast.success(t("profile.avatarRemoved"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <UserRound className="h-4 w-4" />
+          {t("profile.avatar")}
+        </CardTitle>
+        <CardDescription>{t("profile.avatarHint")}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center gap-4">
+        <Avatar username={username} version={version} size={72} className="border" />
+        <div className="flex flex-col gap-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) upload(f);
+              e.target.value = "";
+            }}
+          />
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => inputRef.current?.click()}>
+            {t("profile.avatarUpload")}
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={remove}>
+            {t("profile.avatarRemove")}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
