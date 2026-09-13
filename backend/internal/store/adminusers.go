@@ -59,6 +59,10 @@ func (s *Store) AdminDeleteUser(username string) error {
 				return err
 			}
 		}
+		// 关注关系（作为关注者或被关注者）
+		if err := tx.Where("follower = ? OR followee = ?", username, username).Delete(&followRow{}).Error; err != nil {
+			return err
+		}
 		// 名下 packages（含文件 blob 路径引用；blob 为内容寻址、不含个人信息）
 		if err := tx.Where("owner = ?", username).Delete(&packageRow{}).Error; err != nil {
 			return err

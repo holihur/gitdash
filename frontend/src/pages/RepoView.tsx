@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Copy,
@@ -408,7 +408,11 @@ export default function RepoView() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold">
-            {owner}/{name}
+            <Link to={`/users/${owner}`} className="hover:underline">
+              {owner}
+            </Link>
+            <span className="text-muted-foreground">/</span>
+            {name}
           </h1>
           <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
           {repo?.fork_owner && repo?.fork_repo && (

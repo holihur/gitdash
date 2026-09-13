@@ -149,6 +149,44 @@ func TestCannotForkOwnRepo(t *testing.T) {
 	}
 }
 
+func TestRepoDescriptionUpdate(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	bob := register(t, env, "bobby", "bob-pass-123456")
+
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo", "description": "old"}, 201)
+
+	// owner 修改描述
+	m := alice.mustStatus("POST", "/users/alice/repos/demo/description",
+		map[string]string{"description": "  new desc  "}, 200)
+	if m["description"] != "new desc" {
+		t.Fatalf("description = %v, want trimmed %q", m["description"], "new desc")
+	}
+	got := alice.mustStatus("GET", "/users/alice/repos/demo", nil, 200)
+	if got["description"] != "new desc" {
+		t.Fatalf("persisted description = %v", got["description"])
+	}
+
+	// 置空
+	m = alice.mustStatus("POST", "/users/alice/repos/demo/description",
+		map[string]string{"description": ""}, 200)
+	if m["description"] != "" {
+		t.Fatalf("cleared description = %v", m["description"])
+	}
+
+	// 非 owner 不可修改（requireOwner 返回 404 隐藏存在性）
+	bob.mustFail("POST", "/users/alice/repos/demo/description",
+		map[string]string{"description": "hacked"}, 404)
+
+	// 超长拒绝（>500 字符）
+	long := make([]rune, 501)
+	for i := range long {
+		long[i] = 'a'
+	}
+	alice.mustFail("POST", "/users/alice/repos/demo/description",
+		map[string]string{"description": string(long)}, 400)
+}
+
 func TestRepoSize(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")

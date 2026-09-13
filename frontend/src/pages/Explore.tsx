@@ -170,14 +170,36 @@ export default function Explore() {
               <p className="text-xs font-medium uppercase text-muted-foreground">
                 {t("explore.sectionUsers")}
               </p>
-              {results.users.map((u) => (
-                <div key={`${u.kind}:${u.name}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm">
-                  <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="font-medium">{u.name}</span>
-                  {u.kind === "org" && <Badge variant="secondary" className="font-normal">{t("explore.org")}</Badge>}
-                  {u.display && <span className="text-muted-foreground">{u.display}</span>}
-                </div>
-              ))}
+              {results.users.map((u) => {
+                const inner = (
+                  <>
+                    <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="font-medium">{u.name}</span>
+                    {u.kind === "org" && (
+                      <Badge variant="secondary" className="font-normal">
+                        {t("explore.org")}
+                      </Badge>
+                    )}
+                    {u.display && <span className="text-muted-foreground">{u.display}</span>}
+                  </>
+                );
+                return u.kind === "user" ? (
+                  <Link
+                    key={`${u.kind}:${u.name}`}
+                    to={`/users/${u.name}`}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <div
+                    key={`${u.kind}:${u.name}`}
+                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+                  >
+                    {inner}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -94,6 +94,19 @@ func (s *Store) SetRepoTemplate(owner, name string, isTemplate bool) error {
 	return nil
 }
 
+// SetRepoDescription 修改仓库描述（仅 owner 调用；空字符串表示清空）。
+func (s *Store) SetRepoDescription(owner, name, description string) error {
+	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("description", description)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) GetRepo(owner, name string) (Repo, error) {
 	var row repoRow
 	err := s.db.Where("owner = ? AND name = ?", owner, name).First(&row).Error

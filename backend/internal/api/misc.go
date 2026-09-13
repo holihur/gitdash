@@ -126,6 +126,51 @@ func (a *API) setRepoTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repo)
 }
 
+// maxRepoDescription 仓库描述最大长度（按 Unicode 字符计）。
+const maxRepoDescription = 500
+
+// setRepoDescription 修改仓库描述。
+//
+//	@Summary     修改仓库描述
+//	@Description 仅仓库所有者可修改；描述可置空。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setRepoDescriptionReq true "description"
+//	@Success     200 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/description [post]
+func (a *API) setRepoDescription(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in setRepoDescriptionReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	desc := strings.TrimSpace(in.Description)
+	if len([]rune(desc)) > maxRepoDescription {
+		writeCode(w, http.StatusBadRequest, "description_too_long",
+			"description must be at most 500 characters")
+		return
+	}
+	if err := a.store.SetRepoDescription(owner, name, desc); err != nil {
+		internalError(w, err)
+		return
+	}
+	repo, err := a.store.GetRepo(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, repo)
+}
+
 // listTemplateRepos 列出当前用户可访问的模版仓库。
 //
 //	@Summary     列出可访问的模版仓库

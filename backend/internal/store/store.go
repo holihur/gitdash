@@ -27,6 +27,12 @@ type User struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// UserSummary 用户公开摘要（用户页/关注列表使用，不含邮箱等私有字段）。
+type UserSummary struct {
+	Username  string `json:"username"`
+	CreatedAt string `json:"created_at"`
+}
+
 type UserAuth struct {
 	ID           int64
 	Username     string

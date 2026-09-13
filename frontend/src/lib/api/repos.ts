@@ -35,6 +35,11 @@ export const reposApi = {
       method: "POST",
       body: JSON.stringify({ is_template: isTemplate }),
     }),
+  setRepoDescription: (owner: string, name: string, description: string) =>
+    req<Repo>(`/users/${owner}/repos/${name}/description`, {
+      method: "POST",
+      body: JSON.stringify({ description }),
+    }),
   listExplore: (limit?: number, offset?: number) =>
     reqPage<Repo[]>(`/explore/repos${pageQuery(limit, offset)}`),
   listTemplateRepos: () => req<Repo[]>("/templates"),

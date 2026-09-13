@@ -60,6 +60,11 @@ type setRepoTemplateReq struct {
 	IsTemplate *bool `json:"is_template"` // 是否为模版仓库（必填）
 }
 
+// setRepoDescriptionReq 修改仓库描述请求体。
+type setRepoDescriptionReq struct {
+	Description string `json:"description"` // 仓库描述（可为空，最长 500 字符）
+}
+
 // addCollabReq 添加/更新协作者请求体。
 type addCollabReq struct {
 	Username   string `json:"username"`   // 协作者用户名

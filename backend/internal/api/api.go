@@ -238,6 +238,13 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/search", a.auth(a.search))
 
+	// user page & follow
+	mux.HandleFunc("GET /api/users/{username}", a.auth(a.getUserProfile))
+	mux.HandleFunc("POST /api/users/{username}/follow", a.auth(a.followUser))
+	mux.HandleFunc("DELETE /api/users/{username}/follow", a.auth(a.unfollowUser))
+	mux.HandleFunc("GET /api/users/{username}/followers", a.auth(a.listFollowers))
+	mux.HandleFunc("GET /api/users/{username}/following", a.auth(a.listFollowing))
+
 	// star & fork & import
 	mux.HandleFunc("GET /api/starred", a.auth(a.listStarred))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/star", a.auth(a.starRepo))
@@ -349,6 +356,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// collaborators
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/visibility", a.auth(a.setRepoVisibility))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/template", a.auth(a.setRepoTemplate))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/description", a.auth(a.setRepoDescription))
 	mux.HandleFunc("GET /api/templates", a.auth(a.listTemplateRepos))
 	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
 	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))

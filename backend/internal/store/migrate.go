@@ -36,6 +36,7 @@ func (s *Store) migrate() error {
 		&userOAuthRow{},
 		&starRow{},
 		&watchRow{},
+		&followRow{},
 		&notificationRow{},
 		&loginFailRow{},
 		&forkRow{},

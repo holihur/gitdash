@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { BookTemplate, KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BookTemplate, KeyRound, PencilLine, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { api, type Branch, type BranchProtection, type Repo, type RepoEnvVar } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,29 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const navigate = useNavigate();
   const [visibilityBusy, setVisibilityBusy] = useState(false);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [description, setDescription] = useState("");
+  const [descBusy, setDescBusy] = useState(false);
   const [deleteRepoOpen, setDeleteRepoOpen] = useState(false);
   const [deleteRepoBusy, setDeleteRepoBusy] = useState(false);
+
+  useEffect(() => {
+    setDescription(repo?.description ?? "");
+  }, [repo?.description]);
+
+  const saveDescription = async () => {
+    if (!repo) return;
+    setDescBusy(true);
+    try {
+      const r = await api.setRepoDescription(owner, name, description.trim());
+      setRepo({ ...repo, description: r.description });
+      setDescription(r.description);
+      toast.success(t("repo.descriptionSaved"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setDescBusy(false);
+    }
+  };
 
   const toggleVisibility = async () => {
     if (!repo) return;
@@ -70,6 +91,39 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
 
   return (
     <div className="space-y-4">
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <PencilLine className="h-4 w-4" />
+              {t("repo.description")}
+            </CardTitle>
+            <CardDescription>{t("repo.descriptionDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex max-w-xl flex-wrap items-center gap-2">
+              <Input
+                value={description}
+                maxLength={500}
+                placeholder={t("repo.descriptionPlaceholder")}
+                disabled={descBusy}
+                className="min-w-0 flex-1"
+                onChange={(e) => setDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveDescription();
+                }}
+              />
+              <Button
+                size="sm"
+                disabled={descBusy || description.trim() === (repo?.description ?? "")}
+                onClick={saveDescription}
+              >
+                {t("common.save")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <BranchProtectionsCard owner={owner} name={name} />
       {repo?.role === "owner" && <PipelineCard owner={owner} name={name} />}
       {repo?.role === "owner" && <RepoEnvVarsCard owner={owner} name={name} />}

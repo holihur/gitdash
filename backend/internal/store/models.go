@@ -317,6 +317,15 @@ type watchRow struct {
 
 func (watchRow) TableName() string { return "repo_watches" }
 
+// followRow 用户关注关系（follower 关注 followee）。
+type followRow struct {
+	Follower  string `gorm:"primaryKey;size:255;index:idx_follows_follower"`
+	Followee  string `gorm:"primaryKey;size:255;index:idx_follows_followee"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (followRow) TableName() string { return "user_follows" }
+
 type notificationRow struct {
 	ID        int64  `gorm:"primaryKey;autoIncrement"`
 	Username  string `gorm:"not null;index:idx_notifications_user"`

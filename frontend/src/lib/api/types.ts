@@ -439,3 +439,28 @@ export interface Notification {
   read: boolean;
   created_at: string;
 }
+
+// ---- 用户主页与关注 ----
+
+export interface UserSummary {
+  username: string;
+  created_at: string;
+}
+
+export interface UserProfile {
+  username: string;
+  created_at: string;
+  followers: number;
+  following: number;
+  /** 当前登录用户是否就是该用户本人 */
+  is_self: boolean;
+  is_following: boolean;
+  /** 可见仓库：本人含私有，他人仅公开 */
+  repos: Repo[];
+}
+
+export interface FollowState {
+  followers: number;
+  following: number;
+  is_following: boolean;
+}

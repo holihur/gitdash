@@ -22,6 +22,7 @@ const Keys = lazy(() => import("@/pages/Keys"));
 const Packages = lazy(() => import("@/pages/Packages"));
 const Orgs = lazy(() => import("@/pages/Orgs"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
+const UsersPage = lazy(() => import("@/pages/UserPage"));
 const RunnersPage = lazy(() => import("@/pages/Runners"));
 
 function PageLoading() {
@@ -303,6 +304,14 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             element={
               <Suspense fallback={<PageLoading />}>
                 <Orgs />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/users/:username"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <UsersPage />
               </Suspense>
             }
           />
