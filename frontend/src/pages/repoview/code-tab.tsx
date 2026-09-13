@@ -359,37 +359,7 @@ export default function CodeTab({
   );
 
   return (
-    <div
-      className={cn(
-        "grid gap-4",
-        showTree &&
-          (showOutline
-            ? "lg:grid-cols-[220px_minmax(0,1fr)_220px] xl:grid-cols-[230px_minmax(0,1fr)_250px]"
-            : "lg:grid-cols-[230px_minmax(0,1fr)]"),
-      )}
-    >
-      {showTree && (
-        <aside className="sticky top-20 hidden self-start rounded-lg border bg-card lg:block">
-          <div className="flex items-center gap-2 border-b px-3 py-2">
-            <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">{t("repo.files")}</span>
-          </div>
-          <div className="max-h-[calc(100vh-14rem)] overflow-auto">
-            <FileTree
-              owner={owner}
-              name={name}
-              refName={refName}
-              currentDir={currentDir}
-              activeFile={blob?.path ?? ""}
-              emptyRepo={emptyRepo}
-              onOpenDir={openDir}
-              onOpenFile={openFile}
-            />
-          </div>
-        </aside>
-      )}
-
-      <div className="min-w-0 space-y-4">
+    <div className="space-y-4">
       {!emptyRepo ? (
         <CodeSearch
           owner={owner}
@@ -401,6 +371,7 @@ export default function CodeTab({
       ) : (
         <div className="flex flex-wrap items-center justify-end gap-2">{toolbarActions}</div>
       )}
+
       <div className="flex flex-wrap items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -482,6 +453,38 @@ export default function CodeTab({
           </nav>
         )}
       </div>
+
+      <div
+        className={cn(
+          "grid gap-4",
+          showTree &&
+            (showOutline
+              ? "lg:grid-cols-[220px_minmax(0,1fr)_220px] xl:grid-cols-[230px_minmax(0,1fr)_250px]"
+              : "lg:grid-cols-[230px_minmax(0,1fr)]"),
+        )}
+      >
+      {showTree && (
+        <aside className="sticky top-20 hidden self-start rounded-lg border bg-card lg:block">
+          <div className="flex items-center gap-2 border-b px-3 py-2">
+            <FolderTree className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">{t("repo.files")}</span>
+          </div>
+          <div className="max-h-[calc(100vh-14rem)] overflow-auto">
+            <FileTree
+              owner={owner}
+              name={name}
+              refName={refName}
+              currentDir={currentDir}
+              activeFile={blob?.path ?? ""}
+              emptyRepo={emptyRepo}
+              onOpenDir={openDir}
+              onOpenFile={openFile}
+            />
+          </div>
+        </aside>
+      )}
+
+      <div className="min-w-0 space-y-4">
 
       {error && (
         <Card className="border-destructive">
@@ -737,6 +740,7 @@ export default function CodeTab({
           </div>
         </aside>
       )}
+      </div>
 
       {/* 窄屏：左侧文件树抽屉 */}
       <Sheet open={treeOpen} onOpenChange={setTreeOpen}>
