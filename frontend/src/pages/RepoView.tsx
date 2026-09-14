@@ -37,7 +37,7 @@ import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { cn, copyText, formatSize } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import MirrorDialog from "@/components/mirror-dialog";
@@ -58,7 +58,7 @@ type RepoTab = (typeof tabs)[number];
 
 export default function RepoView() {
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const { owner = "", name = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -77,18 +77,10 @@ export default function RepoView() {
     [setSearchParams],
   );
 
-  const [me, setMe] = useState("");
-  const isOwner = me !== "" && me === owner;
-
-  // 当前登录用户（用于判断仓库归属，决定是否展示设置页）
-  useEffect(() => {
-    api
-      .me()
-      .then((m) => setMe(m.username))
-      .catch(() => setMe(""));
-  }, []);
-
   const [repo, setRepo] = useState<Repo | null>(null);
+  // 仓库角色由后端按 owner / 协作者 / 组织角色计算；组织仓库的 owner 也是"owner"，
+  // 不能用 me === owner 判断（组织仓库 owner 是组织名）。
+  const isOwner = repo?.role === "owner";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [entries, setEntries] = useState<TreeEntry[]>([]);
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -541,7 +533,7 @@ export default function RepoView() {
 
         <TabsContent value="commits">
           <Suspense fallback={<TabFallback />}>
-            <CommitsTab owner={owner} name={name} refName={ref} emptyRepo={emptyRepo} />
+            <CommitsTab owner={owner} name={name} refName={ref} emptyRepo={emptyRepo} role={repo?.role} />
           </Suspense>
         </TabsContent>
 

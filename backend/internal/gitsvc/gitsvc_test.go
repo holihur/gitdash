@@ -186,3 +186,96 @@ func TestPushMirror(t *testing.T) {
 		t.Fatalf("target branches = %q, want main", out)
 	}
 }
+
+func TestRevertCommit(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "rev"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "rev"); err != nil {
+		t.Fatal(err)
+	}
+	// v1 -> v2
+	if _, err := WriteCommit("alice", "rev", "main", "add", "alice",
+		[]FileChange{{Path: "a.txt", Action: "create", Content: "v1"}}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := WriteCommit("alice", "rev", "main", "edit", "alice",
+		[]FileChange{{Path: "a.txt", Action: "update", Content: "v2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newSHA, err := RevertCommit("alice", "rev", "main", second, "", "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(newSHA) != 40 {
+		t.Fatalf("revert sha = %q", newSHA)
+	}
+	out, err := gitOut(RepoPath("alice", "rev"), "show", "main:a.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "v1" {
+		t.Fatalf("content after revert = %q, want v1", out)
+	}
+}
+
+// TestRevertMergeCommit 验证 merge 提交按第一父提交撤销（-m 1）。
+func TestRevertMergeCommit(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "m"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "m"); err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	runGit := func(args ...string) string {
+		t.Helper()
+		out, err := gitOut(work, args...)
+		if err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+		return out
+	}
+	if _, err := gitOut("", "clone", "-q", RepoPath("alice", "m"), work); err != nil {
+		t.Fatal(err)
+	}
+	runGit("config", "user.name", "alice")
+	runGit("config", "user.email", "alice@example.com")
+	// feature 分支新增 feature.txt
+	runGit("checkout", "-q", "-b", "feature")
+	if err := os.WriteFile(filepath.Join(work, "feature.txt"), []byte("feature"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "feature")
+	// main 分支新增 main.txt
+	runGit("checkout", "-q", "main")
+	if err := os.WriteFile(filepath.Join(work, "main.txt"), []byte("main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "main side")
+	runGit("merge", "--no-ff", "-q", "-m", "merge feature", "feature")
+	mergeSHA := strings.TrimSpace(runGit("rev-parse", "HEAD"))
+	runGit("push", "-q", "origin", "HEAD:refs/heads/main")
+
+	if _, err := RevertCommit("alice", "m", "main", mergeSHA, "", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	// 撤销 merge 后 feature.txt 消失，main.txt 仍在
+	if _, err := gitOut(RepoPath("alice", "m"), "cat-file", "-e", "main:feature.txt"); err == nil {
+		t.Fatal("feature.txt should be gone after reverting merge")
+	}
+	if _, err := gitOut(RepoPath("alice", "m"), "cat-file", "-e", "main:main.txt"); err != nil {
+		t.Fatalf("main.txt should remain: %v", err)
+	}
+}

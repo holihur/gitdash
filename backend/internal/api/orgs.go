@@ -41,6 +41,8 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	// 组织创建时初始化同名公开仓库（<org>/<org>），创建者自动订阅。
+	a.provisionSameNameRepo(o.Name, userFrom(r))
 	writeJSON(w, http.StatusCreated, o)
 }
 

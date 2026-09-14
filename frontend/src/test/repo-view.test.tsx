@@ -75,7 +75,7 @@ describe("RepoView", () => {
 
   it("非 owner 不显示 settings 标签", async () => {
     (api.me as Mock).mockResolvedValue({ username: "bob" });
-    (api.getRepo as Mock).mockResolvedValue(repo());
+    (api.getRepo as Mock).mockResolvedValue(repo({ role: "write" }));
     renderRepo("alice");
     await waitFor(() => expect(screen.getAllByText("a test repo").length).toBeGreaterThan(0));
     expect(screen.queryByText("Settings")).not.toBeInTheDocument();
@@ -83,8 +83,18 @@ describe("RepoView", () => {
 
   it("owner 显示 settings 标签", async () => {
     (api.me as Mock).mockResolvedValue({ username: "alice" });
-    (api.getRepo as Mock).mockResolvedValue(repo());
+    (api.getRepo as Mock).mockResolvedValue(repo({ role: "owner" }));
     renderRepo("alice");
+    await waitFor(() => expect(screen.getByText("Settings")).toBeInTheDocument());
+  });
+
+  it("组织仓库：组织 owner 显示 settings 标签", async () => {
+    // 组织仓库的 owner 是组织名，me !== owner；权限应依据后端返回的 role。
+    (api.me as Mock).mockResolvedValue({ username: "alice" });
+    (api.getRepo as Mock).mockResolvedValue(
+      repo({ owner: "acme", role: "owner" }),
+    );
+    renderRepo("acme");
     await waitFor(() => expect(screen.getByText("Settings")).toBeInTheDocument());
   });
 

@@ -5811,6 +5811,85 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/commits/{sha}/revert": {
+            "post": {
+                "description": "在 branch 上创建撤销 sha 变更的新提交；merge 提交按第一父提交撤销；冲突时返回 409。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "撤销提交",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "commit SHA",
+                        "name": "sha",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "branch 与可选 message",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.revertCommitReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "sha、branch 与 message",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/copilots": {
             "get": {
                 "produces": [
@@ -11663,6 +11742,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.revertCommitReq": {
+            "type": "object",
+            "properties": {
+                "branch": {
+                    "description": "目标分支（必填，通常为当前查看的分支）",
+                    "type": "string"
+                },
+                "message": {
+                    "description": "提交信息，可选，缺省自动生成 \"Revert \u003c原始主题\u003e\"",
                     "type": "string"
                 }
             }

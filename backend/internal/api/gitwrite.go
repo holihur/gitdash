@@ -200,6 +200,57 @@ func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"sha": sha, "branch": in.Branch, "message": in.Message})
 }
 
+// revertCommit 撤销某次提交：在目标分支上新建一个反向提交（git revert）。
+//
+//	@Summary     撤销提交
+//	@Description 在 branch 上创建撤销 sha 变更的新提交；merge 提交按第一父提交撤销；冲突时返回 409。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       sha   path string true "commit SHA"
+//	@Param       body  body revertCommitReq true "branch 与可选 message"
+//	@Success     201 {object} map[string]any "sha、branch 与 message"
+//	@Failure     400 {object} map[string]string
+//	@Failure     409 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/commits/{sha}/revert [post]
+func (a *API) revertCommit(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	sha := r.PathValue("sha")
+	if !shaRe.MatchString(sha) {
+		writeCode(w, http.StatusBadRequest, "invalid_sha", "invalid commit sha")
+		return
+	}
+	var in revertCommitReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.Branch = strings.TrimSpace(in.Branch)
+	in.Message = strings.TrimSpace(in.Message)
+	if in.Branch == "" {
+		writeCode(w, http.StatusBadRequest, "branch_required", "branch is required")
+		return
+	}
+	newSha, err := gitsvc.RevertCommit(owner, name, in.Branch, sha, in.Message, userFrom(r))
+	if err != nil {
+		msg := err.Error()
+		code := http.StatusBadRequest
+		codeStr := "revert_failed"
+		if strings.Contains(msg, "conflict") {
+			code = http.StatusConflict
+			codeStr = "revert_conflict"
+		}
+		writeCode(w, code, codeStr, msg)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"sha": newSha, "branch": in.Branch})
+}
+
 // commitDiff 查看提交差异。
 //
 //	@Summary     提交 diff

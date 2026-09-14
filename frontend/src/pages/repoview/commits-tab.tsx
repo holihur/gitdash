@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BadgeCheck, ChevronDown, GitCommitHorizontal , ShieldAlert, ShieldQuestion } from "lucide-react";
+import { BadgeCheck, ChevronDown, GitCommitHorizontal , ShieldAlert, ShieldQuestion, Undo2 } from "lucide-react";
 import { api, type Commit, type PullDiff } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import ConfirmDialog from "@/components/confirm-dialog";
 import {
   Table,
   TableBody,
@@ -13,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
 
@@ -22,14 +24,19 @@ export interface CommitsTabProps {
   name: string;
   refName: string;
   emptyRepo: boolean;
+  role?: string;
 }
 
-export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsTabProps) {
+export default function CommitsTab({ owner, name, refName, emptyRepo, role }: CommitsTabProps) {
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const [commits, setCommits] = useState<Commit[]>([]);
   const [diffSha, setDiffSha] = useState<string | null>(null);
   const [diffData, setDiffData] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
+  const [revertSha, setRevertSha] = useState<string | null>(null);
+  const [revertBusy, setRevertBusy] = useState(false);
+  const [reload, setReload] = useState(0);
+  const canWrite = role === "owner" || role === "write";
 
   useEffect(() => {
     if (!refName) return;
@@ -37,7 +44,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsT
       .commits(owner, name, refName)
       .then(setCommits)
       .catch((e) => toast.error(apiErrorMsg(to, e)));
-  }, [owner, name, refName, to]);
+  }, [owner, name, refName, to, reload]);
 
   useEffect(() => {
     if (!diffSha) {
@@ -54,6 +61,21 @@ export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsT
     };
   }, [diffSha, owner, name]);
 
+  const doRevert = async () => {
+    if (!revertSha) return;
+    setRevertBusy(true);
+    try {
+      const r = await api.revertCommit(owner, name, revertSha, refName);
+      toast.success(t("commits.reverted", { sha: r.sha.slice(0, 7) }));
+      setRevertSha(null);
+      setReload((n) => n + 1);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setRevertBusy(false);
+    }
+  };
+
   return (
     <div>
       {emptyRepo ? (
@@ -66,6 +88,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsT
                 <TableHead>{t("repo.commit")}</TableHead>
                 <TableHead className="w-36">{t("common.author")}</TableHead>
                 <TableHead className="w-56">{t("common.date")}</TableHead>
+                {canWrite && <TableHead className="w-28 text-right">{t("common.actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -125,6 +148,20 @@ export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsT
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(c.date, locale)}
                   </TableCell>
+                  {canWrite && (
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        title={t("commits.revertTitle")}
+                        onClick={() => setRevertSha(c.sha)}
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                        {t("commits.revert")}
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -146,6 +183,18 @@ export default function CommitsTab({ owner, name, refName, emptyRepo }: CommitsT
           </CardContent>
         </Card>
       )}
+      <ConfirmDialog
+        open={revertSha !== null}
+        onOpenChange={(o) => !o && setRevertSha(null)}
+        title={t("commits.revertTitle")}
+        description={t("commits.revertConfirm", {
+          sha: (revertSha ?? "").slice(0, 7),
+          branch: refName,
+        })}
+        confirmText={t("commits.revert")}
+        onConfirm={doRevert}
+        busy={revertBusy}
+      />
     </div>
   );
 }

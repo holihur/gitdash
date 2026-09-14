@@ -68,7 +68,8 @@ export default function FileOpDialog({ open, onOpenChange, owner, repo, branches
           : t("fops.msgCreate", { path: submitPath }));
     try {
       await api.createCommit(owner, repo, branch, msg, [
-        { path: submitPath, action, content },
+        // 新建文件夹通过提交 <dir>/.gitkeep 占位实现，其内容无意义，固定为空。
+        { path: submitPath, action, content: isDir ? "" : content },
       ]);
       toast.success(t("fops.saved", { path: submitPath }));
       onOpenChange(false);
@@ -125,12 +126,14 @@ export default function FileOpDialog({ open, onOpenChange, owner, repo, branches
             />
             {isDir && <p className="text-xs text-muted-foreground">{t("fops.folderHint")}</p>}
           </div>
-          <div className="grid gap-2">
-            <Label>{t("fops.contentLabel")}</Label>
-            <div className="max-h-[46vh] overflow-auto rounded-md border bg-background">
-              <CodeMirrorEditor value={content} path={submitPath} onDocChange={setContent} className="min-h-64" />
+          {!isDir && (
+            <div className="grid gap-2">
+              <Label>{t("fops.contentLabel")}</Label>
+              <div className="max-h-[46vh] overflow-auto rounded-md border bg-background">
+                <CodeMirrorEditor value={content} path={submitPath} onDocChange={setContent} className="min-h-64" />
+              </div>
             </div>
-          </div>
+          )}
           <div className="grid gap-2">
             <Label htmlFor="fop-msg">{t("fops.messageLabel")}</Label>
             <Input id="fop-msg" value={message} onChange={(e) => setMessage(e.target.value)} />

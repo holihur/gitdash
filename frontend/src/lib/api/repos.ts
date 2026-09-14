@@ -111,6 +111,11 @@ export const reposApi = {
       `/users/${owner}/repos/${name}/commits`,
       { method: "POST", body: JSON.stringify({ branch, message, changes }) },
     ),
+  revertCommit: (owner: string, name: string, sha: string, branch: string, message?: string) =>
+    req<{ sha: string; branch: string }>(
+      `/users/${owner}/repos/${name}/commits/${sha}/revert`,
+      { method: "POST", body: JSON.stringify({ branch, message }) },
+    ),
 
 
   // branches & tags

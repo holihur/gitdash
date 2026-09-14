@@ -50,6 +50,12 @@ type writeCommitReq struct {
 	Changes []gitsvc.FileChange `json:"changes"` // 文件变更列表（create/update/delete/delete_tree）
 }
 
+// revertCommitReq 撤销提交请求体。
+type revertCommitReq struct {
+	Branch  string `json:"branch"`  // 目标分支（必填，通常为当前查看的分支）
+	Message string `json:"message"` // 提交信息，可选，缺省自动生成 "Revert <原始主题>"
+}
+
 // setRepoVisibilityReq 设置仓库可见性请求体。
 type setRepoVisibilityReq struct {
 	Private *bool `json:"private"` // 是否私有（必填）
