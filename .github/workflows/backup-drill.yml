@@ -1,0 +1,31 @@
+name: Backup drill
+
+# 定时（每月 1 日 03:00 UTC）跑一次真实备份→校验→恢复→启动验证的演练，
+# 防止备份/恢复路径被后续改动悄悄破坏（issue #4 P2.8）。也可手动触发。
+on:
+  schedule:
+    - cron: "0 3 1 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: backup-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    name: Backup / restore drill
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: backend/go.sum
+
+      - name: Build server binary
+        working-directory: backend
+        run: go build -o /tmp/gitdash .
+
+      - name: Run backup/restore drill
+        run: GITDASH_BIN=/tmp/gitdash bash scripts/backup-drill.sh
