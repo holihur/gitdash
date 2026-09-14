@@ -284,7 +284,7 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("%w: start agent: %v", ErrAgentUnavailable, err)
+		return nil, fmt.Errorf("%w: start agent: %w", ErrAgentUnavailable, err)
 	}
 
 	p := &proc{cmd: cmd, baseURL: "http://" + addr, ws: ws, branch: branch, dead: make(chan struct{})}
@@ -300,7 +300,7 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 
 	if err := waitHealthy(ctx, p.baseURL, 20*time.Second); err != nil {
 		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("%w: %v: %s", ErrAgentUnavailable, err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("%w: %w: %s", ErrAgentUnavailable, err, strings.TrimSpace(stderr.String()))
 	}
 	logx.Infof("copilot audit: AGENT START session=%d repo=%s/%s addr=%s bin=%s",
 		session.ID, session.Owner, session.Repo, addr, bin)
@@ -400,7 +400,7 @@ func (m *Manager) RunTurn(ctx context.Context, session store.CopilotSession, tex
 	if err != nil {
 		return fmt.Errorf("agent chat: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		return fmt.Errorf("agent chat: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
@@ -418,8 +418,7 @@ func (m *Manager) RunTurn(ctx context.Context, session store.CopilotSession, tex
 		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &ev); err != nil {
 			continue
 		}
-		switch ev.Type {
-		case EventDone:
+		if ev.Type == EventDone {
 			sawDone = true
 			if sha, pushErr := m.commitAndPush(p.ws, p.branch, text); pushErr != nil {
 				logx.Warnf("copilot: push session %d: %v", session.ID, pushErr)
@@ -464,7 +463,7 @@ func (m *Manager) Messages(ctx context.Context, session store.CopilotSession) ([
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		return nil, fmt.Errorf("agent messages: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
@@ -496,7 +495,7 @@ func freePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 

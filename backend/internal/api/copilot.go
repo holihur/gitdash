@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket"
 
 	"gitdash/backend/internal/copilot"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
 
@@ -405,7 +406,9 @@ func (a *API) deleteCopilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.copilotMgr != nil {
-		a.copilotMgr.RemoveWorkspace(session)
+		if err := a.copilotMgr.RemoveWorkspace(session); err != nil {
+			logx.Warnf("copilot: remove workspace session %d: %v", session.ID, err)
+		}
 	}
 	if err := a.store.DeleteCopilotSession(owner, name, session.ID); err != nil {
 		internalError(w, err)
