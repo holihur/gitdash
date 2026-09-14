@@ -24,27 +24,31 @@ var uiOnlyErrorKeys = map[string]bool{
 // 因此这里不做调用点匹配，只做「字面量存在性」契约，避免机制变化导致漏检。
 func backendStringLiterals(t *testing.T, dir string) map[string]bool {
 	t.Helper()
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, func(fi os.FileInfo) bool {
-		return !strings.HasSuffix(fi.Name(), "_test.go")
-	}, 0)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("parse api package: %v", err)
+		t.Fatalf("read api dir: %v", err)
 	}
+	fset := token.NewFileSet()
 	out := map[string]bool{}
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			ast.Inspect(file, func(n ast.Node) bool {
-				lit, ok := n.(*ast.BasicLit)
-				if !ok || lit.Kind != token.STRING {
-					return true
-				}
-				if s, err := strconv.Unquote(lit.Value); err == nil {
-					out[s] = true
-				}
-				return true
-			})
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
 		}
+		file, perr := parser.ParseFile(fset, filepath.Join(dir, name), nil, 0)
+		if perr != nil {
+			t.Fatalf("parse %s: %v", name, perr)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			if s, uerr := strconv.Unquote(lit.Value); uerr == nil {
+				out[s] = true
+			}
+			return true
+		})
 	}
 	return out
 }
