@@ -63,10 +63,11 @@ jobs:
         working-directory: backend
         run: go test ./... -covermode=atomic -coverprofile=/tmp/coverage-unit.out 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
 
-      # 全量 race 检测（runner hub / queue / webhook dispatcher / copilot / store 均为并发代码）
+      # 全量 race 检测（runner hub / queue / webhook dispatcher / copilot / store 均为并发代码）。
+      # 集成套件在 -race 下较慢，放宽超时（默认 10m 不够）。
       - name: Test (race)
         working-directory: backend
-        run: go test -race ./... 2>&1 | tee /tmp/test-race.log; exit ${PIPESTATUS[0]}
+        run: go test -race -timeout 30m ./... 2>&1 | tee /tmp/test-race.log; exit ${PIPESTATUS[0]}
 
       - name: Upload unit-test coverage to Codecov
         uses: codecov/codecov-action@v5
