@@ -74,6 +74,8 @@ func start(t *testing.T) *Env {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
+	// 内容寻址 blob 存储（包 / Docker 注册表）；与 main.go 保持一致。
+	store.SetBlobDir(filepath.Join(dir, "packages-blobs"))
 
 	hs := httptest.NewServer(api.New(st, "test").Handler(""))
 	t.Cleanup(hs.Close)

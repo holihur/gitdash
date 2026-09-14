@@ -1,6 +1,6 @@
 # 私有包仓库
 
-gitdash 内置私有包仓库，覆盖 **npm (node)**、**composer (PHP)**、**pypi (Python)**、**rubygems (Ruby)**、**Go modules**、**cargo (Rust)** 与 **Maven (Java)**。
+gitdash 内置私有包仓库，覆盖 **npm (node)**、**composer (PHP)**、**pypi (Python)**、**rubygems (Ruby)**、**Go modules**、**cargo (Rust)**、**Maven (Java)** 与 **Docker / OCI 镜像仓库**。
 
 通用规则：
 
@@ -9,7 +9,8 @@ gitdash 内置私有包仓库，覆盖 **npm (node)**、**composer (PHP)**、**p
 - 读：本实例任意已认证用户；若包在发布时通过 `X-Gitdash-Repo` 头关联了仓库，则跟随该仓库可见性
 - 发布 / 删除 / yank：命名空间 owner 本人或组织 **owner** 角色成员
 - 存储：文件内容按内容寻址落盘（`data/packages-blobs`），元数据 / 下载计数 / 审计日志存 DB
-- 单文件上限：64 MB
+- 单文件上限：64 MB（Docker layer 直接流式落盘，不设此限）
+- Docker / OCI 走标准的 Distribution API（`/v2/...`，不在 `/api/packages` 下），同样私有：仅命名空间（路径首段 `<owner>`）成员可推拉
 
 下文请将 `<owner>` 替换为用户名/组织名，`<user>:<PAT>` 替换为凭证，`your-host:8080` 替换为服务地址。
 
@@ -329,6 +330,30 @@ mvn deploy          # 使用 ~/.m2/settings.xml 中的凭证（id: gitdash）
 mvn dependency:get -DremoteRepositories=gitdash \
   -Dartifact=com.example:hello:1.0.0
 ```
+
+---
+
+## 8. docker / OCI（私有镜像仓库）
+
+gitdash 在服务根路径实现了 [OCI Distribution 规范](https://github.com/opencontainers/distribution-spec)，`docker` / `podman` / `nerdctl` 可直接使用。镜像位于 `<owner>/<image>`（`<owner>` 为用户或组织），默认私有：仅其成员可推拉。
+
+鉴权为 HTTP Basic：用户名 + PAT（`repo` scope）作为密码。
+
+```bash
+# 登录（localhost 可用明文 HTTP；远程主机请用 HTTPS，或将仓库加入
+# /etc/docker/daemon.json 的 "insecure-registries"）
+docker login your-host:8080 -u <owner> -p <PAT>
+
+# 构建、打标签并推送
+docker build -t hello:1.0 .
+docker tag hello:1.0 your-host:8080/<owner>/hello:1.0
+docker push your-host:8080/<owner>/hello:1.0
+
+# 拉取
+docker pull your-host:8080/<owner>/hello:1.0
+```
+
+支持的端点：`/v2/`（版本/登录）、blob 上传（`POST`/`PATCH`/`PUT`，按 digest `HEAD`/`GET`）、manifest（按 tag 或 digest `GET`/`HEAD`/`PUT`/`DELETE`）以及 `/v2/<name>/tags/list`。blob 按内容寻址落盘（`data/packages-blobs`）并在镜像间去重；manifest 存 DB。
 
 ---
 

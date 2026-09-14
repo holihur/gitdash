@@ -54,6 +54,7 @@ func (s *Store) migrate() error {
 		&packageRow{},
 		&packageTagRow{},
 		&packageAuditRow{},
+		&registryManifestRow{},
 		&runnerRow{},
 		&runnerTokenRow{},
 		&byokKeyRow{},

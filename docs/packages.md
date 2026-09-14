@@ -1,6 +1,6 @@
 # Private Package Registry
 
-gitdash ships a built-in private package registry covering **npm (node)**, **composer (PHP)**, **pypi (Python)**, **rubygems (Ruby)**, **Go modules**, **cargo (Rust)** and **Maven (Java)**.
+gitdash ships a built-in private package registry covering **npm (node)**, **composer (PHP)**, **pypi (Python)**, **rubygems (Ruby)**, **Go modules**, **cargo (Rust)**, **Maven (Java)** and a **Docker / OCI registry**.
 
 Common rules:
 
@@ -9,7 +9,8 @@ Common rules:
 - Read: any authenticated user of the instance; if a package is linked to a repo (via the `X-Gitdash-Repo` header on publish), the repo's visibility applies
 - Publish / delete / yank: the namespace owner or org members with the **owner** role
 - Storage: file contents are stored content-addressed on disk (`data/packages-blobs`), metadata / download counts / audit log in the DB
-- Size limit: 64 MB per file
+- Size limit: 64 MB per file (Docker layers are streamed to disk, no such limit)
+- Docker / OCI uses the standard Distribution API at `/v2/...` (not `/api/packages`), with the same private-by-default access: only members of the namespace (`<owner>` first path segment) can pull or push
 
 Below, replace `<owner>` with your username/org, `<user>:<PAT>` with your credentials, `your-host:8080` with your server address.
 
@@ -334,6 +335,30 @@ mvn deploy          # uses ~/.m2/settings.xml credentials (id: gitdash)
 mvn dependency:get -DremoteRepositories=gitdash \
   -Dartifact=com.example:hello:1.0.0
 ```
+
+---
+
+## 8. docker / OCI (private registry)
+
+gitdash implements the [OCI Distribution spec](https://github.com/opencontainers/distribution-spec) at the server root, so `docker` / `podman` / `nerdctl` work directly. Images live under `<owner>/<image>` where `<owner>` is a user or organization; only its members can pull or push (private by default).
+
+Auth is HTTP Basic: username + a PAT (`repo` scope) as the password.
+
+```bash
+# login (plain HTTP works on localhost; for remote hosts use HTTPS or add the
+# registry to /etc/docker/daemon.json -> "insecure-registries")
+docker login your-host:8080 -u <owner> -p <PAT>
+
+# build, tag and push
+docker build -t hello:1.0 .
+docker tag hello:1.0 your-host:8080/<owner>/hello:1.0
+docker push your-host:8080/<owner>/hello:1.0
+
+# pull
+docker pull your-host:8080/<owner>/hello:1.0
+```
+
+Supported endpoints: `/v2/` (version/login), blob upload (`POST`/`PATCH`/`PUT` + `HEAD`/`GET` by digest), manifests (`GET`/`HEAD`/`PUT`/`DELETE` by tag or digest) and `/v2/<name>/tags/list`. Blobs are content-addressed on disk (`data/packages-blobs`) and deduplicated across images; manifests are stored in the DB.
 
 ---
 

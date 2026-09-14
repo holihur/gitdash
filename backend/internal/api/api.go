@@ -520,6 +520,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenGet))
 	mux.HandleFunc("HEAD /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenGet))
 
+	// Docker / OCI 私有注册表（Distribution spec，统一在 /v2/ 下按路径分派）
+	mux.HandleFunc("/v2/", a.registryAuth(a.registryHandler))
+
 	// swagger（OpenAPI 文档 + 内置 Swagger UI）
 	docs.SwaggerInfo.BasePath = "/api"
 	docs.SwaggerInfo.Host = ""
