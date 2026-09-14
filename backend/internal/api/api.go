@@ -220,6 +220,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/settings", a.adminAuth(a.adminSettings))
 	mux.HandleFunc("POST /api/admin/settings", a.adminAuth(a.adminSaveSettings))
 	mux.HandleFunc("POST /api/admin/password", a.adminAuth(a.adminChangePassword))
+	mux.HandleFunc("GET /api/admin/quota", a.adminAuth(a.adminGetQuota))
+	mux.HandleFunc("POST /api/admin/quota", a.adminAuth(a.adminSaveQuotaDefault))
+	mux.HandleFunc("PUT /api/admin/quota/{scope}/{name}", a.adminAuth(a.adminSaveQuotaOverride))
+	mux.HandleFunc("DELETE /api/admin/quota/{scope}/{name}", a.adminAuth(a.adminDeleteQuotaOverride))
 	mux.HandleFunc("GET /api/admin/runners", a.adminAuth(a.adminListRunners))
 	mux.HandleFunc("POST /api/admin/runners/registration-token", a.adminAuth(a.createGlobalRunnerToken))
 	mux.HandleFunc("DELETE /api/admin/runners/{name}", a.adminAuth(a.adminDeleteRunner))
@@ -788,6 +792,11 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 // GORM/驱动/文件系统错误（表结构、路径等）泄漏进 HTTP 响应。
 // 请求上下文（方法/路径/状态码）由 logMiddleware 统一记录。
 func internalError(w http.ResponseWriter, err error) {
+	var qe *store.QuotaError
+	if errors.As(err, &qe) {
+		writeCode(w, http.StatusForbidden, "quota_exceeded", qe.Error())
+		return
+	}
 	logx.Infof("internal error: %v", err)
 	writeCode(w, http.StatusInternalServerError, "internal_error", "internal server error")
 }

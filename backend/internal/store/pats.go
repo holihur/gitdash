@@ -130,6 +130,11 @@ func NormalizePATCIDRs(cidrs []string) (string, bool) {
 // CreatePAT 生成 64 位 hex 明文 token，仅存 sha256 hash；明文只此一次返回。
 // cidrs 为已规范化的 IP/CIDR 白名单（逗号分隔），expiresAt 为 RFC3339 UTC（空 = 永不过期）。
 func (s *Store) CreatePAT(userID int64, name, scopes, cidrs, expiresAt string) (string, PAT, error) {
+	createMu.Lock()
+	defer createMu.Unlock()
+	if err := s.CheckPATQuota(userID); err != nil {
+		return "", PAT{}, err
+	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", PAT{}, err

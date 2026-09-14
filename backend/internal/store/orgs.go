@@ -17,6 +17,11 @@ func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 	if _, err := s.GetByUsername(name); err == nil {
 		return Org{}, ErrExists // 用户名占用
 	}
+	createMu.Lock()
+	defer createMu.Unlock()
+	if err := s.checkOrgQuota(creator); err != nil {
+		return Org{}, err
+	}
 	o := Org{Name: name, Display: display, CreatedAt: now()}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		row := orgRow{Name: name, Display: display, CreatedAt: o.CreatedAt}
@@ -84,6 +89,18 @@ func (s *Store) OrgMembers(org string) ([]OrgMember, error) {
 }
 
 func (s *Store) AddOrgMember(org, username, role string) error {
+	createMu.Lock()
+	defer createMu.Unlock()
+	// 已存在只改角色，不占用新名额
+	var existing int64
+	if err := s.db.Model(&orgMemberRow{}).Where("org = ? AND username = ?", org, username).Count(&existing).Error; err != nil {
+		return err
+	}
+	if existing == 0 {
+		if err := s.checkOrgMemberQuota(org); err != nil {
+			return err
+		}
+	}
 	row := orgMemberRow{Org: org, Username: username, Role: role, CreatedAt: now()}
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "org"}, {Name: "username"}},

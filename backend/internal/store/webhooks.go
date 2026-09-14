@@ -8,6 +8,11 @@ import (
 
 // CreateWebhook 新建仓库 webhook（同 owner+repo+url 重复返回 ErrExists）。
 func (s *Store) CreateWebhook(owner, repo, url, secret string) (Webhook, error) {
+	createMu.Lock()
+	defer createMu.Unlock()
+	if err := s.checkWebhookQuota(owner, repo); err != nil {
+		return Webhook{}, err
+	}
 	w := Webhook{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: now()}
 	row := webhookRow{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: w.CreatedAt}
 	if err := s.db.Create(&row).Error; err != nil {

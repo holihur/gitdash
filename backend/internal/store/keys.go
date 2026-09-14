@@ -12,6 +12,11 @@ func (s *Store) UserID(username string) (int64, error) {
 }
 
 func (s *Store) CreateKey(username, name, publicKey, fingerprint string) (SSHKey, error) {
+	createMu.Lock()
+	defer createMu.Unlock()
+	if err := s.checkUserCountQuota(username, "ssh_keys", "ssh_keys", s.QuotaForUser(username).MaxSSHKeysPerUser); err != nil {
+		return SSHKey{}, err
+	}
 	k := SSHKey{Name: name, PublicKey: publicKey, Fingerprint: fingerprint, CreatedAt: now()}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var u userRow
@@ -80,6 +85,11 @@ func (s *Store) DeleteKey(username string, id int64) error {
 // ---- gpg keys ----
 
 func (s *Store) AddGPGKey(username, fingerprint, armor string) (GPGKey, error) {
+	createMu.Lock()
+	defer createMu.Unlock()
+	if err := s.checkUserCountQuota(username, "gpg_keys", "gpg_keys", s.QuotaForUser(username).MaxGPGKeysPerUser); err != nil {
+		return GPGKey{}, err
+	}
 	k := GPGKey{Fingerprint: fingerprint, CreatedAt: now()}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var u userRow

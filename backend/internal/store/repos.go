@@ -19,6 +19,11 @@ func toRepo(r repoRow) Repo {
 }
 
 func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo, error) {
+	createMu.Lock()
+	defer createMu.Unlock()
+	if err := s.checkRepoQuota(owner); err != nil {
+		return Repo{}, err
+	}
 	row := repoRow{Owner: owner, Name: name, Description: description, Private: private, CreatedAt: now()}
 	// 用 map 插入绕过 GORM 对 default 字段零值的改写（private=false 必须显式落库）
 	if err := s.db.Table("repos").Create(map[string]any{
