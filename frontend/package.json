@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "build:analyze": "tsc && vite build --mode analyze"
   },
   "packageManager": "pnpm@11.25.0",

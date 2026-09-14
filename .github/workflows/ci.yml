@@ -51,9 +51,22 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
+      # 供应链漏洞扫描（Go 官方漏洞库）。存量 stdlib 漏洞见 issue #5，修完转硬门禁。
+      - name: Vulnerability scan (govulncheck)
+        working-directory: backend
+        continue-on-error: true
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
       - name: Test
         working-directory: backend
         run: go test ./... -covermode=atomic -coverprofile=/tmp/coverage-unit.out 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
+
+      # 全量 race 检测（runner hub / queue / webhook dispatcher / copilot / store 均为并发代码）
+      - name: Test (race)
+        working-directory: backend
+        run: go test -race ./... 2>&1 | tee /tmp/test-race.log; exit ${PIPESTATUS[0]}
 
       - name: Upload unit-test coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -222,6 +235,12 @@ jobs:
         working-directory: frontend
         run: pnpm run lint
 
+      # 依赖漏洞扫描（官方源才能拿到 audit 数据）。存量 advisory 见 issue #5，修完转硬门禁。
+      - name: Audit (pnpm audit)
+        working-directory: frontend
+        continue-on-error: true
+        run: pnpm audit --registry=https://registry.npmjs.org
+
       - name: Test (vitest)
         working-directory: frontend
         run: pnpm run test
@@ -294,3 +313,17 @@ jobs:
           name: playwright-report
           path: tests/ui/test-results
           retention-days: 3
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # 扫描 AK/SK、私钥、token 等入库；先 warning，清理存量命中后改硬门禁。
+      - name: gitleaks
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
