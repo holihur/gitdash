@@ -19,7 +19,7 @@ func (s *Store) RateBlocked(key string, maxFails int) (bool, error) {
 		return false, nil //nolint:nilerr // 无记录 = 未限流，查询失败按未限流处理
 	}
 	if until, e := time.Parse(time.RFC3339, r.Until); e == nil && time.Now().After(until) {
-		_ = s.db.Delete(&loginFailRow{}, r.Key).Error // 窗口已过，惰性清理
+		_ = s.db.Where("\"key\" = ?", r.Key).Delete(&loginFailRow{}).Error // 窗口已过，惰性清理
 		return false, nil
 	}
 	return r.Count >= maxFails, nil
