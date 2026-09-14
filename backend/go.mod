@@ -1,6 +1,6 @@
 module gitdash/backend
 
-go 1.26.0
+go 1.26.6
 
 require (
 	cel.dev/cel-go v0.32.0
