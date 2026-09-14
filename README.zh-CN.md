@@ -164,6 +164,8 @@ go run .
 | `GITDASH_LOG_MAX_BACKUPS` | `7` | 保留的历史日志文件数 |
 | `GITDASH_LOG_MAX_AGE_DAYS` | `28` | 历史日志文件最长保留天数 |
 | `GITDASH_LOG_COMPRESS` | `true` | 压缩历史日志文件（gzip） |
+| `GITDASH_SLOW_SQL_MS` | `200` | 查询超过该毫秒数时打 `slow sql` warn（含 SQL 与耗时）；`0` 关闭 |
+| `GITDASH_SLOW_API_MS` | `1000` | 请求超过该毫秒数时打 `slow api` warn 并累加 `gitdash_http_slow_requests_total` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | 启用 OpenTelemetry trace 导出（OTLP/HTTP，如 `http://localhost:4318`） |
 | `GITDASH_ADMIN_PASSWORD` | 空（关闭） | 设置后在**首次启动**创建管理员并启用 `/admin` 管理面板 |
 | `GITDASH_ADMIN_USER` | `admin` | 管理员用户名（配合上者） |
@@ -309,7 +311,7 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | POST | `/api/auth/login` | 登录，返回会话 token |
 | POST | `/api/auth/logout` | 登出（作废当前 token） |
 | GET | `/api/me` | 当前用户 |
-| GET | `/api/health` `/api/version` | 健康检查 / 版本 |
+| GET | `/api/health` `/api/health/live` `/api/version` | 就绪检查（ping DB，数据库不可用返回 503）/ 存活检查 / 版本 |
 
 业务类（需 `Authorization: Bearer <token>`，token 来自注册/登录）：
 

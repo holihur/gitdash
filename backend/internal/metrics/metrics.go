@@ -28,12 +28,20 @@ var (
 		},
 		[]string{"method", "path"},
 	)
+	httpSlowRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "gitdash_http_slow_requests_total",
+			Help: "Total number of HTTP requests slower than GITDASH_SLOW_API_MS",
+		},
+		[]string{"method", "path"},
+	)
 )
 
 func init() {
 	registry.MustRegister(
 		httpRequests,
 		httpDuration,
+		httpSlowRequests,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -63,4 +71,9 @@ func Observe(method, path string, status int, d time.Duration) {
 	p := normalizePath(path)
 	httpRequests.WithLabelValues(method, p, strconv.Itoa(status)).Inc()
 	httpDuration.WithLabelValues(method, p).Observe(d.Seconds())
+}
+
+// ObserveSlow 记录一次超过慢接口阈值的请求（阈值判定在调用方）。
+func ObserveSlow(method, path string) {
+	httpSlowRequests.WithLabelValues(method, normalizePath(path)).Inc()
 }

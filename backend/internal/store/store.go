@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	gormsqlite "github.com/glebarez/sqlite" // 纯 Go sqlite GORM dialector
 )
@@ -324,7 +324,7 @@ func OpenDSN(dsn string) (*Store, error) {
 func openGorm(dial gorm.Dialector) (*Store, error) {
 	db, err := gorm.Open(dial, &gorm.Config{
 		TranslateError: true, // 唯一约束 → gorm.ErrDuplicatedKey
-		Logger:         gormlogger.Default.LogMode(gormlogger.Silent),
+		Logger:         newSQLLogger(),
 	})
 	if err != nil {
 		return nil, err
@@ -338,6 +338,15 @@ func openGorm(dial gorm.Dialector) (*Store, error) {
 
 // DB 暴露底层 gorm.DB（供需要原生查询的特殊场景使用）。
 func (s *Store) DB() *gorm.DB { return s.db }
+
+// Ping 供健康检查（readiness）使用：确认底层数据库仍可连通。
+func (s *Store) Ping(ctx context.Context) error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
+}
 
 func now() string { return time.Now().UTC().Format(time.RFC3339) }
 

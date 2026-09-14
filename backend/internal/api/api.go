@@ -6,6 +6,7 @@ import (
 	"errors"
 	"gitdash/backend/internal/api/docs"
 	"gitdash/backend/internal/copilot"
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/gpgsig"
 	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/logx"
@@ -33,6 +34,9 @@ import (
 )
 
 var shaRe = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
+
+// slowAPIThreshold 默认 1000ms，可用 GITDASH_SLOW_API_MS 覆盖（非法值回退默认）。
+var slowAPIThreshold = envx.Millis("GITDASH_SLOW_API_MS", 1000)
 
 // runnerNameRe runner 名（可读字符，2-64 位由 handler 校验长度）
 var runnerNameRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]+$`)
@@ -525,6 +529,18 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// prometheus metrics
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		// readiness：确认数据库可达（2s 超时），失败返回 503；liveness 见 /api/health/live。
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := a.store.Ping(ctx); err != nil {
+			logx.Warn("health check failed", "err", err)
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	// liveness：进程存活即返回 200，不依赖下游（用于 restart 判定，避免 DB 抖动触发重启）。
+	mux.HandleFunc("GET /api/health/live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
@@ -675,6 +691,17 @@ func logMiddleware(next http.Handler) http.Handler {
 		)
 		if r.URL.Path != "/metrics" {
 			metrics.Observe(r.Method, r.URL.Path, rw.status, dur)
+		}
+		// 慢接口告警：跳过 /metrics 与 /api/health（避免健康检查自激）。
+		if r.URL.Path != "/metrics" && r.URL.Path != "/api/health" && dur > slowAPIThreshold {
+			logx.Warn("slow api",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", rw.status,
+				"duration_ms", float64(dur.Microseconds())/1000.0,
+				"threshold_ms", float64(slowAPIThreshold.Microseconds())/1000.0,
+			)
+			metrics.ObserveSlow(r.Method, r.URL.Path)
 		}
 	})
 }

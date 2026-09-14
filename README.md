@@ -164,6 +164,8 @@ Environment variables (all optional):
 | `GITDASH_LOG_MAX_BACKUPS` | `7` | Number of rotated files to keep |
 | `GITDASH_LOG_MAX_AGE_DAYS` | `28` | Maximum age of rotated files |
 | `GITDASH_LOG_COMPRESS` | `true` | gzip rotated log files |
+| `GITDASH_SLOW_SQL_MS` | `200` | Log a `slow sql` warning (with SQL + duration) when a query exceeds this many ms; `0` disables |
+| `GITDASH_SLOW_API_MS` | `1000` | Log a `slow api` warning and bump `gitdash_http_slow_requests_total` when a request exceeds this many ms |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Enable OpenTelemetry trace export (OTLP/HTTP, e.g. `http://localhost:4318`) |
 | `GITDASH_ADMIN_PASSWORD` | empty (off) | Set to create an admin on **first boot** and enable the `/admin` panel |
 | `GITDASH_ADMIN_USER` | `admin` | Admin username (used with the above) |
@@ -309,7 +311,7 @@ Auth (public):
 | POST | `/api/auth/login` | Login, returns a session token |
 | POST | `/api/auth/logout` | Logout (invalidates the current token) |
 | GET | `/api/me` | Current user |
-| GET | `/api/health` `/api/version` | Health check / version |
+| GET | `/api/health` `/api/health/live` `/api/version` | Readiness (pings DB, 503 when down) / liveness / version |
 
 Business (requires `Authorization: Bearer <token>`, token from register/login):
 
