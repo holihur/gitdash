@@ -50,21 +50,22 @@ export function MarkdownView({ text, className }: { text: string; className?: st
       root.querySelectorAll<HTMLElement>("pre > code.language-mermaid"),
     );
     const mermaidNodes: HTMLElement[] = [];
+    const mermaidCharts: string[] = [];
     for (const code of mermaidCodes) {
       const pre = code.parentElement;
       if (!pre) continue;
       const div = document.createElement("div");
       div.className = "mermaid";
-      // 用 textContent 写入源码（不解析 HTML，避免注入）
-      div.textContent = code.textContent ?? "";
       pre.replaceWith(div);
       mermaidNodes.push(div);
+      // 源码先留在内存里离屏渲染，不写进 DOM，避免加载期间闪现未渲染的源码
+      mermaidCharts.push(code.textContent ?? "");
     }
 
     let alive = true;
     if (mermaidNodes.length > 0) {
-      void renderMermaid(mermaidNodes).catch(() => {
-        /* 非法图表：mermaid 会在容器内渲染错误提示 */
+      void renderMermaid(mermaidNodes, mermaidCharts).catch(() => {
+        /* 非法图表：渲染失败时容器保持为空 */
       });
     }
 
