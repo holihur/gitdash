@@ -27,7 +27,14 @@ export function MarkdownView({ text, className }: { text: string; className?: st
         import("dompurify"),
       ]);
       const raw = marked.parse(text ?? "", { async: false, gfm: true, breaks: false }) as string;
-      const clean = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+      // 显式收紧白名单：仅允许 HTML profile，禁掉样式/表单/嵌入类标签与内联 style；
+      // 默认已拦截 javascript: 等危险 URI，这里不再自定义 ALLOWED_URI_REGEXP，
+      // 以免破坏相对链接、锚点与 mailto。
+      const clean = DOMPurify.sanitize(raw, {
+        USE_PROFILES: { html: true },
+        FORBID_TAGS: ["style", "form", "iframe", "object", "embed", "link", "meta", "base"],
+        FORBID_ATTR: ["style"],
+      });
       if (alive) setHtml(clean);
     })();
     return () => {

@@ -36,7 +36,7 @@ export default function Orgs() {
     try { setOrgs(await api.listOrgs()); }
     catch (e) { toast.error(apiErrorMsg(to, e)); }
     finally { setLoading(false); }
-  }, []);
+  }, [to]);
   useEffect(() => { load(); }, [load]);
 
   const create = async () => {
@@ -172,7 +172,7 @@ function OrgDetail({ org, locale, onOrgDeleted }: { org: Org; locale: string; on
       const [ms, rs] = await Promise.all([api.listOrgMembers(org.name), api.listOrgRepos(org.name)]);
       setMembers(ms); setRepos(rs.repos);
     } catch (e) { toast.error(apiErrorMsg(to, e)); }
-  }, [org.name]);
+  }, [org.name, to]);
   useEffect(() => { load(); }, [load]);
 
   const addMember = async () => {

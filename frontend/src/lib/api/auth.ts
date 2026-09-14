@@ -25,6 +25,14 @@ export const authApi = {
     }),
   logout: () => req<null>("/auth/logout", { method: "POST" }),
   me: () => req<User>("/me"),
+  // 登录页：探测已启用的 OAuth/OIDC provider（失败时前端可提示并重试）
+  authProviders: () =>
+    req<{
+      github?: { enabled?: boolean };
+      google?: { enabled?: boolean };
+      oidc?: { enabled?: boolean; name?: string };
+    }>("/auth/providers"),
+  version: () => req<{ version: string }>("/version"),
   verifyEmail: (token: string) =>
     req<{ username: string; email_verified: boolean }>("/me/email/verify", {
       method: "POST",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Github, ShieldCheck } from "lucide-react";
@@ -33,23 +33,32 @@ export default function Login({ onAuthed }: Props) {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [oidc, setOidc] = useState<{ enabled: boolean; name: string }>({ enabled: false, name: "OIDC" });
   const [version, setVersion] = useState("");
+  const [providersError, setProvidersError] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/version")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d?.version) setVersion(d.version);
-      })
-      .catch(() => undefined);
-    fetch("/api/auth/providers", { credentials: "same-origin" })
-      .then((r) => r.json())
+  const loadProviders = useCallback(() => {
+    setProvidersError(false);
+    api
+      .authProviders()
       .then((d) => {
         setGithubEnabled(Boolean(d?.github?.enabled));
         setGoogleEnabled(Boolean(d?.google?.enabled));
         setOidc({ enabled: Boolean(d?.oidc?.enabled), name: d?.oidc?.name || "OIDC" });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // 不再静默吞掉：接口异常时给出可见提示与重试入口
+        setProvidersError(true);
+      });
   }, []);
+
+  useEffect(() => {
+    api
+      .version()
+      .then((d) => {
+        if (d?.version) setVersion(d.version);
+      })
+      .catch(() => undefined);
+    loadProviders();
+  }, [loadProviders]);
 
   const finish = (r: { token?: string; username?: string }) => {
     if (!r.token || !r.username) return;
@@ -259,7 +268,7 @@ export default function Login({ onAuthed }: Props) {
                 {t("login.apiDocs")}
               </a>
             </p>
-            {(githubEnabled || googleEnabled || oidc.enabled) && (
+            {(githubEnabled || googleEnabled || oidc.enabled || providersError) && (
               <div className="mt-3 space-y-2">
                 {githubEnabled && (
                   <a
@@ -287,6 +296,20 @@ export default function Login({ onAuthed }: Props) {
                     <ShieldCheck className="h-4 w-4" />
                     {t("login.signInWithOIDC", { name: oidc.name })}
                   </a>
+                )}
+                {providersError && (
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                    <span>{t("login.providersLoadFailed")}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 shrink-0 px-2"
+                      onClick={loadProviders}
+                    >
+                      {t("common.retry")}
+                    </Button>
+                  </div>
                 )}
               </div>
             )}

@@ -220,7 +220,7 @@ export default function RepoView() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [name, ref, currentDir, loadTick]);
+  }, [name, owner, ref, currentDir, loadTick]);
 
   useEffect(() => {
     loadTree();
@@ -352,7 +352,7 @@ export default function RepoView() {
       'git commit -m "initial commit"',
       `git push origin ${branches[0]?.name || "main"}`,
     ],
-    [name, branches],
+    [name, owner, branches],
   );
 
   const overflowTabs = useMemo(

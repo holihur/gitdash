@@ -65,6 +65,9 @@ export default function App() {
       }
       setReady(true);
     })();
+    // 仅在挂载时执行一次：恢复会话 + 处理邮箱验证链接。
+    // t 只用于 toast 文案，跟随语言变化重新跑会重复消费验证 token，故不加入依赖。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = async () => {

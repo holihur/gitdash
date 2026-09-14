@@ -103,7 +103,7 @@ function SSHKeysSection({ t, to, locale }: SectionProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [to]);
 
   useEffect(() => {
     load();
@@ -269,7 +269,7 @@ function PATSection({ t, to, locale }: SectionProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [to]);
 
   useEffect(() => {
     load();

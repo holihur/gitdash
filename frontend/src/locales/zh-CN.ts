@@ -52,6 +52,7 @@ export const zhCN: Messages = {
     preview: "预览",
     markdownSupported: "支持 Markdown",
     nothingToPreview: "暂无可预览内容",
+    retry: "重试",
   },
   login: {
     subtitle: "登录或注册以管理你的仓库",
@@ -86,6 +87,7 @@ export const zhCN: Messages = {
     signInWithGithub: "使用 GitHub 登录",
     signInWithGoogle: "使用 Google 登录",
     signInWithOIDC: "使用 {name} 登录",
+    providersLoadFailed: "登录方式加载失败",
   },
   pagination: {
     prev: "上一页",

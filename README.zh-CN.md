@@ -171,7 +171,7 @@ go run .
 | `GITDASH_SMTP_PORT` | `587` | SMTP 端口 |
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | 空 | SMTP 账号 / 密码 |
 | `GITDASH_SMTP_FROM` | SMTP 用户名 | 发件人地址 |
-| `GITDASH_TRUSTED_PROXIES` | 空（仅回环） | 信任 `X-Forwarded-For` 的反代 IP/CIDR 列表（逗号分隔） |
+| `GITDASH_TRUSTED_PROXIES` | 空（仅回环） | 信任 `X-Forwarded-For` 的反代 IP/CIDR 列表（逗号分隔）。反代**必须重写/剥离**外部传入的 `X-Forwarded-For`（而非追加客户端头部），否则客户端可伪造最左 IP，绕过 PAT IP 白名单 / 登录限流 |
 | `GITDASH_SECURE_COOKIES` | 关闭 | 反代终止 TLS 时设为 `1`，让会话/管理 cookie 带 `Secure` |
 | `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | 空 | 内置 HTTPS 证书/私钥路径 |
 | `GITDASH_ACME_DOMAINS` | 空 | 逗号分隔域名；设置后用 ACME 自动申请证书（另见 `GITDASH_ACME_EMAIL`） |
@@ -253,6 +253,7 @@ bash scripts/backup.sh ./data ./backups
 ```bash
 cd backend
 golangci-lint run     # 安装：go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+                      # 需使用 Go >= 1.26 构建的版本（旧版会报 "Go language version used to build golangci-lint is lower than the targeted Go version"）；CI 固定 v2.13.2
 ```
 
 后端集成测试（Go）：

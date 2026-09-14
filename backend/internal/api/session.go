@@ -82,6 +82,12 @@ func isTrustedProxy(addr netip.Addr) bool {
 }
 
 // clientIP 仅在直连地址是受信反代时才信任 X-Forwarded-For，避免伪造头部绕过限流。
+//
+// 注意：这里取 XFF 最左值（首个地址），其语义是“最初的客户端”，但该值由客户端可伪造。
+// 因此要求受信反代必须 **重写/剥离** 外部传入的 X-Forwarded-For（例如 nginx 用
+// `proxy_set_header X-Forwarded-For $remote_addr;`，而非 `$proxy_add_x_forwarded_for`），
+// 只追加真实的直连地址。若代理原样透传外部头部，攻击者可伪造最左 IP，从而绕过
+// PAT IP allow-list 与登录限流。详见 README 的 `GITDASH_TRUSTED_PROXIES`。
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {

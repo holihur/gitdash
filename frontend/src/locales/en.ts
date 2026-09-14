@@ -50,6 +50,7 @@ export const en = {
     preview: "Preview",
     markdownSupported: "Markdown supported",
     nothingToPreview: "Nothing to preview",
+    retry: "Retry",
   },
   login: {
     subtitle: "Sign in or register to manage your repositories",
@@ -84,6 +85,7 @@ export const en = {
     signInWithGithub: "Continue with GitHub",
     signInWithGoogle: "Continue with Google",
     signInWithOIDC: "Continue with {name}",
+    providersLoadFailed: "Failed to load sign-in providers",
   },
   pagination: {
     prev: "Prev",

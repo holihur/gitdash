@@ -171,7 +171,7 @@ Environment variables (all optional):
 | `GITDASH_SMTP_PORT` | `587` | SMTP port |
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | empty | SMTP username / password |
 | `GITDASH_SMTP_FROM` | SMTP user | From address |
-| `GITDASH_TRUSTED_PROXIES` | empty (loopback only) | Comma-separated proxy IP/CIDR allowed to set `X-Forwarded-For` |
+| `GITDASH_TRUSTED_PROXIES` | empty (loopback only) | Comma-separated proxy IP/CIDR allowed to set `X-Forwarded-For`. The proxy **must strip/overwrite** the incoming `X-Forwarded-For` (not append client headers), otherwise a client can spoof the left-most IP and bypass PAT IP allow-lists / login rate limits |
 | `GITDASH_SECURE_COOKIES` | off | Set to `1` behind a TLS-terminating proxy so session/admin cookies get `Secure` |
 | `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | empty | Built-in HTTPS certificate/key paths |
 | `GITDASH_ACME_DOMAINS` | empty | Comma-separated domains; obtain certificates automatically via ACME (see `GITDASH_ACME_EMAIL`) |
@@ -253,6 +253,7 @@ Static checks (golangci-lint, config in `backend/.golangci.yml`, runs automatica
 ```bash
 cd backend
 golangci-lint run     # install: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+                      # must be built with Go >= 1.26 (older binaries fail with "Go language version used to build golangci-lint is lower than the targeted Go version"); CI pins v2.13.2
 ```
 
 Backend integration tests (Go):
