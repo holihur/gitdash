@@ -3,15 +3,19 @@ package store
 // 管理面板的用户管理：列表 / 级联删除（admin_users 与普通 users 是两套账号体系）。
 
 import (
+	"strings"
+
 	"gorm.io/gorm"
 )
 
-// AdminListUsers 列出普通用户：q 为用户名模糊过滤（LIKE %q%），limit/offset 分页。
+// AdminListUsers 列出普通用户：q 为用户名模糊过滤（不区分大小写），limit/offset 分页。
+// 统一用 LOWER(username) LIKE：SQLite 的 LIKE 默认对 ASCII 不区分大小写，而 Postgres 区分，
+// 因此显式 LOWER 才能保证两个后端行为一致。
 // 返回 (users, 总数, error)。
 func (s *Store) AdminListUsers(q string, limit, offset int) ([]User, int, error) {
 	db := s.db.Model(&userRow{})
-	if q != "" {
-		db = db.Where("username LIKE ?", "%"+q+"%")
+	if q = strings.ToLower(strings.TrimSpace(q)); q != "" {
+		db = db.Where("LOWER(username) LIKE ?", "%"+q+"%")
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
