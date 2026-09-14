@@ -1,2 +1,7 @@
 allowBuilds:
   esbuild: true
+
+# 供应链修复（issue #5）：mermaid → chevrotain 引入的 lodash-es@4.17.23 存在
+# _.template 代码注入 / 原型污染（GHSA-r5fr-rjxr-66jc 等），强制顶到已修复版本。
+overrides:
+  lodash-es: 4.18.1
