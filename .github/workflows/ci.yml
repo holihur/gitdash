@@ -51,10 +51,9 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
-      # 供应链漏洞扫描（Go 官方漏洞库）。存量 stdlib 漏洞见 issue #5，修完转硬门禁。
+      # 供应链漏洞扫描（Go 官方漏洞库）
       - name: Vulnerability scan (govulncheck)
         working-directory: backend
-        continue-on-error: true
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
@@ -236,10 +235,9 @@ jobs:
         working-directory: frontend
         run: pnpm run lint
 
-      # 依赖漏洞扫描（官方源才能拿到 audit 数据）。存量 advisory 见 issue #5，修完转硬门禁。
+      # 依赖漏洞扫描（官方源才能拿到 audit 数据）
       - name: Audit (pnpm audit)
         working-directory: frontend
-        continue-on-error: true
         run: pnpm audit --registry=https://registry.npmjs.org
 
       - name: Test (vitest)
@@ -322,9 +320,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      # 扫描 AK/SK、私钥、token 等入库；先 warning，清理存量命中后改硬门禁。
+      # 扫描 AK/SK、私钥、token 等入库
       - name: gitleaks
-        continue-on-error: true
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
