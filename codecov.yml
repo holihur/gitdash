@@ -1,0 +1,24 @@
+# Codecov 配置（issue #4 P3.11）
+#
+# 从「只看总量覆盖」收紧为「新增代码覆盖率门禁」：patch 覆盖不足会标记失败，
+# 防止新代码零测试合并；project 允许相对基线轻微波动。
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: 60%
+        threshold: 0%
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "backend/internal/api/docs/**"
+  - "frontend/src/locales/**"
+  - "**/*.d.ts"
