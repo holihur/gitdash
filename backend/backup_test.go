@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gitdash/backend/internal/store"
 )
@@ -44,5 +45,69 @@ func TestBackupRestoreRoundTrip(t *testing.T) {
 	}
 	if _, err := safeArchivePath(dst, "/abs"); err == nil {
 		t.Fatal("expected absolute path rejection")
+	}
+
+	// dry-run 校验：归档可解、路径安全、能识别 db/repos
+	m, err := verifyArchive(out)
+	if err != nil {
+		t.Fatalf("verifyArchive: %v", err)
+	}
+	if !m.HasDB || m.Files == 0 {
+		t.Fatalf("manifest missing db/files: %+v", m)
+	}
+}
+
+func TestPruneBackupsKeepsNewest(t *testing.T) {
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	names := []string{
+		"gitdash-backup-20260101-000000.tar.gz",
+		"gitdash-backup-20260102-000000.tar.gz",
+		"gitdash-backup-20260103-000000.tar.gz",
+		"unrelated.tar.gz",
+	}
+	for i, n := range names {
+		p := filepath.Join(dir, n)
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// 让文件名序号与 mtime 顺序一致
+		if err := os.Chtimes(p, base.Add(time.Duration(i)*time.Minute), base.Add(time.Duration(i)*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := pruneBackups(dir, 2)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if removed != 1 {
+		t.Fatalf("removed=%d, want 1", removed)
+	}
+	files, err := backupFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("kept %d backups, want 2", len(files))
+	}
+	// 最新的两份应保留，最旧的被删；无关文件不受影响
+	if _, err := os.Stat(filepath.Join(dir, names[0])); !os.IsNotExist(err) {
+		t.Fatalf("oldest backup should be removed, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, names[2])); err != nil {
+		t.Fatalf("newest backup should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, names[3])); err != nil {
+		t.Fatalf("unrelated file should remain: %v", err)
+	}
+}
+
+func TestVerifyArchiveRejectsGarbage(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "bad.tar.gz")
+	if err := os.WriteFile(p, []byte("not gzip"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifyArchive(p); err == nil {
+		t.Fatal("expected error for non-gzip archive")
 	}
 }

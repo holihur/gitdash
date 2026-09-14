@@ -173,6 +173,16 @@ func run() {
 		go autoUpdateLoop(interval)
 	}
 
+	// 自动备份：设置 GITDASH_BACKUP_DIR 即启用（间隔 GITDASH_BACKUP_INTERVAL，默认 24h；保留 GITDASH_BACKUP_KEEP，默认 14）
+	if bdir := backupDirEnv(); bdir != "" {
+		interval, keep := backupIntervalEnv(), backupKeepEnv()
+		logx.Infof("auto-backup enabled: dir %s (interval %s, keep %d)", bdir, interval, keep)
+		if dsn := os.Getenv("GITDASH_DB"); strings.HasPrefix(dsn, "postgres") {
+			logx.Warnf("auto-backup: PostgreSQL is used; only files under GITDASH_DATA are archived, run pg_dump separately")
+		}
+		go autoBackupLoop(dataDir, bdir, interval, keep)
+	}
+
 	// Admin 引导（默认关闭）：首次启动时设置 GITDASH_ADMIN_PASSWORD 即启用管理面板
 	adminPW := os.Getenv("GITDASH_ADMIN_PASSWORD")
 	if adminPW != "" {
@@ -398,6 +408,7 @@ func main() {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "usage: gitdash [serve|backup|restore|update|version]\n")
+		fmt.Fprintln(os.Stderr, "  backup [-o FILE] [-d DIR] [-k KEEP] [-l]\n  restore ARCHIVE [--force] [--dry-run]")
 		os.Exit(2)
 	}
 }
