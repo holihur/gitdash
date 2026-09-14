@@ -14,7 +14,7 @@ import { PullDiffView as InlinePullDiffView } from "@/components/diff-view";
 import CommentSection from "@/components/comment-section";
 import PullReviewSection from "@/components/pull-review";
 import { apiErrorMsg } from "@/lib/errors";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -44,7 +44,7 @@ export default function RepoPulls({
 }) {
   const canWrite = role === "owner" || role === "write";
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [pullTotal, setPullTotal] = useState(0);
   // 页码/页大小同步进 URL(?p_page/?p_size)

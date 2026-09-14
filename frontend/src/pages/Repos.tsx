@@ -30,7 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { copyText, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import CollaboratorsDialog from "@/components/collabs-dialog";
 import WebhooksDialog from "@/components/webhooks-dialog";
@@ -414,7 +414,7 @@ export default function Repos() {
                   <CardContent className="mt-auto space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary" className="font-normal">
-                        {formatDate(repo.created_at, lang === "zh-CN" ? "zh-CN" : "en-US")}
+                        {formatDate(repo.created_at, dateLocale(lang))}
                       </Badge>
                       {repo.is_template && (
                         <Badge variant="outline" className="font-normal">

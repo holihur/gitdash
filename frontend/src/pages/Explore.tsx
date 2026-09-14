@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import { copyText, formatDate } from "@/lib/utils";
 import { useQueryState } from "@/lib/query-state";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
 export default function Explore() {
@@ -263,7 +263,7 @@ export default function Explore() {
               <CardContent className="mt-auto space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary" className="font-normal">
-                    {formatDate(repo.created_at, lang === "zh-CN" ? "zh-CN" : "en-US")}
+                    {formatDate(repo.created_at, dateLocale(lang))}
                   </Badge>
                   <Button
                     variant={repo.starred ? "default" : "outline"}

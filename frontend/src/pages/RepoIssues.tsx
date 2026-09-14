@@ -24,7 +24,7 @@ import { Label as FieldLabel } from "@/components/ui/label";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import LabelChip from "@/components/label-chip";
 import { MarkdownView } from "@/components/markdown";
@@ -40,7 +40,7 @@ interface Draft {
 
 export default function RepoIssues({ owner, name }: { owner: string; name: string }) {
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issueTotal, setIssueTotal] = useState(0);
   // 页码/页大小/标签筛选同步进 URL(?i_page/?i_size/?i_label)

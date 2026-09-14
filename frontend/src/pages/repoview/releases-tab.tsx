@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { MarkdownWithToc } from "@/components/markdown";
 import { cn, formatDate, formatSize } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
 export interface ReleasesTabProps {
@@ -30,7 +30,7 @@ export interface ReleasesTabProps {
 
 export default function ReleasesTab({ owner, name, role }: ReleasesTabProps) {
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const canWrite = role === "owner" || role === "write";
   const [releases, setReleases] = useState<Release[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);

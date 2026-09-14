@@ -28,7 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { copyText, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
 const SCOPE_LABEL_KEY: Record<string, string> = {
@@ -53,7 +53,7 @@ function expiryRFC3339(days: number | null): string {
 
 export default function Keys() {
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const [tab, setTab] = useState("ssh");
   return (
     <div className="space-y-6">

@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import ListSkeleton from "@/components/list-skeleton";
 
@@ -51,7 +51,7 @@ function notifIcon(n: Notification) {
 
 export default function Inbox({ onChanged }: { onChanged?: () => void }) {
   const { t, lang, to } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
   const [total, setTotal] = useState(0);

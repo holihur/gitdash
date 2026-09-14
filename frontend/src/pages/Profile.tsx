@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { QRCodeSVG } from "qrcode.react";
 import { BadgeCheck, Bot, Cpu, Copy, KeyRound, Pencil, Plus, ShieldCheck, ShieldOff, Trash2, UserRound } from "lucide-react";
 import { api, type MFAEnroll, type MFAStatus, type GPGKey, type Runner, type ByokKey } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ interface Profile {
 
 export default function ProfilePage() {
   const { t, to, lang } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const [profile, setProfile] = useState<Profile | null>(null);
 
   const loadProfile = useCallback(async () => {

@@ -51,6 +51,7 @@ export const en = {
     markdownSupported: "Markdown supported",
     nothingToPreview: "Nothing to preview",
     retry: "Retry",
+    actions: "Actions",
   },
   login: {
     subtitle: "Sign in or register to manage your repositories",
@@ -220,6 +221,10 @@ export const en = {
     gpgInvalid: "GPG signature is invalid (commit may have been tampered with)",
     gpgInvalidShort: "bad signature",
     viewDiff: "View diff",
+    revert: "Revert",
+    revertTitle: "Revert commit",
+    revertConfirm: "Create a new commit on {branch} that undoes the changes of {sha}?",
+    reverted: "Reverted as {sha}",
   },
   repo: {
     notFound: "Repository not found: {error}",

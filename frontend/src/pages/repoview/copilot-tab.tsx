@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import ConfirmDialog from "@/components/confirm-dialog";
 
@@ -294,7 +294,7 @@ function CopilotChat({ owner, name, session }: { owner: string; name: string; se
 
 export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
   const { t, to, lang } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const canWrite = role === "owner" || role === "write";
 
   const [sessions, setSessions] = useState<CopilotSession[]>([]);

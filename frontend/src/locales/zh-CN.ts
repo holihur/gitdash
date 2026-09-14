@@ -53,6 +53,7 @@ export const zhCN: Messages = {
     markdownSupported: "支持 Markdown",
     nothingToPreview: "暂无可预览内容",
     retry: "重试",
+    actions: "操作",
   },
   login: {
     subtitle: "登录或注册以管理你的仓库",
@@ -220,6 +221,10 @@ export const zhCN: Messages = {
     gpgInvalid: "GPG 签名无效（提交可能被篡改）",
     gpgInvalidShort: "签名无效",
     viewDiff: "查看改动",
+    revert: "撤销",
+    revertTitle: "撤销提交",
+    revertConfirm: "将在 {branch} 上创建一个新提交，撤销 {sha} 的改动。是否继续？",
+    reverted: "已撤销，生成提交 {sha}",
   },
   repo: {
     notFound: "仓库不存在：{error}",

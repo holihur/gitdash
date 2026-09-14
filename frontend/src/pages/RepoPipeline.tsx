@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn, formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MermaidDiagram } from "@/components/mermaid";
 
@@ -92,7 +92,7 @@ function toMermaid(g: PipelineGraph): string {
 
 export default function RepoPipeline({ owner, name, role }: Props) {
   const { t, to, lang } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const isOwner = role === "owner";
   const canWrite = role === "owner" || role === "write";
 

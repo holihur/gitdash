@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { CalendarDays, FolderGit2, Settings, Star, UserMinus, UserPlus } from "lucide-react";
 import { api, type Repo, type UserProfile, type UserSummary } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ type View = "repos" | "followers" | "following";
 export default function UserPage() {
   const { username = "" } = useParams();
   const { t, to, lang } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -196,7 +196,7 @@ export default function UserPage() {
 
 function RepoCard({ repo }: { repo: Repo }) {
   const { t, lang } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : "en-US";
+  const locale = dateLocale(lang);
   return (
     <Card className="flex min-w-0 flex-col">
       <CardContent className="space-y-2 pt-4">

@@ -17,7 +17,7 @@ import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { formatDate } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
 const PKG_TYPES = ["npm", "composer", "pypi", "rubygems", "go", "cargo", "maven"] as const;
@@ -29,7 +29,7 @@ export default function Packages() {
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<PackageEntry | null>(null);
   const { t, lang } = useI18n();
-  const locale = lang === "zh-CN" ? "zh-CN" : undefined;
+  const locale = dateLocale(lang);
 
   const load = useCallback(async () => {
     setLoading(true);
