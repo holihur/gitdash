@@ -20,13 +20,13 @@ English | 简体中文
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
 - **发现（Explore）**：浏览公开仓库；仓库设置页可切换公开 / 私有
-- **代码浏览**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame
+- **代码浏览与网页编辑**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame；可新建 / 编辑 / 删除文件与目录，并在提交记录页撤销某次提交（生成反向提交）
 - **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）提供私有包发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md)
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；任务默认进程内执行，也可走 Redis（asynq）持久化队列
 - **BYOK Copilot**：与运行在仓库检出副本中的独立 agent 运行时（由 `deps/agent` 子模块构建的 `agent` 二进制）对话；它能读、改、执行命令，每轮结束后 gitdash 会把改动提交并推送到 `copilot/session-<id>` 分支——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
 - **用户头像**：上传 / 移除头像（PNG/JPEG/GIF/WebP，最大 2MB）；显示在顶栏、用户主页与个人资料页，未设置时回退为首字母
-- **同名仓库**：用户首次创建（注册 / 管理端 / OAuth）时自动创建公开的 `<用户名>/<用户名>` 仓库并初始化 README（`GITDASH_PROFILE_REPO=0` 关闭）
+- **同名仓库**：用户首次创建（注册 / 管理端 / OAuth）时自动创建公开的 `<用户名>/<用户名>` 仓库并初始化 README；创建组织时同样自动初始化公开的 `<组织名>/<组织名>` 仓库（`GITDASH_PROFILE_REPO=0` 关闭以上行为）
 - **结构化日志与链路追踪**：基于 `log/slog` 的日志（级别 + text/JSON 格式），支持滚动文件输出（`GITDASH_LOG_FILE`）；通过 OTLP 导出 OpenTelemetry trace（`OTEL_EXPORTER_OTLP_ENDPOINT`）
 - **流水线可视化**：流水线页渲染 `.gitdash.yml` 的步骤 DAG（含并行组）
 - **Markdown 支持 Mermaid**：` ```mermaid ` 代码块渲染为图表（按需懒加载）
@@ -34,6 +34,7 @@ English | 简体中文
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
 - **自更新**：`gitdash update` 手动更新；可选后台自动更新（**默认关闭**）
+- **备份与恢复**：`gitdash backup` / `gitdash restore`（SQLite 一致性快照 + 仓库 + webhook spool + SSH host key），归档校验（`restore --dry-run`）、保留份数（`--keep`），以及可选定时后台备份（`GITDASH_BACKUP_DIR`）——见 [备份与恢复](#备份与恢复)
 - **前端**：React + Vite + Tailwind + shadcn/ui 风格组件
 - **后端**：Go 标准库 HTTP + `golang.org/x/crypto/ssh` + SQLite（modernc，纯 Go 无 CGO）
 - **单二进制发布**：GoReleaser 发布时前端已 embed 进二进制，下载即用
@@ -150,11 +151,14 @@ go run .
 | `GITDASH_AUTO_UPDATE` | 关闭 | **自动更新默认关闭**，设为 `1`/`true`/`yes`/`on` 开启 |
 | `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | 自动更新检查间隔（最小 1h） |
 | `GITDASH_UPDATE_REPO` | `holihur/gitdash` | 更新源仓库（fork / 测试用） |
+| `GITDASH_BACKUP_DIR` | 空（关闭） | 在 `serve` 模式启用定时后台备份；归档输出目录 |
+| `GITDASH_BACKUP_INTERVAL` | `24h` | 自动备份间隔（最小 1m） |
+| `GITDASH_BACKUP_KEEP` | `14` | 自动备份保留的最新份数 |
 | `GITDASH_QUEUE` | `memory` | 流水线任务队列：`memory`（进程内 goroutine）或 `redis`/`asynq`（Redis 持久化队列） |
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | asynq 队列使用的 Redis 地址 |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
-| `GITDASH_PROFILE_REPO` | `1` | 用户首次创建时自动创建公开的 `<用户名>/<用户名>` 仓库（`0` 关闭） |
+| `GITDASH_PROFILE_REPO` | `1` | 用户 / 组织首次创建时自动创建公开的 `<名称>/<名称>` 仓库（`0` 关闭） |
 | `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent` / PATH | copilot 会话使用的 agent 运行时路径（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
 | `GITDASH_COPILOT_AGENT_URL` | 空 | 使用已在运行的 agent（`http://host:port`），而不是每会话拉起一个 |
 | `GITDASH_LOG_LEVEL` | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
@@ -239,13 +243,45 @@ docker compose up -d --build
 
 ## 备份与恢复
 
+### 内置命令（推荐）
+
+```bash
+# 生成一致性备份（SQLite VACUUM INTO 快照 + 仓库 + webhook spool + SSH host key）
+gitdash backup -d ./backups -k 14     # -d 输出目录，-k 保留最新 N 份（不传 -k 则不清理）
+gitdash backup -o /tmp/snap.tar.gz    # 指定输出文件
+
+# 列出已有备份（新→旧）
+gitdash backup -d ./backups --list
+
+# 只读校验归档，不改动数据（gzip/tar 完整性 + 路径安全）
+gitdash restore ./backups/gitdash-backup-*.tar.gz --dry-run
+
+# 恢复（数据目录非空需 --force；拒绝路径穿越）
+gitdash restore ./backups/gitdash-backup-*.tar.gz --force
+```
+
+### 定时（自动）备份
+
+设置 `GITDASH_BACKUP_DIR` 即在 `serve` 模式启用后台备份：
+
+```bash
+GITDASH_BACKUP_DIR=/var/backups/gitdash \
+GITDASH_BACKUP_INTERVAL=24h \
+GITDASH_BACKUP_KEEP=14 \
+gitdash serve
+```
+
+启动时先备份一次，之后每隔 `GITDASH_BACKUP_INTERVAL`（默认 `24h`，最小 `1m`）备份一次，保留最新 `GITDASH_BACKUP_KEEP`（默认 `14`）份。全程在线，无需停服。若使用 `GITDASH_DB=postgres://...`，归档只包含 `GITDASH_DATA` 下的文件，数据库需自行 `pg_dump`。
+
+### Shell 脚本
+
 ```bash
 # 在线备份（SQLite 一致性快照 + 仓库打包，保留最近 14 份）
 bash scripts/backup.sh ./data ./backups
 # KEEP=30 bash scripts/backup.sh   # 保留更多份
 ```
 
-恢复：停掉服务，把备份解包回数据目录（`tar -xzf gitdash-backup-*.tar.gz -C <数据目录>`），再启动即可。
+手动恢复：停掉服务，把备份解包回数据目录（`tar -xzf gitdash-backup-*.tar.gz -C <数据目录>`），再启动即可。
 若宿主机没有 `sqlite3`，脚本会用直接拷贝兜底（WAL 模式建议先停服保证一致性）；Docker 内亦可 `docker compose exec gitdash bash` 执行同款脚本。
 
 ## 自动化测试
@@ -323,6 +359,8 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | GET | `/api/repos/{name}/tree?ref=&path=` | 浏览目录 |
 | GET | `/api/repos/{name}/blob?ref=&path=` | 文件内容 |
 | GET | `/api/repos/{name}/commits?ref=` | 提交历史 |
+| POST | `/api/users/{owner}/repos/{name}/commits` | 创建提交（批量文件变更） |
+| POST | `/api/users/{owner}/repos/{name}/commits/{sha}/revert` | 撤销提交（在指定分支生成反向提交） |
 | GET/POST | `/api/keys` | 列出 / 添加 SSH 公钥（绑定当前用户） |
 | DELETE | `/api/keys/{id}` | 删除自己的公钥 |
 

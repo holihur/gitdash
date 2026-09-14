@@ -20,13 +20,13 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **Admin panel**: admin users, settings (OAuth providers), password management
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings
-- **Code browsing**: browse repos by branch / directory, view file contents, commit history and blame on the web
+- **Code browsing & web editing**: browse repos by branch / directory, view file contents, commit history and blame on the web; create / edit / delete files and folders, and revert a commit (creates an inverse commit) from the Commits tab
 - **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust) and Maven (Java) under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md)
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
 - **BYOK copilot**: chat with a standalone agent runtime (the `agent` binary built from the `deps/agent` submodule) inside a checkout of the repo; it can read, edit and run commands, and gitdash commits + pushes its changes to a `copilot/session-<id>` branch after every turn — see [docs/copilot.md](docs/copilot.md)
 - **User avatars**: upload / remove a profile picture (PNG/JPEG/GIF/WebP, max 2MB); shown in the header, user page and profile, with an initials fallback
-- **Profile repo**: a public `<username>/<username>` repo is created when an account is first created (register / admin / OAuth), initialized with a README (`GITDASH_PROFILE_REPO=0` disables)
+- **Profile repo**: a public `<username>/<username>` repo is created when an account is first created (register / admin / OAuth), initialized with a README; creating an organization likewise initializes a public `<org>/<org>` repo (`GITDASH_PROFILE_REPO=0` disables both)
 - **Structured logging & tracing**: `log/slog`-based logs with levels + text/JSON format, optional rotating file output (`GITDASH_LOG_FILE`), and OpenTelemetry tracing via OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`)
 - **Pipeline visualization**: the Pipeline tab renders the `.gitdash.yml` step DAG (parallel groups included)
 - **Mermaid in markdown**: ` ```mermaid ` code blocks render as diagrams (lazily loaded)
@@ -34,6 +34,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
 - **Self-update**: `gitdash update` for manual updates; optional background auto-update (**off by default**)
+- **Backup & restore**: `gitdash backup` / `gitdash restore` (consistent SQLite snapshot + repos + webhook spool + SSH host key), archive verification (`restore --dry-run`), retention (`--keep`), and optional scheduled background backups (`GITDASH_BACKUP_DIR`) — see [Backup & Restore](#backup--restore)
 - **Frontend**: React + Vite + Tailwind + shadcn/ui-style components
 - **Backend**: Go standard library HTTP + `golang.org/x/crypto/ssh` + SQLite (modernc, pure Go, no CGO)
 - **Single-binary releases**: GoReleaser embeds the frontend into the binary at release time — download and run
@@ -150,11 +151,14 @@ Environment variables (all optional):
 | `GITDASH_AUTO_UPDATE` | off | **Auto-update is off by default**; set to `1`/`true`/`yes`/`on` to enable |
 | `GITDASH_AUTO_UPDATE_INTERVAL` | `24h` | Auto-update check interval (minimum 1h) |
 | `GITDASH_UPDATE_REPO` | `holihur/gitdash` | Source repo for updates (for forks / testing) |
+| `GITDASH_BACKUP_DIR` | empty (off) | Enable scheduled background backups in `serve` mode; output directory for the archives |
+| `GITDASH_BACKUP_INTERVAL` | `24h` | Auto-backup interval (minimum 1m) |
+| `GITDASH_BACKUP_KEEP` | `14` | Number of newest auto-backups to retain |
 | `GITDASH_QUEUE` | `memory` | Pipeline job queue: `memory` (in-process goroutines) or `redis`/`asynq` (durable Redis queue) |
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
-| `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<username>/<username>` repo on first account creation (`0` disables) |
+| `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<name>/<name>` repo when an account or organization is first created (`0` disables) |
 | `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash / in PATH | Path to the agent runtime for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
 | `GITDASH_COPILOT_AGENT_URL` | empty | Use an already-running agent (`http://host:port`) instead of spawning one per session |
 | `GITDASH_LOG_LEVEL` | `info` | Log level: `debug` / `info` / `warn` / `error` |
@@ -239,13 +243,45 @@ docker compose up -d --build
 
 ## Backup & Restore
 
+### Built-in CLI (recommended)
+
+```bash
+# Write a consistent backup (SQLite VACUUM INTO snapshot + repos + webhook spool + SSH host key)
+gitdash backup -d ./backups -k 14     # -d output dir, -k keep newest N (omit -k to disable pruning)
+gitdash backup -o /tmp/snap.tar.gz    # explicit output file
+
+# List existing backups (newest first)
+gitdash backup -d ./backups --list
+
+# Verify an archive without touching data (gzip/tar integrity + path safety)
+gitdash restore ./backups/gitdash-backup-*.tar.gz --dry-run
+
+# Restore (refuses a non-empty data dir unless --force; rejects path traversal)
+gitdash restore ./backups/gitdash-backup-*.tar.gz --force
+```
+
+### Scheduled (automatic) backups
+
+Set `GITDASH_BACKUP_DIR` to enable a background backup loop in `serve` mode:
+
+```bash
+GITDASH_BACKUP_DIR=/var/backups/gitdash \
+GITDASH_BACKUP_INTERVAL=24h \
+GITDASH_BACKUP_KEEP=14 \
+gitdash serve
+```
+
+The first backup runs at startup, then every `GITDASH_BACKUP_INTERVAL` (default `24h`, minimum `1m`); the newest `GITDASH_BACKUP_KEEP` (default `14`) archives are retained. Backups run online without stopping the service. With `GITDASH_DB=postgres://...` only the files under `GITDASH_DATA` are archived — run `pg_dump` separately.
+
+### Shell script
+
 ```bash
 # Online backup (consistent SQLite snapshot + repo archives, keeps the latest 14)
 bash scripts/backup.sh ./data ./backups
 # KEEP=30 bash scripts/backup.sh   # keep more copies
 ```
 
-Restore: stop the service, unpack the backup into the data directory (`tar -xzf gitdash-backup-*.tar.gz -C <data dir>`), then start again.
+Restore manually: stop the service, unpack the backup into the data directory (`tar -xzf gitdash-backup-*.tar.gz -C <data dir>`), then start again.
 If `sqlite3` is not available on the host, the script falls back to a straight file copy (in WAL mode, stop the server first for consistency); inside Docker you can also run the same script via `docker compose exec gitdash bash`.
 
 ## Automated Testing
@@ -323,6 +359,8 @@ Business (requires `Authorization: Bearer <token>`, token from register/login):
 | GET | `/api/repos/{name}/tree?ref=&path=` | Browse directory |
 | GET | `/api/repos/{name}/blob?ref=&path=` | File content |
 | GET | `/api/repos/{name}/commits?ref=` | Commit history |
+| POST | `/api/users/{owner}/repos/{name}/commits` | Create a commit (batch file changes) |
+| POST | `/api/users/{owner}/repos/{name}/commits/{sha}/revert` | Revert a commit (creates an inverse commit on a branch) |
 | GET/POST | `/api/keys` | List / add SSH public keys (bound to the current user) |
 | DELETE | `/api/keys/{id}` | Delete your own public key |
 
