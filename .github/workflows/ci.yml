@@ -68,6 +68,12 @@ jobs:
         working-directory: backend
         run: go test -race -timeout 30m ./... 2>&1 | tee /tmp/test-race.log; exit ${PIPESTATUS[0]}
 
+      # 性能基线（软门禁：仅记录 blame/tree/commits/blob 基准，人工看劣化趋势）。
+      - name: Benchmarks (informational)
+        working-directory: backend
+        continue-on-error: true
+        run: go test -run '^$' -bench . -benchmem ./internal/gitsvc/
+
       - name: Upload unit-test coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
