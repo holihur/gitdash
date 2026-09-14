@@ -190,3 +190,28 @@ func TestAsynqQueueStartOnce(t *testing.T) {
 	q.Start(ctx, nil, h) // 第二次应为 no-op，不 panic
 	_ = q.Client().Close()
 }
+
+// 故障注入：Redis 不可达时 Enqueue 必须快速返回错误，而不是挂起
+// （服务端在 Redis 宕机时应保持可用，只是异步任务投递失败）。
+func TestAsynqQueueRedisDownFailsFast(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close() // 端口空闲 => 连接被拒
+
+	q := NewAsynq(addr, "", 0, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	err = q.Enqueue(ctx, Job{Kind: "pipeline:run", Payload: []byte("{}")})
+	if err == nil {
+		t.Fatal("enqueue to unreachable redis should return an error")
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("enqueue should fail before context deadline, took %v: %v", time.Since(start), err)
+	}
+	_ = q.Client().Close()
+}
