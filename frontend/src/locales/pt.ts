@@ -146,6 +146,7 @@ export const pt: Messages = {
     starred: "Marcado com estrela",
     unstarred: "Estrela removida",
     fork: "Fork",
+    forking: "Bifurcando…",
     forked: "Bifurcado para {name}",
     forkTitle: "Bifurcar repositório",
     forkDescription: "Crie sua própria cópia de {name}.",

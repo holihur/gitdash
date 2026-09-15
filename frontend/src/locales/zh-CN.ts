@@ -144,6 +144,7 @@ export const zhCN: Messages = {
     starred: "已收藏",
     unstarred: "已取消收藏",
     fork: "Fork",
+    forking: "正在 Fork…",
     forked: "已 Fork 到 {name}",
     forkTitle: "Fork 仓库",
     forkDescription: "创建 {name} 的副本到你的账号下。",

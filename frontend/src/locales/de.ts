@@ -146,6 +146,7 @@ export const de: Messages = {
     starred: "Mit Stern markiert",
     unstarred: "Stern entfernt",
     fork: "Fork",
+    forking: "Wird geforkt…",
     forked: "Geforkt nach {name}",
     forkTitle: "Repository forken",
     forkDescription: "Erstellen Sie Ihre eigene Kopie von {name}.",

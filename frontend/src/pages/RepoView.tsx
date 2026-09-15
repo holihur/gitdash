@@ -637,7 +637,7 @@ export default function RepoView() {
           </div>
           <DialogFooter>
             <Button onClick={doFork} disabled={forkBusy || !forkName.trim()}>
-              {t("social.fork")}
+              {forkBusy ? t("social.forking") : t("social.fork")}
             </Button>
           </DialogFooter>
         </DialogContent>

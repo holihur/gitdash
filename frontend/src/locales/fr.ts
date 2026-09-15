@@ -146,6 +146,7 @@ export const fr: Messages = {
     starred: "Ajouté aux favoris",
     unstarred: "Retiré des favoris",
     fork: "Fork",
+    forking: "Fork en cours…",
     forked: "Forké vers {name}",
     forkTitle: "Forker le dépôt",
     forkDescription: "Créez votre propre copie de {name}.",

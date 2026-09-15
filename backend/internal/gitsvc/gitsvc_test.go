@@ -201,6 +201,44 @@ func TestLastCommit(t *testing.T) {
 	}
 }
 
+func TestSSHEnvAlwaysAcceptsNewHostKeys(t *testing.T) {
+	// issue #8: 无私钥导入时也必须注入 accept-new，避免卡在 host key 确认。
+	env, cleanup, err := sshEnv("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleanup != nil {
+		t.Fatal("no-key sshEnv should not return cleanup")
+	}
+	if len(env) != 1 || !strings.HasPrefix(env[0], "GIT_SSH_COMMAND=") {
+		t.Fatalf("env = %v", env)
+	}
+	cmd := strings.TrimPrefix(env[0], "GIT_SSH_COMMAND=")
+	if !strings.Contains(cmd, "-o StrictHostKeyChecking=accept-new") {
+		t.Fatalf("ssh command %q missing accept-new", cmd)
+	}
+	if strings.Contains(cmd, "-i") || strings.Contains(cmd, "IdentitiesOnly") {
+		t.Fatalf("no-key ssh command %q should not contain -i/IdentitiesOnly", cmd)
+	}
+
+	// 有私钥时仍需指定专用 key。
+	env, cleanup, err = sshEnv("ssh-ed25519 AAAA fake\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleanup == nil {
+		t.Fatal("with-key sshEnv should return cleanup")
+	}
+	defer cleanup()
+	if len(env) != 1 || !strings.HasPrefix(env[0], "GIT_SSH_COMMAND=") {
+		t.Fatalf("env = %v", env)
+	}
+	cmd = strings.TrimPrefix(env[0], "GIT_SSH_COMMAND=")
+	if !strings.Contains(cmd, "-o StrictHostKeyChecking=accept-new") || !strings.Contains(cmd, "-i") || !strings.Contains(cmd, "IdentitiesOnly=yes") {
+		t.Fatalf("with-key ssh command %q missing options", cmd)
+	}
+}
+
 func TestPushMirror(t *testing.T) {
 	dir := t.TempDir()
 	if err := Init(dir); err != nil {

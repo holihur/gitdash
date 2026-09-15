@@ -144,6 +144,7 @@ export const ru: Messages = {
     "starred": "В избранном",
     "unstarred": "Удалено из избранного",
     "fork": "Fork",
+    "forking": "Создание форка…",
     "forked": "Fork создан в {name}",
     "forkTitle": "Fork репозитория",
     "forkDescription": "Создайте свою собственную копию {name}.",

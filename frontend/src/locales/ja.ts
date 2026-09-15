@@ -144,6 +144,7 @@ export const ja: Messages = {
     "starred": "スター済み",
     "unstarred": "スターを解除しました",
     "fork": "フォーク",
+    "forking": "フォーク中…",
     "forked": "{name}にフォークしました",
     "forkTitle": "リポジトリをフォーク",
     "forkDescription": "{name}のコピーを作成します。",

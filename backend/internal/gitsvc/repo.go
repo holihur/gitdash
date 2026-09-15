@@ -138,16 +138,12 @@ func ImportRepo(url, targetOwner, targetName, privateKey string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	var env []string
-	if strings.TrimSpace(privateKey) != "" {
-		keyPath, err := writeTempImportKey(privateKey)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = os.Remove(keyPath) }()
-		env = append(env,
-			"GIT_SSH_COMMAND=ssh -i '"+strings.ReplaceAll(keyPath, "'", "'\\''")+"' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
-		)
+	env, cleanup, err := sshEnv(privateKey)
+	if err != nil {
+		return err
+	}
+	if cleanup != nil {
+		defer cleanup()
 	}
 	if _, err := gitOutEnv(env, "", "clone", "--mirror", "--quiet", url, dst); err != nil {
 		_ = os.RemoveAll(dst)
@@ -166,19 +162,34 @@ func PushMirror(owner, name, url, privateKey string) error {
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
 		return fmt.Errorf("repo %s/%s not on disk", owner, name)
 	}
-	var env []string
-	if strings.TrimSpace(privateKey) != "" {
-		keyPath, err := writeTempImportKey(privateKey)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = os.Remove(keyPath) }()
-		env = append(env,
-			"GIT_SSH_COMMAND=ssh -i '"+strings.ReplaceAll(keyPath, "'", "'\\''")+"' -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new",
-		)
+	env, cleanup, err := sshEnv(privateKey)
+	if err != nil {
+		return err
 	}
-	_, err := gitOutEnv(env, path, "push", "--mirror", url)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	_, err = gitOutEnv(env, path, "push", "--mirror", url)
 	return err
+}
+
+// sshEnv 构造 git 通过 SSH 访问远端所需的环境变量。
+// 始终注入 StrictHostKeyChecking=accept-new：首次连接公网仓库（如 github.com）时
+// 自动接受 host key，避免因 known_hosts 缺失卡在
+// "Are you sure you want to continue connecting?" 交互确认（issue #8）。
+// privateKey 非空时额外写入临时 key 文件（0600）并加 -i/-o IdentitiesOnly。
+// 返回的 cleanup 用于清理临时 key 文件（无 key 时为 nil）。
+func sshEnv(privateKey string) ([]string, func(), error) {
+	cmd := "ssh -o StrictHostKeyChecking=accept-new"
+	if strings.TrimSpace(privateKey) == "" {
+		return []string{"GIT_SSH_COMMAND=" + cmd}, nil, nil
+	}
+	keyPath, err := writeTempImportKey(privateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd += " -i '" + strings.ReplaceAll(keyPath, "'", "'\\''") + "' -o IdentitiesOnly=yes"
+	return []string{"GIT_SSH_COMMAND=" + cmd}, func() { _ = os.Remove(keyPath) }, nil
 }
 
 // writeTempImportKey 把导入私钥写入临时文件（0600），调用方负责删除。

@@ -146,6 +146,7 @@ export const ko: Messages = {
     starred: "Star했습니다",
     unstarred: "Star를 해제했습니다",
     fork: "Fork",
+    forking: "Fork 중…",
     forked: "{name}(으)로 fork했습니다",
     forkTitle: "저장소 fork",
     forkDescription: "{name}의 복사본을 만듭니다.",

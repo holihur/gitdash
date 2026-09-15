@@ -144,6 +144,7 @@ export const en = {
     starred: "Starred",
     unstarred: "Removed star",
     fork: "Fork",
+    forking: "Forking…",
     forked: "Forked to {name}",
     forkTitle: "Fork repository",
     forkDescription: "Create your own copy of {name}.",
