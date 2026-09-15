@@ -45,7 +45,7 @@ func (s *Store) ListMyOrgs(username string) ([]Org, error) {
 	err := s.db.Table("orgs").
 		Select("orgs.*").
 		Joins("JOIN org_members ON org_members.org = orgs.name").
-		Where("org_members.username = ?", username).
+		Where("org_members.username = ? AND orgs.banned = ?", username, false).
 		Order("orgs.name").
 		Scan(&rows).Error
 	if err != nil {

@@ -14,6 +14,7 @@ func toRepo(r repoRow) Repo {
 		Description: r.Description,
 		Private:     r.Private,
 		IsTemplate:  r.IsTemplate,
+		Banned:      r.Banned,
 		CreatedAt:   r.CreatedAt,
 	}
 }
@@ -24,13 +25,19 @@ func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo,
 	if err := s.checkRepoQuota(owner); err != nil {
 		return Repo{}, err
 	}
-	row := repoRow{Owner: owner, Name: name, Description: description, Private: private, CreatedAt: now()}
+	// 系统专用模版用户：其名下仓库强制公开 + 标记为模版。
+	isTemplate := owner == TemplateUser
+	if isTemplate {
+		private = false
+	}
+	row := repoRow{Owner: owner, Name: name, Description: description, Private: private, IsTemplate: isTemplate, CreatedAt: now()}
 	// 用 map 插入绕过 GORM 对 default 字段零值的改写（private=false 必须显式落库）
 	if err := s.db.Table("repos").Create(map[string]any{
 		"owner":       row.Owner,
 		"name":        row.Name,
 		"description": row.Description,
 		"private":     private,
+		"is_template": isTemplate,
 		"created_at":  row.CreatedAt,
 	}).Error; err != nil {
 		if isUniqueErr(err) {
@@ -58,7 +65,8 @@ func (s *Store) ListRepos(owner string) ([]Repo, error) {
 
 // ExploreRepos 分页列出公开仓库（供发现页使用）；limit<=0 表示不限制。
 func (s *Store) ExploreRepos(limit, offset int) ([]Repo, error) {
-	q := s.db.Where("private = ?", false).Order("id DESC")
+	q := s.db.Where("private = ? AND banned = ? AND owner NOT IN (SELECT name FROM orgs WHERE banned = ?)",
+		false, false, true).Order("id DESC")
 	if limit > 0 {
 		q = q.Limit(limit).Offset(offset)
 	}
@@ -194,6 +202,9 @@ func (s *Store) SharedByName(username, name string) (string, error) {
 }
 
 func (s *Store) CanRead(owner, repo, username string) bool {
+	if s.IsRepoBanned(owner, repo) {
+		return false
+	}
 	if owner == username {
 		return true
 	}
@@ -213,6 +224,9 @@ func (s *Store) CanRead(owner, repo, username string) bool {
 }
 
 func (s *Store) CanWrite(owner, repo, username string) bool {
+	if s.IsRepoBanned(owner, repo) {
+		return false
+	}
 	if owner == username {
 		return true
 	}
@@ -248,7 +262,9 @@ func (s *Store) QueryOrgRepos(org string) ([]Repo, error) {
 // CountExploreRepos 公开仓库总数。
 func (s *Store) CountExploreRepos() (int, error) {
 	var n int64
-	if err := s.db.Model(&repoRow{}).Where("private = ?", false).Count(&n).Error; err != nil {
+	if err := s.db.Model(&repoRow{}).
+		Where("private = ? AND banned = ? AND owner NOT IN (SELECT name FROM orgs WHERE banned = ?)", false, false, true).
+		Count(&n).Error; err != nil {
 		return 0, err
 	}
 	return int(n), nil
@@ -311,6 +327,15 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 		dto.Role = r.Perm
 		repos = append(repos, dto)
 	}
+	// 封禁仓库（或其所在组织被封禁）不展示。
+	visible := repos[:0]
+	for _, r := range repos {
+		if s.IsRepoBanned(r.Owner, r.Name) {
+			continue
+		}
+		visible = append(visible, r)
+	}
+	repos = visible
 	// 按 owner, name 排序（稳定排序保持各来源内部相对顺序）
 	sort.SliceStable(repos, func(i, j int) bool {
 		if repos[i].Owner != repos[j].Owner {

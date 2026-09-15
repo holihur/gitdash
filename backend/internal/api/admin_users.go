@@ -158,6 +158,10 @@ func (a *API) adminResetPassword(w http.ResponseWriter, r *http.Request) {
 //	@Router      /admin/users/{username} [delete]
 func (a *API) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	username := strings.ToLower(strings.TrimSpace(r.PathValue("username")))
+	if username == store.TemplateUser {
+		writeCode(w, http.StatusForbidden, "template_user_protected", "the system template user cannot be deleted")
+		return
+	}
 	if err := a.store.AdminDeleteUser(username); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "user")

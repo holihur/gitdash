@@ -27,7 +27,7 @@ func (s *Store) AdminListUsers(q string, limit, offset int) ([]User, int, error)
 	}
 	users := make([]User, 0, len(rows))
 	for _, r := range rows {
-		users = append(users, User{ID: r.ID, Username: r.Username, Email: r.Email, CreatedAt: r.CreatedAt})
+		users = append(users, User{ID: r.ID, Username: r.Username, Email: r.Email, CreatedAt: r.CreatedAt, Banned: r.Banned})
 	}
 	return users, int(total), nil
 }

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { en, type Messages } from "@/locales/en";
+import { en, type DeepPartial, type Messages } from "@/locales/en";
 import { zhCN } from "@/locales/zh-CN";
 import { ja } from "@/locales/ja";
 import { ko } from "@/locales/ko";
@@ -58,7 +58,7 @@ export function dateLocale(lang: Lang): string {
   return DATE_LOCALES[lang] ?? "en-US";
 }
 
-const MESSAGES: Record<Lang, Messages> = {
+const MESSAGES: Record<Lang, Messages | DeepPartial<Messages>> = {
   en,
   "zh-CN": zhCN,
   ja,

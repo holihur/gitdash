@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Ban,
   Bell,
   Check,
   CheckCheck,
@@ -46,6 +47,10 @@ function notifIcon(n: Notification) {
       );
     case "merged":
       return <GitMerge className="h-4 w-4 shrink-0 text-purple-600" />;
+    case "banned_user":
+    case "banned_repo":
+    case "banned_org":
+      return <Ban className="h-4 w-4 shrink-0 text-destructive" />;
   }
 }
 
@@ -90,9 +95,10 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
         setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
         onChanged?.();
       } catch {
-        /* 忽略：仍跳转 */
+        /* 忽略：仍继续 */
       }
     }
+    if (n.kind === "system") return; // 系统通知（封禁等）无跳转目标
     navigate(`/repo/${n.owner}/${n.repo}?tab=${n.kind === "issue" ? "issues" : "pulls"}`);
   };
 
@@ -204,7 +210,7 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="font-mono text-xs text-muted-foreground">
-                        {n.owner}/{n.repo}
+                        {n.kind === "system" ? "system" : `${n.owner}/${n.repo}`}
                       </span>
                       {!n.read && (
                         <span className="h-2 w-2 rounded-full bg-blue-500" title={t("inbox.unread")} />
@@ -216,10 +222,14 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
                         n.read && "text-muted-foreground",
                       )}
                     >
-                      #{n.number} · {n.title}
+                      {n.kind === "system"
+                        ? t(`inbox.system.${n.action}`, { owner: n.owner, repo: n.repo, actor: n.actor })
+                        : `#${n.number} · ${n.title}`}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {t(`inbox.${n.kind}.${n.action}`, { actor: n.actor })} ·{" "}
+                      {n.kind !== "system" && (
+                        <>{t(`inbox.${n.kind}.${n.action}`, { actor: n.actor })} · </>
+                      )}
                       {formatDate(n.created_at, locale)}
                     </span>
                   </span>

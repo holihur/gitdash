@@ -18,8 +18,8 @@ func (s *Store) SearchRepos(q string, limit int) ([]Repo, error) {
 	}
 	pat := likePat(q)
 	var rows []repoRow
-	if err := s.db.Where("private = ? AND (LOWER(owner) LIKE ? OR LOWER(name) LIKE ? OR LOWER(description) LIKE ?)",
-		false, pat, pat, pat).Order("id DESC").Limit(limit).Find(&rows).Error; err != nil {
+	if err := s.db.Where("private = ? AND banned = ? AND owner NOT IN (SELECT name FROM orgs WHERE banned = ?) AND (LOWER(owner) LIKE ? OR LOWER(name) LIKE ? OR LOWER(description) LIKE ?)",
+		false, false, true, pat, pat, pat).Order("id DESC").Limit(limit).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := []Repo{}
@@ -70,7 +70,7 @@ func (s *Store) SearchUsers(q string, limit int) ([]SearchUsersResult, error) {
 	}
 	pat := likePat(q)
 	var userRows []userRow
-	if err := s.db.Where("LOWER(username) LIKE ?", pat).Order("username").Limit(limit).Find(&userRows).Error; err != nil {
+	if err := s.db.Where("LOWER(username) LIKE ? AND banned = ?", pat, false).Order("username").Limit(limit).Find(&userRows).Error; err != nil {
 		return nil, err
 	}
 	out := []SearchUsersResult{}
@@ -78,7 +78,7 @@ func (s *Store) SearchUsers(q string, limit int) ([]SearchUsersResult, error) {
 		out = append(out, SearchUsersResult{Kind: "user", Name: r.Username, CreatedAt: r.CreatedAt})
 	}
 	var orgRows []orgRow
-	if err := s.db.Where("LOWER(name) LIKE ? OR LOWER(display) LIKE ?", pat, pat).
+	if err := s.db.Where("(LOWER(name) LIKE ? OR LOWER(display) LIKE ?) AND banned = ?", pat, pat, false).
 		Order("name").Limit(limit).Find(&orgRows).Error; err != nil {
 		return nil, err
 	}

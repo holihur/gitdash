@@ -91,6 +91,10 @@ func buildConfig(st *store.Store) *ssh.ServerConfig {
 					continue
 				}
 				if parsed.Type() == key.Type() && bytes.Equal(parsed.Marshal(), key.Marshal()) {
+					if st.IsUserBanned(ka.Username) {
+						logx.Infof("ssh: rejected banned user %q (key %s)", ka.Username, ssh.FingerprintSHA256(key))
+						return nil, fmt.Errorf("account is banned")
+					}
 					fp := ssh.FingerprintSHA256(key)
 					logx.Infof("ssh: %s authenticated as user %q with key %s", meta.User(), ka.Username, fp)
 					return &ssh.Permissions{Extensions: map[string]string{"username": ka.Username}}, nil

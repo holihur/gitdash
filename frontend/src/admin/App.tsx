@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Toaster } from "sonner";
 import {
+  Ban,
   GitBranch,
   KeyRound,
   LogOut,
@@ -314,6 +315,8 @@ function Dashboard({ user, onLogout }: { user: string; onLogout: () => void }) {
       <OidcSettings settings={settings} onChange={load} />
       <PasswordCard />
       <UsersSection />
+      <ReposSection />
+      <OrgsSection />
       <QuotaSection />
     </div>
   );
@@ -818,6 +821,26 @@ interface AdminUser {
   created_at: string;
   mfa_enabled: boolean;
   notify_email: boolean;
+  banned: boolean;
+}
+
+interface AdminRepo {
+  id: number;
+  owner: string;
+  name: string;
+  description: string;
+  private: boolean;
+  is_template: boolean;
+  banned: boolean;
+  created_at: string;
+}
+
+interface AdminOrg {
+  id: number;
+  name: string;
+  display: string;
+  created_at: string;
+  banned: boolean;
 }
 
 const PAGE_SIZE = 20;
@@ -993,10 +1016,16 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
   const { t } = useI18n();
   const [resetOpen, setResetOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const isTemplate = user.username === "template";
 
   return (
     <TableRow>
-      <TableCell className="font-medium">{user.username}</TableCell>
+      <TableCell className="font-medium">
+        <span className="flex items-center gap-2">
+          {user.username}
+          {user.banned && <Badge variant="destructive">{t("admin.banned")}</Badge>}
+        </span>
+      </TableCell>
       <TableCell>{user.email || "—"}</TableCell>
       <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
       <TableCell>
@@ -1006,11 +1035,27 @@ function UserRow({ user, onChanged }: { user: AdminUser; onChanged: () => void }
       </TableCell>
       <TableCell className="text-right">
         <div className="flex justify-end gap-1">
+          {isTemplate ? (
+            <Badge variant="outline">{t("admin.templateProtected")}</Badge>
+          ) : (
+            <BanButton
+              path={`/users/${encodeURIComponent(user.username)}/ban`}
+              banned={user.banned}
+              name={user.username}
+              onChanged={onChanged}
+            />
+          )}
           <Button variant="ghost" size="sm" className="gap-1" onClick={() => setResetOpen(true)}>
             <KeyRound className="h-4 w-4" />
             {t("admin.resetPassword")}
           </Button>
-          <Button variant="ghost" size="sm" className="gap-1 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1 text-destructive hover:text-destructive"
+            disabled={isTemplate}
+            onClick={() => setDeleteOpen(true)}
+          >
             <Trash2 className="h-4 w-4" />
             {t("admin.deleteUser")}
           </Button>
@@ -1124,6 +1169,239 @@ function DeleteUserDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+function BanButton({
+  path,
+  banned,
+  name,
+  onChanged,
+}: {
+  path: string;
+  banned: boolean;
+  name: string;
+  onChanged: () => void;
+}) {
+  const { t, to } = useI18n();
+  const [busy, setBusy] = useState(false);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      await adminReq(path, { banned: !banned }, "POST");
+      toast.success(t(banned ? "admin.unbannedMsg" : "admin.bannedMsg", { name }));
+      onChanged();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={`gap-1 ${banned ? "text-destructive hover:text-destructive" : ""}`}
+      disabled={busy}
+      onClick={toggle}
+    >
+      <Ban className="h-4 w-4" />
+      {banned ? t("admin.unban") : t("admin.ban")}
+    </Button>
+  );
+}
+
+function ReposSection() {
+  const { t, to } = useI18n();
+  const [repos, setRepos] = useState<AdminRepo[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const load = useCallback(
+    async (q: string, p: number) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String((p - 1) * PAGE_SIZE) });
+      if (q) params.set("q", q);
+      try {
+        const r = await adminList<AdminRepo[]>(`/repos?${params}`);
+        setRepos(r.items);
+        setTotal(r.total);
+      } catch (e) {
+        toastError(to, e);
+      }
+    },
+    [to],
+  );
+
+  useEffect(() => {
+    void load(activeQuery, page);
+  }, [load, activeQuery, page]);
+
+  const search = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    setActiveQuery(query.trim());
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("admin.reposTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <form onSubmit={search} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("admin.reposSearch")} />
+          </div>
+          <Button type="submit" variant="outline">{t("admin.usersSearchBtn")}</Button>
+        </form>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("admin.reposColRepo")}</TableHead>
+              <TableHead>{t("admin.usersColCreated")}</TableHead>
+              <TableHead className="text-right">{t("admin.usersColActions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {repos === null ? null : repos.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="py-6 text-center text-muted-foreground">
+                  {t("admin.reposEmpty")}
+                </TableCell>
+              </TableRow>
+            ) : (
+              repos.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono text-sm">
+                    {r.owner}/{r.name}
+                    {r.banned && <Badge variant="destructive" className="ml-2">{t("admin.banned")}</Badge>}
+                  </TableCell>
+                  <TableCell>{new Date(r.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-right">
+                    <BanButton
+                      path={`/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.name)}/ban`}
+                      banned={r.banned}
+                      name={`${r.owner}/${r.name}`}
+                      onChanged={() => void load(activeQuery, page)}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-sm text-muted-foreground">{t("admin.usersPageOf", { page, pages })}</span>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            {t("admin.usersPrev")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+            {t("admin.usersNext")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function OrgsSection() {
+  const { t, to } = useI18n();
+  const [orgs, setOrgs] = useState<AdminOrg[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [activeQuery, setActiveQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const load = useCallback(
+    async (q: string, p: number) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String((p - 1) * PAGE_SIZE) });
+      if (q) params.set("q", q);
+      try {
+        const r = await adminList<AdminOrg[]>(`/orgs?${params}`);
+        setOrgs(r.items);
+        setTotal(r.total);
+      } catch (e) {
+        toastError(to, e);
+      }
+    },
+    [to],
+  );
+
+  useEffect(() => {
+    void load(activeQuery, page);
+  }, [load, activeQuery, page]);
+
+  const search = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    setActiveQuery(query.trim());
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("admin.orgsTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <form onSubmit={search} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("admin.orgsSearch")} />
+          </div>
+          <Button type="submit" variant="outline">{t("admin.usersSearchBtn")}</Button>
+        </form>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("admin.usersColUsername")}</TableHead>
+              <TableHead className="text-right">{t("admin.usersColActions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {orgs === null ? null : orgs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={2} className="py-6 text-center text-muted-foreground">
+                  {t("admin.orgsEmpty")}
+                </TableCell>
+              </TableRow>
+            ) : (
+              orgs.map((o) => (
+                <TableRow key={o.id}>
+                  <TableCell className="font-medium">
+                    {o.name}
+                    {o.banned && <Badge variant="destructive" className="ml-2">{t("admin.banned")}</Badge>}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <BanButton
+                      path={`/orgs/${encodeURIComponent(o.name)}/ban`}
+                      banned={o.banned}
+                      name={o.name}
+                      onChanged={() => void load(activeQuery, page)}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <div className="flex items-center justify-end gap-2">
+          <span className="text-sm text-muted-foreground">{t("admin.usersPageOf", { page, pages })}</span>
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+            {t("admin.usersPrev")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>
+            {t("admin.usersNext")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

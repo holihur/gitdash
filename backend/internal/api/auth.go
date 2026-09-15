@@ -154,6 +154,10 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.rateReset(key)
+	if ua.Banned {
+		writeCode(w, http.StatusForbidden, "account_banned", "account is banned")
+		return
+	}
 	if ua.MFAEnabled {
 		method := ua.MFAMethod
 		if method == "" {
@@ -220,6 +224,10 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 	ua, err := a.store.GetByUsername(username)
 	if err != nil || !ua.MFAEnabled {
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
+		return
+	}
+	if ua.Banned {
+		writeCode(w, http.StatusForbidden, "account_banned", "account is banned")
 		return
 	}
 	nowStr := now.Format(time.RFC3339)

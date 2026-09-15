@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Package as PackageIcon, Trash2 } from "lucide-react";
+import { Copy, Package as PackageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
+import { api, type DockerImage, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +20,13 @@ import { formatDate } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
-const PKG_TYPES = ["npm", "composer", "pypi", "rubygems", "go", "cargo", "maven"] as const;
+const PKG_TYPES = ["npm", "composer", "pypi", "rubygems", "go", "cargo", "maven", "docker"] as const;
 
 export default function Packages() {
   const [type, setType] = useState<string>("");
   const [pkgs, setPkgs] = useState<PackageEntry[]>([]);
+  const [dockerImages, setDockerImages] = useState<DockerImage[]>([]);
+  const [self, setSelf] = useState("");
   const [audit, setAudit] = useState<PackageAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<PackageEntry | null>(null);
@@ -35,12 +37,19 @@ export default function Packages() {
     setLoading(true);
     try {
       const me = await api.me();
-      const [list, log] = await Promise.all([
-        api.listPackages(me.username, type || undefined),
-        api.listPackageAudit(me.username),
-      ]);
-      setPkgs(list);
-      setAudit(log);
+      setSelf(me.username);
+      if (type === "docker") {
+        const images = await api.listDockerImages(me.username);
+        setDockerImages(images);
+        setPkgs([]);
+      } else {
+        const [list, log] = await Promise.all([
+          api.listPackages(me.username, type || undefined),
+          api.listPackageAudit(me.username),
+        ]);
+        setPkgs(list);
+        setAudit(log);
+      }
     } catch (e) {
       toast.error(apiErrorMsg(t, e));
     } finally {
@@ -71,6 +80,17 @@ export default function Packages() {
     }
   };
 
+  const copyPull = async (img: DockerImage) => {
+    const tag = img.tags[0] ?? "latest";
+    const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
+    try {
+      await navigator.clipboard.writeText(`docker pull ${host}/${self}/${img.name}:${tag}`);
+      toast.success(t("common.copied"));
+    } catch {
+      toast.error(t("common.copyFailed"));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -88,6 +108,55 @@ export default function Packages() {
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-2/3" />
         </div>
+      ) : type === "docker" ? (
+        dockerImages.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <PackageIcon className="h-10 w-10" />
+            <p className="text-sm">{t("packages.dockerEmpty")}</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("packages.type")}</TableHead>
+                <TableHead>{t("common.name")}</TableHead>
+                <TableHead>{t("packages.version")}</TableHead>
+                <TableHead>{t("packages.dockerPull")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dockerImages.map((img) => {
+                const tag = img.tags[0] ?? "latest";
+                const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
+                const pull = `docker pull ${host}/${self}/${img.name}:${tag}`;
+                return (
+                  <TableRow key={img.name}>
+                    <TableCell>
+                      <Badge variant="secondary">docker</Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">{img.name}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {img.tags.length ? img.tags.join(", ") : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <code className="max-w-[60vw] truncate rounded bg-muted px-2 py-1 text-xs">{pull}</code>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => void copyPull(img)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )
       ) : pkgs.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
           <PackageIcon className="h-10 w-10" />
@@ -133,7 +202,7 @@ export default function Packages() {
         </Table>
       )}
 
-      {audit.length > 0 && (
+      {type !== "docker" && audit.length > 0 && (
         <div>
           <h2 className="mb-2 text-lg font-semibold">{t("packages.audit")}</h2>
           <div className="rounded-md border p-3 text-sm">

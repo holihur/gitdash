@@ -35,6 +35,11 @@ export interface PackageAuditEntry {
   created_at: string;
 }
 
+export interface DockerImage {
+  name: string;
+  tags: string[];
+}
+
 export interface LoginResult {
   token?: string;
   username?: string;
@@ -523,8 +528,8 @@ export interface CopilotMessage {
   tools?: CopilotTool[];
 }
 
-export type NotifKind = "issue" | "pull";
-export type NotifAction = "opened" | "closed" | "reopened" | "merged";
+export type NotifKind = "issue" | "pull" | "system";
+export type NotifAction = "opened" | "closed" | "reopened" | "merged" | "banned_user" | "banned_repo" | "banned_org";
 
 export interface Notification {
   id: number;

@@ -117,6 +117,14 @@ func run() {
 	// 包文件内容寻址 blob 存储
 	store.SetBlobDir(filepath.Join(dataDir, "packages-blobs"))
 
+	// 系统专用 template 用户：幂等 seed（封禁禁止登录，其仓库自动成为模板）
+	templateHash, terr := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("gitdash-template-%d", time.Now().UnixNano())), api.BcryptCost)
+	if terr == nil {
+		if terr = st.EnsureTemplateUser(string(templateHash)); terr != nil {
+			logx.Infof("template user seed: %v", terr)
+		}
+	}
+
 	// 后台定期清理过期的登录失败限流行，防止表无限增长
 	go func() {
 		defer func() {

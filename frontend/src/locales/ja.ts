@@ -1,6 +1,6 @@
-import type { Messages } from "./en";
+import type { DeepPartial, Messages } from "./en";
 
-export const ja: Messages = {
+export const ja: DeepPartial<Messages> = {
   "app": {
     "title": "gitdash",
     "logout": "ログアウト",
@@ -950,6 +950,8 @@ export const ja: Messages = {
     "version": "最新バージョン",
     "size": "サイズ",
     "downloads": "ダウンロード数",
+    "dockerPull": "プルコマンド",
+    "dockerEmpty": "イメージはまだありません — docker push でプッシュしてください。",
     "empty": "パッケージはまだありません — お好みのパッケージマネージャーで公開してください。",
     "deleted": "パッケージを削除しました",
     "deleteTitle": "パッケージを削除",

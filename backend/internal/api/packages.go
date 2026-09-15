@@ -100,7 +100,13 @@ func limitBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 
 var validPkgTypes = map[string]bool{
 	"npm": true, "composer": true, "pypi": true, "rubygems": true,
-	"go": true, "cargo": true, "maven": true,
+	"go": true, "cargo": true, "maven": true, "docker": true,
+}
+
+// dockerImage Packages 页 docker tab 的展示条目：一个镜像名 + 其全部 tag。
+type dockerImage struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
 }
 
 // savePackage 存储包文件（内容寻址）并记录审计。
@@ -136,7 +142,7 @@ func servePackageBytes(w http.ResponseWriter, p store.Package, content []byte, c
 // listPackagesUI 列出命名空间下的包
 //
 //	@Summary     列出包
-//	@Description 列出 owner 命名空间下的包（type 可选过滤：npm/composer/pypi/rubygems/go/cargo/maven）
+//	@Description 列出 owner 命名空间下的包（type 可选过滤：npm/composer/pypi/rubygems/go/cargo/maven/docker）
 //	@Tags        packages
 //	@Param       owner  path string true "用户或组织"
 //	@Param       type   path string false "包类型"
@@ -148,6 +154,25 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 	typ := r.PathValue("type")
 	if typ != "" && !validPkgTypes[typ] {
 		writeCode(w, http.StatusBadRequest, "invalid_type", "unknown package type")
+		return
+	}
+	if typ == "docker" {
+		images, err := a.store.ListRegistryImages(owner)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+		out := make([]dockerImage, 0, len(images))
+		for _, img := range images {
+			tags, terr := a.store.ListRegistryTags(owner, img)
+			if terr != nil {
+				internalError(w, terr)
+				return
+			}
+			out = append(out, dockerImage{Name: img, Tags: tags})
+		}
+		setTotal(w, len(out))
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
 	limit, offset := pageParams(r)

@@ -19,6 +19,8 @@ type userRow struct {
 	EmailVerified bool   `gorm:"not null;default:false"`
 	EmailToken    string `gorm:"not null;default:'';size:255"`
 	EmailTokenExp string `gorm:"not null;default:''"`
+	// Banned 封禁标记：封禁用户禁止登录与一切 API/SSH 使用（系统专用 template 用户亦为封禁态）。
+	Banned bool `gorm:"not null;default:false"`
 }
 
 func (userRow) TableName() string { return "users" }
@@ -41,6 +43,7 @@ type repoRow struct {
 	Description string `gorm:"not null;default:''"`
 	Private     bool   `gorm:"not null;default:true"`
 	IsTemplate  bool   `gorm:"not null;default:false"`
+	Banned      bool   `gorm:"not null;default:false"`
 	CreatedAt   string `gorm:"not null"`
 }
 
@@ -234,6 +237,7 @@ type orgRow struct {
 	Name      string `gorm:"not null;uniqueIndex;size:255"`
 	Display   string `gorm:"not null;default:''"`
 	CreatedAt string `gorm:"not null"`
+	Banned    bool   `gorm:"not null;default:false"`
 }
 
 func (orgRow) TableName() string { return "orgs" }

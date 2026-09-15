@@ -179,6 +179,11 @@ export const en = {
       closed: "{actor} closed issue",
       reopened: "{actor} reopened issue",
     },
+    system: {
+      banned_user: "Your account was banned by {actor}",
+      banned_repo: "Your repository {owner}/{repo} was banned by {actor}",
+      banned_org: "Your organization {owner} was banned by {actor}",
+    },
     pull: {
       opened: "{actor} opened pull request",
       closed: "{actor} closed pull request",
@@ -786,6 +791,19 @@ export const en = {
     deleteUserHint: "This permanently removes the account. This action cannot be undone.",
     userDeleted: "User {name} deleted",
     userNotFound: "User not found",
+    ban: "Ban",
+    unban: "Unban",
+    banned: "Banned",
+    bannedMsg: "{name} banned",
+    unbannedMsg: "{name} unbanned",
+    templateProtected: "The system template user is protected",
+    reposTitle: "Repositories",
+    reposSearch: "Search owner / name…",
+    reposColRepo: "Repository",
+    reposEmpty: "No repositories found",
+    orgsTitle: "Organizations",
+    orgsSearch: "Search organization…",
+    orgsEmpty: "No organizations found",
     quotaTitle: "Quotas",
     quotaHint: "Limit how many resources each account can create. 0 means unlimited; per-user / per-org overrides replace the default entirely. Changes take effect immediately.",
     quotaDefault: "Default quotas",
@@ -955,6 +973,8 @@ export const en = {
     version: "Latest version",
     size: "Size",
     downloads: "Downloads",
+    dockerPull: "Pull command",
+    dockerEmpty: "No images pushed yet — push one with `docker push`.",
     empty: "No packages yet — publish one with your favourite package manager.",
     deleted: "Package deleted",
     deleteTitle: "Delete package",
@@ -1086,3 +1106,5 @@ export const en = {
 };
 
 export type Messages = typeof en;
+
+export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };

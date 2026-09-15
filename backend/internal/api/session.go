@@ -143,16 +143,24 @@ func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 			tok = c.Value
 		}
 	}
+	// 封禁用户视为未认证：禁止登录与一切 API/SSH 使用（现有会话/PAT 亦失效）。
+	banned := func(name string) bool { return name != "" && a.store.IsUserBanned(name) }
 	if tok == "" {
 		if user, pass, ok := r.BasicAuth(); ok && pass != "" {
 			if name, scopes, err := a.store.ValidatePAT(pass, clientIP(r)); err == nil {
 				if user == "" || user == name {
+					if banned(name) {
+						return "", nil, false
+					}
 					return name, scopes, true
 				}
 				return "", nil, false
 			}
 			if name, err := a.store.GetSession(pass); err == nil {
 				if user == "" || user == name {
+					if banned(name) {
+						return "", nil, false
+					}
 					return name, nil, false
 				}
 			}
@@ -162,9 +170,15 @@ func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	}
 	username, err := a.store.GetSession(tok)
 	if err == nil {
+		if banned(username) {
+			return "", nil, false
+		}
 		return username, nil, false
 	}
 	if name, scopes, err := a.store.ValidatePAT(tok, clientIP(r)); err == nil {
+		if banned(name) {
+			return "", nil, false
+		}
 		return name, scopes, true
 	}
 	return "", nil, false
@@ -184,6 +198,10 @@ func (a *API) startSession(w http.ResponseWriter, r *http.Request, status int, u
 		internalError(w, err)
 		return
 	}
+	if ua.Banned {
+		writeCode(w, http.StatusForbidden, "account_banned", "account is banned")
+		return
+	}
 	token, err := newSessionToken()
 	if err != nil {
 		internalError(w, err)
@@ -198,7 +216,7 @@ func (a *API) startSession(w http.ResponseWriter, r *http.Request, status int, u
 }
 
 func (a *API) oauthIssueSession(w http.ResponseWriter, r *http.Request, username string) {
-	if ua, err := a.store.GetByUsername(username); err == nil {
+	if ua, err := a.store.GetByUsername(username); err == nil && !ua.Banned {
 		if token, err := newSessionToken(); err == nil {
 			if err := a.store.CreateSession(token, ua.ID); err == nil {
 				a.setSessionCookie(w, r, token)

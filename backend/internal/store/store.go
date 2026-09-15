@@ -25,6 +25,7 @@ type User struct {
 	Username  string `json:"username"`
 	Email     string `json:"email"`
 	CreatedAt string `json:"created_at"`
+	Banned    bool   `json:"banned"`
 }
 
 // UserSummary 用户公开摘要（用户页/关注列表使用，不含邮箱等私有字段）。
@@ -47,6 +48,8 @@ type UserAuth struct {
 	EmailVerified bool
 	EmailToken    string
 	EmailTokenExp string
+	// Banned 封禁标记（禁止登录与使用）。
+	Banned bool
 }
 
 type Repo struct {
@@ -56,6 +59,7 @@ type Repo struct {
 	Description string `json:"description"`
 	Private     bool   `json:"private"`
 	IsTemplate  bool   `json:"is_template"`
+	Banned      bool   `json:"banned"`
 	CreatedAt   string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
@@ -191,6 +195,7 @@ type Org struct {
 	Name      string `json:"name"`
 	Display   string `json:"display"`
 	CreatedAt string `json:"created_at"`
+	Banned    bool   `json:"banned"`
 }
 
 // OrgMember 组织成员（owner 拥有全部管理权，member 可写组织仓库）

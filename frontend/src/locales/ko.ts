@@ -1,6 +1,6 @@
-import type { Messages } from "./en";
+import type { DeepPartial, Messages } from "./en";
 
-export const ko: Messages = {
+export const ko: DeepPartial<Messages> = {
   app: {
     title: "gitdash",
     logout: "로그아웃",
@@ -957,6 +957,8 @@ export const ko: Messages = {
     version: "최신 버전",
     size: "크기",
     downloads: "다운로드",
+    dockerPull: "Pull 명령",
+    dockerEmpty: "아직 이미지가 없습니다 — docker push로 푸시해 보세요.",
     empty: "아직 패키지가 없습니다 — 좋아하는 패키지 관리자로 게시해 보세요.",
     deleted: "패키지를 삭제했습니다",
     deleteTitle: "패키지 삭제",

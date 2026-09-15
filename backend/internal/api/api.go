@@ -246,7 +246,13 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/users", a.adminAuth(a.adminListUsers))
 	mux.HandleFunc("POST /api/admin/users", a.adminAuth(a.adminCreateUser))
 	mux.HandleFunc("POST /api/admin/users/{username}/reset_password", a.adminAuth(a.adminResetPassword))
+	mux.HandleFunc("POST /api/admin/users/{username}/ban", a.adminAuth(a.adminBanUser))
 	mux.HandleFunc("DELETE /api/admin/users/{username}", a.adminAuth(a.adminDeleteUser))
+	// 仓库 / 组织管理（含封禁）
+	mux.HandleFunc("GET /api/admin/repos", a.adminAuth(a.adminListRepos))
+	mux.HandleFunc("POST /api/admin/repos/{owner}/{name}/ban", a.adminAuth(a.adminBanRepo))
+	mux.HandleFunc("GET /api/admin/orgs", a.adminAuth(a.adminListOrgs))
+	mux.HandleFunc("POST /api/admin/orgs/{name}/ban", a.adminAuth(a.adminBanOrg))
 	// auth
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
@@ -888,6 +894,10 @@ func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) 
 		writeNotFound(w, "repo")
 		return "", "", false
 	}
+	if repo.Banned || a.store.IsOrgBanned(owner) {
+		writeNotFound(w, "repo")
+		return "", "", false
+	}
 	if me == owner {
 		return owner, name, true
 	}
@@ -912,6 +922,10 @@ func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) (string, stri
 		return "", "", false
 	}
 	if !a.store.IsRepoOwner(owner, userFrom(r)) {
+		writeNotFound(w, "repo")
+		return "", "", false
+	}
+	if a.store.IsRepoBanned(owner, name) {
 		writeNotFound(w, "repo")
 		return "", "", false
 	}
