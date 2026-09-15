@@ -407,7 +407,20 @@ export interface Webhook {
   owner: string;
   repo: string;
   url: string;
+  /** 订阅的事件类型；空数组 = 全部事件 */
+  events: string[];
   created_at: string;
+}
+
+/** 入站 webhook：外部系统凭 token 创建 issue。 */
+export interface IncomingWebhook {
+  enabled: boolean;
+  /** 调用路径（如 /api/hooks/incoming/owner/repo），仅配置后返回 */
+  path?: string;
+  created_at?: string;
+  last_used_at?: string;
+  /** token 明文仅在创建/轮换响应中返回一次 */
+  token?: string;
 }
 
 export interface GlobalSearchResult {

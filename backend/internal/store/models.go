@@ -258,11 +258,13 @@ func (orgMemberRow) TableName() string { return "org_members" }
 // ---- webhooks / admin / settings / oauth ----
 
 type webhookRow struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement"`
-	Owner     string `gorm:"not null;uniqueIndex:uq_hook;size:255"`
-	Repo      string `gorm:"not null;uniqueIndex:uq_hook;size:255"`
-	URL       string `gorm:"not null;uniqueIndex:uq_hook;size:1024"`
-	Secret    string `gorm:"not null;default:''"`
+	ID     int64  `gorm:"primaryKey;autoIncrement"`
+	Owner  string `gorm:"not null;uniqueIndex:uq_hook;size:255"`
+	Repo   string `gorm:"not null;uniqueIndex:uq_hook;size:255"`
+	URL    string `gorm:"not null;uniqueIndex:uq_hook;size:1024"`
+	Secret string `gorm:"not null;default:''"`
+	// Events 逗号分隔的订阅事件类型；空 = 订阅全部事件。
+	Events    string `gorm:"not null;default:''"`
 	CreatedAt string `gorm:"not null"`
 }
 
@@ -641,3 +643,16 @@ type oauthDeviceGrantRow struct {
 }
 
 func (oauthDeviceGrantRow) TableName() string { return "oauth_device_grants" }
+
+// incomingWebhookRow 仓库的入站 webhook：外部系统在请求中携带 token（X-Gitdash-Token）
+// 调用即可创建 issue。TokenHash 为 token 的 sha256；明文仅在创建/轮换时返回一次。
+type incomingWebhookRow struct {
+	ID         int64  `gorm:"primaryKey;autoIncrement"`
+	Owner      string `gorm:"not null;uniqueIndex:uq_incoming;size:255"`
+	Repo       string `gorm:"not null;uniqueIndex:uq_incoming;size:255"`
+	TokenHash  string `gorm:"not null;uniqueIndex;size:255"`
+	CreatedAt  string `gorm:"not null"`
+	LastUsedAt string `gorm:"not null;default:''"`
+}
+
+func (incomingWebhookRow) TableName() string { return "incoming_webhooks" }

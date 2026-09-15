@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webhooks"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -37,6 +38,43 @@ func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hooks)
 }
 
+// normalizeWebhookEvents 校验并去重订阅事件列表；空列表 = 订阅全部。
+// 返回 (nil, false) 表示包含未知事件类型。
+func normalizeWebhookEvents(events []string) ([]string, bool) {
+	known := map[string]bool{}
+	for _, e := range webhooks.EventTypes {
+		known[e] = true
+	}
+	out := []string{}
+	seen := map[string]bool{}
+	for _, e := range events {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		if !known[e] {
+			return nil, false
+		}
+		if !seen[e] {
+			seen[e] = true
+			out = append(out, e)
+		}
+	}
+	return out, true
+}
+
+// listWebhookEvents 列出可订阅的出站 webhook 事件类型。
+//
+//	@Summary     列出 webhook 事件类型
+//	@Tags        webhooks
+//	@Produce     json
+//	@Success     200 {array} string
+//	@Security    BearerAuth
+//	@Router      /webhook-events [get]
+func (a *API) listWebhookEvents(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, webhooks.EventTypes)
+}
+
 // createWebhook 创建 webhook（仅 owner）。
 //
 //	@Summary     创建 webhook
@@ -45,7 +83,7 @@ func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 //	@Produce     json
 //	@Param       owner path string true "仓库所有者"
 //	@Param       name  path string true "仓库名"
-//	@Param       body  body createWebhookReq true "url 与可选 secret（至少 16 字符）"
+//	@Param       body  body createWebhookReq true "url、可选 secret（至少 16 字符）与可选 events（订阅的事件类型，空=全部）"
 //	@Success     201 {object} object
 //	@Failure     400 {object} map[string]string
 //	@Failure     409 {object} map[string]string
@@ -57,8 +95,9 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		URL    string `json:"url"`
-		Secret string `json:"secret"`
+		URL    string   `json:"url"`
+		Secret string   `json:"secret"`
+		Events []string `json:"events"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -77,7 +116,12 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_secret", "webhook secret must be at least 16 characters")
 		return
 	}
-	hk, err := a.store.CreateWebhook(owner, name, in.URL, in.Secret)
+	events, ok := normalizeWebhookEvents(in.Events)
+	if !ok {
+		writeCode(w, http.StatusBadRequest, "invalid_event", "unknown event type (see /webhook-events)")
+		return
+	}
+	hk, err := a.store.CreateWebhook(owner, name, in.URL, in.Secret, events...)
 	if errors.Is(err, store.ErrExists) {
 		writeCode(w, http.StatusConflict, "webhook_exists", "webhook already registered")
 		return

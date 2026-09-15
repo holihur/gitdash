@@ -30,6 +30,8 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
   const [expanded, setExpanded] = useState<number | null>(null);
   const [url, setUrl] = useState("");
   const [secret, setSecret] = useState("");
+  const [events, setEvents] = useState<string[]>([]);
+  const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -47,14 +49,23 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
     }
   }, [open, load]);
 
+  useEffect(() => {
+    if (!open) return;
+    api
+      .listWebhookEvents()
+      .then(setEventTypes)
+      .catch(() => setEventTypes([]));
+  }, [open]);
+
   const add = async () => {
     if (!url.trim()) return;
     setBusy(true);
     try {
-      await api.createWebhook(owner, repo, url.trim(), secret.trim());
+      await api.createWebhook(owner, repo, url.trim(), secret.trim(), events);
       toast.success(t("webhooks.added"));
       setUrl("");
       setSecret("");
+      setEvents([]);
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -134,6 +145,11 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                  <p className="mt-0.5 pl-7 text-[11px] text-muted-foreground">
+                    {w.events.length === 0
+                      ? t("webhooks.allEvents")
+                      : w.events.join(", ")}
+                  </p>
                   {expanded === w.id && (
                     <div className="mt-2 space-y-1 border-l pl-3">
                       {(deliveries[w.id] ?? []).length === 0 ? (
@@ -199,6 +215,26 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
               onChange={(e) => setSecret(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">{t("webhooks.secretHint")}</p>
+          </div>
+          <div className="grid gap-2">
+            <Label>{t("webhooks.eventsLabel")}</Label>
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {eventTypes.map((ev) => (
+                <label key={ev} className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={events.includes(ev)}
+                    onChange={(e) =>
+                      setEvents((v) =>
+                        e.target.checked ? [...v, ev] : v.filter((x) => x !== ev),
+                      )
+                    }
+                  />
+                  {ev}
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("webhooks.eventsHint")}</p>
           </div>
         </div>
 

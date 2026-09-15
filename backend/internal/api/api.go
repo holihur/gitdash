@@ -454,6 +454,13 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/webhooks", a.auth(a.createWebhook))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/webhooks/{id}", a.auth(a.deleteWebhook))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/webhooks/{id}/deliveries", a.auth(a.listWebhookDeliveries))
+	mux.HandleFunc("GET /api/webhook-events", a.auth(a.listWebhookEvents))
+
+	// incoming webhook（入站：外部系统凭 token 创建 issue；不经过登录鉴权）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.getIncomingWebhook))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.setIncomingWebhook))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.deleteIncomingWebhook))
+	mux.HandleFunc("POST /api/hooks/incoming/{owner}/{repo}", a.createIssueFromIncomingWebhook)
 
 	// pipeline（CI）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline", a.auth(a.getPipeline))

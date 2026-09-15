@@ -4,16 +4,26 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 夜间跑重任务（race / 基准 / Docker / Playwright / Postgres 全量 / 依赖与漏洞扫描）。
+  # 18:00 UTC = 02:00 (UTC+8)。也可在 Actions 页面手动触发。
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
 
-# 同一分支/PR 的连续推送取消旧任务，避免排队浪费
+# 同一分支/PR 的连续推送取消旧任务，避免排队浪费；
+# 带上 event_name 以免主分支 push 把夜间任务取消。
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # ---------- 每次 push / PR 都跑：快速反馈 ----------
+
   backend:
     name: Backend (go)
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16-alpine
@@ -34,7 +44,9 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
 
       # shadow 只检查新代码（HEAD~1 之后的变更），存量代码不阻断
       - name: Lint (golangci-lint)
@@ -51,28 +63,9 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
-      # 供应链漏洞扫描（Go 官方漏洞库）
-      - name: Vulnerability scan (govulncheck)
-        working-directory: backend
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
-
       - name: Test
         working-directory: backend
         run: go test ./... -covermode=atomic -coverprofile=/tmp/coverage-unit.out 2>&1 | tee /tmp/test.log; exit ${PIPESTATUS[0]}
-
-      # 全量 race 检测（runner hub / queue / webhook dispatcher / copilot / store 均为并发代码）。
-      # 集成套件在 -race 下较慢，放宽超时（默认 10m 不够）。
-      - name: Test (race)
-        working-directory: backend
-        run: go test -race -timeout 30m ./... 2>&1 | tee /tmp/test-race.log; exit ${PIPESTATUS[0]}
-
-      # 性能基线（软门禁：仅记录 blame/tree/commits/blob 基准，人工看劣化趋势）。
-      - name: Benchmarks (informational)
-        working-directory: backend
-        continue-on-error: true
-        run: go test -run '^$' -bench . -benchmem ./internal/gitsvc/
 
       - name: Upload unit-test coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -97,14 +90,26 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build server binary (with coverage instrumentation for black-box tests)
-        working-directory: backend
-        run: go build -cover -o gitdash-server .
-
       - name: E2E (create repo, ssh clone/push, browsing)
         run: bash scripts/e2e.sh
 
-      - name: Upload server binary (reused by api-tests)
+  # 构建带覆盖率插桩的二进制并共享给黑盒测试（push/PR 给 api-tests，夜间给 pg-tests）。
+  build-server:
+    name: Build instrumented server
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
+      - name: Build server binary (with coverage instrumentation for black-box tests)
+        working-directory: backend
+        run: go build -cover -o gitdash-server .
+      - name: Upload server binary
         uses: actions/upload-artifact@v4
         with:
           name: gitdash-server
@@ -113,22 +118,10 @@ jobs:
 
   api-tests:
     name: API tests (pytest · uv, black-box)
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
-    needs: backend
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: gitdash
-          POSTGRES_PASSWORD: pg
-          POSTGRES_DB: gitdash
-        ports:
-          - 54329:5432
-        options: >-
-          --health-cmd "pg_isready -U gitdash"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    timeout-minutes: 30
+    needs: build-server
     steps:
       - uses: actions/checkout@v5
         with:
@@ -140,7 +133,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Download server binary (built by backend job)
+      - name: Download server binary (built by build-server job)
         uses: actions/download-artifact@v4
         with:
           name: gitdash-server
@@ -149,7 +142,9 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
 
       - name: Build copilot agent runtime (deps/agent)
         run: cd deps/agent && go build -o /tmp/agent ./cmd/agent
@@ -167,16 +162,6 @@ jobs:
           GITDASH_BIN: /tmp/gitdash-server
           GITDASH_AGENT_BIN: /tmp/agent
           GITDASH_CLI_BIN: /tmp/gitdash-cli
-          GOCOVERDIR: /tmp/gocover-api
-
-      - name: Run black-box API tests against PostgreSQL
-        working-directory: tests
-        run: chmod +x /tmp/gitdash-server && uv run pytest -v --tb=short
-        env:
-          GITDASH_BIN: /tmp/gitdash-server
-          GITDASH_AGENT_BIN: /tmp/agent
-          GITDASH_CLI_BIN: /tmp/gitdash-cli
-          GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
           GOCOVERDIR: /tmp/gocover-api
 
       # email MFA happy path：单独实例 + pytest 进程内的本地 SMTP sink（见 test_email_mfa.py）
@@ -203,28 +188,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-  docker:
-    name: Docker image build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-      - name: Build image
-        run: docker build -t gitdash:ci .
-      - name: Smoke test container
-        run: |
-          docker run -d --name gitdash-smoke -e GITDASH_HTTP_ADDR=:18080 -e GITDASH_SSH_ADDR=:18222 gitdash:ci
-          for i in $(seq 1 40); do
-            docker exec gitdash-smoke curl -fsS http://127.0.0.1:18080/api/health >/dev/null 2>&1 && break
-            sleep 1
-          done
-          docker exec gitdash-smoke curl -fsS http://127.0.0.1:18080/api/version
-          docker stop gitdash-smoke >/dev/null && docker rm gitdash-smoke >/dev/null
-
   frontend:
     name: Frontend (react)
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -246,11 +214,6 @@ jobs:
         working-directory: frontend
         run: pnpm run lint
 
-      # 依赖漏洞扫描（官方源才能拿到 audit 数据）
-      - name: Audit (pnpm audit)
-        working-directory: frontend
-        run: pnpm audit --registry=https://registry.npmjs.org
-
       - name: Test (vitest)
         working-directory: frontend
         run: pnpm run test
@@ -259,9 +222,193 @@ jobs:
         working-directory: frontend
         run: pnpm run build
 
+  secrets:
+    name: Secret scan (gitleaks)
+    if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      # 扫描 AK/SK、私钥、token 等入库
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------- 夜间 / 手动触发：重任务与扫描 ----------
+
+  race:
+    name: Backend (race + benchmarks)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
+      # 全量 race 检测（runner hub / queue / webhook dispatcher / copilot / store 均为并发代码）。
+      - name: Test (race)
+        working-directory: backend
+        run: go test -race -timeout 30m ./... 2>&1 | tee /tmp/test-race.log; exit ${PIPESTATUS[0]}
+      - name: Upload race failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: race-log
+          path: /tmp/test-race.log
+          retention-days: 3
+      # 性能基线（软门禁：仅记录 blame/tree/commits/blob 基准，人工看劣化趋势）。
+      - name: Benchmarks (informational)
+        working-directory: backend
+        continue-on-error: true
+        run: go test -run '^$' -bench . -benchmem ./internal/gitsvc/
+
+  pg-tests:
+    name: API tests against PostgreSQL
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: build-server
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gitdash
+          POSTGRES_PASSWORD: pg
+          POSTGRES_DB: gitdash
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U gitdash"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: gitdash-server
+          path: /tmp
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
+      - name: Build copilot agent runtime (deps/agent)
+        run: cd deps/agent && go build -o /tmp/agent ./cmd/agent
+      - name: Build CLI (gitdash-cli)
+        run: cd backend && go build -o /tmp/gitdash-cli ./cmd/gitdash-cli
+      - name: Prepare coverage dir
+        run: mkdir -p /tmp/gocover-api
+      - name: Run black-box API tests against PostgreSQL
+        working-directory: tests
+        run: chmod +x /tmp/gitdash-server && uv run pytest -v --tb=short
+        env:
+          GITDASH_BIN: /tmp/gitdash-server
+          GITDASH_AGENT_BIN: /tmp/agent
+          GITDASH_CLI_BIN: /tmp/gitdash-cli
+          GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
+          GOCOVERDIR: /tmp/gocover-api
+      - name: Report black-box (API · PG) coverage
+        working-directory: backend
+        run: |
+          go tool covdata percent -i=/tmp/gocover-api | tail -1
+          go tool covdata textfmt -i=/tmp/gocover-api -o /tmp/coverage-api-pg.out
+      - name: Upload black-box (API · PG) coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: /tmp/coverage-api-pg.out
+          flags: blackbox-api
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  security:
+    name: Vulnerability scan (govulncheck)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
+      # action 自带二进制缓存，避免每次 go install
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          working-directory: backend
+          go-version-input: stable
+          check-latest: false
+
+  docker:
+    name: Docker image build
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: docker/setup-buildx-action@v3
+      # GHA 层缓存：依赖层未变时直接复用，避免每次全量重装/重编译
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: gitdash:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test container
+        run: |
+          docker run -d --name gitdash-smoke -e GITDASH_HTTP_ADDR=:18080 -e GITDASH_SSH_ADDR=:18222 gitdash:ci
+          for i in $(seq 1 40); do
+            docker exec gitdash-smoke curl -fsS http://127.0.0.1:18080/api/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec gitdash-smoke curl -fsS http://127.0.0.1:18080/api/version
+          docker stop gitdash-smoke >/dev/null && docker rm gitdash-smoke >/dev/null
+
+  audit:
+    name: Dependency audit (npm)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # pnpm audit 只读锁文件，无需 install
+      - name: Audit (pnpm audit)
+        working-directory: frontend
+        run: pnpm audit --registry=https://registry.npmjs.org
+
   ui-tests:
     name: E2E UI tests (Playwright · black-box)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -278,7 +425,17 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
-          cache-dependency-path: backend/go.sum
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
+
+      # 缓存 Playwright 浏览器，避免每次重新下载 Chromium
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('tests/ui/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-playwright-
 
       # 构建带内嵌前端 + 覆盖率插桩的被测二进制
       - name: Build embedded frontend + instrumented server binary
@@ -323,16 +480,3 @@ jobs:
           name: playwright-report
           path: tests/ui/test-results
           retention-days: 3
-
-  secrets:
-    name: Secret scan (gitleaks)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-      # 扫描 AK/SK、私钥、token 等入库
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

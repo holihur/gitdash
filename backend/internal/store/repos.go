@@ -190,6 +190,7 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			{&pipelineCfgRow{}, "owner = ? AND repo = ?"},
 			{&pipelineRunRow{}, "owner = ? AND repo = ?"},
 			{&repoEnvVarRow{}, "owner = ? AND repo = ?"},
+			{&incomingWebhookRow{}, "owner = ? AND repo = ?"},
 		}
 		for _, d := range deletes {
 			if err := tx.Where(d.cond, owner, name).Delete(d.model).Error; err != nil {

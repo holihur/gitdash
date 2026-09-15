@@ -10,6 +10,7 @@ import (
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webhooks"
 )
 
 const (
@@ -100,6 +101,10 @@ func (a *API) createRelease(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	a.emitWebhook(webhooks.Event{
+		Event: "release", Owner: owner, Repo: name, Action: "published",
+		Actor: userFrom(r), Title: rel.TagName,
+	})
 	writeJSON(w, http.StatusCreated, rel)
 }
 

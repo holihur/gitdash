@@ -45,6 +45,24 @@ type Event struct {
 	Comment string `json:"comment,omitempty"` // 评论内容摘要（截断）
 }
 
+// EventTypes 出站 webhook 可订阅的事件类型（供 API / 前端展示）。
+var EventTypes = []string{
+	"push", "issues", "pulls", "comment", "create", "delete", "release", "pipeline", "fork", "star", "watch",
+}
+
+// Subscribes 判断某 webhook 是否订阅了给定事件类型；events 为空表示订阅全部。
+func Subscribes(events []string, event string) bool {
+	if len(events) == 0 {
+		return true
+	}
+	for _, e := range events {
+		if e == event {
+			return true
+		}
+	}
+	return false
+}
+
 // client 使用 ssrf.DialContext：解析后直接拨已校验的 IP，消除 DNS 重绑定（TOCTOU）窗口。
 var client = &http.Client{
 	Timeout: 10 * time.Second,
@@ -144,6 +162,9 @@ func (d *Dispatcher) drain(spoolDir string, handlers []func(Event)) {
 				for _, h := range hooks {
 					if d.q == nil {
 						break
+					}
+					if !Subscribes(h.Events, ev.Event) {
+						continue // 该 webhook 未订阅此类事件
 					}
 					if err := d.q.EnqueueWebhook(jobs.WebhookPayload{HookID: h.ID, Body: body}); err != nil {
 						logx.Infof("webhook: enqueue %s/%s hook %d: %v", ev.Owner, ev.Repo, h.ID, err)

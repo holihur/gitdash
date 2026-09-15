@@ -15,7 +15,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Pull requests**: fork-based pull requests with squash merge and reviewer flow
 - **Stars & forks**: star repos and fork them with one click
 - **Repo mirroring & import**: import from a remote URL and push-mirror to GitHub/GitLab-like remotes
-- **Webhooks**: per-repo webhooks with HMAC signature delivery
+- **Webhooks**: per-repo outbound webhooks with per-event subscriptions (push / issues / pull requests / comments / branches & tags / releases / pipeline) and HMAC signature delivery, dispatched asynchronously through the job queue with backoff retries; plus an **incoming webhook** token that lets external systems create issues
 - **GPG keys**: upload GPG public keys to verify commit signatures
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
@@ -615,7 +615,7 @@ Since v0.2 the data model includes a user system; for older versions (≤ v0.1),
 
 ## CI / Release
 
-- **CI** (`.github/workflows/ci.yml`): Go build/vet/test + `backend/tests/` integration tests + E2E smoke test; frontend tsc + vite build.
+- **CI** (`.github/workflows/ci.yml`): push/PR runs the fast path — Go lint/build/vet/unit tests + `backend/tests/` integration tests + E2E smoke + black-box API tests, and frontend tsc/vite build; heavy jobs (race detector + benchmarks, full Playwright UI suite, PostgreSQL black-box run, Docker image build, `govulncheck`, `pnpm audit`) run nightly (18:00 UTC) or via **workflow_dispatch**.
 - **Release** (`.github/workflows/release.yml`): pushing a tag triggers an automatic release:
 
 ```bash

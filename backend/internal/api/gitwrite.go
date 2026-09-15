@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/webhooks"
 	"net/http"
 	"strings"
 )
@@ -79,6 +80,14 @@ func (a *API) createRef(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_ref_name", err.Error())
 		return
 	}
+	full := "refs/heads/" + in.Name
+	if in.Type == "tag" {
+		full = "refs/tags/" + in.Name
+	}
+	a.emitWebhook(webhooks.Event{
+		Event: "create", Owner: owner, Repo: name, Kind: in.Type,
+		Ref: full, Actor: userFrom(r), Title: in.Name,
+	})
 	writeJSON(w, http.StatusCreated, map[string]any{"type": in.Type, "name": in.Name, "sha": sha})
 }
 
@@ -125,6 +134,14 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_ref_name", err.Error())
 		return
 	}
+	full := "refs/heads/" + refName
+	if kind == "tag" {
+		full = "refs/tags/" + refName
+	}
+	a.emitWebhook(webhooks.Event{
+		Event: "delete", Owner: owner, Repo: name, Kind: kind,
+		Ref: full, Actor: userFrom(r), Title: refName,
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

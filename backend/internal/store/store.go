@@ -289,12 +289,21 @@ type GPGKeyAuth struct {
 }
 
 type Webhook struct {
-	ID        int64  `json:"id"`
-	Owner     string `json:"owner"`
-	Repo      string `json:"repo"`
-	URL       string `json:"url"`
-	Secret    string `json:"-"` // 签名密钥，不回传
-	CreatedAt string `json:"created_at"`
+	ID        int64    `json:"id"`
+	Owner     string   `json:"owner"`
+	Repo      string   `json:"repo"`
+	URL       string   `json:"url"`
+	Secret    string   `json:"-"` // 签名密钥，不回传
+	Events    []string `json:"events"`
+	CreatedAt string   `json:"created_at"`
+}
+
+// IncomingWebhook 仓库入站 webhook 的元信息（不含 token 明文/散列）。
+type IncomingWebhook struct {
+	Owner      string `json:"owner"`
+	Repo       string `json:"repo"`
+	CreatedAt  string `json:"created_at"`
+	LastUsedAt string `json:"last_used_at"`
 }
 
 // WebhookDelivery webhook 投递记录（含重试状态）。

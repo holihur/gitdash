@@ -15,7 +15,7 @@ English | 简体中文
 - **Pull Request**：基于 fork 的 PR，支持 squash 合并
 - **Star 与 Fork**：一键 star / fork 仓库
 - **镜像与导入**：从远端 URL 导入仓库，push 镜像到 GitHub/GitLab 等远端
-- **Webhook**：仓库级 webhook，HMAC 签名推送
+- **Webhook**：仓库级出站 webhook，支持按事件类型订阅（push / issue / PR / 评论 / 分支标签 / Release / 流水线），HMAC 签名推送，经任务队列异步派发并按退避重试；另提供**入站 webhook** token，外部系统可凭其创建 issue
 - **GPG Key**：上传 GPG 公钥验证提交签名
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
@@ -560,7 +560,7 @@ v0.2 起数据模型加入用户系统，旧版（≤ v0.1）`data` 目录中的
 
 ## CI / 发版
 
-- **CI**（`.github/workflows/ci.yml`）：Go build/vet/test + `backend/tests/` 集成测试 + E2E 冒烟，前端 tsc + vite 构建。
+- **CI**（`.github/workflows/ci.yml`）：push/PR 只跑快速路径——Go lint/build/vet/单测 + `backend/tests/` 集成测试 + E2E 冒烟 + 黑盒 API 测试，以及前端 tsc/vite 构建；重任务（race 检测 + 基准、Playwright 全量 UI、PostgreSQL 黑盒、Docker 镜像构建、`govulncheck`、`pnpm audit`）放在夜间（18:00 UTC）或手动 **workflow_dispatch** 触发。
 - **发版**（`.github/workflows/release.yml`）：推送 tag 即自动发布：
 
 ```bash

@@ -107,3 +107,15 @@ func (a *API) notify(owner, repo, kind, action, actor string, number int64, titl
 	// 异步写 spool，不阻塞请求
 	go a.Publish(ev)
 }
+
+// emitWebhook 只发送出站 webhook 事件（不写收件箱通知），用于分支/标签、Release
+// 等无收件箱语义的事件。事件经 API spool → dispatcher → 任务队列异步投递。
+func (a *API) emitWebhook(ev webhooks.Event) {
+	if a.Publish == nil {
+		return
+	}
+	if ev.CreatedAt == "" {
+		ev.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+	}
+	go a.Publish(ev)
+}

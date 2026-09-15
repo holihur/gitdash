@@ -69,43 +69,49 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var in struct {
-		Title string `json:"title"`
-		Body  string `json:"body"`
-	}
+	var in createIssueReq
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	title := strings.TrimSpace(in.Title)
+	issue, ok := a.newIssue(w, owner, name, userFrom(r), in.Title, in.Body)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusCreated, issue)
+}
+
+// newIssue 校验并创建 issue（校验/权限失败时已写入响应），推送通知与 webhook 后返回
+// 组装好的 issue。createIssue 与入站 webhook 共用此逻辑。
+func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body string) (map[string]any, bool) {
+	title = strings.TrimSpace(title)
 	if title == "" {
 		writeCode(w, http.StatusBadRequest, "title_required", "title is required")
-		return
+		return nil, false
 	}
 	if len([]rune(title)) > 200 {
 		writeCode(w, http.StatusBadRequest, "title_too_long", "title too long (max 200 chars)")
-		return
+		return nil, false
 	}
-	if len([]rune(in.Body)) > 10000 {
+	if len([]rune(body)) > 10000 {
 		writeCode(w, http.StatusBadRequest, "body_too_long", "body too long (max 10000 chars)")
-		return
+		return nil, false
 	}
-	me := userFrom(r)
 	repo, err := a.store.GetRepo(owner, name)
 	if err != nil {
 		internalError(w, err)
-		return
+		return nil, false
 	}
 	if !repo.HasIssues {
 		writeCode(w, http.StatusForbidden, "issues_disabled", "issues are disabled for this repository")
-		return
+		return nil, false
 	}
-	issue, err := a.store.CreateIssue(owner, name, me, title, in.Body)
+	issue, err := a.store.CreateIssue(owner, name, author, title, body)
 	if err != nil {
 		internalError(w, err)
-		return
+		return nil, false
 	}
-	a.notify(owner, name, "issue", "opened", me, issue.Number, issue.Title, "")
-	writeJSON(w, http.StatusCreated, a.enrichIssues(owner, name, []store.Issue{issue})[0])
+	a.notify(owner, name, "issue", "opened", author, issue.Number, issue.Title, "")
+	return a.enrichIssues(owner, name, []store.Issue{issue})[0], true
 }
 
 // updateIssue 编辑 issue（标题 / 正文 / 状态，字段均可选）。

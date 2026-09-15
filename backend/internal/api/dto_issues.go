@@ -1,8 +1,6 @@
 package api
 
 // createIssueReq 创建 Issue 请求体。
-//
-//nolint:unused // 仅供 swagger @Param 注解引用
 type createIssueReq struct {
 	Title string `json:"title"` // Issue 标题（必填，最长 200 字符）
 	Body  string `json:"body"`  // Issue 正文（可选，最长 10000 字符）

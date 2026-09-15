@@ -2,19 +2,60 @@ package store
 
 import (
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
+// toWebhook 把行记录转换为 DTO。
+func toWebhook(r webhookRow) Webhook {
+	return Webhook{
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo, URL: r.URL, Secret: r.Secret,
+		Events: splitEvents(r.Events), CreatedAt: r.CreatedAt,
+	}
+}
+
+// splitEvents 解析逗号分隔的事件订阅（去空、去重、保序）；空串返回空切片（= 全部）。
+func splitEvents(s string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	return out
+}
+
+// joinEvents 规范化事件订阅列表为逗号分隔串。
+func joinEvents(events []string) string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, e := range events {
+		e = strings.TrimSpace(e)
+		if e == "" || seen[e] {
+			continue
+		}
+		seen[e] = true
+		out = append(out, e)
+	}
+	return strings.Join(out, ",")
+}
+
 // CreateWebhook 新建仓库 webhook（同 owner+repo+url 重复返回 ErrExists）。
-func (s *Store) CreateWebhook(owner, repo, url, secret string) (Webhook, error) {
+// events 为订阅的事件类型；为空表示订阅全部。
+func (s *Store) CreateWebhook(owner, repo, url, secret string, events ...string) (Webhook, error) {
 	createMu.Lock()
 	defer createMu.Unlock()
 	if err := s.checkWebhookQuota(owner, repo); err != nil {
 		return Webhook{}, err
 	}
-	w := Webhook{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: now()}
-	row := webhookRow{Owner: owner, Repo: repo, URL: url, Secret: secret, CreatedAt: w.CreatedAt}
+	ev := joinEvents(events)
+	w := Webhook{Owner: owner, Repo: repo, URL: url, Secret: secret, Events: splitEvents(ev), CreatedAt: now()}
+	row := webhookRow{Owner: owner, Repo: repo, URL: url, Secret: secret, Events: ev, CreatedAt: w.CreatedAt}
 	if err := s.db.Create(&row).Error; err != nil {
 		if isUniqueErr(err) {
 			return w, ErrExists
@@ -33,7 +74,7 @@ func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
 	}
 	ws := make([]Webhook, 0, len(rows))
 	for _, r := range rows {
-		ws = append(ws, Webhook(r))
+		ws = append(ws, toWebhook(r))
 	}
 	return ws, nil
 }
@@ -113,7 +154,7 @@ func (s *Store) GetWebhookByID(id int64) (Webhook, bool, error) {
 	if err != nil {
 		return Webhook{}, false, err
 	}
-	return Webhook(row), true, nil
+	return toWebhook(row), true, nil
 }
 
 // ListDeliveries 列出某 webhook 最近的投递记录（校验 hook 归属；id 降序）。
