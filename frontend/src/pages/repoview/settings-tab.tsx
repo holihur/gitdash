@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { BookTemplate, CircleDot, GitBranch, KeyRound, PencilLine, Plus, Recycle, ShieldCheck, Tag, Trash2, Webhook } from "lucide-react";
+import { BookTemplate, CircleDot, GitBranch, KeyRound, PencilLine, Plus, Recycle, RefreshCw, ShieldCheck, Tag, Trash2, Webhook } from "lucide-react";
 import { api, type Branch, type BranchProtection, type IncomingWebhook, type Repo, type RepoEnvVar } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import ConfirmDialog from "@/components/confirm-dialog";
+import MirrorDialog from "@/components/mirror-dialog";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { cn, copyText, formatSize } from "@/lib/utils";
@@ -36,6 +37,7 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const [deleteRepoBusy, setDeleteRepoBusy] = useState(false);
   const [gcOpen, setGcOpen] = useState(false);
   const [gcBusy, setGcBusy] = useState(false);
+  const [mirrorOpen, setMirrorOpen] = useState(false);
 
   useEffect(() => {
     setDescription(repo?.description ?? "");
@@ -386,6 +388,28 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
           </CardContent>
         </Card>
       )}
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <RefreshCw className="h-4 w-4" />
+              {t("mirror.title")}
+            </CardTitle>
+            <CardDescription>{t("mirror.hint")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => setMirrorOpen(true)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {t("mirror.sync")}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="text-base text-destructive">{t("repo.dangerZone")}</CardTitle>
@@ -403,6 +427,12 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
           </Button>
         </CardContent>
       </Card>
+      <MirrorDialog
+        open={mirrorOpen}
+        onOpenChange={setMirrorOpen}
+        owner={owner}
+        repo={name}
+      />
       <ConfirmDialog
         open={gcOpen}
         onOpenChange={setGcOpen}

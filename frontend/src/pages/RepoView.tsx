@@ -9,7 +9,6 @@ import {
   GitFork,
   HardDrive,
   MoreVertical,
-  RefreshCw,
   Star,
 } from "lucide-react";
 import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
@@ -42,7 +41,6 @@ import { cn, copyText, formatSize } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
-import MirrorDialog from "@/components/mirror-dialog";
 import RefsDialog from "@/components/refs-dialog";
 
 const CodeTab = lazy(() => import("./repoview/code-tab"));
@@ -162,7 +160,6 @@ export default function RepoView() {
   const [forkOpen, setForkOpen] = useState(false);
   const [forkName, setForkName] = useState("");
   const [forkBusy, setForkBusy] = useState(false);
-  const [mirrorOpen, setMirrorOpen] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<{ path: string; isDir: boolean } | null>(null);
 
   const ref =
@@ -542,16 +539,6 @@ export default function RepoView() {
               {t("social.fork")}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            title={t("mirror.title")}
-            onClick={() => setMirrorOpen(true)}
-          >
-            <RefreshCw className="h-4 w-4" />
-            {t("mirror.sync")}
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="w-full gap-2 font-mono text-xs sm:w-auto">
@@ -710,12 +697,6 @@ export default function RepoView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <MirrorDialog
-        open={mirrorOpen}
-        onOpenChange={setMirrorOpen}
-        owner={owner}
-        repo={name}
-      />
       <ConfirmDialog
         open={pendingRemove !== null}
         onOpenChange={(o) => !o && setPendingRemove(null)}
