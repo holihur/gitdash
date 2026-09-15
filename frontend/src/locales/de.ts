@@ -107,6 +107,13 @@ export const de: Messages = {
     sectionIssues: "Issues",
     sectionUsers: "Benutzer & Organisationen",
     org: "Org",
+    filterByTopic: "Nach Tag filtern:",
+    allTopics: "Alle",
+    editTopics: "Tags bearbeiten",
+    topicsPlaceholder: "go, web, cli",
+    topicsHint: "Kleinbuchstaben, Ziffern und '-'; bis zu 20 Tags.",
+    topicsUpdated: "Tags aktualisiert",
+    noTopicRepos: "Keine Repositories mit diesem Tag",
   },
   repos: {
     title: "Repositories",

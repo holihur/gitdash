@@ -105,6 +105,13 @@ export const en = {
     sectionIssues: "Issues",
     sectionUsers: "Users & orgs",
     org: "org",
+    filterByTopic: "Filter by tag:",
+    allTopics: "All",
+    editTopics: "Edit tags",
+    topicsPlaceholder: "go, web, cli",
+    topicsHint: "Lowercase letters, digits and '-'; up to 20 tags.",
+    topicsUpdated: "Tags updated",
+    noTopicRepos: "No repositories with this tag",
   },
   repos: {
     title: "Repositories",

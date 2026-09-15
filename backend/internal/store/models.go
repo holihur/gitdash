@@ -46,6 +46,15 @@ type repoRow struct {
 
 func (repoRow) TableName() string { return "repos" }
 
+// repoTopicRow 仓库话题/标签（一个仓库可挂多个 topic，用于 Explore 按标签搜索）。
+type repoTopicRow struct {
+	Owner string `gorm:"primaryKey;size:255"`
+	Repo  string `gorm:"primaryKey;size:255"`
+	Topic string `gorm:"primaryKey;size:64;index"`
+}
+
+func (repoTopicRow) TableName() string { return "repo_topics" }
+
 // ---- ssh keys / gpg keys ----
 
 type sshKeyRow struct {

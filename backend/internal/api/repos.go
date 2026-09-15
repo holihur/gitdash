@@ -57,6 +57,7 @@ func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 	}
 	setTotal(w, total)
 	a.attachStars(repos, me)
+	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 
@@ -229,6 +230,9 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 		repo.Role = "write"
 	default:
 		repo.Role = "read"
+	}
+	if ts, err := a.store.ListRepoTopics(owner, name); err == nil {
+		repo.Topics = ts
 	}
 	writeJSON(w, http.StatusOK, repo)
 }

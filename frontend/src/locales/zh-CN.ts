@@ -107,6 +107,13 @@ export const zhCN: Messages = {
     sectionIssues: "Issue",
     sectionUsers: "用户与组织",
     org: "组织",
+    filterByTopic: "按标签筛选：",
+    allTopics: "全部",
+    editTopics: "编辑标签",
+    topicsPlaceholder: "go, web, cli",
+    topicsHint: "小写字母、数字与 '-'，最多 20 个。",
+    topicsUpdated: "标签已更新",
+    noTopicRepos: "没有使用该标签的仓库",
   },
   repos: {
     title: "仓库",

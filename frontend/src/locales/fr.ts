@@ -107,6 +107,13 @@ export const fr: Messages = {
     sectionIssues: "Tickets",
     sectionUsers: "Utilisateurs et organisations",
     org: "org",
+    filterByTopic: "Filtrer par étiquette :",
+    allTopics: "Toutes",
+    editTopics: "Modifier les étiquettes",
+    topicsPlaceholder: "go, web, cli",
+    topicsHint: "Lettres minuscules, chiffres et '-'; jusqu'à 20 étiquettes.",
+    topicsUpdated: "Étiquettes mises à jour",
+    noTopicRepos: "Aucun dépôt avec cette étiquette",
   },
   repos: {
     title: "Dépôts",

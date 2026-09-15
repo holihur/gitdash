@@ -106,7 +106,14 @@ export const ja: Messages = {
     "sectionRepos": "リポジトリ",
     "sectionIssues": "イシュー",
     "sectionUsers": "ユーザー & 組織",
-    "org": "組織"
+    "org": "組織",
+    "filterByTopic": "タグで絞り込み：",
+    "allTopics": "すべて",
+    "editTopics": "タグを編集",
+    "topicsPlaceholder": "go, web, cli",
+    "topicsHint": "小文字・数字・'-'、最大20個。",
+    "topicsUpdated": "タグを更新しました",
+    "noTopicRepos": "このタグのリポジトリはありません"
   },
   "repos": {
     "title": "リポジトリ",

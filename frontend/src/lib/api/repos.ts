@@ -1,5 +1,5 @@
 import { pageQuery, req, reqPage } from "./core";
-import type { Blame, Blob, Branch, Commit, GlobalSearchResult, PullDiff, Repo, Tag, TreeEntry } from "./types";
+import type { Blame, Blob, Branch, Commit, GlobalSearchResult, PullDiff, Repo, Tag, TopicCount, TreeEntry } from "./types";
 
 export const reposApi = {
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
@@ -40,8 +40,21 @@ export const reposApi = {
       method: "POST",
       body: JSON.stringify({ description }),
     }),
-  listExplore: (limit?: number, offset?: number) =>
-    reqPage<Repo[]>(`/explore/repos${pageQuery(limit, offset)}`),
+  listExplore: (limit?: number, offset?: number, filters?: { q?: string; topic?: string }) => {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (offset) params.set("offset", String(offset));
+    if (filters?.q) params.set("q", filters.q);
+    if (filters?.topic) params.set("topic", filters.topic);
+    const qs = params.toString();
+    return reqPage<Repo[]>(`/explore/repos${qs ? `?${qs}` : ""}`);
+  },
+  setRepoTopics: (owner: string, name: string, topics: string[]) =>
+    req<{ topics: string[] }>(`/users/${owner}/repos/${name}/topics`, {
+      method: "PUT",
+      body: JSON.stringify({ topics }),
+    }),
+  listTopics: () => req<TopicCount[]>("/topics"),
   listTemplateRepos: () => req<Repo[]>("/templates"),
   globalSearch: (q: string) =>
     req<GlobalSearchResult>(`/search?q=${encodeURIComponent(q)}`),

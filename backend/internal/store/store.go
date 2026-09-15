@@ -71,6 +71,8 @@ type Repo struct {
 	// 导入任务状态（queued/running/synced/failed），非导入仓库为空
 	ImportStatus string `json:"import_status,omitempty"`
 	ImportError  string `json:"import_error,omitempty"`
+	// Topics 仓库标签/话题（由 API 层批量填充，store 查询不扫描）
+	Topics []string `json:"topics,omitempty"`
 }
 
 // Mirror 仓库 push 镜像目标（同步到 GitHub/GitLab 等第三方）。

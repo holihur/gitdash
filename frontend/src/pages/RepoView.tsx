@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Copy,
@@ -409,6 +410,17 @@ export default function RepoView() {
             {name}
           </h1>
           <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
+          {repo?.topics && repo.topics.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {repo.topics.map((tp) => (
+                <Link key={tp} to={`/explore?tag=${encodeURIComponent(tp)}`}>
+                  <Badge variant="secondary" className="font-normal">
+                    {tp}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          )}
           {repo?.fork_owner && repo?.fork_repo && (
             <p className="text-xs text-muted-foreground">
               {t("social.forkedFrom")}{" "}

@@ -107,6 +107,13 @@ export const ko: Messages = {
     sectionIssues: "이슈",
     sectionUsers: "사용자 및 조직",
     org: "조직",
+    filterByTopic: "태그로 필터:",
+    allTopics: "전체",
+    editTopics: "태그 편집",
+    topicsPlaceholder: "go, web, cli",
+    topicsHint: "소문자, 숫자, '-'; 최대 20개.",
+    topicsUpdated: "태그가 업데이트되었습니다",
+    noTopicRepos: "이 태그가 있는 저장소가 없습니다"
   },
   repos: {
     title: "저장소",

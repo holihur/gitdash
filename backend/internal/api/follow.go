@@ -52,6 +52,7 @@ func (a *API) getUserProfile(w http.ResponseWriter, r *http.Request) {
 		repos = public
 	}
 	a.attachStars(repos, me)
+	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username":     u.Username,
 		"created_at":   u.CreatedAt,

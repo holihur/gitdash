@@ -43,6 +43,7 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 	}
 	out := append([]store.Repo{}, rows...)
 	a.attachStars(out, me)
+	a.attachTopics(out)
 	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out})
 }
 
@@ -187,6 +188,7 @@ func (a *API) listTemplateRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.attachStars(repos, me)
+	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 
@@ -197,6 +199,8 @@ func (a *API) listTemplateRepos(w http.ResponseWriter, r *http.Request) {
 //	@Produce     json
 //	@Param       limit  query int false "每页数量（默认 200，最大 500）"
 //	@Param       offset query int false "偏移量"
+//	@Param       q      query string false "关键词（匹配所有者/名称/描述）"
+//	@Param       topic  query string false "按标签（topic）过滤"
 //	@Success     200 {array} store.Repo
 //	@SuccessHeader X-Total-Count int "公开仓库总数"
 //	@Failure     500 {object} map[string]string
@@ -204,12 +208,14 @@ func (a *API) listTemplateRepos(w http.ResponseWriter, r *http.Request) {
 //	@Router      /explore/repos [get]
 func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pageParams(r)
-	repos, err := a.store.ExploreRepos(limit, offset)
+	q := r.URL.Query().Get("q")
+	topic := strings.TrimSpace(r.URL.Query().Get("topic"))
+	repos, err := a.store.ExploreReposFiltered(q, topic, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	total, err := a.store.CountExploreRepos()
+	total, err := a.store.CountExploreReposFiltered(q, topic)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -219,6 +225,7 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
 	out := append([]store.Repo{}, repos...)
 	a.attachStars(out, me)
+	a.attachTopics(out)
 	writeJSON(w, http.StatusOK, out)
 }
 

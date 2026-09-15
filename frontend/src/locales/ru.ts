@@ -106,7 +106,14 @@ export const ru: Messages = {
     "sectionRepos": "Репозитории",
     "sectionIssues": "Issues",
     "sectionUsers": "Пользователи и орг.",
-    "org": "орг."
+    "org": "орг.",
+    "filterByTopic": "Фильтр по тегу:",
+    "allTopics": "Все",
+    "editTopics": "Изменить теги",
+    "topicsPlaceholder": "go, web, cli",
+    "topicsHint": "Строчные буквы, цифры и '-'; до 20 тегов.",
+    "topicsUpdated": "Теги обновлены",
+    "noTopicRepos": "Нет репозиториев с этим тегом"
   },
   "repos": {
     "title": "Репозитории",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { BookTemplate, KeyRound, PencilLine, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { BookTemplate, KeyRound, PencilLine, Plus, ShieldCheck, Tag, Trash2 } from "lucide-react";
 import { api, type Branch, type BranchProtection, type Repo, type RepoEnvVar } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,18 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const [templateBusy, setTemplateBusy] = useState(false);
   const [description, setDescription] = useState("");
   const [descBusy, setDescBusy] = useState(false);
+  const [topicsInput, setTopicsInput] = useState("");
+  const [topicsBusy, setTopicsBusy] = useState(false);
   const [deleteRepoOpen, setDeleteRepoOpen] = useState(false);
   const [deleteRepoBusy, setDeleteRepoBusy] = useState(false);
 
   useEffect(() => {
     setDescription(repo?.description ?? "");
   }, [repo?.description]);
+
+  useEffect(() => {
+    setTopicsInput((repo?.topics ?? []).join(", "));
+  }, [repo?.topics]);
 
   const saveDescription = async () => {
     if (!repo) return;
@@ -44,6 +50,25 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       toast.error(apiErrorMsg(to, e));
     } finally {
       setDescBusy(false);
+    }
+  };
+
+  const saveTopics = async () => {
+    if (!repo) return;
+    setTopicsBusy(true);
+    try {
+      const topics = topicsInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const r = await api.setRepoTopics(owner, name, topics);
+      setRepo({ ...repo, topics: r.topics });
+      setTopicsInput(r.topics.join(", "));
+      toast.success(t("explore.topicsUpdated"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setTopicsBusy(false);
     }
   };
 
@@ -118,6 +143,34 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
                 disabled={descBusy || description.trim() === (repo?.description ?? "")}
                 onClick={saveDescription}
               >
+                {t("common.save")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Tag className="h-4 w-4" />
+              {t("explore.editTopics")}
+            </CardTitle>
+            <CardDescription>{t("explore.topicsHint")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex max-w-xl flex-wrap items-center gap-2">
+              <Input
+                value={topicsInput}
+                placeholder={t("explore.topicsPlaceholder")}
+                disabled={topicsBusy}
+                className="min-w-0 flex-1"
+                onChange={(e) => setTopicsInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveTopics();
+                }}
+              />
+              <Button size="sm" disabled={topicsBusy} onClick={saveTopics}>
                 {t("common.save")}
               </Button>
             </div>

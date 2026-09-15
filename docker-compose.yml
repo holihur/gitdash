@@ -1,15 +1,56 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gitdash-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gitdash
+      POSTGRES_PASSWORD: gitdash
+      POSTGRES_DB: gitdash
+    volumes:
+      - gitdash-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitdash"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: gitdash-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - gitdash-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   gitdash:
     build: .
     image: gitdash:local
     container_name: gitdash
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080" # Web / API
       - "2222:2222" # Git over SSH
     environment:
-      # 数据目录（镜像内固定 /data，如需自定义改下面 volumes 映射即可）
+      # 数据目录（镜像内固定 /data；git 仓库、webhook spool、SSH host key、包 blob 等仍落在这里）
       GITDASH_DATA: /data
+      # 数据库：PostgreSQL（不使用 SQLite）
+      GITDASH_DB: postgres://gitdash:gitdash@postgres:5432/gitdash?sslmode=disable
+      # 任务队列 / Runner：Redis（不使用进程内 memory 队列）
+      GITDASH_QUEUE: redis
+      GITDASH_REDIS_ADDR: redis:6379
+      # GITDASH_REDIS_PASSWORD: ""
+      # GITDASH_REDIS_DB: "0"
       # 需要自动更新时取消注释（仅正式发布版生效）：
       # GITDASH_AUTO_UPDATE: "1"
     volumes:
@@ -20,3 +61,5 @@ services:
 
 volumes:
   gitdash-data:
+  gitdash-pg:
+  gitdash-redis:

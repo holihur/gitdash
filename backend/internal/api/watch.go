@@ -71,6 +71,7 @@ func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.attachStars(repos, me)
+	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 

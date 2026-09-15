@@ -80,6 +80,13 @@ export interface Repo {
   import_status?: "queued" | "running" | "synced" | "failed";
   /** 最近一次导入失败原因 */
   import_error?: string;
+  /** 仓库标签/话题 */
+  topics?: string[];
+}
+
+export interface TopicCount {
+  topic: string;
+  count: number;
 }
 
 export interface GPGKey {

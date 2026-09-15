@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { CircleDot, Copy, FolderGit2, Search, Star, User } from "lucide-react";
-import { api, cloneCommand, type GlobalSearchResult, type Repo } from "@/lib/api";
+import { CircleDot, Copy, FolderGit2, Search, Star, Tag, User } from "lucide-react";
+import { api, cloneCommand, type GlobalSearchResult, type Repo, type TopicCount } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,10 @@ export default function Explore() {
   const page = getNum("page", 1);
   const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
   const pageSize = getNum("size", 20);
+  // 标签筛选同步进 URL(?tag=)
+  const activeTopic = get("tag", "");
+  const setActiveTopic = (tag: string) => set({ tag: tag || null, page: null }, { push: true });
+  const [topics, setTopics] = useState<TopicCount[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(get("q", ""));
@@ -37,7 +41,9 @@ export default function Explore() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api.listExplore(pageSize, (page - 1) * pageSize);
+      const r = await api.listExplore(pageSize, (page - 1) * pageSize, {
+        topic: activeTopic,
+      });
       setRepos(r.items);
       setTotal(r.total);
       setError("");
@@ -46,7 +52,11 @@ export default function Explore() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [page, pageSize, activeTopic]);
+
+  useEffect(() => {
+    api.listTopics().then(setTopics).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (query.trim()) return;
@@ -111,6 +121,34 @@ export default function Explore() {
           onChange={(e) => updateQuery(e.target.value)}
         />
       </div>
+
+      {!results && topics.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Tag className="h-3.5 w-3.5" />
+            {t("explore.filterByTopic")}
+          </span>
+          <button type="button" onClick={() => setActiveTopic("")}>
+            <Badge
+              variant={activeTopic ? "outline" : "secondary"}
+              className="cursor-pointer font-normal"
+            >
+              {t("explore.allTopics")}
+            </Badge>
+          </button>
+          {topics.map((tp) => (
+            <button key={tp.topic} type="button" onClick={() => setActiveTopic(tp.topic)}>
+              <Badge
+                variant={activeTopic === tp.topic ? "secondary" : "outline"}
+                className="cursor-pointer font-normal"
+              >
+                {tp.topic}
+                <span className="ml-1 text-muted-foreground">{tp.count}</span>
+              </Badge>
+            </button>
+          ))}
+        </div>
+      )}
 
       {searching && <Skeleton className="h-10 w-full" />}
 
@@ -238,7 +276,9 @@ export default function Explore() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
             <FolderGit2 className="h-10 w-10 text-muted-foreground" />
-            <p className="font-medium">{t("explore.empty")}</p>
+            <p className="font-medium">
+              {activeTopic ? t("explore.noTopicRepos") : t("explore.empty")}
+            </p>
             <p className="text-sm text-muted-foreground">{t("explore.emptyHint")}</p>
           </CardContent>
         </Card>
@@ -261,6 +301,17 @@ export default function Explore() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="mt-auto space-y-3">
+                {repo.topics && repo.topics.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {repo.topics.map((tp) => (
+                      <button key={tp} type="button" onClick={() => setActiveTopic(tp)}>
+                        <Badge variant="outline" className="cursor-pointer font-normal">
+                          {tp}
+                        </Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary" className="font-normal">
                     {formatDate(repo.created_at, dateLocale(lang))}

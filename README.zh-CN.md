@@ -21,7 +21,8 @@ English | 简体中文
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
 - **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
-- **发现（Explore）**：浏览公开仓库；仓库设置页可切换公开 / 私有
+- **发现（Explore）**：浏览公开仓库；支持按标签筛选与关键词搜索；仓库设置页可切换公开 / 私有
+- **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索
 - **代码浏览与网页编辑**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame；可新建 / 编辑 / 删除文件与目录，并在提交记录页撤销某次提交（生成反向提交）
 - **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md)
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）

@@ -107,6 +107,13 @@ export const es: Messages = {
     sectionIssues: "Issues",
     sectionUsers: "Usuarios y organizaciones",
     org: "org",
+    filterByTopic: "Filtrar por etiqueta:",
+    allTopics: "Todas",
+    editTopics: "Editar etiquetas",
+    topicsPlaceholder: "go, web, cli",
+    topicsHint: "Letras minúsculas, dígitos y '-'; hasta 20 etiquetas.",
+    topicsUpdated: "Etiquetas actualizadas",
+    noTopicRepos: "No hay repositorios con esta etiqueta",
   },
   repos: {
     title: "Repositorios",

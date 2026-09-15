@@ -418,6 +418,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/visibility", a.auth(a.setRepoVisibility))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/template", a.auth(a.setRepoTemplate))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/description", a.auth(a.setRepoDescription))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/topics", a.auth(a.setRepoTops))
+	mux.HandleFunc("GET /api/topics", a.auth(a.listTopics))
 	mux.HandleFunc("GET /api/templates", a.auth(a.listTemplateRepos))
 	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
 	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))

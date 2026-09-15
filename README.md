@@ -21,7 +21,8 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
 - **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
 - **Admin panel**: admin users, settings (OAuth providers), password management
-- **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings
+- **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings; filter by tag and free-text search
+- **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore
 - **Code browsing & web editing**: browse repos by branch / directory, view file contents, commit history and blame on the web; create / edit / delete files and folders, and revert a commit (creates an inverse commit) from the Commits tab
 - **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust), Maven (Java) and Docker/OCI images under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md)
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
@@ -234,14 +235,30 @@ When enabled, the process periodically checks GitHub Releases; on a new version 
 
 ## Docker Deployment
 
+The bundled `docker-compose.yml` runs a **production-ish** stack: **PostgreSQL** for the
+database and **Redis** for the task queue / self-hosted runners (no SQLite, no in-process
+memory queue).
+
 ```bash
 docker compose up -d --build
 # Web http://localhost:8080, Git SSH localhost:2222
 ```
 
-- Data (SQLite + bare repos + SSH host key) is persisted in the Docker volume `gitdash-data` (`/data` inside the container).
+What the compose file sets for the `gitdash` service:
+
+```yaml
+GITDASH_DB: postgres://gitdash:gitdash@postgres:5432/gitdash?sslmode=disable
+GITDASH_QUEUE: redis
+GITDASH_REDIS_ADDR: redis:6379
+```
+
+- `postgres` and `redis` are separate services with healthchecks; `gitdash` waits for both (`depends_on: condition: service_healthy`).
+- Persistent volumes: `gitdash-data` (`/data`: bare repos, webhook spool, SSH host key, package blobs, copilot workspaces), `gitdash-pg` (PostgreSQL data), `gitdash-redis` (AOF). **Change the default `POSTGRES_PASSWORD` before exposing this to anyone.**
+- The database schema is auto-migrated on startup. Backups: only `GITDASH_DATA` files are archived automatically — dump PostgreSQL with `pg_dump` (e.g. `docker compose exec postgres pg_dump -U gitdash gitdash > backup.sql`).
 - Listen ports / auto-update can be adjusted via `environment` in `docker-compose.yml`.
-- You can also build the image directly: `docker build -t gitdash .`, then mount `-v gitdash-data:/data -p 8080:8080 -p 2222:2222`.
+- You can also build the image directly: `docker build -t gitdash .`, then run it against your own PostgreSQL + Redis via the `GITDASH_*` variables above.
+
+> To run SQLite + in-process queue instead (single-node, no external deps), drop the `postgres`/`redis` services and unset `GITDASH_DB` / `GITDASH_QUEUE`.
 
 ## Backup & Restore
 

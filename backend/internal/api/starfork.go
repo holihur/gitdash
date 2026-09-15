@@ -87,6 +87,7 @@ func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.attachStars(repos, me)
+	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 

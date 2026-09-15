@@ -13,6 +13,7 @@ func (s *Store) migrate() error {
 		&userRow{},
 		&sessionRow{},
 		&repoRow{},
+		&repoTopicRow{},
 		&sshKeyRow{},
 		&gpgKeyRow{},
 		&patRow{},
