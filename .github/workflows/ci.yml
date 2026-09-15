@@ -349,13 +349,16 @@ jobs:
           cache-dependency-path: |
             backend/go.sum
             deps/agent/go.sum
-      # action 自带二进制缓存，避免每次 go install
+      # action 自带 Go 依赖缓存；注意输入名是 work-dir（不是 working-directory）
       - name: govulncheck
         uses: golang/govulncheck-action@v1
         with:
-          working-directory: backend
+          work-dir: backend
           go-version-input: stable
           check-latest: false
+          cache-dependency-path: |
+            backend/go.sum
+            deps/agent/go.sum
 
   docker:
     name: Docker image build
