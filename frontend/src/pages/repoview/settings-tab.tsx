@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { BookTemplate, CircleDot, GitBranch, KeyRound, PencilLine, Plus, ShieldCheck, Tag, Trash2, Webhook } from "lucide-react";
+import { BookTemplate, CircleDot, GitBranch, KeyRound, PencilLine, Plus, Recycle, ShieldCheck, Tag, Trash2, Webhook } from "lucide-react";
 import { api, type Branch, type BranchProtection, type IncomingWebhook, type Repo, type RepoEnvVar } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import { copyText } from "@/lib/utils";
+import { cn, copyText, formatSize } from "@/lib/utils";
 
 export interface SettingsTabProps {
   owner: string;
@@ -34,6 +34,8 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const [topicsBusy, setTopicsBusy] = useState(false);
   const [deleteRepoOpen, setDeleteRepoOpen] = useState(false);
   const [deleteRepoBusy, setDeleteRepoBusy] = useState(false);
+  const [gcOpen, setGcOpen] = useState(false);
+  const [gcBusy, setGcBusy] = useState(false);
 
   useEffect(() => {
     setDescription(repo?.description ?? "");
@@ -143,6 +145,22 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       toast.error(apiErrorMsg(to, e));
     } finally {
       setTemplateBusy(false);
+    }
+  };
+
+  const doGC = async () => {
+    if (!repo) return;
+    setGcBusy(true);
+    try {
+      const res = await api.gcRepo(owner, name);
+      setRepo({ ...repo, size: res.after_bytes });
+      if (res.freed_bytes > 0) toast.success(t("repo.gcDone", { freed: formatSize(res.freed_bytes) }));
+      else toast.success(t("repo.gcDoneNoop"));
+      setGcOpen(false);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setGcBusy(false);
     }
   };
 
@@ -338,6 +356,36 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
           </CardContent>
         </Card>
       )}
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Recycle className="h-4 w-4" />
+              {t("repo.gcTitle")}
+            </CardTitle>
+            <CardDescription>{t("repo.gcDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-3">
+              {typeof repo.size === "number" && (
+                <span className="text-xs text-muted-foreground">
+                  {t("repo.gcCurrentSize", { size: formatSize(repo.size) })}
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                disabled={gcBusy || !repo}
+                onClick={() => setGcOpen(true)}
+              >
+                <Recycle className={cn("h-3.5 w-3.5", gcBusy && "animate-spin")} />
+                {gcBusy ? t("repo.gcRunning") : t("repo.gcRun")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="text-base text-destructive">{t("repo.dangerZone")}</CardTitle>
@@ -355,6 +403,14 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
           </Button>
         </CardContent>
       </Card>
+      <ConfirmDialog
+        open={gcOpen}
+        onOpenChange={setGcOpen}
+        title={t("repo.gcRun")}
+        description={t("repo.gcConfirm", { name: `${owner}/${name}` })}
+        onConfirm={doGC}
+        busy={gcBusy}
+      />
       <ConfirmDialog
         open={deleteRepoOpen}
         onOpenChange={setDeleteRepoOpen}

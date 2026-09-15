@@ -111,6 +111,7 @@ Commands:
   me                    Show the authenticated user
   repo list             List your repositories
   repo create [flags] <name>
+  repo gc <owner/repo>  Run git gc and reclaim disk space
   issue list <owner/repo>
   issue create <owner/repo> --title <t> [--body <b>]
   issue fix <owner/repo> <issue-number> [--byok <name|id>] [--instructions <text>] [--detach]
@@ -493,7 +494,7 @@ func cmdMe(cl *client, jsonOut bool) error {
 
 func cmdRepo(args []string, host, token string, jsonOut bool) error {
 	if len(args) == 0 {
-		return errors.New("usage: gitdash-cli repo <list|create>")
+		return errors.New("usage: gitdash-cli repo <list|create|gc>")
 	}
 	cl, err := resolveClient(host, token)
 	if err != nil {
@@ -550,6 +551,25 @@ func cmdRepo(args []string, host, token string, jsonOut bool) error {
 			return nil
 		}
 		fmt.Printf("Created repository %s/%v\n", out["owner"], out["name"])
+		return nil
+	case "gc":
+		owner, repo, err := needRepo(args[1:])
+		if err != nil {
+			return err
+		}
+		var out struct {
+			BeforeBytes int64 `json:"before_bytes"`
+			AfterBytes  int64 `json:"after_bytes"`
+			FreedBytes  int64 `json:"freed_bytes"`
+		}
+		if err := cl.postJSON(fmt.Sprintf("/users/%s/repos/%s/gc", owner, repo), nil, &out); err != nil {
+			return err
+		}
+		if jsonOut {
+			printJSON(out)
+			return nil
+		}
+		fmt.Printf("GC %s/%s: %d -> %d bytes (freed %d)\n", owner, repo, out.BeforeBytes, out.AfterBytes, out.FreedBytes)
 		return nil
 	default:
 		return fmt.Errorf("unknown repo subcommand %q", args[0])

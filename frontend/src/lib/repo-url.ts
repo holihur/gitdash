@@ -1,0 +1,75 @@
+/**
+ * 仓库页面的路径化路由。
+ *
+ * 采用 GitHub / Gitea 风格的路径，把「浏览位置」放进 pathname，而不是全部塞进
+ * 查询参数。这样 Markdown 里的相对链接（如 `docs/x.md`、`../deps/agent`）才能被
+ * 浏览器按目录结构正确解析；`ref` 仍留在查询参数里，避免分支名包含 `/` 时
+ * 与文件路径产生歧义。
+ *
+ *   /repo/:owner/:name                       代码根目录
+ *   /repo/:owner/:name/tree/<dir>            目录
+ *   /repo/:owner/:name/blob/<file>           文件
+ *   /repo/:owner/:name/blame/<file>          blame
+ *   /repo/:owner/:name/commits|issues|...    其余 tab
+ */
+
+export const REPO_TABS = [
+  "code",
+  "commits",
+  "issues",
+  "pulls",
+  "pipeline",
+  "copilot",
+  "releases",
+  "projects",
+  "settings",
+] as const;
+
+export type RepoTab = (typeof REPO_TABS)[number];
+export type RepoCodeKind = "tree" | "blob" | "blame";
+
+export interface RepoRoute {
+  tab: RepoTab;
+  /** code tab 的浏览类型；非 code tab 恒为 tree */
+  kind: RepoCodeKind;
+  /** 相对仓库根的路径（无前导 / 尾随斜杠）；非 code tab 为空串 */
+  path: string;
+}
+
+const encodePath = (p: string): string =>
+  p
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+
+/** 解析 `/repo/:owner/:name` 之后的 splat 部分（React Router 已解码）。 */
+export function parseRepoRoute(splat: string | undefined): RepoRoute {
+  const rest = (splat ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!rest) return { tab: "code", kind: "tree", path: "" };
+  const slash = rest.indexOf("/");
+  const head = slash < 0 ? rest : rest.slice(0, slash);
+  const tail = slash < 0 ? "" : rest.slice(slash + 1);
+  if (head === "tree") return { tab: "code", kind: "tree", path: tail };
+  if (head === "blob") return { tab: "code", kind: "blob", path: tail };
+  if (head === "blame") return { tab: "code", kind: "blame", path: tail };
+  if (head !== "code" && (REPO_TABS as readonly string[]).includes(head)) {
+    return { tab: head as RepoTab, kind: "tree", path: "" };
+  }
+  // 未知路径：回退代码根目录
+  return { tab: "code", kind: "tree", path: "" };
+}
+
+/** 构造仓库页面的 pathname（不含查询参数）。 */
+export function buildRepoPath(
+  owner: string,
+  name: string,
+  route: { tab: RepoTab; kind?: RepoCodeKind; path?: string },
+): string {
+  const base = `/repo/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+  if (route.tab !== "code") return `${base}/${route.tab}`;
+  const p = (route.path ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!p) return base;
+  const kind = route.kind === "blob" || route.kind === "blame" ? route.kind : "tree";
+  return `${base}/${kind}/${encodePath(p)}`;
+}

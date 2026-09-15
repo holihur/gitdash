@@ -189,7 +189,7 @@ export default function Explore() {
               {results.issues.map((i) => (
                 <Link
                   key={`${i.owner}/${i.repo}#${i.number}`}
-                  to={`/repo/${i.owner}/${i.repo}?tab=issues`}
+                  to={`/repo/${i.owner}/${i.repo}/issues`}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
                 >
                   <CircleDot

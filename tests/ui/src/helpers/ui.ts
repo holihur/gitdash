@@ -132,7 +132,8 @@ export async function addFileViaUi(
   page: Page,
   opts: { path: string; content: string; branch?: string },
 ) {
-  await page.getByRole("button", { name: "New file" }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New file" }).click();
   const dialog = page.getByRole("dialog");
   if (opts.branch) await dialog.locator("#fop-branch").selectOption(opts.branch);
   await dialog.locator("#fop-path").fill(opts.path);

@@ -1,5 +1,5 @@
 import { pageQuery, req, reqPage } from "./core";
-import type { Blame, Blob, Branch, Commit, GlobalSearchResult, PullDiff, Repo, Tag, TopicCount, TreeEntry } from "./types";
+import type { Blame, Blob, Branch, Commit, GlobalSearchResult, PullDiff, Repo, RepoGCResult, Tag, TopicCount, TreeEntry } from "./types";
 
 export const reposApi = {
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
@@ -71,6 +71,8 @@ export const reposApi = {
   getRepo: (owner: string, name: string) => req<Repo>(`/users/${owner}/repos/${name}`),
   deleteRepo: (owner: string, name: string) =>
     req<null>(`/users/${owner}/repos/${name}`, { method: "DELETE" }),
+  gcRepo: (owner: string, name: string) =>
+    req<RepoGCResult>(`/users/${owner}/repos/${name}/gc`, { method: "POST" }),
 
 
   // star & fork

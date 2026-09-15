@@ -233,7 +233,7 @@ function CopilotChat({ owner, name, session }: { owner: string; name: string; se
             <span className="text-xs">{t("copilot.linkedIssue", { number: session.issue_number })}</span>
           ) : null}
           {session.pr_number ? (
-            <Link to={`/repo/${owner}/${name}?tab=pulls`} className="text-xs text-primary hover:underline">
+            <Link to={`/repo/${owner}/${name}/pulls`} className="text-xs text-primary hover:underline">
               {t("copilot.openedPull", { number: session.pr_number })}
             </Link>
           ) : null}

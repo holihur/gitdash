@@ -13,6 +13,7 @@ import {
   Star,
 } from "lucide-react";
 import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
+import { buildRepoPath, parseRepoRoute, type RepoCodeKind, type RepoTab } from "@/lib/repo-url";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -54,29 +55,91 @@ const ReleasesTab = lazy(() => import("./repoview/releases-tab"));
 const ProjectsTab = lazy(() => import("./repoview/projects-tab"));
 const SettingsTab = lazy(() => import("./repoview/settings-tab"));
 
-const tabs = ["code", "commits", "issues", "pulls", "pipeline", "copilot", "releases", "projects", "settings"] as const;
-type RepoTab = (typeof tabs)[number];
-
 export default function RepoView() {
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
-  const { owner = "", name = "" } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { owner = "", name = "", "*": splat = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  // 把 tab / ref / path / file 写进 URL 查询参数，支持刷新与分享
+  // 路径化路由派生：/repo/:owner/:name/{tree|blob|blame}/... 及其余 tab。
+  // ref / line 仍走查询参数（ref 可能包含 `/`，放路径里会与文件路径歧义）。
+  const route = useMemo(() => parseRepoRoute(splat), [splat]);
+  const tab: RepoTab = route.tab;
+  const fileParam = route.tab === "code" && route.kind !== "tree" ? route.path : "";
+  const path =
+    route.tab === "code" && route.kind === "tree" && route.path ? route.path.split("/") : [];
+  const currentDir = route.tab === "code" && route.kind === "tree" ? route.path : "";
+  const blameParam = route.tab === "code" && route.kind === "blame";
+  const urlRef = searchParams.get("ref") ?? "";
+  const lineParam = Number(searchParams.get("line")) || null;
+
+  // 兼容既有 `setParams` 语义（CodeTab / tab 切换均调用），把变更翻译为路径化导航。
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        for (const [k, v] of Object.entries(patch)) {
-          if (v === null) next.delete(k);
-          else next.set(k, v);
-        }
-        return next;
-      });
+      const nextTab: RepoTab = "tab" in patch ? ((patch.tab as RepoTab) ?? "code") : tab;
+      let kind: RepoCodeKind = route.kind;
+      let dirPath = route.kind === "tree" ? route.path : "";
+      let filePath = route.kind !== "tree" ? route.path : "";
+      let nextBlame = route.kind === "blame";
+      let nextRef = urlRef;
+      let nextLine: number | null = lineParam;
+      let nextHash = "";
+
+      if ("path" in patch) dirPath = patch.path ?? "";
+      if ("file" in patch) {
+        filePath = patch.file ?? "";
+        kind = filePath ? (nextBlame ? "blame" : "blob") : "tree";
+      }
+      if ("blame" in patch) {
+        nextBlame = patch.blame === "1" || patch.blame === "true";
+        if (filePath) kind = nextBlame ? "blame" : "blob";
+      }
+      if ("ref" in patch) nextRef = patch.ref ?? "";
+      if ("line" in patch) nextLine = patch.line ? Number(patch.line) : null;
+      // 支持跨文件锚点：patch.hash 不进查询参数，只拼成 URL 片段。
+      if ("hash" in patch) nextHash = patch.hash ?? "";
+
+      const pathname =
+        nextTab === "code"
+          ? buildRepoPath(owner, name, {
+              tab: "code",
+              kind,
+              path: kind === "tree" ? dirPath : filePath,
+            })
+          : buildRepoPath(owner, name, { tab: nextTab });
+
+      const next = new URLSearchParams(searchParams);
+      if (nextRef) next.set("ref", nextRef);
+      else next.delete("ref");
+      if (nextTab === "code" && nextLine && filePath) next.set("line", String(nextLine));
+      else next.delete("line");
+      const qs = next.toString();
+      navigate(`${pathname}${qs ? `?${qs}` : ""}${nextHash ? `#${nextHash}` : ""}`);
     },
-    [setSearchParams],
+    [owner, name, tab, route, urlRef, lineParam, searchParams, navigate],
   );
+
+  // 兼容旧的查询参数式 URL（?tab=&path=&file=&blame=），自动重定向到路径化地址。
+  useEffect(() => {
+    const legacyTab = searchParams.get("tab");
+    const legacyPath = searchParams.get("path") ?? "";
+    const legacyFile = searchParams.get("file") ?? "";
+    const legacyBlame = searchParams.get("blame") === "1";
+    if (!legacyTab && !legacyPath && !legacyFile && !legacyBlame) return;
+    const kind: RepoCodeKind = legacyFile ? (legacyBlame ? "blame" : "blob") : "tree";
+    const pathname =
+      legacyTab && legacyTab !== "code"
+        ? buildRepoPath(owner, name, { tab: legacyTab as RepoTab })
+        : buildRepoPath(owner, name, { tab: "code", kind, path: legacyFile || legacyPath });
+    const next = new URLSearchParams(searchParams);
+    next.delete("tab");
+    next.delete("path");
+    next.delete("file");
+    next.delete("blame");
+    const qs = next.toString();
+    navigate(`${pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+  }, [searchParams, navigate, owner, name]);
 
   const [repo, setRepo] = useState<Repo | null>(null);
   // 仓库角色由后端按 owner / 协作者 / 组织角色计算；组织仓库的 owner 也是"owner"，
@@ -101,20 +164,7 @@ export default function RepoView() {
   const [forkBusy, setForkBusy] = useState(false);
   const [mirrorOpen, setMirrorOpen] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<{ path: string; isDir: boolean } | null>(null);
-  const navigate = useNavigate();
 
-  // URL 参数派生：tab / ref / path / file（blob）
-  const tabParam = searchParams.get("tab");
-  const tab: RepoTab = (tabs as readonly string[]).includes(tabParam ?? "")
-    ? (tabParam as RepoTab)
-    : "code";
-  const pathParam = searchParams.get("path") ?? "";
-  const path = pathParam ? pathParam.split("/") : [];
-  const currentDir = path.join("/");
-  const fileParam = searchParams.get("file") ?? "";
-  const blameParam = searchParams.get("blame") === "1";
-  const urlRef = searchParams.get("ref") ?? "";
-  const lineParam = Number(searchParams.get("line")) || null;
   const ref =
     urlRef ||
     branches.find((b) => b.is_head)?.name ||
@@ -234,11 +284,21 @@ export default function RepoView() {
       .then((b) => {
         if (alive) setBlob(b);
       })
-      .catch((e) => {
+      .catch((err) => {
         if (!alive) return;
         setBlob(null);
-        setParams({ file: null });
-        toast.error(apiErrorMsg(to, e));
+        // 目录链接可能没有尾随 `/`（Markdown 相对链接常见）：先按目录尝试。
+        void (async () => {
+          try {
+            await api.tree(owner, name, ref, fileParam);
+            if (!alive) return;
+            setParams({ path: fileParam, file: null, line: null, blame: null });
+          } catch {
+            if (!alive) return;
+            setParams({ file: null });
+            toast.error(apiErrorMsg(to, err));
+          }
+        })();
       });
     return () => {
       alive = false;

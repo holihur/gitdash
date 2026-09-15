@@ -130,7 +130,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
       });
       toast.success(t("copilot.launch"));
       setCopilotTarget(null);
-      navigate(`/repo/${owner}/${name}?tab=copilot&copilot=${session.id}`);
+      navigate(`/repo/${owner}/${name}/copilot?copilot=${session.id}`);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {

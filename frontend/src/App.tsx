@@ -252,6 +252,15 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
               </Suspense>
             }
           />
+          {/* 路径化浏览：/repo/:owner/:name/(tree|blob|blame)/<path> 及其余 tab */}
+          <Route
+            path="/repo/:owner/:name/*"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <RepoView />
+              </Suspense>
+            }
+          />
           <Route
             path="/explore"
             element={

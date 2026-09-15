@@ -93,6 +93,13 @@ export interface Repo {
   topics?: string[];
 }
 
+/** `git gc` 执行结果（字节） */
+export interface RepoGCResult {
+  before_bytes: number;
+  after_bytes: number;
+  freed_bytes: number;
+}
+
 export interface TopicCount {
   topic: string;
   count: number;

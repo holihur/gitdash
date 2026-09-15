@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { cn, copyText } from "@/lib/utils";
 import { extractHeadings } from "@/lib/md-headings";
+import { headingAnchorMap, rewriteMarkdownHtml, type RepoLinkContext, type RepoLinkTarget } from "@/lib/md-links";
 import { renderMermaid } from "@/components/mermaid";
 
 export { extractHeadings };
@@ -71,10 +72,27 @@ function addCopyButtons(
   }
 }
 
-export function MarkdownView({ text, className }: { text: string; className?: string }) {
+export function MarkdownView({
+  text,
+  className,
+  repo,
+  onOpenRepoLink,
+}: {
+  text: string;
+  className?: string;
+  /** 仓库上下文：提供后仓库内相对引用会改写为代码浏览路由 */
+  repo?: RepoLinkContext;
+  /** 仓库内链接点击回调；缺省时回退为 href 跳转 */
+  onOpenRepoLink?: (target: RepoLinkTarget) => void;
+}) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState("");
+
+  const repoOwner = repo?.owner;
+  const repoName = repo?.name;
+  const repoRef = repo?.ref;
+  const repoPath = repo?.path;
 
   // 解析 + 消毒：延迟到组件挂载后再拉取 marked / dompurify
   useEffect(() => {
@@ -84,11 +102,17 @@ export function MarkdownView({ text, className }: { text: string; className?: st
         import("marked"),
         import("dompurify"),
       ]);
+      const repoCtx =
+        repoOwner && repoName && repoRef && repoPath
+          ? { owner: repoOwner, name: repoName, ref: repoRef, path: repoPath }
+          : undefined;
       const raw = marked.parse(text ?? "", { async: false, gfm: true, breaks: false }) as string;
+      // 仓库内引用 / 文档锚点先改写为可跳转的地址，再交给 DOMPurify 消毒。
+      const linked = rewriteMarkdownHtml(raw, repoCtx);
       // 显式收紧白名单：仅允许 HTML profile，禁掉样式/表单/嵌入类标签与内联 style；
       // 默认已拦截 javascript: 等危险 URI，这里不再自定义 ALLOWED_URI_REGEXP，
       // 以免破坏相对链接、锚点与 mailto。
-      const clean = DOMPurify.sanitize(raw, {
+      const clean = DOMPurify.sanitize(linked, {
         USE_PROFILES: { html: true },
         FORBID_TAGS: ["style", "form", "iframe", "object", "embed", "link", "meta", "base"],
         FORBID_ATTR: ["style"],
@@ -98,7 +122,50 @@ export function MarkdownView({ text, className }: { text: string; className?: st
     return () => {
       alive = false;
     };
-  }, [text]);
+  }, [text, repoOwner, repoName, repoRef, repoPath]);
+
+  // 仓库内链接点击：拦截为 SPA 内跳转（未提供回调时保留 href 默认行为）。
+  const onOpenRef = useRef(onOpenRepoLink);
+  useEffect(() => {
+    onOpenRef.current = onOpenRepoLink;
+  }, [onOpenRepoLink]);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || !html) return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      const anchor = (e.target as HTMLElement | null)?.closest?.(
+        "a[data-repo-path]",
+      ) as HTMLAnchorElement | null;
+      const cb = onOpenRef.current;
+      if (!anchor || !cb) return;
+      e.preventDefault();
+      cb({
+        path: anchor.dataset.repoPath ?? "",
+        kind: anchor.dataset.repoKind === "dir" ? "dir" : "file",
+        hash: anchor.dataset.repoHash || undefined,
+      });
+    };
+    root.addEventListener("click", onClick);
+    return () => root.removeEventListener("click", onClick);
+  }, [html]);
+
+  // 跨文件锚点：内容渲染后按 hash（GitHub slug）定位到对应标题。
+  useEffect(() => {
+    const root = ref.current;
+    if (!root || !html) return;
+    const raw = window.location.hash.replace(/^#/, "");
+    if (!raw) return;
+    const hash = decodeURIComponent(raw);
+    let el = document.getElementById(hash);
+    if (!el || !root.contains(el)) {
+      const id = headingAnchorMap(root).get(hash);
+      el = id ? document.getElementById(id) : null;
+    }
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [html]);
 
   // 标题锚点 + Mermaid 图表 + 代码块高亮（highlight.js / mermaid 均按需加载）
   useEffect(() => {
@@ -176,17 +243,25 @@ export function MarkdownView({ text, className }: { text: string; className?: st
 }
 
 /** Markdown + 右侧标题目录（lg 以上显示），锚点平滑滚动。 */
-export function MarkdownWithToc({ text }: { text: string }) {
+export function MarkdownWithToc({
+  text,
+  repo,
+  onOpenRepoLink,
+}: {
+  text: string;
+  repo?: RepoLinkContext;
+  onOpenRepoLink?: (target: RepoLinkTarget) => void;
+}) {
   const { t } = useI18n();
   const headings = useMemo(() => extractHeadings(text), [text]);
-  if (headings.length === 0) return <MarkdownView text={text} />;
+  if (headings.length === 0) return <MarkdownView text={text} repo={repo} onOpenRepoLink={onOpenRepoLink} />;
   const jump = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   return (
     <div className="flex gap-4">
       <div className="min-w-0 flex-1">
-        <MarkdownView text={text} />
+        <MarkdownView text={text} repo={repo} onOpenRepoLink={onOpenRepoLink} />
       </div>
       <nav className="hidden w-52 shrink-0 border-l pl-3 lg:block" aria-label={t("toc.title")}>
         <p className="mb-2 text-xs font-medium text-muted-foreground">{t("toc.title")}</p>

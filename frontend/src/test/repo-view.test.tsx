@@ -25,6 +25,8 @@ vi.mock("@/lib/api", () => {
       branches: vi.fn().mockResolvedValue([]),
       listTags: vi.fn().mockResolvedValue([]),
       tree: vi.fn().mockResolvedValue({ entries: [] }),
+      blob: vi.fn(),
+      blame: vi.fn(),
     },
   };
 });
@@ -48,12 +50,13 @@ const repo = (over: Partial<Repo> = {}): Repo => ({
   ...over,
 });
 
-function renderRepo(owner: string) {
+function renderRepo(owner: string, rest = "") {
   return render(
     <I18nProvider>
-      <MemoryRouter initialEntries={[`/${owner}/demo`]}>
+      <MemoryRouter initialEntries={[`/repo/${owner}/demo${rest}`]}>
         <Routes>
-          <Route path="/:owner/:name" element={<RepoView />} />
+          <Route path="/repo/:owner/:name" element={<RepoView />} />
+          <Route path="/repo/:owner/:name/*" element={<RepoView />} />
         </Routes>
       </MemoryRouter>
     </I18nProvider>,
@@ -104,6 +107,36 @@ describe("RepoView", () => {
     renderRepo("nobody");
     await waitFor(() =>
       expect(screen.getByText("Repository not found: repo not found")).toBeInTheDocument(),
+    );
+  });
+
+  it("路径化 blob 路由按 ref/path 加载文件", async () => {
+    (api.me as Mock).mockResolvedValue({ username: "bob" });
+    (api.getRepo as Mock).mockResolvedValue(repo());
+    (api.blob as Mock).mockResolvedValue({
+      path: "docs/x.md",
+      encoding: "utf-8",
+      content: "# Hi",
+      size: 4,
+    });
+    renderRepo("alice", "/blob/docs/x.md?ref=main");
+    await waitFor(() =>
+      expect(api.blob).toHaveBeenCalledWith("alice", "demo", "main", "docs/x.md"),
+    );
+  });
+
+  it("旧查询参数 blob URL 自动重定向到路径化路由", async () => {
+    (api.me as Mock).mockResolvedValue({ username: "bob" });
+    (api.getRepo as Mock).mockResolvedValue(repo());
+    (api.blob as Mock).mockResolvedValue({
+      path: "docs/x.md",
+      encoding: "utf-8",
+      content: "# Hi",
+      size: 4,
+    });
+    renderRepo("alice", "?file=docs/x.md&ref=main");
+    await waitFor(() =>
+      expect(api.blob).toHaveBeenCalledWith("alice", "demo", "main", "docs/x.md"),
     );
   });
 });

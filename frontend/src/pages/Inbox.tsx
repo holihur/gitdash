@@ -99,7 +99,7 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
       }
     }
     if (n.kind === "system") return; // 系统通知（封禁等）无跳转目标
-    navigate(`/repo/${n.owner}/${n.repo}?tab=${n.kind === "issue" ? "issues" : "pulls"}`);
+    navigate(`/repo/${n.owner}/${n.repo}/${n.kind === "issue" ? "issues" : "pulls"}`);
   };
 
   const markRead = async (id: number) => {

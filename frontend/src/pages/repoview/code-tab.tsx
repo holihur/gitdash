@@ -14,6 +14,7 @@ import {
   GitCompare,
   List,
   Pencil,
+  Plus,
   Search,
   Tag as TagIcon,
   Trash2,
@@ -43,6 +44,7 @@ import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MarkdownView, MarkdownWithToc } from "@/components/markdown";
+import type { RepoLinkTarget } from "@/lib/md-links";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
 import FileTree from "@/components/file-tree";
 import Outline from "@/components/outline";
@@ -386,6 +388,22 @@ export default function CodeTab({
     setParams({ file, line: null, blame: null });
   };
 
+  // README / Markdown 文件里的仓库内引用：在代码浏览器内跳转，保持当前 ref。
+  const openRepoLink = (target: RepoLinkTarget) => {
+    if (target.kind === "dir") {
+      setParams({ path: target.path, file: null, line: null, blame: null, hash: null });
+    } else {
+      setParams({ file: target.path, line: null, blame: null, hash: target.hash ?? null });
+    }
+  };
+
+  // 当前 README 在仓库中的完整路径（相对根），用于解析其相对引用。
+  const readmePath = readmeEntryName
+    ? currentDir
+      ? `${currentDir}/${readmeEntryName}`
+      : readmeEntryName
+    : "";
+
   const jumpToId = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -449,7 +467,7 @@ export default function CodeTab({
     }
   }, [lineParam, blob]);
 
-  // 搜索框同行的操作区：窄屏的文件树/大纲按钮 + 新建文件/文件夹
+  // 搜索框同行的操作区：窄屏的文件树/大纲按钮 + “新建”下拉（文件 / 文件夹）
   const toolbarActions = (
     <>
       {showTree && (
@@ -474,14 +492,25 @@ export default function CodeTab({
           {t("outline.title")}
         </Button>
       )}
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-file")}>
-        <FilePlus2 className="h-4 w-4" />
-        {t("fops.newFile")}
-      </Button>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCreateDialog("create-dir")}>
-        <FolderPlus className="h-4 w-4" />
-        {t("fops.newFolder")}
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            {t("fops.new")}
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => openCreateDialog("create-file")}>
+            <FilePlus2 className="h-4 w-4" />
+            {t("fops.newFile")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => openCreateDialog("create-dir")}>
+            <FolderPlus className="h-4 w-4" />
+            {t("fops.newFolder")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
 
@@ -727,7 +756,7 @@ export default function CodeTab({
                             <td className="w-40 max-w-40 truncate whitespace-nowrap border-r border-border/50 bg-muted/40 px-2 py-0.5 align-top text-muted-foreground">
                               <a
                                 className="block truncate hover:underline"
-                                href={`/repo/${owner}/${name}?tab=commits`}
+                                href={`/repo/${owner}/${name}/commits`}
                                 title={c ? `${c.author} · ${c.message}` : l.commit}
                               >
                                 {c ? c.author : l.commit.slice(0, 7)}
@@ -751,7 +780,11 @@ export default function CodeTab({
             ) : blob.encoding === "utf-8" ? (
               isMarkdown(blob.path) ? (
                 <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
-                  <MarkdownView text={blob.content} />
+                  <MarkdownView
+                    text={blob.content}
+                    repo={{ owner, name, ref: refName, path: blob.path }}
+                    onOpenRepoLink={openRepoLink}
+                  />
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-md border">
@@ -887,7 +920,11 @@ export default function CodeTab({
             <span className="text-xs font-medium text-muted-foreground">{readmeEntry.name}</span>
           </div>
           <div className="p-4">
-            <MarkdownWithToc text={readmeContent} />
+            <MarkdownWithToc
+              text={readmeContent}
+              repo={{ owner, name, ref: refName, path: readmePath }}
+              onOpenRepoLink={openRepoLink}
+            />
           </div>
         </div>
       )}
