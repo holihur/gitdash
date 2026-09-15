@@ -140,6 +140,16 @@ func run() {
 			} else if n > 0 {
 				logx.Infof("oauth-state cleanup: removed %d expired states", n)
 			}
+			if n, err := st.PruneOAuthGrants(time.Now().UTC().Format(time.RFC3339)); err != nil {
+				logx.Infof("oauth-grant cleanup: %v", err)
+			} else if n > 0 {
+				logx.Infof("oauth-grant cleanup: removed %d expired codes", n)
+			}
+			if n, err := st.PruneDeviceGrants(time.Now().UTC().Format(time.RFC3339)); err != nil {
+				logx.Infof("oauth-device-grant cleanup: %v", err)
+			} else if n > 0 {
+				logx.Infof("oauth-device-grant cleanup: removed %d expired grants", n)
+			}
 			if n, err := st.PruneMFAChallenges(time.Now().UTC().Format(time.RFC3339)); err != nil {
 				logx.Infof("mfa-challenge cleanup: %v", err)
 			} else if n > 0 {

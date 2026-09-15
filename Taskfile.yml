@@ -52,6 +52,16 @@ tasks:
     generates:
       - /tmp/agent
 
+  cli:
+    desc: 构建命令行客户端 gitdash-cli 到 /tmp/gitdash-cli
+    dir: backend
+    cmds:
+      - go build -o /tmp/gitdash-cli ./cmd/gitdash-cli
+    sources:
+      - "**/*.go"
+    generates:
+      - /tmp/gitdash-cli
+
   # ---------- 测试 ----------
   test:go:
     desc: 后端 Go 测试（含功能测试套件）

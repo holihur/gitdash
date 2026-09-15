@@ -18,6 +18,8 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Webhooks**: per-repo webhooks with HMAC signature delivery
 - **GPG keys**: upload GPG public keys to verify commit signatures
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
+- **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
+- **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
 - **Admin panel**: admin users, settings (OAuth providers), password management
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings
 - **Code browsing & web editing**: browse repos by branch / directory, view file contents, commit history and blame on the web; create / edit / delete files and folders, and revert a commit (creates an inverse commit) from the Commits tab
@@ -376,6 +378,110 @@ Repo social / inbox (watch → subscribe to repo activity in your inbox):
 | DELETE | `/api/inbox/{id}` | Delete one notification |
 
 > MVP note: repos are owner-only (only the owner can read/write); add TLS at the HTTP layer yourself (or place behind a reverse proxy).
+
+## OAuth 2.0 provider (applications)
+
+gitdash can act as an **OAuth 2.0 authorization server** (authorization-code flow), so third-party
+apps can act on behalf of a user with the same scopes as personal access tokens
+(`repo`, `inbox`, `keys`). Register and manage apps in the web UI under **OAuth Apps**,
+or via the API below.
+
+### Flow
+
+1. Register an app (`POST /api/applications`) — you get a `client_id` and a `client_secret` (the secret is shown only once; reset it if lost).
+2. Send the user to `GET /login/oauth/authorize?client_id=…&redirect_uri=…&scope=repo&state=…&response_type=code`. `redirect_uri` must exactly match the registered callback URL.
+3. After the user approves, gitdash redirects back to `redirect_uri?code=…&state=…`.
+4. Exchange the code: `POST /login/oauth/access_token` (form-encoded) with `grant_type=authorization_code`, `client_id`, `client_secret`, `code`, `redirect_uri`. The response is `{"access_token":"…","token_type":"bearer","scope":"repo"}`.
+5. Call protected endpoints with `Authorization: Bearer <access_token>`.
+
+Authorization codes are single-use and expire after 10 minutes. Access tokens are opaque,
+sha256-hashed at rest, and reuse the existing PAT validation / scope / expiry machinery;
+revoke individual grants (or delete an app to revoke all its tokens) from **OAuth Apps → Authorized Apps**.
+
+### Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET/POST | `/api/applications` | List / register OAuth apps |
+| DELETE | `/api/applications/{id}` | Delete an app (revokes all its tokens) |
+| POST | `/api/applications/{id}/reset_secret` | Rotate `client_secret` |
+| GET | `/api/applications/authorizations` | List issued tokens (grants) |
+| DELETE | `/api/applications/authorizations/{id}` | Revoke one grant |
+| GET/POST | `/login/oauth/authorize` | Consent page / approve-or-deny |
+| POST | `/login/oauth/access_token` | Exchange `code` (or `device_code`) for `access_token` |
+| POST | `/login/oauth/device/code` | Start device flow (RFC 8628), returns `device_code` + `user_code` |
+| GET/POST | `/login/oauth/device` | Device-flow verification/consent page |
+
+### Device flow (for CLIs)
+
+`gitdash-cli` uses the OAuth 2.0 **device flow** with a built-in first-party client
+(`client_id=gitdash-cli`), so users never register an app or paste a secret:
+
+1. `POST /login/oauth/device/code` with `client_id=gitdash-cli` → `device_code`, `user_code`, `verification_uri_complete`.
+2. The user opens `verification_uri_complete` and approves.
+3. The client polls `POST /login/oauth/access_token` with `grant_type=urn:ietf:params:oauth:grant-type:device_code` until it receives an `access_token` (`authorization_pending` while waiting).
+
+## CLI (gitdash-cli)
+
+A small command-line client (`gh`/`glab`-style) for repos, issues and pull requests.
+It authenticates with a **PAT** or the **OAuth 2.0 device flow**.
+
+### Build / install
+
+The release archives ship a `gitdash-cli` binary alongside `gitdash`. From source:
+
+```bash
+task cli                       # → /tmp/gitdash-cli
+# or:
+cd backend && go build -o gitdash-cli ./cmd/gitdash-cli
+```
+
+### Login
+
+```bash
+gitdash-cli login                            # interactive: browser (device flow) or PAT
+gitdash-cli login --host http://localhost:8080 --method pat
+gitdash-cli me
+gitdash-cli logout
+```
+
+Credentials are stored in `~/.config/gitdash/config.json` (mode 0600). `--host` / `--token`
+flags and the `GITDASH_HOST` / `GITDASH_TOKEN` environment variables override the file. Add
+`--json` for raw output.
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `gitdash-cli login` | Authenticate (device flow or PAT) |
+| `gitdash-cli logout` | Remove stored credentials |
+| `gitdash-cli me` | Show the authenticated user |
+| `gitdash-cli repo list` | List your repositories |
+| `gitdash-cli repo create [--private=false] [--description D] <name>` | Create a repository |
+| `gitdash-cli issue list <owner/repo>` | List issues |
+| `gitdash-cli issue create <owner/repo> --title T [--body B]` | Create an issue |
+| `gitdash-cli pr list <owner/repo>` | List pull requests |
+| `gitdash-cli pr create <owner/repo> --title T --head H --base B [--body B]` | Open a pull request |
+| `gitdash-cli skill show` | Print the embedded Agent Skill |
+| `gitdash-cli skill install` | Install the Agent Skill for Claude Code / opencode / pi |
+
+### Agent skill (for Claude Code / opencode / pi)
+
+`gitdash-cli` ships an [Agent Skill](https://agentskills.io/specification) (`SKILL.md`) that
+teaches AI coding agents how to drive the CLI. Install it into the standard skill
+directories:
+
+```bash
+gitdash-cli skill install              # ~/.claude/skills + ~/.agents/skills
+gitdash-cli skill install --target claude
+gitdash-cli skill install --target agents
+gitdash-cli skill install --project    # ./.claude/skills + ./.agents/skills
+gitdash-cli skill show                 # print the skill
+```
+
+Claude Code loads `~/.claude/skills/gitdash-cli/SKILL.md`; opencode auto-loads both
+`~/.claude/skills` and `~/.agents/skills`; pi loads `~/.agents/skills`. So a single
+`gitdash-cli skill install` makes the CLI usable by all three.
 
 ## CI Pipeline (MVP)
 

@@ -18,6 +18,8 @@ English | 简体中文
 - **Webhook**：仓库级 webhook，HMAC 签名推送
 - **GPG Key**：上传 GPG 公钥验证提交签名
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
+- **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
+- **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
 - **发现（Explore）**：浏览公开仓库；仓库设置页可切换公开 / 私有
 - **代码浏览与网页编辑**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame；可新建 / 编辑 / 删除文件与目录，并在提交记录页撤销某次提交（生成反向提交）
@@ -376,6 +378,80 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | DELETE | `/api/inbox/{id}` | 删除单条通知 |
 
 > MVP 注意：仓库为 owner-only（仅属主可读写）；HTTP 层请自行加 TLS（或置于反代之后）。
+
+## OAuth 2.0 提供方（应用）
+
+gitdash 可作为 **OAuth 2.0 授权服务器**（授权码流程），让第三方应用以用户身份、用与 PAT
+相同的 scope（`repo`/`inbox`/`keys`）访问 API。在网页 **OAuth Apps** 页注册管理应用。
+
+### 流程
+
+1. `POST /api/applications` 注册应用，得到 `client_id` 与 `client_secret`（secret 只显示一次，丢失可重置）。
+2. 浏览器跳转到 `GET /login/oauth/authorize?client_id=…&redirect_uri=…&scope=repo&state=…&response_type=code`；`redirect_uri` 必须与注册的回调地址完全一致。
+3. 用户批准后回跳 `redirect_uri?code=…&state=…`。
+4. `POST /login/oauth/access_token`（表单）带 `grant_type=authorization_code&client_id&client_secret&code&redirect_uri` 换取 `access_token`。
+5. 之后以 `Authorization: Bearer <access_token>` 调用受保护接口。
+
+授权码一次性、10 分钟过期；access token 不透明、只存 sha256，复用现有一套 PAT 校验/scope/过期机制；
+可在 **OAuth Apps → Authorized Apps** 撤销单个授权（删除应用会撤销其全部 token）。
+
+### 设备流（CLI 用，RFC 8628）
+
+`gitdash-cli` 用内置第一方公开客户端（`client_id=gitdash-cli`）跑设备流，用户无需注册应用或粘贴密钥：
+
+1. `POST /login/oauth/device/code`（`client_id=gitdash-cli`）→ `device_code`、`user_code`、`verification_uri_complete`。
+2. 用户打开 `verification_uri_complete` 并批准。
+3. 客户端轮询 `POST /login/oauth/access_token`（`grant_type=urn:ietf:params:oauth:grant-type:device_code`），等待期间返回 `authorization_pending`，批准后返回 `access_token`。
+
+### 接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET/POST | `/api/applications` | 列出 / 注册 OAuth 应用 |
+| DELETE | `/api/applications/{id}` | 删除应用（级联撤销其 token） |
+| POST | `/api/applications/{id}/reset_secret` | 重置 `client_secret` |
+| GET | `/api/applications/authorizations` | 列出已签发的授权 |
+| DELETE | `/api/applications/authorizations/{id}` | 撤销单个授权 |
+| GET/POST | `/login/oauth/authorize` | 授权确认页 / 批准或拒绝 |
+| POST | `/login/oauth/access_token` | 用 `code`（或 `device_code`）换 `access_token` |
+| POST | `/login/oauth/device/code` | 启动设备流，返回 `device_code` + `user_code` |
+| GET/POST | `/login/oauth/device` | 设备流验证/确认页 |
+
+## CLI（gitdash-cli）
+
+`gh`/`glab` 风格的命令行客户端，管理仓库、issue 与 PR，支持 **PAT** 或 **OAuth 2.0 设备流**登录。
+
+发布归档会附带 `gitdash-cli`；源码构建：`task cli`（或 `cd backend && go build -o gitdash-cli ./cmd/gitdash-cli`）。
+
+```bash
+gitdash-cli login                      # 交互式：浏览器设备流（默认）或 PAT
+gitdash-cli login --host http://localhost:8080 --method pat
+gitdash-cli me
+
+# 常用命令
+gitdash-cli repo list
+gitdash-cli repo create --private demo
+gitdash-cli issue list alice/demo
+gitdash-cli issue create alice/demo --title "Bug" --body "..."
+gitdash-cli pr list alice/demo
+gitdash-cli pr create alice/demo --title "Fix" --head feature --base main
+```
+
+凭据存于 `~/.config/gitdash/config.json`（0600）；`--host`/`--token` 与 `GITDASH_HOST`/`GITDASH_TOKEN` 可覆盖；`--json` 输出原始 JSON。
+
+### Agent Skill（供 Claude Code / opencode / pi 使用）
+
+`gitdash-cli` 内置一份 [Agent Skill](https://agentskills.io/specification)（`SKILL.md`），告诉 AI 编码代理如何用本 CLI 操作 gitdash：
+
+```bash
+gitdash-cli skill install              # 装到 ~/.claude/skills 与 ~/.agents/skills
+gitdash-cli skill install --target claude
+gitdash-cli skill install --target agents
+gitdash-cli skill install --project    # 装到当前项目的 ./.claude/skills 与 ./.agents/skills
+gitdash-cli skill show                 # 打印 skill 内容
+```
+
+Claude Code 读 `~/.claude/skills/gitdash-cli/SKILL.md`；opencode 自动加载 `~/.claude/skills` 与 `~/.agents/skills`；pi 读 `~/.agents/skills`。一次 `gitdash-cli skill install` 三者都能用。
 
 ## CI 流水线 (MVP)
 

@@ -130,17 +130,28 @@ func NormalizePATCIDRs(cidrs []string) (string, bool) {
 // CreatePAT 生成 64 位 hex 明文 token，仅存 sha256 hash；明文只此一次返回。
 // cidrs 为已规范化的 IP/CIDR 白名单（逗号分隔），expiresAt 为 RFC3339 UTC（空 = 永不过期）。
 func (s *Store) CreatePAT(userID int64, name, scopes, cidrs, expiresAt string) (string, PAT, error) {
+	return s.createPAT(userID, 0, name, scopes, cidrs, expiresAt, true)
+}
+
+// CreateOAuthPAT 为 OAuth 2.0 授权签发 access token（复用 PAT 表，oauthAppID 关联应用）。
+func (s *Store) CreateOAuthPAT(userID, oauthAppID int64, name, scopes string) (string, PAT, error) {
+	return s.createPAT(userID, oauthAppID, name, scopes, "", "", true)
+}
+
+func (s *Store) createPAT(userID, oauthAppID int64, name, scopes, cidrs, expiresAt string, checkQuota bool) (string, PAT, error) {
 	createMu.Lock()
 	defer createMu.Unlock()
-	if err := s.CheckPATQuota(userID); err != nil {
-		return "", PAT{}, err
+	if checkQuota {
+		if err := s.CheckPATQuota(userID); err != nil {
+			return "", PAT{}, err
+		}
 	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", PAT{}, err
 	}
 	token := hex.EncodeToString(raw)
-	row := patRow{UserID: userID, Name: name, TokenHash: patHash(token), Scopes: scopes, CIDRs: cidrs, ExpiresAt: expiresAt, CreatedAt: now()}
+	row := patRow{UserID: userID, OAuthAppID: oauthAppID, Name: name, TokenHash: patHash(token), Scopes: scopes, CIDRs: cidrs, ExpiresAt: expiresAt, CreatedAt: now()}
 	if err := s.db.Create(&row).Error; err != nil {
 		return "", PAT{}, err
 	}

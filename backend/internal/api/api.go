@@ -213,6 +213,21 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/auth/oidc/start", a.oidcStart)
 	mux.HandleFunc("GET /api/auth/oidc/callback", a.oidcCallback)
 
+	// OAuth 2.0 provider（gitdash 作为授权服务器，供第三方应用接入）
+	mux.HandleFunc("GET /api/applications", a.auth(a.listOAuthApps))
+	mux.HandleFunc("POST /api/applications", a.auth(a.createOAuthApp))
+	mux.HandleFunc("DELETE /api/applications/{id}", a.auth(a.deleteOAuthApp))
+	mux.HandleFunc("POST /api/applications/{id}/reset_secret", a.auth(a.resetOAuthAppSecret))
+	mux.HandleFunc("GET /api/applications/authorizations", a.auth(a.listOAuthAuthorizations))
+	mux.HandleFunc("DELETE /api/applications/authorizations/{id}", a.auth(a.revokeOAuthAuthorization))
+	mux.HandleFunc("GET /login/oauth/authorize", a.oauthAuthorize)
+	mux.HandleFunc("POST /login/oauth/authorize", a.oauthAuthorize)
+	mux.HandleFunc("POST /login/oauth/access_token", a.oauthAccessToken)
+	// 设备流（RFC 8628）：CLI 登录用
+	mux.HandleFunc("POST /login/oauth/device/code", a.oauthDeviceCode)
+	mux.HandleFunc("GET /login/oauth/device", a.oauthDeviceVerify)
+	mux.HandleFunc("POST /login/oauth/device", a.oauthDeviceVerify)
+
 	// admin（默认未启用：未引导时一律 404）
 	mux.HandleFunc("POST /api/admin/login", a.adminLogin)
 	mux.HandleFunc("POST /api/admin/logout", a.adminAuth(a.adminLogout))

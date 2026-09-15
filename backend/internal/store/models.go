@@ -72,6 +72,7 @@ func (gpgKeyRow) TableName() string { return "gpg_keys" }
 type patRow struct {
 	ID         int64  `gorm:"primaryKey;autoIncrement"`
 	UserID     int64  `gorm:"not null;index"`
+	OAuthAppID int64  `gorm:"column:oauth_app_id;index;default:0"` // 0 = 用户自建 PAT；>0 = OAuth 2.0 应用签发的 access token
 	Name       string `gorm:"not null"`
 	TokenHash  string `gorm:"not null;uniqueIndex;size:255"`
 	Scopes     string `gorm:"not null;default:'repo'"`               // 逗号分隔: repo,inbox,keys
@@ -567,3 +568,50 @@ type copilotSessionRow struct {
 }
 
 func (copilotSessionRow) TableName() string { return "copilot_sessions" }
+
+// ---- OAuth 2.0 provider（gitdash 作为授权服务器）----
+
+// oauthAppRow 用户注册的第三方 OAuth 应用（client_id 公开，client_secret 只存哈希）。
+type oauthAppRow struct {
+	ID               int64  `gorm:"primaryKey;autoIncrement"`
+	UserID           int64  `gorm:"not null;index"`
+	Name             string `gorm:"not null"`
+	Homepage         string `gorm:"not null;default:''"`
+	Description      string `gorm:"not null;default:''"`
+	CallbackURL      string `gorm:"column:callback_url;not null;size:1024"`
+	ClientID         string `gorm:"column:client_id;not null;uniqueIndex;size:64"`
+	ClientSecretHash string `gorm:"column:client_secret_hash;not null;size:255"`
+	CreatedAt        string `gorm:"not null"`
+}
+
+func (oauthAppRow) TableName() string { return "oauth_apps" }
+
+// oauthGrantRow 授权码（authorization code）：一次性、10 分钟有效。
+type oauthGrantRow struct {
+	ID          int64  `gorm:"primaryKey;autoIncrement"`
+	CodeHash    string `gorm:"column:code_hash;not null;uniqueIndex;size:255"`
+	AppID       int64  `gorm:"column:app_id;not null;index"`
+	UserID      int64  `gorm:"column:user_id;not null;index"`
+	Scopes      string `gorm:"not null;default:'repo'"` // 逗号分隔: repo,inbox,keys
+	RedirectURI string `gorm:"column:redirect_uri;not null;size:1024"`
+	ExpiresAt   string `gorm:"column:expires_at;not null;index"`
+	CreatedAt   string `gorm:"not null"`
+}
+
+func (oauthGrantRow) TableName() string { return "oauth_grants" }
+
+// oauthDeviceGrantRow OAuth 2.0 设备流（RFC 8628）的设备授权记录。
+// status: pending（等待用户确认）| approved（已授权，待 token 换发）| denied（已拒绝）。
+type oauthDeviceGrantRow struct {
+	ID             int64  `gorm:"primaryKey;autoIncrement"`
+	DeviceCodeHash string `gorm:"column:device_code_hash;not null;uniqueIndex;size:255"`
+	UserCode       string `gorm:"column:user_code;not null;uniqueIndex;size:32"`
+	ClientID       string `gorm:"column:client_id;not null;index"`
+	Scopes         string `gorm:"not null;default:'repo'"`
+	Status         string `gorm:"not null;default:'pending';size:16"`
+	UserID         int64  `gorm:"column:user_id;not null;default:0;index"`
+	ExpiresAt      string `gorm:"column:expires_at;not null;index"`
+	CreatedAt      string `gorm:"not null"`
+}
+
+func (oauthDeviceGrantRow) TableName() string { return "oauth_device_grants" }

@@ -60,9 +60,16 @@ func (s *Store) migrate() error {
 		&byokKeyRow{},
 		&copilotSessionRow{},
 		&userAvatarRow{},
+		&oauthAppRow{},
+		&oauthGrantRow{},
+		&oauthDeviceGrantRow{},
 	); err != nil {
 		return err
 	}
 	// 邮箱唯一性（部分唯一索引：空串表示未设置，允许多个）
-	return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email) WHERE email <> ''").Error
+	if err := s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (email) WHERE email <> ''").Error; err != nil {
+		return err
+	}
+	// 引导第一方 OAuth 客户端（gitdash-cli 设备流，公开客户端无 secret）。
+	return s.ensureFirstPartyOAuthApp()
 }

@@ -37,6 +37,22 @@ builds:
       - arm64
     ldflags:
       - -s -w -X main.version={{ .Version }}
+  # 命令行客户端（PAT / OAuth 2.0 设备流登录）
+  - id: gitdash-cli
+    dir: backend
+    main: ./cmd/gitdash-cli
+    binary: gitdash-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.cliVersion={{ .Version }}
   # Copilot agent 运行时（deps/agent 子模块，实现 copilot-api/1）
   # 注意：agent 的 internal/mdns 与 internal/ui/cli 目前只在 linux 编译，
   # 故仅随 linux 归档发布；其它平台可用 GITDASH_COPILOT_AGENT_BIN 自行构建。
@@ -79,6 +95,7 @@ nfpms:
     builds:
       - gitdash
       - gitdash-runner
+      - gitdash-cli
     formats:
       - deb
       - rpm

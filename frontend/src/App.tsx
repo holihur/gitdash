@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "sonner";
-import { Bell, Compass, GitBranch, KeyRound, Loader2, FolderGit2, Building2, Cpu, Package, Search } from "lucide-react";
+import { Bell, Compass, GitBranch, KeyRound, Loader2, FolderGit2, Building2, Cpu, Package, Search, AppWindow } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
@@ -24,6 +24,7 @@ const Orgs = lazy(() => import("@/pages/Orgs"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
 const UsersPage = lazy(() => import("@/pages/UserPage"));
 const RunnersPage = lazy(() => import("@/pages/Runners"));
+const Applications = lazy(() => import("@/pages/Applications"));
 
 function PageLoading() {
   return (
@@ -169,6 +170,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           k: "/keys",
           p: "/packages",
           m: "/profile",
+          a: "/applications",
         };
         const to = dest[e.key.toLowerCase()];
         if (to) {
@@ -203,6 +205,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
       },
       { key: "runners", to: "/runners", icon: <Cpu className="h-4 w-4" />, label: t("nav.runners") },
       { key: "keys", to: "/keys", icon: <KeyRound className="h-4 w-4" />, label: t("nav.keys") },
+      { key: "applications", to: "/applications", icon: <AppWindow className="h-4 w-4" />, label: "OAuth Apps" },
       { key: "packages", to: "/packages", icon: <Package className="h-4 w-4" />, label: t("nav.packages") },
     ],
     [t, unread],
@@ -310,6 +313,14 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             element={
               <Suspense fallback={<PageLoading />}>
                 <ProfilePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/applications"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <Applications />
               </Suspense>
             }
           />
