@@ -937,7 +937,7 @@ func runCopilotTurn(cl *client, owner, repo string, id int64, text string, timeo
 		fmt.Sprintf("/api/users/%s/repos/%s/copilots/%d/chat", owner, repo, id)
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+cl.token)
-	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: header})
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: header}) //nolint:bodyclose // coder/websocket manages the handshake body: "You never need to close resp.Body yourself."
 	if err != nil {
 		return fmt.Errorf("connect chat: %w", err)
 	}
