@@ -10,14 +10,29 @@ LLM 采用**自带密钥（BYOK, bring your own key）**：gitdash 不内置、�
 
 ## 概念
 
-- **BYOK 密钥** —— 用户级 Anthropic 兼容 API 密钥（`provider` 固定为
-  `anthropic`；`base_url` 可用于 Anthropic 兼容端点 / 代理）。密钥只存库，
-  **任何读接口都不会返回**明文；界面仅显示 `key_set = true`。
+- **BYOK 密钥** —— 用户级 LLM 密钥，带一个 `provider` 预设（`anthropic` / `compatible` /
+  `ollama`，见下）；`base_url` 指向 Anthropic 兼容端点（官方、网关或本地 Ollama）。
+  密钥只存库，**任何读接口都不会返回**明文；界面仅显示 `key_set = true`。
 - **Copilot 会话** —— 绑定到某个 BYOK 密钥与一个工作区
-  （`<data>/copilots/{owner}/{repo}/ws-<id>`），检出在 `copilot/session-<id>` 分支。
+  （`<data>/copilots/{owner}/{repo}/ws-<id>`），检出在 `copilot/session-<id>` 分支；
+  可关联一个 issue（`issue_number`），闭环后自动开 PR。
 - **agent 运行时** —— 由 [`deps/agent`](../deps/agent) 子模块构建的 `agent` 二进制，
   每会话以 `agent -C <工作区> -api-addr 127.0.0.1:<port>` 启动。它提供聊天 API + Web UI，
   并受限在工作区内的 `shell` 与 `read`/`write`/`edit` 工具执行"思考-行动-观察"循环。
+
+## 供应商预设
+
+agent 的 LLM 客户端只说 **Anthropic Messages 兼容协议**（`POST {base_url}/v1/messages`），
+因此所有预设都必须指向 Anthropic 兼容端点：
+
+| provider | 默认 base_url | 需要密钥 | 说明 |
+| --- | --- | --- | --- |
+| `anthropic` | `https://api.anthropic.com` | 是 | Anthropic 官方端点 |
+| `compatible` | 无（必填） | 是 | 任意 Anthropic 兼容网关（LiteLLM / one-api / 自建），可转接 OpenAI / vLLM / Ollama |
+| `ollama` | `http://127.0.0.1:11434` | 否 | 本地 Ollama（需其 Anthropic 兼容 `/v1/messages` 端点），无密钥时由服务端补占位密钥 |
+
+在 **个人资料 → BYOK** 里可直接点击「测试连接」发一次最小请求验证 provider / base_url /
+model / 密钥是否可用（`POST /api/me/byok/test`）。
 
 ## 工作原理
 
@@ -29,6 +44,10 @@ LLM 采用**自带密钥（BYOK, bring your own key）**：gitdash 不内置、�
    `git add -A && git commit && git push origin HEAD:refs/heads/copilot/session-<id>`，
    分支随即出现在 gitdash 中，可评审 / 提 PR。每轮开始前 gitdash 会 fetch，并在工作区
    干净时把会话分支 rebase 到默认分支之上，让仓库侧的新提交也进入 agent 视野。
+5. **issue → PR**：会话关联了 issue 时，推送成功后 gitdash 自动开一个 PR
+   （标题 `fix: <issue 标题>`，正文 `Closes #N`，源分支为会话分支，目标为默认分支），
+   并在会话上记录 `pr_number`（幂等：已有同源分支的 open PR 则复用）。入口有两个：
+   网页端 issue 详情页的「用 Copilot 修复」，或 CLI `gitdash-cli copilot fix`。
 
 ## 依赖
 
@@ -46,18 +65,32 @@ LLM 采用**自带密钥（BYOK, bring your own key）**：gitdash 不内置、�
 | `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent`，否则 PATH | agent 运行时二进制 |
 | `GITDASH_COPILOT_AGENT_URL` | 空 | 外部 agent 基地址（不再拉起进程） |
 
-注入每个 agent 进程：`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`（来自 BYOK）。
+注入每个 agent 进程：`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`、`LLM_PROVIDER`、
+`LLM_AUTH_STYLE`（均来自所选 BYOK 预设；`ollama` 无密钥时使用占位密钥）。
+
+## CLI
+
+```bash
+gitdash-cli copilot fix <owner/repo> <issue-number> [--byok <名称|id>] [--instructions <文本>]
+gitdash-cli copilot fix <owner/repo> <issue-number> --detach   # 只建会话
+gitdash-cli copilot list <owner/repo>
+gitdash-cli copilot run <owner/repo> <session-id> --text "..."
+```
+
+`copilot fix` 等价于网页端「用 Copilot 修复」：创建关联 issue 的会话、通过 WebSocket
+驱动 agent 并在 `done` 后打印自动开出的 PR；`issue fix` 是它的别名。
 
 ## API
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/me/byok` | 列出我的 BYOK 密钥（不含明文） |
-| POST | `/api/me/byok` | 创建 BYOK 密钥 |
+| POST | `/api/me/byok` | 创建 BYOK 密钥（`ollama` 可不带 `api_key`） |
+| POST | `/api/me/byok/test` | 测试连接（`api_key` 可留空并回退到 `id` 对应密钥） |
 | PUT | `/api/me/byok/{id}` | 更新 BYOK 密钥（`api_key` 留空保留原密钥） |
 | DELETE | `/api/me/byok/{id}` | 删除 BYOK 密钥 |
 | GET | `/api/users/{owner}/repos/{name}/copilots` | 列出会话 |
-| POST | `/api/users/{owner}/repos/{name}/copilots` | 创建会话 |
+| POST | `/api/users/{owner}/repos/{name}/copilots` | 创建会话（可带 `issue_number` 关联 issue） |
 | GET | `/api/users/{owner}/repos/{name}/copilots/{id}` | 会话详情 |
 | GET | `/api/users/{owner}/repos/{name}/copilots/{id}/messages` | 对话历史 |
 | GET | `/api/users/{owner}/repos/{name}/copilots/{id}/chat` | 双向聊天（WebSocket） |

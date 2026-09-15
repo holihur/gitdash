@@ -271,6 +271,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// byok（bring your own key：用户自带 LLM 密钥）
 	mux.HandleFunc("GET /api/me/byok", a.auth(a.listByok))
 	mux.HandleFunc("POST /api/me/byok", a.auth(a.createByok))
+	mux.HandleFunc("POST /api/me/byok/test", a.auth(a.testByok))
 	mux.HandleFunc("PUT /api/me/byok/{id}", a.auth(a.updateByok))
 	mux.HandleFunc("DELETE /api/me/byok/{id}", a.auth(a.deleteByok))
 

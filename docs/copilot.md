@@ -11,15 +11,32 @@ key you configure to the agent process via environment variables.
 
 ## Concepts
 
-- **BYOK key** — a user-level Anthropic-compatible API key (`provider` is fixed to
-  `anthropic`; `base_url` allows Anthropic-compatible endpoints/proxies). The key is
-  stored in the DB and **never returned** by any read API; the UI only shows `key_set = true`.
+- **BYOK key** — a user-level LLM key with a `provider` preset (`anthropic` / `compatible`
+  / `ollama`, see below); `base_url` points at an Anthropic-compatible endpoint (official,
+  a gateway, or local Ollama). The key is stored in the DB and **never returned** by any
+  read API; the UI only shows `key_set = true`.
 - **Copilot session** — a per-repo chat bound to one BYOK key and one workspace
-  (`<data>/copilots/{owner}/{repo}/ws-<id>`) checked out on branch `copilot/session-<id>`.
+  (`<data>/copilots/{owner}/{repo}/ws-<id>`) checked out on branch `copilot/session-<id>`;
+  it can be linked to an issue (`issue_number`) and auto-opens a PR when done.
 - **Agent runtime** — the `agent` binary (built from the [`deps/agent`](../deps/agent)
   submodule) started per session as `agent -C <workspace> -api-addr 127.0.0.1:<port>`.
   It exposes a chat API + web UI and runs the think-act-observe loop with `shell` and
   `read`/`write`/`edit` tools confined to the workspace.
+
+## Provider presets
+
+The agent's LLM client only speaks the **Anthropic Messages-compatible protocol**
+(`POST {base_url}/v1/messages`), so every preset must point at an Anthropic-compatible
+endpoint:
+
+| provider | default base_url | key required | notes |
+| --- | --- | --- | --- |
+| `anthropic` | `https://api.anthropic.com` | yes | official Anthropic endpoint |
+| `compatible` | none (required) | yes | any Anthropic-compatible gateway (LiteLLM / one-api / custom) that can front OpenAI / vLLM / Ollama |
+| `ollama` | `http://127.0.0.1:11434` | no | local Ollama (needs its Anthropic-compatible `/v1/messages`); a placeholder key is stored when none is given |
+
+In **Profile → BYOK** the **Test connection** button sends one minimal request to verify
+provider / base_url / model / key (`POST /api/me/byok/test`).
 
 ## How it works
 
@@ -34,6 +51,11 @@ key you configure to the agent process via environment variables.
    in the workspace. The branch shows up in gitdash, ready for review / a PR.
    Before each turn gitdash fetches and (when clean) rebases the session branch onto the
    default branch, so upstream commits flow back into the agent's view.
+5. **Issue → PR**: when the session is linked to an issue, a successful push makes
+   gitdash open a PR automatically (title `fix: <issue title>`, body `Closes #N`, source =
+   session branch, target = default branch) and record `pr_number` on the session
+   (idempotent: an existing open PR from the same branch is reused). Start it from the
+   issue page (**Fix with Copilot**) or `gitdash-cli copilot fix`.
 
 ## Requirements
 
@@ -53,18 +75,34 @@ key you configure to the agent process via environment variables.
 | `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash, else `PATH` | Agent runtime binary |
 | `GITDASH_COPILOT_AGENT_URL` | empty | External agent base URL (skip spawning) |
 
-Injected into every agent process: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL` (from BYOK).
+Injected into every agent process: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`,
+`LLM_PROVIDER`, `LLM_AUTH_STYLE` (all from the selected BYOK preset; `ollama` uses a
+placeholder key when none is given).
+
+## CLI
+
+```bash
+gitdash-cli copilot fix <owner/repo> <issue-number> [--byok <name|id>] [--instructions <text>]
+gitdash-cli copilot fix <owner/repo> <issue-number> --detach   # create the session only
+gitdash-cli copilot list <owner/repo>
+gitdash-cli copilot run <owner/repo> <session-id> --text "..."
+```
+
+`copilot fix` is the headless equivalent of the web UI's **Fix with Copilot**: it creates
+the issue-linked session, drives the agent over WebSocket, and prints the auto-opened PR
+when the turn completes. `issue fix` is an alias.
 
 ## API
 
 | Method | Path | Description |
 | --- | --- | --- |
 | GET | `/api/me/byok` | List my BYOK keys (no plaintext key) |
-| POST | `/api/me/byok` | Create a BYOK key |
+| POST | `/api/me/byok` | Create a BYOK key (`ollama` may omit `api_key`) |
+| POST | `/api/me/byok/test` | Test the connection (`api_key` may be blank and falls back to the key at `id`) |
 | PUT | `/api/me/byok/{id}` | Update a BYOK key (empty `api_key` keeps it) |
 | DELETE | `/api/me/byok/{id}` | Delete a BYOK key |
 | GET | `/api/users/{owner}/repos/{name}/copilots` | List sessions |
-| POST | `/api/users/{owner}/repos/{name}/copilots` | Create a session |
+| POST | `/api/users/{owner}/repos/{name}/copilots` | Create a session (optional `issue_number` links an issue) |
 | GET | `/api/users/{owner}/repos/{name}/copilots/{id}` | Session detail |
 | GET | `/api/users/{owner}/repos/{name}/copilots/{id}/messages` | Conversation history |
 | GET | `/api/users/{owner}/repos/{name}/copilots/{id}/chat` | Bidirectional chat (WebSocket) |

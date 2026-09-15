@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -39,7 +40,7 @@ func setup(t *testing.T) (*store.Store, store.CopilotSession) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := st.CreateCopilotSession(owner, repo, owner, byok.ID, "fix the bug")
+	session, err := st.CreateCopilotSession(owner, repo, owner, byok.ID, 0, "fix the bug")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,5 +104,72 @@ func TestRunTurnWithoutAgentBinary(t *testing.T) {
 	err := m.RunTurn(context.Background(), session, "hi", nil)
 	if !errors.Is(err, ErrAgentUnavailable) {
 		t.Fatalf("err = %v, want ErrAgentUnavailable", err)
+	}
+}
+
+// TestMaybeOpenPullForIssue 验证关联 issue 的会话在闭环后自动开 PR，且幂等。
+func TestMaybeOpenPullForIssue(t *testing.T) {
+	st, _ := setup(t)
+	owner, repo := "alice", "demo"
+	issue, err := st.CreateIssue(owner, repo, owner, "crash on start", "steps to reproduce")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byok, err := st.CreateByokKey(owner, "k2", "anthropic", "sk", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := st.CreateCopilotSession(owner, repo, owner, byok.ID, issue.Number, "fix it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if session.IssueNumber != issue.Number {
+		t.Fatalf("issue number = %d, want %d", session.IssueNumber, issue.Number)
+	}
+	m := NewManager(st)
+	hooked := 0
+	m.SetPullHook(func(store.CopilotSession, store.PullRequest) { hooked++ })
+
+	ws, branch, err := m.ensureWorkspace(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "fix.txt"), []byte("fixed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.commitAndPush(ws, branch, "fix"); err != nil {
+		t.Fatal(err)
+	}
+	m.maybeOpenPull(session, branch)
+
+	got, err := st.GetCopilotSession(owner, repo, session.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PRNumber == 0 {
+		t.Fatal("expected auto-opened PR")
+	}
+	pr, err := st.GetPull(owner, repo, got.PRNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.SourceBranch != branch {
+		t.Fatalf("source = %q, want %q", pr.SourceBranch, branch)
+	}
+	if !strings.Contains(pr.Body, "Closes #"+strconv.FormatInt(issue.Number, 10)) {
+		t.Fatalf("body = %q, missing Closes", pr.Body)
+	}
+	if hooked != 1 {
+		t.Fatalf("hook fired %d times, want 1", hooked)
+	}
+
+	// 幂等：再次调用不产生第二个 PR。
+	m.maybeOpenPull(got, branch)
+	pulls, err := st.ListOpenPullsBySource(owner, repo, branch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pulls) != 1 {
+		t.Fatalf("open pulls = %d, want 1", len(pulls))
 	}
 }

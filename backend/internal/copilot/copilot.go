@@ -97,7 +97,12 @@ type Manager struct {
 	mu    sync.Mutex
 	procs map[int64]*proc
 	locks map[int64]*sync.Mutex
+	// pullHook 在会话自动开 PR 后被调用（可为 nil），用于通知等副作用。
+	pullHook PullHook
 }
+
+// PullHook 在 copilot 为关联 issue 的会话自动开出 PR 后触发。
+type PullHook func(session store.CopilotSession, pr store.PullRequest)
 
 type proc struct {
 	cmd     *exec.Cmd
@@ -110,6 +115,13 @@ type proc struct {
 // NewManager 创建 Manager。
 func NewManager(st *store.Store) *Manager {
 	return &Manager{st: st, procs: map[int64]*proc{}, locks: map[int64]*sync.Mutex{}}
+}
+
+// SetPullHook 设置会话自动开 PR 后的回调（在 main 里接线通知）。
+func (m *Manager) SetPullHook(fn PullHook) {
+	m.mu.Lock()
+	m.pullHook = fn
+	m.mu.Unlock()
 }
 
 func (m *Manager) sessionLock(id int64) *sync.Mutex {
@@ -276,10 +288,17 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 
 	cmd := exec.Command(bin, "-C", ws, "-api-addr", addr)
 	cmd.Dir = ws
+	provider := firstNonEmpty(secret.Provider, "anthropic")
+	authStyle := "both"
+	if spec, ok := Provider(provider); ok && spec.AuthStyle != "" {
+		authStyle = spec.AuthStyle
+	}
 	cmd.Env = append(os.Environ(),
 		"LLM_API_KEY="+secret.APIKey,
-		"LLM_BASE_URL="+firstNonEmpty(secret.BaseURL, "https://api.anthropic.com"),
-		"LLM_MODEL="+firstNonEmpty(secret.Model, "claude-sonnet-4-5"),
+		"LLM_BASE_URL="+EffectiveBaseURL(provider, secret.BaseURL),
+		"LLM_MODEL="+EffectiveModel(provider, secret.Model),
+		"LLM_PROVIDER="+provider,
+		"LLM_AUTH_STYLE="+authStyle,
 	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -427,6 +446,7 @@ func (m *Manager) RunTurn(ctx context.Context, session store.CopilotSession, tex
 				}
 			} else {
 				_ = m.st.SetCopilotSessionGit(session.Owner, session.Repo, session.ID, p.branch, sha)
+				m.maybeOpenPull(session, p.branch)
 			}
 		}
 		if emit != nil {
@@ -478,6 +498,56 @@ func (m *Manager) Messages(ctx context.Context, session store.CopilotSession) ([
 }
 
 // ---- 小工具 ----
+
+// maybeOpenPull 在会话关联了 issue、且尚未开出 PR 时，把会话分支自动开成 PR。
+// 已有同源分支的 open PR 时复用它（幂等）。任何失败都只记日志，不影响闭环。
+func (m *Manager) maybeOpenPull(session store.CopilotSession, branch string) {
+	if session.IssueNumber <= 0 || session.PRNumber > 0 {
+		return
+	}
+	owner, repo := session.Owner, session.Repo
+	if existing, err := m.st.ListOpenPullsBySource(owner, repo, branch); err == nil && len(existing) > 0 {
+		_ = m.st.SetCopilotSessionPR(owner, repo, session.ID, existing[0].Number)
+		return
+	}
+	target, err := gitsvc.HeadBranch(owner, repo)
+	if err != nil || target == "" || target == branch {
+		return
+	}
+	baseSHA, err := gitsvc.RevSHA(owner, repo, "refs/heads/"+target)
+	if err != nil {
+		return
+	}
+	srcSHA, err := gitsvc.RevSHA(owner, repo, "refs/heads/"+branch)
+	if err != nil || srcSHA == baseSHA {
+		return
+	}
+	issue, err := m.st.GetIssue(owner, repo, session.IssueNumber)
+	if err != nil {
+		return
+	}
+	title := "fix: " + strings.TrimSpace(issue.Title)
+	if r := []rune(title); len(r) > 120 {
+		title = string(r[:120]) + "…"
+	}
+	body := fmt.Sprintf("Closes #%d\n\n由 Copilot 会话 #%d 自动生成。", issue.Number, session.ID)
+	pr, err := m.st.CreatePull(owner, repo, session.CreatedBy, title, body, branch, target, baseSHA, srcSHA)
+	if err != nil {
+		logx.Warnf("copilot: auto PR session %d: %v", session.ID, err)
+		return
+	}
+	_ = m.st.SetCopilotSessionPR(owner, repo, session.ID, pr.Number)
+	logx.Infof("copilot audit: AUTO PR session=%d issue=#%d pr=#%d", session.ID, issue.Number, pr.Number)
+	if hook := m.getPullHook(); hook != nil {
+		hook(session, pr)
+	}
+}
+
+func (m *Manager) getPullHook() PullHook {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.pullHook
+}
 
 func sessionName(id int64) string { return fmt.Sprintf("%d", id) }
 

@@ -64,6 +64,11 @@ export GITDASH_TOKEN=<personal-access-token>
 | `gitdash-cli issue create <owner/repo> --title T [--body B]` | Create an issue |
 | `gitdash-cli pr list <owner/repo>` | List pull requests |
 | `gitdash-cli pr create <owner/repo> --title T --head H --base B [--body B]` | Open a pull request |
+| `gitdash-cli copilot list <owner/repo>` | List AI copilot sessions |
+| `gitdash-cli copilot create <owner/repo> [--byok NAME] [--issue N] [--prompt P]` | Create a copilot session |
+| `gitdash-cli copilot run <owner/repo> <session-id> [--text M]` | Drive a session and stream the agent's work |
+| `gitdash-cli copilot fix <owner/repo> <issue-number> [--byok NAME] [--instructions P] [--detach]` | Have the agent fix an issue; auto-opens a PR |
+| `gitdash-cli issue fix <owner/repo> <issue-number> [--detach]` | Alias of `copilot fix` |
 | `gitdash-cli skill show` | Print this skill document |
 | `gitdash-cli skill install` | Install this skill for Claude Code / opencode / pi |
 
@@ -94,6 +99,34 @@ gitdash-cli pr create alice/my-service \
 # list open pull requests
 gitdash-cli pr list alice/my-service
 ```
+
+## AI copilot (issue → PR)
+
+`gitdash-cli copilot fix` is the headless equivalent of clicking "Fix with Copilot" on an
+issue: it creates a session linked to the issue, runs the agent (which reads, edits and
+runs commands in a checkout of the repo), and — once the agent pushes — gitdash opens a
+pull request whose body closes the issue. Use `--detach` to only create the session.
+
+```bash
+# let the agent fix issue #14 and open a PR (streams progress to stderr)
+gitdash-cli copilot fix alice/my-service 14
+
+# only create the session; run it later / from the web UI
+gitdash-cli copilot fix alice/my-service 14 --detach
+
+# with a specific BYOK key and extra instructions
+gitdash-cli copilot fix alice/my-service 14 --byok work --instructions "add a regression test"
+
+# list sessions and their linked issue / PR
+gitdash-cli copilot list alice/my-service
+
+# drive an existing session with a free-form message
+gitdash-cli copilot run alice/my-service 3 --text "also update the changelog"
+```
+
+If more than one BYOK key is configured, pass `--byok <name|id>` (list them in the web UI
+under Profile → BYOK). The command requires the server to have the copilot agent runtime
+available; otherwise it fails with `agent runtime unavailable`.
 
 ## Errors
 

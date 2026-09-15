@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,6 +20,11 @@ import (
 // SetCopilotManager 注入 copilot 编排器（main 启动时注入）。
 func (a *API) SetCopilotManager(m *copilot.Manager) { a.copilotMgr = m }
 
+// CopilotPullOpened 是 copilot 自动开 PR 后的回调：向仓库关注者推送通知。
+func (a *API) CopilotPullOpened(session store.CopilotSession, pr store.PullRequest) {
+	a.notify(session.Owner, session.Repo, "pull", "opened", session.CreatedBy, pr.Number, pr.Title, "")
+}
+
 // ---- BYOK（bring your own key）----
 
 type byokReq struct {
@@ -27,6 +33,8 @@ type byokReq struct {
 	APIKey   string `json:"api_key"`
 	BaseURL  string `json:"base_url"`
 	Model    string `json:"model"`
+	// ID 仅用于测试连接：api_key 留空时回退到已保存密钥。
+	ID int64 `json:"id,omitempty"`
 }
 
 func (in *byokReq) validate() (code, msg string) {
@@ -40,12 +48,120 @@ func (in *byokReq) validate() (code, msg string) {
 	switch {
 	case in.Name == "" || len(in.Name) > 64:
 		return "invalid_name", "name is required (max 64)"
-	case in.Provider != "anthropic":
-		return "unsupported_provider", "only anthropic provider is supported"
+	case !supportedProvider(in.Provider):
+		return "unsupported_provider", "unsupported provider: " + in.Provider +
+			" (supported: " + strings.Join(copilot.ProviderNames(), ", ") + ")"
 	case len(in.APIKey) > 1024 || len(in.BaseURL) > 1024 || len(in.Model) > 255:
 		return "invalid_value", "value too long"
 	}
 	return "", ""
+}
+
+func supportedProvider(name string) bool {
+	_, ok := copilot.Provider(name)
+	return ok
+}
+
+// normalizeByokKey 为不需要密钥的 provider 填一个占位密钥（agent 要求非空）。
+func normalizeByokKey(provider, apiKey string) string {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey != "" {
+		return apiKey
+	}
+	if spec, ok := copilot.Provider(provider); ok && !spec.KeyRequired {
+		return "not-needed"
+	}
+	return ""
+}
+
+func byokKeyRequired(provider string) bool {
+	spec, ok := copilot.Provider(provider)
+	return !ok || spec.KeyRequired
+}
+
+// testByokReq 是测试连接的请求体（api_key 可留空并回退到已保存密钥）。
+type testByokReq struct {
+	ID       int64  `json:"id"`
+	Provider string `json:"provider"`
+	APIKey   string `json:"api_key"`
+	BaseURL  string `json:"base_url"`
+	Model    string `json:"model"`
+}
+
+// testByok 用给定（或已保存）的凭据向 LLM 端点发一次最小请求，验证配置可用。
+//
+//	@Summary     测试 BYOK 连接
+//	@Description 向 Anthropic 兼容端点发送一次最小请求，返回是否连通及错误信息。
+//	@Tags        byok
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body testByokReq true "provider/base_url/model/api_key(可留空回退到 id)"
+//	@Success     200 {object} map[string]any
+//	@Security    BearerAuth
+//	@Router      /me/byok/test [post]
+func (a *API) testByok(w http.ResponseWriter, r *http.Request) {
+	me := userFrom(r)
+	var in testByokReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.Provider = strings.TrimSpace(in.Provider)
+	providerGiven := in.Provider != ""
+	in.Provider = strings.ToLower(in.Provider)
+	apiKey := strings.TrimSpace(in.APIKey)
+	if in.ID > 0 && (apiKey == "" || strings.TrimSpace(in.BaseURL) == "" || strings.TrimSpace(in.Model) == "" || !providerGiven) {
+		secret, err := a.store.GetByokSecret(me, in.ID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				writeNotFound(w, "byok")
+				return
+			}
+			internalError(w, err)
+			return
+		}
+		if !providerGiven {
+			in.Provider = strings.ToLower(secret.Provider)
+		}
+		if apiKey == "" {
+			apiKey = secret.APIKey
+		}
+		if strings.TrimSpace(in.BaseURL) == "" {
+			in.BaseURL = secret.BaseURL
+		}
+		if strings.TrimSpace(in.Model) == "" {
+			in.Model = secret.Model
+		}
+	}
+	if in.Provider == "" {
+		in.Provider = "anthropic"
+	}
+	if !supportedProvider(in.Provider) {
+		writeCode(w, http.StatusBadRequest, "unsupported_provider", "unsupported provider: "+in.Provider)
+		return
+	}
+	apiKey = normalizeByokKey(in.Provider, apiKey)
+	if apiKey == "" {
+		writeCode(w, http.StatusBadRequest, "api_key_required", "api_key is required")
+		return
+	}
+	baseURL := copilot.EffectiveBaseURL(in.Provider, in.BaseURL)
+	model := copilot.EffectiveModel(in.Provider, in.Model)
+	if err := copilot.TestConnection(r.Context(), in.Provider, baseURL, apiKey, model); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "base_url": baseURL, "model": model})
+}
+
+// composeIssuePrompt 把 issue 的标题/正文与用户附加要求拼成 agent 的起始提示词。
+func composeIssuePrompt(issue store.Issue, extra string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "请修复以下 issue，完成后确保改动可提交：\n\n# %s\n\n%s", strings.TrimSpace(issue.Title), strings.TrimSpace(issue.Body))
+	if e := strings.TrimSpace(extra); e != "" {
+		b.WriteString("\n\n附加要求：\n")
+		b.WriteString(e)
+	}
+	return b.String()
 }
 
 // listByok 列出当前用户的 BYOK 密钥（不含明文）。
@@ -86,11 +202,11 @@ func (a *API) createByok(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
-	if strings.TrimSpace(in.APIKey) == "" {
+	if strings.TrimSpace(in.APIKey) == "" && byokKeyRequired(in.Provider) {
 		writeCode(w, http.StatusBadRequest, "api_key_required", "api_key is required")
 		return
 	}
-	key, err := a.store.CreateByokKey(me, in.Name, in.Provider, strings.TrimSpace(in.APIKey), in.BaseURL, in.Model)
+	key, err := a.store.CreateByokKey(me, in.Name, in.Provider, normalizeByokKey(in.Provider, in.APIKey), in.BaseURL, in.Model)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -123,7 +239,7 @@ func (a *API) updateByok(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
-	key, err := a.store.UpdateByokKey(me, id, in.Name, in.Provider, strings.TrimSpace(in.APIKey), in.BaseURL, in.Model)
+	key, err := a.store.UpdateByokKey(me, id, in.Name, in.Provider, normalizeByokKey(in.Provider, in.APIKey), in.BaseURL, in.Model)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "byok")
@@ -164,8 +280,9 @@ func (a *API) deleteByok(w http.ResponseWriter, r *http.Request) {
 // ---- copilot sessions ----
 
 type copilotCreateReq struct {
-	ByokID int64  `json:"byok_id"`
-	Prompt string `json:"prompt"`
+	ByokID      int64  `json:"byok_id"`
+	Prompt      string `json:"prompt"`
+	IssueNumber int64  `json:"issue_number"`
 }
 
 // listCopilots 列出仓库的 copilot 会话。
@@ -210,6 +327,18 @@ func (a *API) createCopilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Prompt = strings.TrimSpace(in.Prompt)
+	if in.IssueNumber > 0 {
+		issue, err := a.store.GetIssue(owner, name, in.IssueNumber)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				writeCode(w, http.StatusBadRequest, "issue_not_found", "issue not found")
+				return
+			}
+			internalError(w, err)
+			return
+		}
+		in.Prompt = composeIssuePrompt(issue, in.Prompt)
+	}
 	if len(in.Prompt) > 32<<10 {
 		writeCode(w, http.StatusBadRequest, "too_long", "prompt too long")
 		return
@@ -227,7 +356,7 @@ func (a *API) createCopilot(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "byok_key_empty", "byok key has no api_key")
 		return
 	}
-	session, err := a.store.CreateCopilotSession(owner, name, me, in.ByokID, in.Prompt)
+	session, err := a.store.CreateCopilotSession(owner, name, me, in.ByokID, in.IssueNumber, in.Prompt)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -437,7 +566,6 @@ func (a *API) loadCopilotSession(w http.ResponseWriter, r *http.Request, owner, 
 }
 
 // ---- WebSocket 助手 ----
-
 // readCopilotChat 读取客户端消息；收到 user 文本投入 out，收到 cancel 调用 onCancel。
 // 连接关闭或出错时关闭 out。
 func readCopilotChat(ctx context.Context, ws *websocket.Conn, out chan<- string, onCancel func()) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Bot,
@@ -25,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate } from "@/lib/utils";
@@ -83,7 +85,10 @@ function historyToItems(messages: CopilotMessage[]): ChatItem[] {
 function CopilotChat({ owner, name, session }: { owner: string; name: string; session: CopilotSession }) {
   const { t } = useI18n();
   const [items, setItems] = useState<ChatItem[]>([]);
-  const [input, setInput] = useState("");
+  // 关联 issue 的新会话：把生成的起始提示词预填到输入框，用户确认后发送即可。
+  const [input, setInput] = useState(() =>
+    session.issue_number && session.prompt ? session.prompt : "",
+  );
   const [running, setRunning] = useState(false);
   const [connected, setConnected] = useState(false);
 
@@ -224,6 +229,14 @@ function CopilotChat({ owner, name, session }: { owner: string; name: string; se
               {session.head_sha ? `@${session.head_sha.slice(0, 7)}` : ""}
             </span>
           )}
+          {session.issue_number ? (
+            <span className="text-xs">{t("copilot.linkedIssue", { number: session.issue_number })}</span>
+          ) : null}
+          {session.pr_number ? (
+            <Link to={`/repo/${owner}/${name}?tab=pulls`} className="text-xs text-primary hover:underline">
+              {t("copilot.openedPull", { number: session.pr_number })}
+            </Link>
+          ) : null}
           {session.prompt && <span className="truncate">{session.prompt}</span>}
         </CardDescription>
       </CardHeader>
@@ -296,6 +309,8 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
   const { t, to, lang } = useI18n();
   const locale = dateLocale(lang);
   const canWrite = role === "owner" || role === "write";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantedId = Number(searchParams.get("copilot")) || null;
 
   const [sessions, setSessions] = useState<CopilotSession[]>([]);
   const [byokKeys, setByokKeys] = useState<ByokKey[]>([]);
@@ -304,6 +319,7 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [byokId, setByokId] = useState(0);
   const [prompt, setPrompt] = useState("");
+  const [issueRef, setIssueRef] = useState("");
   const [activeId, setActiveId] = useState<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<CopilotSession | null>(null);
 
@@ -326,6 +342,25 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 从 issue 页面跳转过来（?copilot=<id>）时聚焦对应会话。
+  useEffect(() => {
+    if (wantedId && sessions.some((s) => s.id === wantedId)) setActiveId(wantedId);
+  }, [wantedId, sessions]);
+
+  const selectSession = (id: number) => {
+    setActiveId(id);
+    if (searchParams.has("copilot")) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("copilot");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  };
+
   // 有运行中的会话时轮询状态
   useEffect(() => {
     const active = sessions.some((s) => s.status === "running");
@@ -342,6 +377,7 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
   const openCreate = () => {
     setByokId(byokKeys[0]?.id ?? 0);
     setPrompt("");
+    setIssueRef("");
     setCreateOpen(true);
   };
 
@@ -349,7 +385,12 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
     if (!byokId) return;
     setBusy(true);
     try {
-      const s = await api.createCopilot(owner, name, { byok_id: byokId, prompt: prompt.trim() });
+      const issueNumber = Number(issueRef.replace(/[^0-9]/g, "")) || 0;
+      const s = await api.createCopilot(owner, name, {
+        byok_id: byokId,
+        prompt: prompt.trim(),
+        issue_number: issueNumber || undefined,
+      });
       toast.success(t("copilot.launch"));
       setCreateOpen(false);
       setSessions((prev) => [s, ...prev]);
@@ -421,7 +462,7 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
               <button
                 key={s.id}
                 type="button"
-                onClick={() => setActiveId(s.id)}
+                onClick={() => selectSession(s.id)}
                 className={cn(
                   "w-full rounded-lg border p-3 text-left transition-colors",
                   activeId === s.id ? "border-primary/60 bg-muted/50" : "hover:bg-muted/40",
@@ -494,6 +535,15 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">{t("copilot.byokHint")}</p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="copilot-issue">{t("copilot.issueNumber")}</Label>
+              <Input
+                id="copilot-issue"
+                value={issueRef}
+                onChange={(e) => setIssueRef(e.target.value)}
+                placeholder={t("copilot.issueNumberPlaceholder")}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="copilot-prompt">{t("copilot.prompt")}</Label>

@@ -250,7 +250,8 @@ type ProjectSwimlane struct {
 	Position  int    `json:"position"`
 }
 
-// ProjectCard 看板卡片（issue 卡片或纯文本卡片）；issue 信息由聚合查询填充
+// ProjectCard 看板卡片（issue 卡片或纯文本卡片）；issue 信息由聚合查询填充。
+// start_date / due_date 供列表与甘特视图使用（空 = 未排期）。
 type ProjectCard struct {
 	ID          int64  `json:"id"`
 	ProjectID   int64  `json:"project_id"`
@@ -260,6 +261,8 @@ type ProjectCard struct {
 	IssueTitle  string `json:"issue_title"`
 	IssueState  string `json:"issue_state"`
 	Note        string `json:"note"`
+	StartDate   string `json:"start_date"`
+	DueDate     string `json:"due_date"`
 	Position    int    `json:"position"`
 	CreatedAt   string `json:"created_at"`
 }

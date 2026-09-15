@@ -20,6 +20,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -32,9 +33,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/coder/websocket"
 	"golang.org/x/term"
 )
 
@@ -79,6 +82,8 @@ func run(argv []string) error {
 		return cmdRepo(args[1:], host, token, jsonOut)
 	case "issue":
 		return cmdIssue(args[1:], host, token, jsonOut)
+	case "copilot":
+		return cmdCopilot(args[1:], host, token, jsonOut)
 	case "pr":
 		return cmdPr(args[1:], host, token, jsonOut)
 	case "skill":
@@ -108,6 +113,11 @@ Commands:
   repo create [flags] <name>
   issue list <owner/repo>
   issue create <owner/repo> --title <t> [--body <b>]
+  issue fix <owner/repo> <issue-number> [--byok <name|id>] [--instructions <text>] [--detach]
+  copilot list <owner/repo>
+  copilot create <owner/repo> [--byok <name|id>] [--issue <n>] [--prompt <text>]
+  copilot run <owner/repo> <session-id> --text <message>
+  copilot fix <owner/repo> <issue-number> [--byok <name|id>] [--instructions <text>] [--detach]
   pr list <owner/repo>
   pr create <owner/repo> --title <t> --head <branch> --base <branch> [--body <b>]
   skill show            Print the embedded Agent Skill (SKILL.md)
@@ -606,6 +616,8 @@ func cmdIssue(args []string, host, token string, jsonOut bool) error {
 		}
 		fmt.Printf("Created issue #%v in %s/%s\n", out["number"], owner, repo)
 		return nil
+	case "fix":
+		return cmdCopilotFix(cl, args[1:], jsonOut)
 	default:
 		return fmt.Errorf("unknown issue subcommand %q", args[0])
 	}
@@ -750,6 +762,322 @@ func cmdPr(args []string, host, token string, jsonOut bool) error {
 	default:
 		return fmt.Errorf("unknown pr subcommand %q", args[0])
 	}
+}
+
+// ---- copilot ----
+
+// copilotSession 是 API 返回的 copilot 会话（只取 CLI 需要的字段）。
+type copilotSession struct {
+	ID          int64  `json:"id"`
+	ByokID      int64  `json:"byok_id"`
+	IssueNumber int64  `json:"issue_number"`
+	PRNumber    int64  `json:"pr_number"`
+	Prompt      string `json:"prompt"`
+	Branch      string `json:"branch"`
+	HeadSHA     string `json:"head_sha"`
+	Status      string `json:"status"`
+	Error       string `json:"error"`
+}
+
+func cmdCopilot(args []string, host, token string, jsonOut bool) error {
+	if len(args) == 0 {
+		return errors.New("usage: gitdash-cli copilot <list|create|run|fix> <owner/repo>")
+	}
+	cl, err := resolveClient(host, token)
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "list", "ls":
+		owner, repo, err := needRepo(args[1:])
+		if err != nil {
+			return err
+		}
+		var sessions []copilotSession
+		if err := cl.get(fmt.Sprintf("/users/%s/repos/%s/copilots", owner, repo), &sessions); err != nil {
+			return err
+		}
+		if jsonOut {
+			printJSON(sessions)
+			return nil
+		}
+		if len(sessions) == 0 {
+			fmt.Println("No copilot sessions.")
+			return nil
+		}
+		for _, s := range sessions {
+			issue, pr := "", ""
+			if s.IssueNumber > 0 {
+				issue = fmt.Sprintf("issue #%d", s.IssueNumber)
+			}
+			if s.PRNumber > 0 {
+				pr = fmt.Sprintf("PR #%d", s.PRNumber)
+			}
+			fmt.Printf("#%-4d %-8s %-14s %-10s %s\n", s.ID, s.Status, issue, pr, s.Branch)
+		}
+		return nil
+	case "create":
+		return cmdCopilotCreate(cl, args[1:], jsonOut)
+	case "run":
+		return cmdCopilotRun(cl, args[1:], jsonOut)
+	case "fix":
+		return cmdCopilotFix(cl, args[1:], jsonOut)
+	default:
+		return fmt.Errorf("unknown copilot subcommand %q", args[0])
+	}
+}
+
+func cmdCopilotCreate(cl *client, args []string, jsonOut bool) error {
+	owner, repo, rest, err := needRepoThenFlags(args)
+	if err != nil {
+		return err
+	}
+	fs := flag.NewFlagSet("copilot create", flag.ContinueOnError)
+	byok := fs.String("byok", "", "BYOK key name or id (default: the only configured key)")
+	issue := fs.Int64("issue", 0, "link an issue by number")
+	prompt := fs.String("prompt", "", "extra instructions for the agent")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	byokID, err := cl.resolveByok(*byok)
+	if err != nil {
+		return err
+	}
+	body := map[string]any{"byok_id": byokID, "prompt": strings.TrimSpace(*prompt)}
+	if *issue > 0 {
+		body["issue_number"] = *issue
+	}
+	var s copilotSession
+	if err := cl.postJSON(fmt.Sprintf("/users/%s/repos/%s/copilots", owner, repo), body, &s); err != nil {
+		return err
+	}
+	if jsonOut {
+		printJSON(s)
+		return nil
+	}
+	fmt.Printf("Created copilot session #%d (%s) in %s/%s\n", s.ID, s.Branch, owner, repo)
+	return nil
+}
+
+func cmdCopilotRun(cl *client, args []string, jsonOut bool) error {
+	owner, repo, rest, err := needRepoThenFlags(args)
+	if err != nil {
+		return err
+	}
+	fs := flag.NewFlagSet("copilot run", flag.ContinueOnError)
+	text := fs.String("text", "", "message to send to the agent (default: the session prompt)")
+	timeout := fs.Duration("timeout", 30*time.Minute, "max time to wait for the turn")
+	if err := fs.Parse(permuteFlags(rest, map[string]bool{"--text": true, "--timeout": true})); err != nil {
+		return err
+	}
+	id, err := parseSessionID(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	msg := strings.TrimSpace(*text)
+	if msg == "" {
+		var s copilotSession
+		if err := cl.get(fmt.Sprintf("/users/%s/repos/%s/copilots/%d", owner, repo, id), &s); err != nil {
+			return err
+		}
+		msg = s.Prompt
+	}
+	if msg == "" {
+		return errors.New("--text is required (session has no prompt)")
+	}
+	return runCopilotTurn(cl, owner, repo, id, msg, *timeout, jsonOut)
+}
+
+func cmdCopilotFix(cl *client, args []string, jsonOut bool) error {
+	owner, repo, rest, err := needRepoThenFlags(args)
+	if err != nil {
+		return err
+	}
+	fs := flag.NewFlagSet("copilot fix", flag.ContinueOnError)
+	byok := fs.String("byok", "", "BYOK key name or id (default: the only configured key)")
+	instructions := fs.String("instructions", "", "extra instructions for the agent")
+	detach := fs.Bool("detach", false, "create the session but do not run the agent")
+	timeout := fs.Duration("timeout", 30*time.Minute, "max time to wait for the turn")
+	if err := fs.Parse(permuteFlags(rest, map[string]bool{"--byok": true, "--instructions": true, "--timeout": true})); err != nil {
+		return err
+	}
+	number, err := strconv.ParseInt(strings.TrimSpace(fs.Arg(0)), 10, 64)
+	if err != nil || number <= 0 {
+		return errors.New("usage: gitdash-cli copilot fix <owner/repo> <issue-number>")
+	}
+	byokID, err := cl.resolveByok(*byok)
+	if err != nil {
+		return err
+	}
+	var s copilotSession
+	if err := cl.postJSON(fmt.Sprintf("/users/%s/repos/%s/copilots", owner, repo), map[string]any{
+		"byok_id":      byokID,
+		"issue_number": number,
+		"prompt":       strings.TrimSpace(*instructions),
+	}, &s); err != nil {
+		return err
+	}
+	if *detach {
+		if jsonOut {
+			printJSON(s)
+			return nil
+		}
+		fmt.Printf("Created copilot session #%d for issue #%d (%s)\n", s.ID, number, s.Branch)
+		return nil
+	}
+	fmt.Fprintf(os.Stderr, "copilot: session #%d working on issue #%d…\n", s.ID, number)
+	return runCopilotTurn(cl, owner, repo, s.ID, s.Prompt, *timeout, jsonOut)
+}
+
+// runCopilotTurn 连接会话 WebSocket，发送一条消息并流式接收，直到 done。
+func runCopilotTurn(cl *client, owner, repo string, id int64, text string, timeout time.Duration, jsonOut bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	wsURL := strings.Replace(cl.host, "http", "ws", 1) +
+		fmt.Sprintf("/api/users/%s/repos/%s/copilots/%d/chat", owner, repo, id)
+	header := http.Header{}
+	header.Set("Authorization", "Bearer "+cl.token)
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: header})
+	if err != nil {
+		return fmt.Errorf("connect chat: %w", err)
+	}
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+
+	payload, _ := json.Marshal(map[string]string{"type": "user", "text": text})
+	if err := conn.Write(ctx, websocket.MessageText, payload); err != nil {
+		return fmt.Errorf("send: %w", err)
+	}
+
+	for {
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			return fmt.Errorf("stream: %w", err)
+		}
+		var ev struct {
+			Type   string `json:"type"`
+			Text   string `json:"text"`
+			Name   string `json:"name"`
+			Result string `json:"result"`
+			Error  string `json:"error"`
+		}
+		if json.Unmarshal(data, &ev) != nil {
+			continue
+		}
+		switch ev.Type {
+		case "tool_start":
+			fmt.Fprintf(os.Stderr, "  → %s\n", ev.Name)
+		case "tool_end":
+			if ev.Result != "" {
+				fmt.Fprintf(os.Stderr, "    %s\n", firstLine(ev.Result, 200))
+			}
+		case "delta":
+			fmt.Fprint(os.Stderr, ev.Text)
+		case "done":
+			if ev.Text != "" {
+				fmt.Fprintf(os.Stderr, "\n%s\n", ev.Text)
+			}
+			var s copilotSession
+			if err := cl.get(fmt.Sprintf("/users/%s/repos/%s/copilots/%d", owner, repo, id), &s); err == nil {
+				if jsonOut {
+					printJSON(s)
+					return nil
+				}
+				if s.PRNumber > 0 {
+					fmt.Printf("Opened pull request #%d\n", s.PRNumber)
+				} else {
+					fmt.Printf("Session #%d finished on %s (no PR linked)\n", s.ID, s.Branch)
+				}
+			}
+			return nil
+		case "error":
+			return fmt.Errorf("agent: %s", ev.Error)
+		}
+	}
+}
+
+// resolveByok 把 --byok（名称或 id）解析为已配置的 BYOK 密钥 id。
+func (c *client) resolveByok(ref string) (int64, error) {
+	var keys []struct {
+		ID   int64  `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := c.get("/me/byok", &keys); err != nil {
+		return 0, err
+	}
+	if len(keys) == 0 {
+		return 0, errors.New("no BYOK key configured; add one under Profile → BYOK")
+	}
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		if len(keys) == 1 {
+			return keys[0].ID, nil
+		}
+		return 0, fmt.Errorf("multiple BYOK keys; pass --byok <name|id> (available: %s)", byokNames(keys))
+	}
+	if id, err := strconv.ParseInt(ref, 10, 64); err == nil {
+		for _, k := range keys {
+			if k.ID == id {
+				return id, nil
+			}
+		}
+		return 0, fmt.Errorf("byok id %d not found (available: %s)", id, byokNames(keys))
+	}
+	for _, k := range keys {
+		if strings.EqualFold(k.Name, ref) {
+			return k.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("byok %q not found (available: %s)", ref, byokNames(keys))
+}
+
+func byokNames(keys []struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}) string {
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, fmt.Sprintf("%s (#%d)", k.Name, k.ID))
+	}
+	return strings.Join(out, ", ")
+}
+
+func parseSessionID(s string) (int64, error) {
+	id, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errors.New("usage: gitdash-cli copilot run <owner/repo> <session-id>")
+	}
+	return id, nil
+}
+
+// permuteFlags 把 flags 提到位置参数之前（Go 标准 flag 遇首个位置参数即停止解析）。
+// valueFlags 声明哪些 flag 需要紧跟一个值（如 --byok x）。仅支持 --flag / --flag=value 形式。
+func permuteFlags(args []string, valueFlags map[string]bool) []string {
+	flags := make([]string, 0, len(args))
+	pos := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "-") {
+			flags = append(flags, a)
+			if !strings.Contains(a, "=") && valueFlags[a] && i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+		} else {
+			pos = append(pos, a)
+		}
+	}
+	return append(flags, pos...)
+}
+
+func firstLine(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if len(s) > max {
+		s = s[:max] + "…"
+	}
+	return s
 }
 
 // ---- helpers ----

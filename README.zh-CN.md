@@ -19,7 +19,7 @@ English | 简体中文
 - **GPG Key**：上传 GPG 公钥验证提交签名
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
-- **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
+- **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR / copilot），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
 - **发现（Explore）**：浏览公开仓库；支持按标签筛选与关键词搜索；仓库设置页可切换公开 / 私有
 - **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索
@@ -27,7 +27,7 @@ English | 简体中文
 - **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md)
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；任务默认进程内执行，也可走 Redis（asynq）持久化队列
-- **BYOK Copilot**：与运行在仓库检出副本中的独立 agent 运行时（由 `deps/agent` 子模块构建的 `agent` 二进制）对话；它能读、改、执行命令，每轮结束后 gitdash 会把改动提交并推送到 `copilot/session-<id>` 分支——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
+- **BYOK Copilot**：与运行在仓库检出副本中的独立 agent 运行时（由 `deps/agent` 子模块构建的 `agent` 二进制）对话；它能读、改、执行命令，每轮结束后 gitdash 会把改动提交并推送到 `copilot/session-<id>` 分支；关联 issue 的会话在 agent 推送后自动开 PR（正文 `Closes #N`），网页端与 `gitdash-cli copilot fix` 均可触发——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
 - **用户头像**：上传 / 移除头像（PNG/JPEG/GIF/WebP，最大 2MB）；显示在顶栏、用户主页与个人资料页，未设置时回退为首字母
 - **同名仓库**：用户首次创建（注册 / 管理端 / OAuth）时自动创建公开的 `<用户名>/<用户名>` 仓库并初始化 README；创建组织时同样自动初始化公开的 `<组织名>/<组织名>` 仓库（`GITDASH_PROFILE_REPO=0` 关闭以上行为）
 - **结构化日志与链路追踪**：基于 `log/slog` 的日志（级别 + text/JSON 格式），支持滚动文件输出（`GITDASH_LOG_FILE`）；通过 OTLP 导出 OpenTelemetry trace（`OTEL_EXPORTER_OTLP_ENDPOINT`）
@@ -436,7 +436,15 @@ gitdash-cli issue list alice/demo
 gitdash-cli issue create alice/demo --title "Bug" --body "..."
 gitdash-cli pr list alice/demo
 gitdash-cli pr create alice/demo --title "Fix" --head feature --base main
+
+# AI copilot：让 agent 修 issue 并自动开 PR（等价于网页端「用 Copilot 修复」）
+gitdash-cli copilot fix alice/demo 14                  # 修 issue #14，收尾自动开 PR
+gitdash-cli copilot fix alice/demo 14 --detach         # 只建会话，稍后再跑
+gitdash-cli copilot list alice/demo                    # 列出会话及关联 issue/PR
+gitdash-cli copilot run alice/demo 3 --text "顺便更新 changelog"
 ```
+
+`copilot fix` 会创建一个关联 issue 的会话，驱动 agent 在仓库检出中工作，推送后由 gitdash 自动开出一个正文 `Closes #N` 的 PR；多个 BYOK 密钥时用 `--byok <名称|id>` 指定。
 
 凭据存于 `~/.config/gitdash/config.json`（0600）；`--host`/`--token` 与 `GITDASH_HOST`/`GITDASH_TOKEN` 可覆盖；`--json` 输出原始 JSON。
 

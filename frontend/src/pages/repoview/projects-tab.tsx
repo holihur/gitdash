@@ -14,9 +14,10 @@ import ProjectsBoard from "@/components/projects-board";
 interface Props {
   owner: string;
   name: string;
+  role?: "owner" | "read" | "write";
 }
 
-export default function ProjectsTab({ owner, name }: Props) {
+export default function ProjectsTab({ owner, name, role }: Props) {
   const { t, to } = useI18n();
   const [items, setItems] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
@@ -74,6 +75,7 @@ export default function ProjectsTab({ owner, name }: Props) {
         owner={owner}
         name={name}
         project={current}
+        role={role}
         onBack={() => { setCurrent(null); load(); }}
         onProjectChanged={(p) => setCurrent(p)}
       />

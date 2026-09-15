@@ -154,6 +154,9 @@ jobs:
       - name: Build copilot agent runtime (deps/agent)
         run: cd deps/agent && go build -o /tmp/agent ./cmd/agent
 
+      - name: Build CLI (gitdash-cli)
+        run: cd backend && go build -o /tmp/gitdash-cli ./cmd/gitdash-cli
+
       - name: Prepare coverage dir
         run: mkdir -p /tmp/gocover-api
 
@@ -163,6 +166,7 @@ jobs:
         env:
           GITDASH_BIN: /tmp/gitdash-server
           GITDASH_AGENT_BIN: /tmp/agent
+          GITDASH_CLI_BIN: /tmp/gitdash-cli
           GOCOVERDIR: /tmp/gocover-api
 
       - name: Run black-box API tests against PostgreSQL
@@ -171,6 +175,7 @@ jobs:
         env:
           GITDASH_BIN: /tmp/gitdash-server
           GITDASH_AGENT_BIN: /tmp/agent
+          GITDASH_CLI_BIN: /tmp/gitdash-cli
           GITDASH_DB: postgres://gitdash:pg@127.0.0.1:54329/gitdash?sslmode=disable
           GOCOVERDIR: /tmp/gocover-api
 

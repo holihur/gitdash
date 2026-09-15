@@ -554,7 +554,7 @@ export default function RepoView() {
 
         <TabsContent value="issues">
           <Suspense fallback={<TabFallback />}>
-            <IssuesTab owner={owner} name={name} />
+            <IssuesTab owner={owner} name={name} role={repo?.role} />
           </Suspense>
         </TabsContent>
 
@@ -584,7 +584,7 @@ export default function RepoView() {
 
         <TabsContent value="projects">
           <Suspense fallback={<TabFallback />}>
-            <ProjectsTab owner={owner} name={name} />
+            <ProjectsTab owner={owner} name={name} role={repo?.role} />
           </Suspense>
         </TabsContent>
 

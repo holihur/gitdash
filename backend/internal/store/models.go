@@ -208,8 +208,11 @@ type projectCardRow struct {
 	SwimlaneID int64  `gorm:"not null;default:0"`
 	IssueNum   int64  `gorm:"not null;default:0"` // >0 = 关联 issue；0 = 纯文本卡片
 	Note       string `gorm:"not null;default:''"`
-	Position   int    `gorm:"not null;default:0"`
-	CreatedAt  string `gorm:"not null"`
+	// StartDate / DueDate 为甘特图用的日程（YYYY-MM-DD，空 = 未排期）。
+	StartDate string `gorm:"not null;default:'';size:10"`
+	DueDate   string `gorm:"not null;default:'';size:10"`
+	Position  int    `gorm:"not null;default:0"`
+	CreatedAt string `gorm:"not null"`
 }
 
 func (projectCardRow) TableName() string { return "project_cards" }
@@ -564,7 +567,12 @@ type copilotSessionRow struct {
 	Repo      string `gorm:"not null;index;size:255"`
 	CreatedBy string `gorm:"not null;size:255"`
 	ByokID    int64  `gorm:"not null;default:0"`
-	Prompt    string `gorm:"not null;default:''"` // 额外 system 指令（可选）
+	// IssueNumber 为会话关联的 issue 编号（0 = 未关联）；关联后会话分支会在闭环
+	// 结束时自动开 PR，并在 PR 正文里 Closes 该 issue。
+	IssueNumber int64 `gorm:"not null;default:0"`
+	// PRNumber 为自动开出的 PR 编号（0 = 尚未开 PR），用于去重。
+	PRNumber int64  `gorm:"not null;default:0"`
+	Prompt   string `gorm:"not null;default:''"` // 额外 system 指令（可选）
 	// Branch 为会话工作区分支（copilot/session-<id>），HeadSHA 为最近推送的提交。
 	Branch  string `gorm:"not null;default:'';size:255"`
 	HeadSHA string `gorm:"not null;default:'';size:64"`

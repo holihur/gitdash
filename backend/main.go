@@ -214,7 +214,9 @@ func run() {
 
 	a := api.New(st, version)
 	a.SetSSHPort(sshAddr)
-	a.SetCopilotManager(copilot.NewManager(st))
+	copilotMgr := copilot.NewManager(st)
+	copilotMgr.SetPullHook(a.CopilotPullOpened)
+	a.SetCopilotManager(copilotMgr)
 	if shutdown, terr := telemetry.Setup(context.Background(), "gitdash", version); terr != nil {
 		logx.Warnf("telemetry setup: %v", terr)
 	} else {

@@ -1046,6 +1046,18 @@ const docTemplate = `{
                         "description": "偏移量",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（匹配所有者/名称/描述）",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "按标签（topic）过滤",
+                        "name": "topic",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1783,6 +1795,46 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/store.ByokKey"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/me/byok/test": {
+            "post": {
+                "description": "向 Anthropic 兼容端点发送一次最小请求，返回是否连通及错误信息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "byok"
+                ],
+                "summary": "测试 BYOK 连接",
+                "parameters": [
+                    {
+                        "description": "provider/base_url/model/api_key(可留空回退到 id)",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.testByokReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 },
@@ -3862,6 +3914,18 @@ const docTemplate = `{
                         "description": "偏移量",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（标题/正文/作者）",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤：open 或 closed（空 = 全部）",
+                        "name": "state",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3926,7 +3990,40 @@ const docTemplate = `{
             }
         },
         "/repos/{name}/issues/{number}": {
+            "delete": {
+                "tags": [
+                    "issues"
+                ],
+                "summary": "删除 Issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Issue 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
             "patch": {
+                "description": "局部更新标题、正文、状态与置顶；至少提供一个字段。",
                 "consumes": [
                     "application/json"
                 ],
@@ -3936,7 +4033,7 @@ const docTemplate = `{
                 "tags": [
                     "issues"
                 ],
-                "summary": "修改 Issue 状态",
+                "summary": "编辑 Issue",
                 "parameters": [
                     {
                         "type": "string",
@@ -3953,12 +4050,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "状态（open/closed）",
+                        "description": "标题 / 正文 / 状态（均可选）",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.setIssueStateReq"
+                            "$ref": "#/definitions/api.updateIssueReq"
                         }
                     }
                 ],
@@ -4978,6 +5075,34 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": {
                                 "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/topics": {
+            "get": {
+                "description": "返回公开仓库的 topic 及使用数，供 Explore 筛选。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "列出仓库标签",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.TopicCount"
                             }
                         }
                     }
@@ -6424,6 +6549,18 @@ const docTemplate = `{
                         "description": "偏移量",
                         "name": "offset",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词（标题/正文/作者）",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤：open 或 closed（空 = 全部）",
+                        "name": "state",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -6495,7 +6632,47 @@ const docTemplate = `{
             }
         },
         "/users/{owner}/repos/{name}/issues/{number}": {
+            "delete": {
+                "tags": [
+                    "issues"
+                ],
+                "summary": "删除 Issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（owner 路由时）",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Issue 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
             "patch": {
+                "description": "局部更新标题、正文、状态与置顶；至少提供一个字段。",
                 "consumes": [
                     "application/json"
                 ],
@@ -6505,7 +6682,7 @@ const docTemplate = `{
                 "tags": [
                     "issues"
                 ],
-                "summary": "修改 Issue 状态",
+                "summary": "编辑 Issue",
                 "parameters": [
                     {
                         "type": "string",
@@ -6529,12 +6706,12 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "状态（open/closed）",
+                        "description": "标题 / 正文 / 状态（均可选）",
                         "name": "body",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/api.setIssueStateReq"
+                            "$ref": "#/definitions/api.updateIssueReq"
                         }
                     }
                 ],
@@ -10391,6 +10568,78 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/topics": {
+            "put": {
+                "description": "全量替换仓库的 topics；仅仓库所有者可操作。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "设置仓库标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "topics 列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRepoTopsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/tree": {
             "get": {
                 "produces": [
@@ -11275,6 +11524,10 @@ const docTemplate = `{
                 "base_url": {
                     "type": "string"
                 },
+                "id": {
+                    "description": "ID 仅用于测试连接：api_key 留空时回退到已保存密钥。",
+                    "type": "integer"
+                },
                 "model": {
                     "type": "string"
                 },
@@ -11327,6 +11580,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "byok_id": {
+                    "type": "integer"
+                },
+                "issue_number": {
                     "type": "integer"
                 },
                 "prompt": {
@@ -11452,10 +11708,16 @@ const docTemplate = `{
                 "column_id": {
                     "type": "integer"
                 },
+                "due_date": {
+                    "type": "string"
+                },
                 "issue_number": {
                     "type": "integer"
                 },
                 "note": {
+                    "type": "string"
+                },
+                "start_date": {
                     "type": "string"
                 },
                 "swimlane_id": {
@@ -11797,15 +12059,6 @@ const docTemplate = `{
                 }
             }
         },
-        "api.setIssueStateReq": {
-            "type": "object",
-            "properties": {
-                "state": {
-                    "description": "目标状态（open 或 closed）",
-                    "type": "string"
-                }
-            }
-        },
         "api.setMirrorReq": {
             "type": "object",
             "properties": {
@@ -11868,12 +12121,65 @@ const docTemplate = `{
                 }
             }
         },
+        "api.setRepoTopsReq": {
+            "type": "object",
+            "properties": {
+                "topics": {
+                    "description": "小写字母/数字/连字符，最多 20 个",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "api.setRepoVisibilityReq": {
             "type": "object",
             "properties": {
                 "private": {
                     "description": "是否私有（必填）",
                     "type": "boolean"
+                }
+            }
+        },
+        "api.testByokReq": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.updateIssueReq": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "description": "新正文（可选）",
+                    "type": "string"
+                },
+                "pinned": {
+                    "description": "是否置顶（可选）",
+                    "type": "boolean"
+                },
+                "state": {
+                    "description": "新状态 open/closed（可选）",
+                    "type": "string"
+                },
+                "title": {
+                    "description": "新标题（可选）",
+                    "type": "string"
                 }
             }
         },
@@ -11926,11 +12232,17 @@ const docTemplate = `{
                 "column_id": {
                     "type": "integer"
                 },
+                "due_date": {
+                    "type": "string"
+                },
                 "note": {
                     "type": "string"
                 },
                 "position": {
                     "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "swimlane_id": {
                     "type": "integer"
@@ -12085,6 +12397,14 @@ const docTemplate = `{
                     "description": "utf-8 | binary | truncated",
                     "type": "string"
                 },
+                "latest_commit": {
+                    "description": "LatestCommit 该文件最近一次变更的提交（由 API 层填充，可选）",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/gitsvc.Commit"
+                        }
+                    ]
+                },
                 "path": {
                     "type": "string"
                 },
@@ -12100,6 +12420,23 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "gitsvc.Commit": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "sha": {
                     "type": "string"
                 }
             }
@@ -12333,6 +12670,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "type": "integer"
+                },
+                "issue_number": {
+                    "description": "IssueNumber 关联的 issue 编号（0 = 未关联）。",
+                    "type": "integer"
+                },
+                "pr_number": {
+                    "description": "PRNumber 自动开出的 PR 编号（0 = 尚未开）。",
                     "type": "integer"
                 },
                 "prompt": {
@@ -12655,6 +13000,10 @@ const docTemplate = `{
                 "number": {
                     "type": "integer"
                 },
+                "pinned": {
+                    "description": "置顶",
+                    "type": "boolean"
+                },
                 "state": {
                     "description": "\"open\" | \"closed\"",
                     "type": "string"
@@ -12922,6 +13271,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "due_date": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -12942,6 +13294,9 @@ const docTemplate = `{
                 },
                 "project_id": {
                     "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "swimlane_id": {
                     "description": "0 = 未分组泳道",
@@ -13207,6 +13562,13 @@ const docTemplate = `{
                     "description": "展示字段（由 API 层填充，store 查询不扫描）",
                     "type": "integer"
                 },
+                "topics": {
+                    "description": "Topics 仓库标签/话题（由 API 层批量填充，store 查询不扫描）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "watchers": {
                     "type": "integer"
                 },
@@ -13290,6 +13652,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "public_key": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.TopicCount": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "topic": {
                     "type": "string"
                 }
             }

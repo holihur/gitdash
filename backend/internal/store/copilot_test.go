@@ -85,7 +85,7 @@ func TestCopilotSessionsCRUD(t *testing.T) {
 	_, _ = s.CreateUser("alice", "alice-pass-123")
 	key, _ := s.CreateByokKey("alice", "k", "openai", "sk-a", "", "")
 
-	cs, err := s.CreateCopilotSession("alice", "repo1", "alice", key.ID, "fix the bug")
+	cs, err := s.CreateCopilotSession("alice", "repo1", "alice", key.ID, 0, "fix the bug")
 	if err != nil {
 		t.Fatal(err)
 	}

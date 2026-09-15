@@ -19,7 +19,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **GPG keys**: upload GPG public keys to verify commit signatures
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
-- **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
+- **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR / copilot) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
 - **Admin panel**: admin users, settings (OAuth providers), password management
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings; filter by tag and free-text search
 - **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore
@@ -27,7 +27,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust), Maven (Java) and Docker/OCI images under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md)
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; jobs can be processed in-process (default) or via a Redis-backed asynq queue
-- **BYOK copilot**: chat with a standalone agent runtime (the `agent` binary built from the `deps/agent` submodule) inside a checkout of the repo; it can read, edit and run commands, and gitdash commits + pushes its changes to a `copilot/session-<id>` branch after every turn — see [docs/copilot.md](docs/copilot.md)
+- **BYOK copilot**: chat with a standalone agent runtime (the `agent` binary built from the `deps/agent` submodule) inside a checkout of the repo; it can read, edit and run commands, and gitdash commits + pushes its changes to a `copilot/session-<id>` branch after every turn; sessions linked to an issue auto-open a pull request (`Closes #N`) once the agent pushes, from the web UI or `gitdash-cli copilot fix` — see [docs/copilot.md](docs/copilot.md)
 - **User avatars**: upload / remove a profile picture (PNG/JPEG/GIF/WebP, max 2MB); shown in the header, user page and profile, with an initials fallback
 - **Profile repo**: a public `<username>/<username>` repo is created when an account is first created (register / admin / OAuth), initialized with a README; creating an organization likewise initializes a public `<org>/<org>` repo (`GITDASH_PROFILE_REPO=0` disables both)
 - **Structured logging & tracing**: `log/slog`-based logs with levels + text/JSON format, optional rotating file output (`GITDASH_LOG_FILE`), and OpenTelemetry tracing via OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`)
@@ -477,10 +477,27 @@ flags and the `GITDASH_HOST` / `GITDASH_TOKEN` environment variables override th
 | `gitdash-cli repo create [--private=false] [--description D] <name>` | Create a repository |
 | `gitdash-cli issue list <owner/repo>` | List issues |
 | `gitdash-cli issue create <owner/repo> --title T [--body B]` | Create an issue |
+| `gitdash-cli issue fix <owner/repo> <n> [--byok NAME] [--detach]` | Alias of `copilot fix` |
+| `gitdash-cli copilot list <owner/repo>` | List AI copilot sessions |
+| `gitdash-cli copilot create <owner/repo> [--byok NAME] [--issue N] [--prompt P]` | Create a copilot session |
+| `gitdash-cli copilot run <owner/repo> <id> [--text M]` | Drive a session and stream the agent's work |
+| `gitdash-cli copilot fix <owner/repo> <n> [--byok NAME] [--instructions P] [--detach]` | Have the agent fix an issue; auto-opens a PR |
 | `gitdash-cli pr list <owner/repo>` | List pull requests |
 | `gitdash-cli pr create <owner/repo> --title T --head H --base B [--body B]` | Open a pull request |
 | `gitdash-cli skill show` | Print the embedded Agent Skill |
 | `gitdash-cli skill install` | Install the Agent Skill for Claude Code / opencode / pi |
+
+The copilot commands are the headless equivalent of the web UI's **Fix with Copilot**
+flow: `copilot fix` creates a session linked to an issue, runs the agent against a
+checkout of the repo, and — once the agent pushes — gitdash opens a pull request whose
+body closes the issue.
+
+```bash
+gitdash-cli copilot fix alice/demo 14                 # fix issue #14, auto-open a PR
+gitdash-cli copilot fix alice/demo 14 --detach        # only create the session
+gitdash-cli copilot list alice/demo                   # sessions + linked issue/PR
+gitdash-cli copilot run alice/demo 3 --text "also update the changelog"
+```
 
 ### Agent skill (for Claude Code / opencode / pi)
 

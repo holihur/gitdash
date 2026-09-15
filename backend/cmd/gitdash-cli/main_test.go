@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/coder/websocket"
 )
 
 func TestExtractGlobals(t *testing.T) {
@@ -62,6 +65,21 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"number": 2, "title": "Fix", "state": "open", "source_branch": "f", "target_branch": "main"},
 			})
+		case "/api/me/byok":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": 5, "name": "work", "provider": "anthropic", "key_set": true},
+			})
+		case "/api/users/alice/repos/demo/copilots":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id": 3, "byok_id": 5, "issue_number": 7, "prompt": "fix issue #7", "branch": "copilot/session-3",
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": 3, "status": "idle", "issue_number": 7, "branch": "copilot/session-3"},
+			})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
@@ -77,6 +95,10 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 		{"me"},
 		{"repo", "list"},
 		{"issue", "list", "alice/demo"},
+		{"copilot", "list", "alice/demo"},
+		{"copilot", "create", "alice/demo", "--issue", "7"},
+		{"copilot", "fix", "alice/demo", "7", "--detach"},
+		{"issue", "fix", "alice/demo", "7", "--detach"},
 		{"pr", "list", "alice/demo"},
 		{"--host", srv.URL, "--token", "x", "me"},
 		{"version"},
@@ -91,7 +113,11 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 	for _, c := range [][]string{
 		{"issue", "create", "alice/demo"},              // 缺 --title
 		{"pr", "create", "alice/demo", "--title", "x"}, // 缺 --head/--base
-		{"repo"},                 // 缺子命令
+		{"repo"},                              // 缺子命令
+		{"copilot"},                           // 缺子命令
+		{"copilot", "run", "alice/demo", "0"}, // 非法会话 id
+		{"copilot", "fix", "alice/demo"},      // 缺 issue 编号
+		{"copilot", "create", "alice/demo", "--byok", "nope"}, // 未知 byok
 		{"unknowncmd"},           // 未知命令
 		{"issue", "list", "bad"}, // owner/repo 格式错
 	} {
@@ -190,5 +216,56 @@ func TestDeviceLoginFlow(t *testing.T) {
 	}
 	if polls < 2 {
 		t.Fatalf("expected at least 2 polls, got %d", polls)
+	}
+}
+
+func TestPermuteFlags(t *testing.T) {
+	got := permuteFlags([]string{"7", "--detach", "--byok", "work"}, map[string]bool{"--byok": true})
+	want := []string{"--detach", "--byok", "work", "7"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("permuteFlags = %v, want %v", got, want)
+	}
+}
+
+func TestRunCopilotTurnStreamsToDone(t *testing.T) {
+	detailHit := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/chat") {
+			if r.Header.Get("Authorization") != "Bearer tok" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			conn, err := websocket.Accept(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
+			ctx := r.Context()
+			_, data, err := conn.Read(ctx)
+			if err != nil {
+				return
+			}
+			var in map[string]string
+			_ = json.Unmarshal(data, &in)
+			if in["text"] != "hello" {
+				return
+			}
+			_ = conn.Write(ctx, websocket.MessageText, []byte(`{"type":"tool_start","name":"write"}`))
+			_ = conn.Write(ctx, websocket.MessageText, []byte(`{"type":"done","text":"done"}`))
+			return
+		}
+		detailHit = true
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"id": 1, "status": "idle", "pr_number": 9, "branch": "copilot/session-1",
+		})
+	}))
+	defer srv.Close()
+
+	cl := &client{host: srv.URL, token: "tok"}
+	if err := runCopilotTurn(cl, "alice", "demo", 1, "hello", 5*time.Second, false); err != nil {
+		t.Fatalf("runCopilotTurn: %v", err)
+	}
+	if !detailHit {
+		t.Fatal("expected the session detail to be refetched after done")
 	}
 }

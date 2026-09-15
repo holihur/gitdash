@@ -18,11 +18,23 @@ export const copilotApi = {
   ) =>
     req<ByokKey>(`/me/byok/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteByok: (id: number) => req<{ deleted: boolean }>(`/me/byok/${id}`, { method: "DELETE" }),
+  /** 测试 BYOK 连接：api_key 留空且带 id 时回退到已保存密钥。 */
+  testByok: (body: {
+    id?: number;
+    provider: string;
+    api_key?: string;
+    base_url?: string;
+    model?: string;
+  }) =>
+    req<{ ok: boolean; base_url?: string; model?: string; error?: string }>("/me/byok/test", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 
   // copilot 会话（每个会话一个 agent 运行时，双向聊天 + 自动提交推送）
   listCopilots: (owner: string, repo: string) =>
     req<CopilotSession[]>(`/users/${owner}/repos/${repo}/copilots`),
-  createCopilot: (owner: string, repo: string, body: { byok_id: number; prompt?: string }) =>
+  createCopilot: (owner: string, repo: string, body: { byok_id: number; prompt?: string; issue_number?: number }) =>
     req<CopilotSession>(`/users/${owner}/repos/${repo}/copilots`, {
       method: "POST",
       body: JSON.stringify(body),

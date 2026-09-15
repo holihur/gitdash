@@ -10,7 +10,9 @@
 from __future__ import annotations
 
 import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 
 import pytest
 
@@ -97,6 +99,88 @@ def test_byok_user_isolation(user_factory):
     assert bob.get("/me/byok", expect=200).json() == []
     bob.put(f"/me/byok/{key['id']}", json={"name": "hijack", "provider": "anthropic"}, expect=404)
     bob.delete(f"/me/byok/{key['id']}", expect=404)
+
+
+class _MockMessages(BaseHTTPRequestHandler):
+    """最小 Anthropic Messages 端点，用于测试 BYOK 连接检测。"""
+
+    status = 200
+
+    def do_POST(self):  # noqa: N802
+        length = int(self.headers.get("Content-Length", "0"))
+        self.rfile.read(length) if length else None
+        self.send_response(self.status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"content": []}')
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def mock_llm():
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _MockMessages)
+    t = Thread(target=httpd.serve_forever, daemon=True)
+    t.start()
+    url = f"http://127.0.0.1:{httpd.server_address[1]}"
+    yield url, httpd
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_byok_providers_and_key_requirement(user_factory):
+    _, _, c = user_factory("bp")
+
+    # ollama：无需密钥（服务端补占位密钥），key_set 仍为 True
+    local = c.post("/me/byok", json={"name": "local", "provider": "ollama"}, expect=201).json()
+    assert local["provider"] == "ollama"
+    assert local["key_set"] is True
+
+    # compatible：需要密钥
+    c.post("/me/byok", json={"name": "gw", "provider": "compatible"}, expect=400)
+    gw = c.post(
+        "/me/byok",
+        json={"name": "gw", "provider": "compatible", "api_key": "sk-x", "base_url": "https://gw.example.com"},
+        expect=201,
+    ).json()
+    assert gw["provider"] == "compatible"
+
+    # 未支持的 provider 仍拒绝
+    c.post("/me/byok", json={"name": "x", "provider": "openai", "api_key": "sk"}, expect=400)
+
+
+def test_byok_test_connection(user_factory, mock_llm):
+    _, _, c = user_factory("bt")
+    url, httpd = mock_llm
+
+    # 连通：本地 mock 端点 + 显式 model
+    ok = c.post(
+        "/me/byok/test",
+        json={"provider": "compatible", "base_url": url, "model": "m", "api_key": "sk-x"},
+        expect=200,
+    ).json()
+    assert ok["ok"] is True
+
+    # 已保存密钥 + api_key 留空 → 回退到 id
+    saved = c.post(
+        "/me/byok",
+        json={"name": "k", "provider": "compatible", "api_key": "sk-x", "base_url": url, "model": "m"},
+        expect=201,
+    ).json()
+    ok2 = c.post("/me/byok/test", json={"id": saved["id"], "provider": "compatible"}, expect=200).json()
+    assert ok2["ok"] is True
+
+    # 认证失败 → ok=false，而不是 5xx
+    _MockMessages.status = 401
+    bad = c.post(
+        "/me/byok/test",
+        json={"provider": "compatible", "base_url": url, "model": "m", "api_key": "sk-bad"},
+        expect=200,
+    ).json()
+    _MockMessages.status = 200
+    assert bad["ok"] is False
+    assert "401" in bad["error"]
 
 
 def test_copilot_session_lifecycle(env):

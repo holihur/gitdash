@@ -114,6 +114,10 @@ type CopilotSession struct {
 	Repo      string `json:"-"`
 	CreatedBy string `json:"created_by"`
 	ByokID    int64  `json:"byok_id"`
+	// IssueNumber 关联的 issue 编号（0 = 未关联）。
+	IssueNumber int64 `json:"issue_number,omitempty"`
+	// PRNumber 自动开出的 PR 编号（0 = 尚未开）。
+	PRNumber  int64  `json:"pr_number,omitempty"`
 	Prompt    string `json:"prompt"`
 	Branch    string `json:"branch,omitempty"`
 	HeadSHA   string `json:"head_sha,omitempty"`
@@ -126,17 +130,19 @@ type CopilotSession struct {
 func copilotRowToDTO(r copilotSessionRow) CopilotSession {
 	return CopilotSession{
 		ID: r.ID, Owner: r.Owner, Repo: r.Repo, CreatedBy: r.CreatedBy, ByokID: r.ByokID,
+		IssueNumber: r.IssueNumber, PRNumber: r.PRNumber,
 		Prompt: r.Prompt, Branch: r.Branch, HeadSHA: r.HeadSHA, Status: r.Status, Error: r.Error,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
 
-// CreateCopilotSession 创建一个 copilot 会话（初始 idle）。
-func (s *Store) CreateCopilotSession(owner, repo, createdBy string, byokID int64, prompt string) (CopilotSession, error) {
+// CreateCopilotSession 创建一个 copilot 会话（初始 idle）。issueNumber > 0 时
+// 会话会与 issue 关联，闭环结束后自动开 PR。
+func (s *Store) CreateCopilotSession(owner, repo, createdBy string, byokID, issueNumber int64, prompt string) (CopilotSession, error) {
 	ts := now()
 	row := copilotSessionRow{
 		Owner: owner, Repo: repo, CreatedBy: createdBy, ByokID: byokID,
-		Prompt: prompt, Status: "idle",
+		IssueNumber: issueNumber, Prompt: prompt, Status: "idle",
 		CreatedAt: ts, UpdatedAt: ts,
 	}
 	if err := s.db.Create(&row).Error; err != nil {
@@ -184,6 +190,19 @@ func (s *Store) SetCopilotSessionStatus(owner, repo string, id int64, status, er
 func (s *Store) SetCopilotSessionGit(owner, repo string, id int64, branch, headSHA string) error {
 	res := s.db.Model(&copilotSessionRow{}).Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).
 		Updates(map[string]any{"branch": branch, "head_sha": headSHA, "updated_at": now()})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetCopilotSessionPR 记录会话自动开出的 PR 编号（用于去重）。
+func (s *Store) SetCopilotSessionPR(owner, repo string, id, prNumber int64) error {
+	res := s.db.Model(&copilotSessionRow{}).Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).
+		Updates(map[string]any{"pr_number": prNumber, "updated_at": now()})
 	if res.Error != nil {
 		return res.Error
 	}

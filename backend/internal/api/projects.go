@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"gitdash/backend/internal/store"
 )
@@ -549,7 +550,17 @@ func (a *API) createProjectCard(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "card_content_required", "issue_number or note is required")
 		return
 	}
-	c, err := a.store.CreateProjectCard(owner, name, pid, in.ColumnID, in.SwimlaneID, in.IssueNumber, strings.TrimSpace(in.Note))
+	startDate := strings.TrimSpace(in.StartDate)
+	dueDate := strings.TrimSpace(in.DueDate)
+	if !validProjectDate(startDate) || !validProjectDate(dueDate) {
+		writeCode(w, http.StatusBadRequest, "invalid_date", "dates must be YYYY-MM-DD")
+		return
+	}
+	if startDate != "" && dueDate != "" && dueDate < startDate {
+		writeCode(w, http.StatusBadRequest, "invalid_date_range", "due_date must be on or after start_date")
+		return
+	}
+	c, err := a.store.CreateProjectCard(owner, name, pid, in.ColumnID, in.SwimlaneID, in.IssueNumber, strings.TrimSpace(in.Note), startDate, dueDate)
 	if errors.Is(err, store.ErrNotFound) {
 		writeCode(w, http.StatusBadRequest, "invalid_card_target", "column, swimlane or issue not found")
 		return
@@ -605,8 +616,36 @@ func (a *API) updateProjectCard(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if in.StartDate != nil && in.DueDate != nil {
+		s, d := strings.TrimSpace(*in.StartDate), strings.TrimSpace(*in.DueDate)
+		if s != "" && d != "" && d < s {
+			writeCode(w, http.StatusBadRequest, "invalid_date_range", "due_date must be on or after start_date")
+			return
+		}
+	}
+	up := store.ProjectCardUpdate{}
 	if in.Note != nil {
-		if err := a.store.UpdateProjectCard(pid, cid, strings.TrimSpace(*in.Note)); err != nil {
+		v := strings.TrimSpace(*in.Note)
+		up.Note = &v
+	}
+	if in.StartDate != nil {
+		v := strings.TrimSpace(*in.StartDate)
+		if !validProjectDate(v) {
+			writeCode(w, http.StatusBadRequest, "invalid_date", "dates must be YYYY-MM-DD")
+			return
+		}
+		up.StartDate = &v
+	}
+	if in.DueDate != nil {
+		v := strings.TrimSpace(*in.DueDate)
+		if !validProjectDate(v) {
+			writeCode(w, http.StatusBadRequest, "invalid_date", "dates must be YYYY-MM-DD")
+			return
+		}
+		up.DueDate = &v
+	}
+	if up.Note != nil || up.StartDate != nil || up.DueDate != nil {
+		if err := a.store.UpdateProjectCard(pid, cid, up); err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
 				return
@@ -728,6 +767,8 @@ type createProjectCardReq struct {
 	SwimlaneID  int64  `json:"swimlane_id"`
 	IssueNumber int64  `json:"issue_number"`
 	Note        string `json:"note"`
+	StartDate   string `json:"start_date"`
+	DueDate     string `json:"due_date"`
 }
 
 type updateProjectCardReq struct {
@@ -735,4 +776,15 @@ type updateProjectCardReq struct {
 	SwimlaneID *int64  `json:"swimlane_id"`
 	Position   *int    `json:"position"`
 	Note       *string `json:"note"`
+	StartDate  *string `json:"start_date"`
+	DueDate    *string `json:"due_date"`
+}
+
+// validProjectDate 校验空串或 YYYY-MM-DD 格式的日期。
+func validProjectDate(s string) bool {
+	if s == "" {
+		return true
+	}
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
 }

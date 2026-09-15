@@ -1,29 +1,36 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Layers, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
-import { api, type Project, type ProjectBoard } from "@/lib/api";
+import { ArrowLeft, GanttChartSquare, KanbanSquare, Layers, List, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
+import { api, type Project, type ProjectBoard, type ProjectCard } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { ProjectCardDialog, ProjectGanttView, ProjectListView, type CardDraft } from "@/components/projects-views";
 import { cn } from "@/lib/utils";
 
 interface Props {
   owner: string;
   name: string;
   project: Project;
+  role?: "owner" | "read" | "write";
   onBack: () => void;
   onProjectChanged: (p: Project) => void;
 }
 
+type ProjectView = "board" | "list" | "gantt";
+
 const UNGROUPED = 0;
 
-export default function ProjectsBoard({ owner, name, project, onBack, onProjectChanged }: Props) {
+export default function ProjectsBoard({ owner, name, project, role, onBack, onProjectChanged }: Props) {
   const { t, to } = useI18n();
+  const canWrite = role === "owner" || role === "write";
   const [board, setBoard] = useState<ProjectBoard | null>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<ProjectView>("board");
+  const [editCard, setEditCard] = useState<ProjectCard | null>(null);
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(project.name);
@@ -97,6 +104,28 @@ export default function ProjectsBoard({ owner, name, project, onBack, onProjectC
     }
   };
 
+  const removeCard = async (card: ProjectCard) => {
+    await act(() => api.deleteCard(owner, name, project.id, card.id));
+  };
+
+  const saveCard = async (card: ProjectCard, draft: CardDraft) => {
+    setBusy(true);
+    try {
+      await api.updateCard(owner, name, project.id, card.id, {
+        note: card.issue_number ? undefined : draft.note,
+        start_date: draft.start_date,
+        due_date: draft.due_date,
+      });
+      toast.success(t("projects.cardSaved"));
+      setEditCard(null);
+      await load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onDrop = (swimlaneId: number, columnId: number) => {
     const cardId = dragging;
     setDragging(null);
@@ -159,8 +188,52 @@ export default function ProjectsBoard({ owner, name, project, onBack, onProjectC
             </Button>
           </>
         )}
+        <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5">
+          {([
+            { id: "board", icon: KanbanSquare, label: t("projects.viewBoard") },
+            { id: "list", icon: List, label: t("projects.viewList") },
+            { id: "gantt", icon: GanttChartSquare, label: t("projects.viewGantt") },
+          ] as const).map((v) => (
+            <Button
+              key={v.id}
+              size="sm"
+              variant={view === v.id ? "secondary" : "ghost"}
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => setView(v.id)}
+              title={v.label}
+            >
+              <v.icon className="h-3.5 w-3.5" />
+              {v.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
+      {view === "list" && (
+        <ProjectListView
+          columns={columns}
+          swimlanes={lanes}
+          cards={cards}
+          canWrite={canWrite}
+          busy={busy}
+          onEdit={setEditCard}
+          onDelete={(c) => void removeCard(c)}
+        />
+      )}
+
+      {view === "gantt" && (
+        <ProjectGanttView
+          columns={columns}
+          swimlanes={lanes}
+          cards={cards}
+          canWrite={canWrite}
+          busy={busy}
+          onEdit={setEditCard}
+          onDelete={(c) => void removeCard(c)}
+        />
+      )}
+
+      {view === "board" && (
       <div className="space-y-3 overflow-x-auto">
         {laneRows.map((lane) => (
           <div key={lane.id} className="min-w-max rounded-lg border bg-muted/20">
@@ -244,6 +317,16 @@ export default function ProjectsBoard({ owner, name, project, onBack, onProjectC
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
+                              disabled={busy}
+                              onClick={() => setEditCard(card)}
+                              title={t("projects.editCard")}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-6 w-6 shrink-0 text-destructive opacity-0 hover:text-destructive group-hover:opacity-100"
                               disabled={busy}
                               onClick={() => act(() => api.deleteCard(owner, name, project.id, card.id))}
@@ -286,6 +369,7 @@ export default function ProjectsBoard({ owner, name, project, onBack, onProjectC
           </div>
         ))}
       </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-3">
         <div className="grid gap-1">
@@ -319,6 +403,8 @@ export default function ProjectsBoard({ owner, name, project, onBack, onProjectC
           {t("projects.addSwimlane")}
         </Button>
       </div>
+
+      <ProjectCardDialog card={editCard} busy={busy} onClose={() => setEditCard(null)} onSave={(c, d) => void saveCard(c, d)} />
 
       <ConfirmDialog
         open={pendingDeleteColumn !== null}

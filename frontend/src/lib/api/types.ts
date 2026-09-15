@@ -272,6 +272,9 @@ export interface ProjectCard {
   issue_title: string | null;
   issue_state: string | null;
   note: string | null;
+  /** 甘特图日程（YYYY-MM-DD，空串 = 未排期） */
+  start_date: string;
+  due_date: string;
   position: number;
   created_at: string;
 }
@@ -494,6 +497,8 @@ export interface CopilotSession {
   id: number;
   created_by: string;
   byok_id: number;
+  issue_number?: number;
+  pr_number?: number;
   prompt: string;
   branch?: string;
   head_sha?: string;

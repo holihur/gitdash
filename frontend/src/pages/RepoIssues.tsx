@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Bot,
   CheckCircle2,
   Circle,
   Flag,
@@ -13,7 +15,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
-import { api, type Issue, type Label, type Milestone } from "@/lib/api";
+import { api, type ByokKey, type Issue, type Label, type Milestone } from "@/lib/api";
 import { useQueryState } from "@/lib/query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
@@ -44,9 +47,11 @@ interface Draft {
   milestone: number; // 0 = 无
 }
 
-export default function RepoIssues({ owner, name }: { owner: string; name: string }) {
+export default function RepoIssues({ owner, name, role }: { owner: string; name: string; role?: "owner" | "read" | "write" }) {
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
+  const navigate = useNavigate();
+  const canWrite = role === "owner" || role === "write";
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issueTotal, setIssueTotal] = useState(0);
   // 页码/页大小/标签筛选同步进 URL(?i_page/?i_size/?i_label)
@@ -90,6 +95,48 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Issue | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // 用 Copilot 修复 issue
+  const [copilotTarget, setCopilotTarget] = useState<Issue | null>(null);
+  const [byokKeys, setByokKeys] = useState<ByokKey[] | null>(null);
+  const [copilotByokId, setCopilotByokId] = useState(0);
+  const [copilotNote, setCopilotNote] = useState("");
+  const [copilotBusy, setCopilotBusy] = useState(false);
+
+  const openCopilot = async (issue: Issue) => {
+    setCopilotTarget(issue);
+    setCopilotNote("");
+    if (byokKeys === null) {
+      try {
+        const keys = await api.listByok();
+        setByokKeys(keys);
+        setCopilotByokId(keys[0]?.id ?? 0);
+      } catch {
+        setByokKeys([]);
+      }
+    } else {
+      setCopilotByokId(byokKeys[0]?.id ?? 0);
+    }
+  };
+
+  const launchCopilot = async () => {
+    if (!copilotTarget || !copilotByokId) return;
+    setCopilotBusy(true);
+    try {
+      const session = await api.createCopilot(owner, name, {
+        byok_id: copilotByokId,
+        issue_number: copilotTarget.number,
+        prompt: copilotNote.trim(),
+      });
+      toast.success(t("copilot.launch"));
+      setCopilotTarget(null);
+      navigate(`/repo/${owner}/${name}?tab=copilot&copilot=${session.id}`);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setCopilotBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -556,6 +603,17 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
+                    {canWrite && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 p-0"
+                        title={t("issues.fixWithCopilot")}
+                        onClick={() => openCopilot(issue)}
+                      >
+                        <Bot className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -680,6 +738,64 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
             </Button>
             <Button onClick={saveEdit} disabled={savingEdit || !editTitle.trim()}>
               {t("issues.saveEdit")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={copilotTarget !== null} onOpenChange={(o) => !o && setCopilotTarget(null)}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {t("issues.fixWithCopilot")} · #{copilotTarget?.number ?? 0}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <p className="text-sm text-muted-foreground">{t("issues.fixWithCopilotHint")}</p>
+            {byokKeys !== null && byokKeys.length === 0 ? (
+              <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+                {t("copilot.noByok")}
+              </p>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <FieldLabel htmlFor="copilot-issue-byok">{t("copilot.byok")}</FieldLabel>
+                  <select
+                    id="copilot-issue-byok"
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={copilotByokId}
+                    onChange={(e) => setCopilotByokId(Number(e.target.value))}
+                  >
+                    {(byokKeys ?? []).map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.name} ({k.model || "claude"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <FieldLabel htmlFor="copilot-issue-note">{t("copilot.prompt")}</FieldLabel>
+                  <Textarea
+                    id="copilot-issue-note"
+                    rows={3}
+                    value={copilotNote}
+                    onChange={(e) => setCopilotNote(e.target.value)}
+                    placeholder={t("copilot.promptPlaceholder")}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopilotTarget(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              onClick={launchCopilot}
+              disabled={copilotBusy || !copilotByokId || (byokKeys !== null && byokKeys.length === 0)}
+            >
+              <Bot className="h-4 w-4" />
+              {t("copilot.launch")}
             </Button>
           </DialogFooter>
         </DialogContent>

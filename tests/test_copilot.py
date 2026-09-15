@@ -298,6 +298,73 @@ def test_copilot_closed_loop(base_url, user_factory):
                 pass
 
 
+def test_copilot_issue_auto_pr(base_url, user_factory):
+    """关联 issue 的会话在闭环后自动开 PR（正文 Closes #N）。"""
+    if not _agent_bin():
+        pytest.skip("copilot agent binary not found (set GITDASH_AGENT_BIN)")
+
+    mock = MockLLMServer()
+    mock_base = mock.start()
+    owner = repo = client = None
+    try:
+        owner, token, client = user_factory("cpi")
+        repo = f"cprepo-{_uuid()}"
+        client.post("/repos", json={"name": repo}, expect=201)
+        client.post(
+            f"/users/{owner}/repos/{repo}/commits",
+            json={"message": "init", "changes": [{"path": "README.md", "action": "create", "content": "# repo\n"}]},
+            expect=201,
+        )
+        issue = client.post(
+            f"/users/{owner}/repos/{repo}/issues",
+            json={"title": "crash on startup", "body": "please fix the startup crash"},
+            expect=201,
+        ).json()
+        issue_number = issue["number"]
+
+        byok = client.post(
+            "/me/byok",
+            json={"name": "mock", "provider": "anthropic", "api_key": "sk-mock", "base_url": mock_base, "model": "mock-1"},
+            expect=201,
+        ).json()
+        session = client.post(
+            f"/users/{owner}/repos/{repo}/copilots",
+            json={"byok_id": byok["id"], "issue_number": issue_number},
+            expect=201,
+        ).json()
+        sid = session["id"]
+        branch = f"copilot/session-{sid}"
+        assert session["issue_number"] == issue_number
+        assert "crash on startup" in session["prompt"]
+
+        ws_url = base_url.replace("http://", "ws://", 1) + (
+            f"/api/users/{owner}/repos/{repo}/copilots/{sid}/chat"
+        )
+        ws = WsClient(ws_url, headers={"Authorization": f"Bearer {token}"})
+        try:
+            events: list[dict] = []
+            _recv_until(ws, events, lambda evs: any(e.get("type") == "status" for e in evs), timeout=20)
+            ws.send({"type": "user", "text": "fix the crash"})
+            _recv_until(ws, events, lambda evs: any(e.get("type") == "done" for e in evs), timeout=90)
+        finally:
+            ws.close()
+
+        detail = client.get(f"/users/{owner}/repos/{repo}/copilots/{sid}", expect=200).json()
+        assert detail["pr_number"], detail
+        pr = client.get(f"/users/{owner}/repos/{repo}/pulls/{detail['pr_number']}", expect=200).json()
+        assert pr["source_branch"] == branch, pr
+        assert f"Closes #{issue_number}" in pr["body"], pr
+
+        client.delete(f"/users/{owner}/repos/{repo}/copilots/{sid}", expect=200)
+    finally:
+        mock.stop()
+        if client and owner and repo:
+            try:
+                client.delete(f"/repos/{repo}", expect=204)
+            except Exception:
+                pass
+
+
 def _read_test_key() -> tuple[str, str, str] | None:
     """从仓库根目录 assets.md 读取真实测试密钥；不存在返回 None。"""
     p = Path(__file__).resolve().parent.parent / "assets.md"
