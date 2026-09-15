@@ -141,6 +141,8 @@ type Blob struct {
 	Size     int64  `json:"size"`
 	Encoding string `json:"encoding"` // utf-8 | binary | truncated
 	Content  string `json:"content"`
+	// LatestCommit 该文件最近一次变更的提交（由 API 层填充，可选）
+	LatestCommit *Commit `json:"latest_commit,omitempty"`
 }
 
 func ReadBlob(owner, name, ref, file string) (*Blob, error) {

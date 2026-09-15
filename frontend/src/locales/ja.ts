@@ -33,6 +33,7 @@ export const ja: Messages = {
     "description": "説明",
     "create": "作成",
     "add": "追加",
+    "copy": "コピー",
     "copied": "コピーしました",
     "copyFailed": "コピーに失敗しました — 手動でコピーしてください",
     "optional": "任意",

@@ -10,6 +10,7 @@ import {
   FolderTree,
   GitBranch,
   GitBranchPlus,
+  GitCommitHorizontal,
   List,
   Pencil,
   Search,
@@ -17,7 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Blame, type Blob, type Branch, type SearchResult, type Tag, type TreeEntry } from "@/lib/api";
+import { api, type Blame, type Blob, type Branch, type Commit, type SearchResult, type Tag, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -197,6 +198,7 @@ export interface CodeTabProps {
   branches: Branch[];
   tags: Tag[];
   entries: TreeEntry[];
+  dirLatestCommit?: Commit | null;
   blob: Blob | null;
   blame: Blame | null;
   error: string;
@@ -224,6 +226,7 @@ export default function CodeTab({
   branches,
   tags,
   entries,
+  dirLatestCommit,
   blob,
   blame,
   error,
@@ -273,6 +276,8 @@ export default function CodeTab({
   const showOutline = !emptyRepo && !blameParam && !!blob && blob.encoding === "utf-8";
   // 目录列表默认不展示侧栏；打开文件后才显示左侧文件树（大纲同样需打开文件）
   const showTree = !emptyRepo && !!blob;
+  // “综合”最后提交：打开文件时用文件的，否则用当前目录的
+  const latestCommit = blob ? blob.latest_commit : dirLatestCommit;
 
   // 回到目录列表（未打开文件）时关闭窄屏抽屉，避免残留
   useEffect(() => {
@@ -485,6 +490,27 @@ export default function CodeTab({
       )}
 
       <div className="min-w-0 space-y-4">
+
+      {!emptyRepo && !error && latestCommit && (
+        <div className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm">
+          <GitCommitHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate font-medium" title={latestCommit.message}>
+            {latestCommit.message}
+          </span>
+          <span className="hidden shrink-0 text-muted-foreground sm:inline">
+            {latestCommit.author}
+          </span>
+          <code
+            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
+            title={latestCommit.sha}
+          >
+            {latestCommit.sha.slice(0, 7)}
+          </code>
+          <span className="shrink-0 whitespace-nowrap text-muted-foreground">
+            {formatDate(latestCommit.date, locale)}
+          </span>
+        </div>
+      )}
 
       {error && (
         <Card className="border-destructive">

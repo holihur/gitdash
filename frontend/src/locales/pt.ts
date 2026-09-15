@@ -33,6 +33,7 @@ export const pt: Messages = {
     description: "Descrição",
     create: "Criar",
     add: "Adicionar",
+    copy: "Copiar",
     copied: "Copiado",
     copyFailed: "Falha ao copiar — copie manualmente",
     optional: "Opcional",

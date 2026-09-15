@@ -33,6 +33,7 @@ export const ko: Messages = {
     description: "설명",
     create: "생성",
     add: "추가",
+    copy: "복사",
     copied: "복사됨",
     copyFailed: "복사에 실패했습니다 — 직접 복사해 주세요",
     optional: "선택 사항",

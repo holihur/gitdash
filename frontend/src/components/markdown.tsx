@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import { cn, copyText } from "@/lib/utils";
 import { extractHeadings } from "@/lib/md-headings";
 import { renderMermaid } from "@/components/mermaid";
 
@@ -14,7 +14,65 @@ export type { MdHeading } from "@/lib/md-headings";
  * 仅在真正展示 Markdown 时才加载，highlight.js（约 150KB）更是在确有代码块时才请求，
  * 避免拖大公共 chunk 与首屏。
  */
+const COPY_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+
+// addCopyButtons 把每个 <pre> 包进 .code-block 容器，并在右上角注入复制按钮
+// （按钮放在滚动容器之外，横向滚动代码时保持固定）。
+function addCopyButtons(
+  root: HTMLElement,
+  t: (key: string) => string,
+  cleanups: Array<() => void>,
+) {
+  const pres = Array.from(root.querySelectorAll<HTMLElement>("pre")).filter(
+    (pre) => pre.querySelector("code") && !pre.closest(".mermaid") && !pre.closest(".code-block"),
+  );
+  for (const pre of pres) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block";
+    pre.replaceWith(wrapper);
+    wrapper.appendChild(pre);
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "code-copy-btn";
+    btn.title = t("common.copy");
+    btn.setAttribute("aria-label", t("common.copy"));
+    btn.innerHTML = COPY_ICON;
+
+    let timer: number | undefined;
+    const onClick = () => {
+      const code = pre.querySelector("code")?.textContent ?? "";
+      copyText(code)
+        .then(() => {
+          btn.innerHTML = CHECK_ICON;
+          btn.classList.add("copied");
+          btn.title = t("common.copied");
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => {
+            btn.innerHTML = COPY_ICON;
+            btn.classList.remove("copied");
+            btn.title = t("common.copy");
+          }, 1500);
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    btn.addEventListener("click", onClick);
+    wrapper.appendChild(btn);
+
+    cleanups.push(() => {
+      window.clearTimeout(timer);
+      btn.removeEventListener("click", onClick);
+    });
+  }
+}
+
 export function MarkdownView({ text, className }: { text: string; className?: string }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState("");
 
@@ -83,26 +141,30 @@ export function MarkdownView({ text, className }: { text: string; className?: st
         el.textContent.length <= 200_000 &&
         !el.classList.contains("language-mermaid"),
     );
-    if (codes.length === 0) {
-      return () => {
-        alive = false;
-      };
-    }
 
-    void import("highlight.js/lib/common").then(({ default: hljs }) => {
-      if (!alive) return;
-      codes.forEach((el) => {
-        try {
-          hljs.highlightElement(el);
-        } catch {
-          /* ignore */
-        }
+    const cleanups: Array<() => void> = [];
+    const withCopyButtons = () => addCopyButtons(root, t, cleanups);
+
+    if (codes.length === 0) {
+      withCopyButtons();
+    } else {
+      void import("highlight.js/lib/common").then(({ default: hljs }) => {
+        if (!alive) return;
+        codes.forEach((el) => {
+          try {
+            hljs.highlightElement(el);
+          } catch {
+            /* ignore */
+          }
+        });
+        withCopyButtons();
       });
-    });
+    }
     return () => {
       alive = false;
+      cleanups.forEach((fn) => fn());
     };
-  }, [html]);
+  }, [html, t]);
 
   return (
     <div

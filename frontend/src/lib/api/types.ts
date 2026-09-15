@@ -175,6 +175,8 @@ export interface Blob {
   size: number;
   encoding: "utf-8" | "binary" | "truncated";
   content: string;
+  /** 该文件最近一次变更的提交（服务端填充） */
+  latest_commit?: Commit;
 }
 
 export interface BlameCommit {

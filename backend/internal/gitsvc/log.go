@@ -101,6 +101,31 @@ func Commits(owner, name, ref string, limit int) ([]Commit, error) {
 	return commits, nil
 }
 
+// LastCommit 返回 ref 上最近一次改动 path（文件或目录；空 = 仓库根）的提交。
+// 空仓库（无提交）返回 (nil, nil)。
+func LastCommit(owner, name, ref, path string) (*Commit, error) {
+	if !ValidRef(ref) {
+		return nil, fmt.Errorf("invalid ref %q", ref)
+	}
+	args := []string{"log", "-1", "--date=iso-strict", "--pretty=format:%H%x1f%an%x1f%ad%x1f%s", ref}
+	if path != "" {
+		args = append(args, "--", path)
+	}
+	out, err := gitOut(RepoPath(owner, name), args...)
+	if err != nil {
+		return nil, err
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return nil, nil
+	}
+	parts := strings.SplitN(out, "\x1f", 4)
+	if len(parts) < 4 {
+		return nil, nil
+	}
+	return &Commit{SHA: parts[0], Author: parts[1], Date: parts[2], Message: parts[3]}, nil
+}
+
 // CommitDiff 返回某提交相对第一父提交（根提交相对空树）的变更。
 func CommitDiff(owner, name, sha string) ([]DiffFile, string, error) {
 	path := RepoPath(owner, name)

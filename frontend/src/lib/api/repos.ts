@@ -98,7 +98,7 @@ export const reposApi = {
   branches: (owner: string, name: string) =>
     req<Branch[]>(`/users/${owner}/repos/${name}/branches`),
   tree: (owner: string, name: string, ref: string, path: string) =>
-    req<{ path: string; entries: TreeEntry[] }>(
+    req<{ path: string; entries: TreeEntry[]; truncated?: boolean; latest_commit?: Commit }>(
       `/users/${owner}/repos/${name}/tree?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
     ),
   blob: (owner: string, name: string, ref: string, path: string) =>

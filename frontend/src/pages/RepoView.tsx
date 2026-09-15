@@ -12,7 +12,7 @@ import {
   RefreshCw,
   Star,
 } from "lucide-react";
-import { api, cloneCommand, type Blame, type Blob, type Branch, type Repo, type Tag, type TreeEntry } from "@/lib/api";
+import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -84,6 +84,7 @@ export default function RepoView() {
   const isOwner = repo?.role === "owner";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [entries, setEntries] = useState<TreeEntry[]>([]);
+  const [treeLatestCommit, setTreeLatestCommit] = useState<Commit | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [blame, setBlame] = useState<Blame | null>(null);
   const [error, setError] = useState("");
@@ -208,6 +209,7 @@ export default function RepoView() {
     try {
       const data = await api.tree(owner, name, ref, currentDir);
       setEntries(data.entries);
+      setTreeLatestCommit(data.latest_commit ?? null);
       setBlob(null);
       setError("");
     } catch (e) {
@@ -524,6 +526,7 @@ export default function RepoView() {
               branches={branches}
               tags={tags}
               entries={entries}
+              dirLatestCommit={treeLatestCommit}
               blob={blob}
               blame={blame}
               error={error}

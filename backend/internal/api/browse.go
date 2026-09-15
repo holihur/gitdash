@@ -70,7 +70,11 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 	if truncated {
 		entries = entries[:maxEntries]
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"path": dir, "entries": entries, "truncated": truncated})
+	// 当前目录的整体最后提交（“综合”信息），供前端 Latest commit 横幅展示
+	latest, _ := gitsvc.LastCommit(owner, name, ref, dir)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"path": dir, "entries": entries, "truncated": truncated, "latest_commit": latest,
+	})
 }
 
 // blob 读取文件内容。
@@ -92,11 +96,14 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	b, err := gitsvc.ReadBlob(owner, name, r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
+	ref := r.URL.Query().Get("ref")
+	file := r.URL.Query().Get("path")
+	b, err := gitsvc.ReadBlob(owner, name, ref, file)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	b.LatestCommit, _ = gitsvc.LastCommit(owner, name, ref, file)
 	writeJSON(w, http.StatusOK, b)
 }
 

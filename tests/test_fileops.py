@@ -78,6 +78,32 @@ def test_file_ops_bad_paths(repo_env):
     assert any(e["name"] == "f.txt" for e in feat)
 
 
+def test_tree_and_blob_latest_commit(repo_env):
+    """代码浏览：目录/文件返回“综合”的最后提交信息（含目录聚合）。"""
+    an, c, repo = repo_env
+    _commit(c, an, repo, "first commit", [
+        {"path": "README.md", "action": "create", "content": "# hi\n"},
+        {"path": "src/app.ts", "action": "create", "content": "a\n"},
+    ])
+    _commit(c, an, repo, "touch src", [
+        {"path": "src/app.ts", "action": "update", "content": "b\n"},
+    ])
+
+    # 根目录：整体最后提交
+    root = c.get(f"/repos/{repo}/tree?ref=main&path=", expect=200).json()
+    assert root["latest_commit"]["message"] == "touch src"
+    assert root["latest_commit"]["author"] == an
+    assert root["latest_commit"]["sha"] and root["latest_commit"]["date"]
+
+    # 子目录：聚合到该目录下最近一次改动
+    src = c.get(f"/repos/{repo}/tree?ref=main&path=src", expect=200).json()
+    assert src["latest_commit"]["message"] == "touch src"
+
+    # 文件：该文件自己的最后提交
+    blob = c.get(f"/repos/{repo}/blob?ref=main&path=README.md", expect=200).json()
+    assert blob["latest_commit"]["message"] == "first commit"
+
+
 def test_file_ops_permissions(repo_env, user_factory, anon):
     an, c, repo = repo_env
     # write 协作者可提交

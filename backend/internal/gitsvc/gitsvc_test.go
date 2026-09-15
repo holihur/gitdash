@@ -159,6 +159,48 @@ func TestWriteCommitWithRelativeDataDir(t *testing.T) {
 	}
 }
 
+func TestLastCommit(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "src"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteCommit("alice", "src", "main", "add root file", "alice",
+		[]FileChange{{Path: "a.txt", Action: "create", Content: "hello"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteCommit("alice", "src", "main", "touch nested", "bob",
+		[]FileChange{{Path: "docs/b.md", Action: "create", Content: "x"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 根目录整体最后提交
+	root, err := LastCommit("alice", "src", "main", "")
+	if err != nil || root == nil {
+		t.Fatalf("root last commit: %+v, %v", root, err)
+	}
+	if root.Message != "touch nested" || root.Author != "bob" || root.SHA == "" || root.Date == "" {
+		t.Fatalf("root = %+v", root)
+	}
+
+	// 目录聚合：docs 的最后提交
+	docs, err := LastCommit("alice", "src", "main", "docs")
+	if err != nil || docs == nil || docs.Message != "touch nested" {
+		t.Fatalf("docs = %+v, %v", docs, err)
+	}
+
+	// 文件：a.txt 的最后提交
+	a, err := LastCommit("alice", "src", "main", "a.txt")
+	if err != nil || a == nil || a.Message != "add root file" {
+		t.Fatalf("a.txt = %+v, %v", a, err)
+	}
+}
+
 func TestPushMirror(t *testing.T) {
 	dir := t.TempDir()
 	if err := Init(dir); err != nil {

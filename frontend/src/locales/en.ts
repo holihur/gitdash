@@ -31,6 +31,7 @@ export const en = {
     description: "Description",
     create: "Create",
     add: "Add",
+    copy: "Copy",
     copied: "Copied",
     copyFailed: "Copy failed — please copy manually",
     optional: "Optional",

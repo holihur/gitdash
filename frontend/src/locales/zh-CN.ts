@@ -33,6 +33,7 @@ export const zhCN: Messages = {
     description: "描述",
     create: "创建",
     add: "添加",
+    copy: "复制",
     copied: "已复制",
     copyFailed: "复制失败——请手动复制",
     optional: "可选",

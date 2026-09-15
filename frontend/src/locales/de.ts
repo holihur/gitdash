@@ -33,6 +33,7 @@ export const de: Messages = {
     description: "Beschreibung",
     create: "Erstellen",
     add: "Hinzufügen",
+    copy: "Kopieren",
     copied: "Kopiert",
     copyFailed: "Kopieren fehlgeschlagen — bitte manuell kopieren",
     optional: "Optional",

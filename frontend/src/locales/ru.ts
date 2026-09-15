@@ -33,6 +33,7 @@ export const ru: Messages = {
     "description": "Описание",
     "create": "Создать",
     "add": "Добавить",
+    "copy": "Копировать",
     "copied": "Скопировано",
     "copyFailed": "Не удалось скопировать — скопируйте вручную",
     "optional": "Необязательно",
