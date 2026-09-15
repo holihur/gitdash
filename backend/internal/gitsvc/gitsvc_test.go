@@ -202,8 +202,8 @@ func TestLastCommit(t *testing.T) {
 }
 
 func TestSSHEnvAlwaysAcceptsNewHostKeys(t *testing.T) {
-	// issue #8: 无私钥导入时也必须注入 accept-new，避免卡在 host key 确认。
-	env, cleanup, err := sshEnv("")
+	// issue #8: 无私钥的 SSH 远端也必须注入 accept-new，避免卡在 host key 确认。
+	env, cleanup, err := sshEnv("git@github.com:owner/repo.git", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,9 +220,20 @@ func TestSSHEnvAlwaysAcceptsNewHostKeys(t *testing.T) {
 	if strings.Contains(cmd, "-i") || strings.Contains(cmd, "IdentitiesOnly") {
 		t.Fatalf("no-key ssh command %q should not contain -i/IdentitiesOnly", cmd)
 	}
+	// ssh:// 前缀同样识别为 SSH。
+	if env, _, err := sshEnv("ssh://git@github.com/owner/repo.git", ""); err != nil || len(env) != 1 {
+		t.Fatalf("ssh:// remote env = %v, err = %v", env, err)
+	}
 
-	// 有私钥时仍需指定专用 key。
-	env, cleanup, err = sshEnv("ssh-ed25519 AAAA fake\n")
+	// 非 SSH 远端（https / git / 本地路径）不注入，避免干扰其它协议。
+	for _, u := range []string{"https://github.com/owner/repo.git", "git://host/repo.git", "/tmp/local.git"} {
+		if env, cleanup, err := sshEnv(u, ""); err != nil || env != nil || cleanup != nil {
+			t.Fatalf("non-ssh %q should not inject env: env=%v hasCleanup=%v err=%v", u, env, cleanup != nil, err)
+		}
+	}
+
+	// 有私钥时仍需指定专用 key（即使远端不是 SSH，只要给了 key 就用）。
+	env, cleanup, err = sshEnv("git@github.com:owner/repo.git", "ssh-ed25519 AAAA fake\n")
 	if err != nil {
 		t.Fatal(err)
 	}

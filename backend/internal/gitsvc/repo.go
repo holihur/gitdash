@@ -138,7 +138,7 @@ func ImportRepo(url, targetOwner, targetName, privateKey string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	env, cleanup, err := sshEnv(privateKey)
+	env, cleanup, err := sshEnv(url, privateKey)
 	if err != nil {
 		return err
 	}
@@ -162,7 +162,7 @@ func PushMirror(owner, name, url, privateKey string) error {
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
 		return fmt.Errorf("repo %s/%s not on disk", owner, name)
 	}
-	env, cleanup, err := sshEnv(privateKey)
+	env, cleanup, err := sshEnv(url, privateKey)
 	if err != nil {
 		return err
 	}
@@ -174,14 +174,19 @@ func PushMirror(owner, name, url, privateKey string) error {
 }
 
 // sshEnv 构造 git 通过 SSH 访问远端所需的环境变量。
-// 始终注入 StrictHostKeyChecking=accept-new：首次连接公网仓库（如 github.com）时
-// 自动接受 host key，避免因 known_hosts 缺失卡在
+// 仅对 SSH 远端（git@host:path 或 ssh://）注入：首次连接公网仓库（如 github.com）
+// 时自动接受 host key，避免因 known_hosts 缺失卡在
 // "Are you sure you want to continue connecting?" 交互确认（issue #8）。
+// https:// 与 git:// 远端无需该环境变量，保持原样以免干扰。
 // privateKey 非空时额外写入临时 key 文件（0600）并加 -i/-o IdentitiesOnly。
 // 返回的 cleanup 用于清理临时 key 文件（无 key 时为 nil）。
-func sshEnv(privateKey string) ([]string, func(), error) {
+func sshEnv(url, privateKey string) ([]string, func(), error) {
+	hasKey := strings.TrimSpace(privateKey) != ""
+	if !hasKey && !isSSHURL(url) {
+		return nil, nil, nil
+	}
 	cmd := "ssh -o StrictHostKeyChecking=accept-new"
-	if strings.TrimSpace(privateKey) == "" {
+	if !hasKey {
 		return []string{"GIT_SSH_COMMAND=" + cmd}, nil, nil
 	}
 	keyPath, err := writeTempImportKey(privateKey)
@@ -190,6 +195,20 @@ func sshEnv(privateKey string) ([]string, func(), error) {
 	}
 	cmd += " -i '" + strings.ReplaceAll(keyPath, "'", "'\\''") + "' -o IdentitiesOnly=yes"
 	return []string{"GIT_SSH_COMMAND=" + cmd}, func() { _ = os.Remove(keyPath) }, nil
+}
+
+// isSSHURL 判断远端地址是否走 SSH：ssh:// 前缀，或 scp 风格 user@host:path。
+func isSSHURL(raw string) bool {
+	raw = strings.TrimSpace(raw)
+	if strings.HasPrefix(raw, "ssh://") {
+		return true
+	}
+	if strings.Contains(raw, "://") { // http(s):// / git:// 等其它 scheme
+		return false
+	}
+	at := strings.IndexByte(raw, '@')
+	colon := strings.IndexByte(raw, ':')
+	return at > 0 && colon > at
 }
 
 // writeTempImportKey 把导入私钥写入临时文件（0600），调用方负责删除。
