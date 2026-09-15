@@ -1,10 +1,23 @@
-import { pageQuery, req, reqPage } from "./core";
+import { req, reqPage } from "./core";
 import type { BranchProtection, Issue, IssueComment, Label, MergeGate, Milestone, PullDiff, PullRequest, PullReview, PullState, ReviewState } from "./types";
 
 export const issuesApi = {
   // issues
-  listIssues: (owner: string, name: string, limit?: number, offset?: number) =>
-    reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${pageQuery(limit, offset)}`),
+  listIssues: (
+    owner: string,
+    name: string,
+    limit?: number,
+    offset?: number,
+    filters?: { q?: string; state?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    if (offset) params.set("offset", String(offset));
+    if (filters?.q) params.set("q", filters.q);
+    if (filters?.state) params.set("state", filters.state);
+    const qs = params.toString();
+    return reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${qs ? `?${qs}` : ""}`);
+  },
   createIssue: (owner: string, name: string, title: string, body: string) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues`, {
       method: "POST",
@@ -15,6 +28,18 @@ export const issuesApi = {
       method: "PATCH",
       body: JSON.stringify({ state }),
     }),
+  updateIssue: (
+    owner: string,
+    name: string,
+    number: number,
+    patch: { title?: string; body?: string; state?: "open" | "closed"; pinned?: boolean },
+  ) =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteIssue: (owner: string, name: string, number: number) =>
+    req<null>(`/users/${owner}/repos/${name}/issues/${number}`, { method: "DELETE" }),
 
 
   // issue/PR comments

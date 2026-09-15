@@ -212,6 +212,7 @@ export interface Issue {
   title: string;
   body: string;
   state: "open" | "closed";
+  pinned?: boolean;
   author: string;
   created_at: string;
   updated_at: string;

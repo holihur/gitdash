@@ -101,7 +101,8 @@ type Issue struct {
 	Number    int64   `json:"number"`
 	Title     string  `json:"title"`
 	Body      string  `json:"body"`
-	State     string  `json:"state"` // "open" | "closed"
+	State     string  `json:"state"`  // "open" | "closed"
+	Pinned    bool    `json:"pinned"` // 置顶
 	Author    string  `json:"author"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`

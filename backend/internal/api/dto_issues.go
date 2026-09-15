@@ -15,6 +15,16 @@ type setIssueStateReq struct {
 	State string `json:"state"` // 目标状态（open 或 closed）
 }
 
+// updateIssueReq 编辑 Issue 请求体（字段均可选）。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type updateIssueReq struct {
+	Title  *string `json:"title"`  // 新标题（可选）
+	Body   *string `json:"body"`   // 新正文（可选）
+	State  *string `json:"state"`  // 新状态 open/closed（可选）
+	Pinned *bool   `json:"pinned"` // 是否置顶（可选）
+}
+
 // setIssueLabelsReq 设置 Issue 标签请求体。
 //
 //nolint:unused // 仅供 swagger @Param 注解引用

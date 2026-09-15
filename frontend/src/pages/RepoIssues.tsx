@@ -5,8 +5,13 @@ import {
   Circle,
   Flag,
   MessageSquare,
+  Pencil,
+  Pin,
+  PinOff,
   Plus,
+  Search,
   Tag,
+  Trash2,
 } from "lucide-react";
 import { api, type Issue, type Label, type Milestone } from "@/lib/api";
 import { useQueryState } from "@/lib/query-state";
@@ -32,6 +37,7 @@ import CommentSection from "@/components/comment-section";
 import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
 import ListSkeleton from "@/components/list-skeleton";
+import ConfirmDialog from "@/components/confirm-dialog";
 
 interface Draft {
   labels: number[];
@@ -52,6 +58,12 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
   const filterLabel = get("i_label", "") ? Number(get("i_label", "")) : null;
   const setFilterLabel = (id: number | null) =>
     set({ i_label: id ?? null, i_page: null }, { push: true });
+  // 搜索词 / 状态过滤同步进 URL(?i_q/?i_state)
+  const urlQuery = get("i_q", "");
+  const stateFilter = get("i_state", ""); // "" | "open" | "closed"
+  const setStateFilter = (s: string) =>
+    set({ i_state: s || null, i_page: null }, { push: true });
+  const [searchInput, setSearchInput] = useState(urlQuery);
   const [labels, setLabels] = useState<Label[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,11 +83,22 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
   const [body, setBody] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // 编辑 / 删除 issue
+  const [editTarget, setEditTarget] = useState<Issue | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editBody, setEditBody] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Issue | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const [is, ls, ms] = await Promise.all([
-        api.listIssues(owner, name, pageSize, (page - 1) * pageSize),
+        api.listIssues(owner, name, pageSize, (page - 1) * pageSize, {
+          q: urlQuery,
+          state: stateFilter,
+        }),
         api.listLabels(owner, name),
         api.listMilestones(owner, name),
       ]);
@@ -89,11 +112,20 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
     } finally {
       setLoading(false);
     }
-  }, [owner, name, page, pageSize]);
+  }, [owner, name, page, pageSize, urlQuery, stateFilter]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // 输入防抖：停止输入 300ms 后写入 URL 触发搜索
+  useEffect(() => {
+    if (searchInput.trim() === urlQuery) return;
+    const timer = setTimeout(() => {
+      set({ i_q: searchInput.trim() || null, i_page: null }, { push: false });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, urlQuery, set]);
 
   const create = async () => {
     if (!title.trim()) return;
@@ -130,6 +162,70 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
         n.delete(issue.id);
         return n;
       });
+    }
+  };
+
+  const openEdit = (issue: Issue) => {
+    setEditTarget(issue);
+    setEditTitle(issue.title);
+    setEditBody(issue.body);
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget || !editTitle.trim()) return;
+    const patch: { title?: string; body?: string } = {};
+    if (editTitle.trim() !== editTarget.title) patch.title = editTitle.trim();
+    if (editBody !== editTarget.body) patch.body = editBody;
+    if (Object.keys(patch).length === 0) {
+      setEditTarget(null);
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await api.updateIssue(owner, name, editTarget.number, patch);
+      toast.success(t("issues.edited", { number: editTarget.number }));
+      setEditTarget(null);
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const togglePin = async (issue: Issue) => {
+    setBusyIds((s) => new Set(s).add(issue.id));
+    try {
+      await api.updateIssue(owner, name, issue.number, { pinned: !issue.pinned });
+      toast.success(
+        issue.pinned
+          ? t("issues.unpinned", { number: issue.number })
+          : t("issues.pinnedMsg", { number: issue.number }),
+      );
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusyIds((s) => {
+        const n = new Set(s);
+        n.delete(issue.id);
+        return n;
+      });
+    }
+  };
+
+  const removeIssue = async (issue: Issue) => {
+    setDeleting(true);
+    try {
+      await api.deleteIssue(owner, name, issue.number);
+      toast.success(t("issues.deleted", { number: issue.number }));
+      setDeleteTarget(null);
+      if (expanded === issue.number) setExpanded(null);
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -255,6 +351,34 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder={t("issues.searchPlaceholder")}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          {(["", "open", "closed"] as const).map((s) => (
+            <Button
+              key={s || "all"}
+              size="sm"
+              variant={stateFilter === s ? "secondary" : "outline"}
+              onClick={() => setStateFilter(s)}
+            >
+              {s === ""
+                ? t("issues.filterAll")
+                : s === "open"
+                  ? t("issues.open")
+                  : t("issues.closed")}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {labels.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-muted-foreground">{t("issues.filterHint")}</span>
@@ -285,7 +409,7 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
 
       {loading && <ListSkeleton rows={5} header={false} />}
 
-      {!loading && !error && issues.length === 0 && (
+      {!loading && !error && issues.length === 0 && urlQuery === "" && stateFilter === "" && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <MessageSquare className="h-10 w-10 text-muted-foreground" />
@@ -294,6 +418,25 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
             <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4" />
               {t("issues.new")}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!loading && !error && issues.length === 0 && filterLabel === null && (urlQuery !== "" || stateFilter !== "") && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+            <Search className="h-8 w-8 text-muted-foreground" />
+            <p className="font-medium">{t("issues.noSearchMatch")}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchInput("");
+                setStateFilter("");
+              }}
+            >
+              {t("issues.clearSearch")}
             </Button>
           </CardContent>
         </Card>
@@ -337,13 +480,18 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     )}
                     <span className="min-w-0 flex-1">
-                      <span
-                        className={cn(
-                          "block truncate font-medium hover:underline",
-                          !isOpen && "text-muted-foreground",
+                      <span className="flex items-center gap-1">
+                        {issue.pinned && (
+                          <Pin className="h-3.5 w-3.5 shrink-0 fill-current text-amber-500" />
                         )}
-                      >
-                        {issue.title}
+                        <span
+                          className={cn(
+                            "min-w-0 truncate font-medium hover:underline",
+                            !isOpen && "text-muted-foreground",
+                          )}
+                        >
+                          {issue.title}
+                        </span>
                       </span>
                       {(issueLabels.length > 0 || issue.milestone) && (
                         <span className="mt-1 flex flex-wrap items-center gap-1">
@@ -384,6 +532,38 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
                       onClick={() => setState(issue, isOpen ? "closed" : "open")}
                     >
                       {isOpen ? t("issues.close") : t("issues.reopen")}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0 p-0"
+                      title={issue.pinned ? t("issues.unpin") : t("issues.pin")}
+                      disabled={busy}
+                      onClick={() => togglePin(issue)}
+                    >
+                      {issue.pinned ? (
+                        <PinOff className="h-3.5 w-3.5" />
+                      ) : (
+                        <Pin className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0 p-0"
+                      title={t("issues.edit")}
+                      onClick={() => openEdit(issue)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 w-8 shrink-0 p-0 text-destructive"
+                      title={t("issues.delete")}
+                      onClick={() => setDeleteTarget(issue)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -466,6 +646,54 @@ export default function RepoIssues({ owner, name }: { owner: string; name: strin
           onPageSizeChange={setPageSize}
         />
       )}
+
+      <Dialog open={editTarget !== null} onOpenChange={(o) => !o && setEditTarget(null)}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {t("issues.editDialogTitle", { number: editTarget?.number ?? 0 })}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <FieldLabel htmlFor="edit-issue-title">{t("issues.titleLabel")}</FieldLabel>
+              <Input
+                id="edit-issue-title"
+                maxLength={200}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <FieldLabel htmlFor="edit-issue-body">{t("issues.bodyLabel")}</FieldLabel>
+              <MarkdownEditor
+                id="edit-issue-body"
+                rows={6}
+                value={editBody}
+                onChange={setEditBody}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={saveEdit} disabled={savingEdit || !editTitle.trim()}>
+              {t("issues.saveEdit")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={t("issues.deleteConfirmTitle")}
+        description={t("issues.deleteConfirmDesc", { number: deleteTarget?.number ?? 0 })}
+        confirmText={t("common.delete")}
+        busy={deleting}
+        onConfirm={() => deleteTarget && removeIssue(deleteTarget)}
+      />
 
       <LabelsManager
         open={labelsOpen}

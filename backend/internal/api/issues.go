@@ -17,8 +17,10 @@ import (
 //	@Produce     json
 //	@Param       owner  path string true "仓库所有者（owner 路由时）"
 //	@Param       name   path string true "仓库名"
-//	@Param       limit  query int false "每页数量"
-//	@Param       offset query int false "偏移量"
+//	@Param       limit  query int    false "每页数量"
+//	@Param       offset query int    false "偏移量"
+//	@Param       q      query string false "关键词（标题/正文/作者）"
+//	@Param       state  query string false "状态过滤：open 或 closed（空 = 全部）"
 //	@Success     200 {array} store.Issue
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues [get]
@@ -29,12 +31,18 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pageParams(r)
-	issues, err := a.store.ListIssues(owner, name, limit, offset)
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	if state != "" && state != "open" && state != "closed" {
+		writeCode(w, http.StatusBadRequest, "invalid_state", "state must be 'open' or 'closed'")
+		return
+	}
+	issues, err := a.store.SearchIssuesInRepo(owner, name, q, state, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	total, err := a.store.CountIssues(owner, name)
+	total, err := a.store.CountSearchIssuesInRepo(owner, name, q, state)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -91,21 +99,22 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
 
-// setIssueState 修改 issue 状态（open/closed）。
+// updateIssue 编辑 issue（标题 / 正文 / 状态，字段均可选）。
 //
-//	@Summary     修改 Issue 状态
+//	@Summary     编辑 Issue
+//	@Description 局部更新标题、正文、状态与置顶；至少提供一个字段。
 //	@Tags        issues
 //	@Accept      json
 //	@Produce     json
 //	@Param       owner  path string true "仓库所有者（owner 路由时）"
 //	@Param       name   path string true "仓库名"
 //	@Param       number path int    true "Issue 编号"
-//	@Param       body   body setIssueStateReq true "状态（open/closed）"
+//	@Param       body   body updateIssueReq true "标题 / 正文 / 状态（均可选）"
 //	@Success     200 {object} store.Issue
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues/{number} [patch]
 //	@Router      /repos/{name}/issues/{number} [patch]
-func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
+func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
 		return
@@ -116,17 +125,16 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		State string `json:"state"`
+		Title  *string `json:"title"`
+		Body   *string `json:"body"`
+		State  *string `json:"state"`
+		Pinned *bool   `json:"pinned"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if in.State != "open" && in.State != "closed" {
-		writeCode(w, http.StatusBadRequest, "invalid_state", "state must be 'open' or 'closed'")
-		return
-	}
-	// 先取当前状态，用于判断状态是否真正变化（重复 close/reopen 不发通知）
-	prev, err := a.store.GetPullIssue(owner, name, number)
+
+	prev, err := a.store.GetIssue(owner, name, number)
 	if errors.Is(err, store.ErrNotFound) {
 		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
 		return
@@ -135,23 +143,100 @@ func (a *API) setIssueState(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	issue, err := a.store.SetIssueState(owner, name, number, in.State)
-	if errors.Is(err, store.ErrNotFound) {
-		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
+
+	var titlePtr, bodyPtr *string
+	if in.Title != nil {
+		t := strings.TrimSpace(*in.Title)
+		if t == "" {
+			writeCode(w, http.StatusBadRequest, "title_required", "title is required")
+			return
+		}
+		if len([]rune(t)) > 200 {
+			writeCode(w, http.StatusBadRequest, "title_too_long", "title too long (max 200 chars)")
+			return
+		}
+		titlePtr = &t
+	}
+	if in.Body != nil {
+		if len([]rune(*in.Body)) > 10000 {
+			writeCode(w, http.StatusBadRequest, "body_too_long", "body too long (max 10000 chars)")
+			return
+		}
+		bodyPtr = in.Body
+	}
+	state := ""
+	if in.State != nil {
+		state = *in.State // 不 trim："closed " 等带空白值应被拒绝
+		if state != "open" && state != "closed" {
+			writeCode(w, http.StatusBadRequest, "invalid_state", "state must be 'open' or 'closed'")
+			return
+		}
+	}
+	if titlePtr == nil && bodyPtr == nil && state == "" && in.Pinned == nil {
+		writeCode(w, http.StatusBadRequest, "no_changes", "provide title, body, state or pinned")
 		return
 	}
+
+	issue, err := a.store.UpdateIssue(owner, name, number, titlePtr, bodyPtr)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	if prev.State != issue.State {
+	if state != "" && state != issue.State {
+		issue, err = a.store.SetIssueState(owner, name, number, state)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+	if in.Pinned != nil && *in.Pinned != issue.Pinned {
+		issue, err = a.store.SetIssuePinned(owner, name, number, *in.Pinned)
+		if err != nil {
+			internalError(w, err)
+			return
+		}
+	}
+
+	// 通知：状态变化优先（closed/reopened），否则内容编辑发 edited（重复值不发）。
+	switch {
+	case prev.State != issue.State:
 		action := "closed"
 		if issue.State == "open" {
 			action = "reopened"
 		}
 		a.notify(owner, name, "issue", action, userFrom(r), issue.Number, issue.Title, "")
+	case (titlePtr != nil && *titlePtr != prev.Title) || (bodyPtr != nil && *bodyPtr != prev.Body):
+		a.notify(owner, name, "issue", "edited", userFrom(r), issue.Number, issue.Title, "")
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
+}
+
+// deleteIssue 删除 issue（级联清理标签 / 评论 / 通知 / 看板卡片）。
+//
+//	@Summary     删除 Issue
+//	@Tags        issues
+//	@Param       owner  path string true "仓库所有者（owner 路由时）"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number} [delete]
+//	@Router      /repos/{name}/issues/{number} [delete]
+func (a *API) deleteIssue(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	number, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || number < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
+		return
+	}
+	if errors.Is(a.store.DeleteIssue(owner, name, number), store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) enrichIssues(owner, repo string, issues []store.Issue) []map[string]any {

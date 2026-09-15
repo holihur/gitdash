@@ -110,6 +110,7 @@ type issueRow struct {
 	Title       string `gorm:"not null"`
 	Body        string `gorm:"not null;default:''"`
 	State       string `gorm:"not null;default:'open';index:idx_issues_owner_repo"`
+	Pinned      bool   `gorm:"not null;default:false"` // 置顶：列表最前
 	Author      string `gorm:"not null"`
 	CreatedAt   string `gorm:"not null"`
 	UpdatedAt   string `gorm:"not null"`

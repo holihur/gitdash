@@ -331,10 +331,12 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// issues
 	mux.HandleFunc("GET /api/repos/{name}/issues", a.auth(a.listIssues))
 	mux.HandleFunc("POST /api/repos/{name}/issues", a.auth(a.createIssue))
-	mux.HandleFunc("PATCH /api/repos/{name}/issues/{number}", a.auth(a.setIssueState))
+	mux.HandleFunc("PATCH /api/repos/{name}/issues/{number}", a.auth(a.updateIssue))
+	mux.HandleFunc("DELETE /api/repos/{name}/issues/{number}", a.auth(a.deleteIssue))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues", a.auth(a.listIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues", a.auth(a.createIssue))
-	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.setIssueState))
+	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.updateIssue))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.deleteIssue))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/labels", a.auth(a.setIssueLabels))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/milestone", a.auth(a.setIssueMilestone))
 
