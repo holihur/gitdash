@@ -261,6 +261,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))
 	mux.HandleFunc("GET /api/me", a.auth(a.me))
 	mux.HandleFunc("GET /api/me/export", a.auth(a.exportMe))
+	mux.HandleFunc("DELETE /api/me", a.auth(a.deleteMe))
 
 	// user profile & mfa
 	mux.HandleFunc("POST /api/me/password", a.auth(a.changePassword))
@@ -292,6 +293,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/blame", a.auth(a.blame))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
 	mux.HandleFunc("GET /api/repos/{name}/search", a.auth(a.search))
+	mux.HandleFunc("POST /api/repos/{name}/gc", a.auth(a.gcRepo))
 	// repos（owner 限定版：供协作者 / 跨用户访问，owner 显式声明）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}", a.auth(a.getRepo))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}", a.auth(a.deleteRepo))
@@ -301,6 +303,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blame", a.auth(a.blame))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/search", a.auth(a.search))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/gc", a.auth(a.gcRepo))
 
 	// user page & follow
 	mux.HandleFunc("GET /api/users/{username}", a.auth(a.getUserProfile))

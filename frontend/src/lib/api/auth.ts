@@ -40,6 +40,8 @@ export const authApi = {
     }),
   resendEmailVerification: () =>
     req<{ sent: boolean }>("/me/email/resend", { method: "POST" }),
+  deleteAccount: (password: string, code: string) =>
+    req<null>("/me", { method: "DELETE", body: JSON.stringify({ password, code }) }),
 
   // avatar
   uploadAvatar: (file: File) => {

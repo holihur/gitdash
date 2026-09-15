@@ -22,7 +22,7 @@ English | 简体中文
 - **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR / copilot），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
 - **发现（Explore）**：浏览公开仓库；支持按标签筛选与关键词搜索；仓库设置页可切换公开 / 私有
-- **仓库设置**：owner 可设置默认分支（决定浏览/HEAD 分支）、开启或关闭 issue 功能，并管理可见性与模版标记
+- **仓库设置**：owner 可设置默认分支（决定浏览/HEAD 分支）、开启或关闭 issue 功能，并管理可见性与模版标记；支持一键 **`git gc`**（仓库维护）打包松散对象、回收磁盘空间
 - **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索
 - **代码浏览与网页编辑**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame；可新建 / 编辑 / 删除文件与目录，在提交记录页撤销某次提交（生成反向提交），并在代码页比较任意两个分支 / 标签 / 提交的差异
 - **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md)
@@ -351,6 +351,7 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | POST | `/api/auth/login` | 登录，返回会话 token |
 | POST | `/api/auth/logout` | 登出（作废当前 token） |
 | GET | `/api/me` | 当前用户 |
+| DELETE | `/api/me` | 注销账号（校验密码/MFA 后彻底删除全部数据） |
 | GET | `/api/health` `/api/health/live` `/api/version` | 就绪检查（ping DB，数据库不可用返回 503）/ 存活检查 / 版本 |
 
 业务类（需 `Authorization: Bearer <token>`，token 来自注册/登录）：

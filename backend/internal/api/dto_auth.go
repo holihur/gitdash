@@ -57,6 +57,14 @@ type mfaDisableReq struct {
 	Code     string `json:"code"`     // 认证器 TOTP 代码
 }
 
+// deleteAccountReq 注销账号请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type deleteAccountReq struct {
+	Password string `json:"password"` // 当前密码
+	Code     string `json:"code"`     // 启用 MFA 时的二次验证码
+}
+
 // createKeyReq 添加 SSH 公钥请求体。
 //
 //nolint:unused // 仅供 swagger @Param 注解引用

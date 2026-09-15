@@ -874,7 +874,17 @@ export const ja: DeepPartial<Messages> = {
     "avatarUpload": "アップロード",
     "avatarRemove": "削除",
     "avatarUpdated": "アバターが更新されました",
-    "avatarRemoved": "アバターが削除されました"
+    "avatarRemoved": "アバターが削除されました",
+    "dangerZone": "危険な操作",
+    "deleteAccount": "アカウントを削除",
+    "deleteAccountHint": "アカウントと関連するすべてのデータを完全に削除します。元に戻せません。",
+    "deleteAccountConfirmTitle": "アカウントを完全に削除しますか？",
+    "deleteAccountConfirmBody": "アカウント、リポジトリ、Issue、コメント、パッケージ、トークンなどすべてのデータが完全に削除されます。この操作は取り消せません。",
+    "deleteAccountPassword": "パスワードを確認",
+    "deleteAccountCode": "二要素認証コード",
+    "deleteAccountSendCode": "コードを送信",
+    "deleteAccountButton": "アカウントを削除",
+    "deleteAccountSuccess": "アカウントを削除しました"
   },
   "errors": {
     "gpg_key_required": "Armored public key は必須です",

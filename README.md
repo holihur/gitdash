@@ -22,7 +22,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR / copilot) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
 - **Admin panel**: admin users, settings (OAuth providers), password management
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings; filter by tag and free-text search
-- **Repo settings**: owner-managed default branch (drives the browsed/HEAD branch), issue tracker on/off toggle, visibility and template flags
+- **Repo settings**: owner-managed default branch (drives the browsed/HEAD branch), issue tracker on/off toggle, visibility and template flags; one-click **`git gc`** (repository maintenance) to pack loose objects and reclaim disk space
 - **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore
 - **Code browsing & web editing**: browse repos by branch / directory, view file contents, commit history and blame on the web; create / edit / delete files and folders, revert a commit (creates an inverse commit) from the Commits tab, and compare any two branches / tags / commits from the Code tab
 - **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust), Maven (Java) and Docker/OCI images under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md)
@@ -367,6 +367,7 @@ Auth (public):
 | POST | `/api/auth/login` | Login, returns a session token |
 | POST | `/api/auth/logout` | Logout (invalidates the current token) |
 | GET | `/api/me` | Current user |
+| DELETE | `/api/me` | Delete own account (password/MFA confirmation, wipes all data) |
 | GET | `/api/health` `/api/health/live` `/api/version` | Readiness (pings DB, 503 when down) / liveness / version |
 
 Business (requires `Authorization: Bearer <token>`, token from register/login):

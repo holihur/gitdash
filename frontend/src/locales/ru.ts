@@ -874,7 +874,17 @@ export const ru: DeepPartial<Messages> = {
     "avatarUpload": "Загрузить",
     "avatarRemove": "Удалить",
     "avatarUpdated": "Аватар обновлён",
-    "avatarRemoved": "Аватар удалён"
+    "avatarRemoved": "Аватар удалён",
+    "dangerZone": "Опасная зона",
+    "deleteAccount": "Удалить аккаунт",
+    "deleteAccountHint": "Безвозвратно удаляет ваш аккаунт и все связанные данные.",
+    "deleteAccountConfirmTitle": "Удалить аккаунт навсегда?",
+    "deleteAccountConfirmBody": "Аккаунт, репозитории, задачи, комментарии, пакеты, токены и все остальные данные будут безвозвратно удалены. Это действие необратимо.",
+    "deleteAccountPassword": "Подтвердите пароль",
+    "deleteAccountCode": "Код двухфакторной аутентификации",
+    "deleteAccountSendCode": "Отправить код",
+    "deleteAccountButton": "Удалить мой аккаунт",
+    "deleteAccountSuccess": "Ваш аккаунт удалён"
   },
   "errors": {
     "gpg_key_required": "Требуется бронированный открытый ключ",

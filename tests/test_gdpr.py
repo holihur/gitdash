@@ -80,3 +80,32 @@ def test_deleted_user_content_is_anonymized(admin, user_factory):
 
     # 匿名后登录/注册同名不受影响
     _mk(victim).get("/me", expect=200)
+
+
+def test_self_delete_account_wipes_data(user_factory, client_factory):
+    """用户自助注销：校验密码后彻底删除账号与数据，同名可重新注册。"""
+    from conftest import ApiClient
+
+    username, _, c = user_factory("sd")
+    repo = f"sd-{_uuid()}"
+    c.post("/repos", json={"name": repo, "private": False}, expect=201)
+    c.post(_r(username, repo) + "/issues", json={"title": "t", "body": "b"}, expect=201)
+
+    # 错误密码被拒绝且账号保留
+    c.delete("/me", json={"password": "wrong-pass-123"}, expect=401)
+    c.get("/me", expect=200)
+
+    # 正确密码注销
+    c.delete("/me", json={"password": "test-pass-123456"}, expect=204)
+    c.get("/me", expect=401)
+
+    # 名下仓库消失，他人无法访问
+    other = user_factory("sd2")[2]
+    other.get(_r(username, repo), expect=404)
+
+    # 同名账号可重新注册，旧数据不再存在
+    nc = ApiClient(c.base)
+    token = nc.post("/auth/register",
+                    json={"username": username, "password": "test-pass-123456"},
+                    expect=201).json()["token"]
+    ApiClient(c.base, token).get(_r(username, repo), expect=404)

@@ -32,33 +32,74 @@ func (s *Store) AdminListUsers(q string, limit, offset int) ([]User, int, error)
 	return users, int(total), nil
 }
 
-// AdminDeleteUser 删除用户及其归属数据（会话 / SSH / GPG / PAT / OAuth 绑定 /
-// stars / watches / 通知 / 组织成员 / 协作者），先级联删除其名下仓库。
-// 用户不存在返回 ErrNotFound。
+// AdminDeleteUser 删除用户及其全部归属数据（管理端入口，保留原函数名）。
 func (s *Store) AdminDeleteUser(username string) error {
+	return s.DeleteUserAccount(username)
+}
+
+// DeleteUserAccount 彻底删除用户及其所有个人数据，使账号在实例上完全消失：
+//   - 名下仓库及其全部关联（issue/PR/评论/标签/项目/流水线/发布/话题/包/镜像/copilot 等）
+//   - 会话、SSH/GPG 公钥、PAT、OAuth 应用与授权、头像、BYOK 密钥、runner
+//   - star/watch/关注/组织成员/协作者/通知、配额覆盖、限速与验证码记录
+//
+// 被遗忘权：他人仓库中该用户留下的内容保留以维持协作历史，但作者身份匿名化为
+// deleted-user。用户不存在返回 ErrNotFound。
+//
+// 注意：git 仓库对象与流水线日志存放在磁盘，需由 API 层另行清理。
+func (s *Store) DeleteUserAccount(username string) error {
 	var u userRow
 	if err := s.db.Where("username = ?", username).First(&u).Error; err != nil {
 		return notFoundErr(err)
 	}
-	// 名下仓库走 DeleteRepo 的完整级联（issues/labels/mirrors/pipeline 等）
-	var names []string
-	if err := s.db.Model(&repoRow{}).Where("owner = ?", username).Pluck("name", &names).Error; err != nil {
-		return err
-	}
-	for _, name := range names {
-		if err := s.DeleteRepo(username, name); err != nil {
+	// 名下仓库的完整级联在下方单个事务内完成（含 DeleteRepo 未覆盖的子表）
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// --- 先清理按父表 ID 关联的子表（须在父表删除前执行）---
+		subDeletes := []struct {
+			query string
+			args  []any
+		}{
+			{"DELETE FROM issue_labels WHERE issue_id IN (SELECT id FROM issues WHERE owner = ?) OR label_id IN (SELECT id FROM repo_labels WHERE owner = ?)", []any{username, username}},
+			{"DELETE FROM webhook_deliveries WHERE hook_id IN (SELECT id FROM webhooks WHERE owner = ?)", []any{username}},
+			{"DELETE FROM project_columns WHERE project_id IN (SELECT id FROM projects WHERE owner = ?)", []any{username}},
+			{"DELETE FROM project_swimlanes WHERE project_id IN (SELECT id FROM projects WHERE owner = ?)", []any{username}},
+			{"DELETE FROM project_cards WHERE project_id IN (SELECT id FROM projects WHERE owner = ?)", []any{username}},
+		}
+		for _, d := range subDeletes {
+			if err := tx.Exec(d.query, d.args...).Error; err != nil {
+				return err
+			}
+		}
+		// --- 按 owner 归属的全部仓库关联数据（补齐 DeleteRepo 未覆盖的表）---
+		ownerTables := []any{
+			&repoTopicRow{}, &issueRow{}, &commentRow{}, &repoLabelRow{}, &milestoneRow{},
+			&projectRow{}, &collabRow{}, &webhookRow{}, &starRow{}, &watchRow{},
+			&notificationRow{}, &forkRow{}, &importRow{}, &mirrorRow{}, &pullRequestRow{},
+			&pullReviewRow{}, &branchProtectionRow{}, &pipelineCfgRow{}, &pipelineRunRow{},
+			&pipelineScheduleRow{}, &repoEnvVarRow{}, &releaseRow{}, &releaseAssetRow{},
+			&incomingWebhookRow{}, &packageRow{}, &packageTagRow{}, &packageAuditRow{},
+			&registryManifestRow{}, &copilotSessionRow{},
+		}
+		for _, m := range ownerTables {
+			if err := tx.Where("owner = ?", username).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+		// 被 fork 自该用户仓库的记录（owner 可能是他人）
+		if err := tx.Where("source_owner = ?", username).Delete(&forkRow{}).Error; err != nil {
 			return err
 		}
-	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		// 按 user_id 关联的归属数据
+		if err := tx.Where("owner = ?", username).Delete(&repoRow{}).Error; err != nil {
+			return err
+		}
+
+		// --- 按 user_id 关联的归属数据 ---
 		for _, m := range []any{&sessionRow{}, &sshKeyRow{}, &gpgKeyRow{}, &patRow{}, &userOAuthRow{}} {
 			if err := tx.Where("user_id = ?", u.ID).Delete(m).Error; err != nil {
 				return err
 			}
 		}
-		// 按用户名关联的归属数据
-		for _, m := range []any{&starRow{}, &watchRow{}, &notificationRow{}, &orgMemberRow{}, &collabRow{}} {
+		// --- 按用户名关联的归属数据 ---
+		for _, m := range []any{&starRow{}, &watchRow{}, &notificationRow{}, &orgMemberRow{}, &collabRow{}, &byokKeyRow{}, &userAvatarRow{}} {
 			if err := tx.Where("username = ?", username).Delete(m).Error; err != nil {
 				return err
 			}
@@ -67,9 +108,44 @@ func (s *Store) AdminDeleteUser(username string) error {
 		if err := tx.Where("follower = ? OR followee = ?", username, username).Delete(&followRow{}).Error; err != nil {
 			return err
 		}
-		// 名下 packages（含文件 blob 路径引用；blob 为内容寻址、不含个人信息）
-		if err := tx.Where("owner = ?", username).Delete(&packageRow{}).Error; err != nil {
+		// 用户注册的 OAuth 应用及其授权码 / 签发的 access token
+		var appIDs []int64
+		if err := tx.Model(&oauthAppRow{}).Where("user_id = ?", u.ID).Pluck("id", &appIDs).Error; err != nil {
 			return err
+		}
+		if len(appIDs) > 0 {
+			if err := tx.Where("app_id IN ?", appIDs).Delete(&oauthGrantRow{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("oauth_app_id IN ?", appIDs).Delete(&patRow{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("user_id = ?", u.ID).Delete(&oauthGrantRow{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", u.ID).Delete(&oauthDeviceGrantRow{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("user_id = ?", u.ID).Delete(&oauthAppRow{}).Error; err != nil {
+			return err
+		}
+		// 归属该用户的 runner 与注册 token（scope 形如 user:<username>）
+		scope := "user:" + username
+		for _, m := range []any{&runnerRow{}, &runnerTokenRow{}} {
+			if err := tx.Where("scope = ?", scope).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+		// 配额覆盖（key: quota:user:<lower>）
+		if err := tx.Where("\"key\" = ?", quotaUserPrefix+strings.ToLower(username)).Delete(&settingRow{}).Error; err != nil {
+			return err
+		}
+		// 邮箱验证码 / MFA 一次性验证码（key: email_mfa:<purpose>:<username>）
+		for _, key := range []string{"email_mfa:enroll:" + username, "email_mfa:disable:" + username} {
+			if err := tx.Where("\"key\" = ?", key).Delete(&settingRow{}).Error; err != nil {
+				return err
+			}
 		}
 		// 登录限速记录（key 形如 "username|ip"；双引号引用兼容 SQLite/PG）
 		if err := tx.Where("\"key\" LIKE ?", username+"|%").Delete(&loginFailRow{}).Error; err != nil {
@@ -90,6 +166,8 @@ func (s *Store) AdminDeleteUser(username string) error {
 			{&releaseRow{}, "author = ?", "author"},
 			{&pipelineRunRow{}, "trigger_by = ?", "trigger_by"},
 			{&notificationRow{}, "actor = ?", "actor"},
+			{&packageRow{}, "uploader = ?", "uploader"},
+			{&packageAuditRow{}, "actor = ?", "actor"},
 		}
 		for _, a := range anon {
 			if err := tx.Model(a.model).Where(a.cond, username).Update(a.field, ghost).Error; err != nil {
