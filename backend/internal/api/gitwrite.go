@@ -154,7 +154,15 @@ func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 	in.Branch = strings.TrimSpace(in.Branch)
 	in.Message = strings.TrimSpace(in.Message)
 	if in.Branch == "" {
-		in.Branch = "main"
+		repo, rerr := a.store.GetRepo(owner, name)
+		if rerr != nil {
+			internalError(w, rerr)
+			return
+		}
+		in.Branch = repo.DefaultBranch
+		if in.Branch == "" {
+			in.Branch = "main"
+		}
 	}
 	if in.Message == "" {
 		writeCode(w, http.StatusBadRequest, "message_required", "commit message is required")
@@ -249,6 +257,57 @@ func (a *API) revertCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"sha": newSha, "branch": in.Branch})
+}
+
+// compareRefs 对比仓库内任意两个引用（分支 / 标签 / 提交）的差异。
+//
+//	@Summary     比较引用
+//	@Description 返回 base..head 之间的文件统计与统一 diff；base / head 可为分支名、标签或 commit SHA。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path  string true  "仓库所有者"
+//	@Param       name  path  string true  "仓库名"
+//	@Param       base  query string true  "基准引用"
+//	@Param       head  query string true  "目标引用"
+//	@Success     200 {object} map[string]any "base、head、base_sha、head_sha、files 与 patch"
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/compare [get]
+func (a *API) compareRefs(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	base := strings.TrimSpace(r.URL.Query().Get("base"))
+	head := strings.TrimSpace(r.URL.Query().Get("head"))
+	if base == "" || head == "" {
+		writeCode(w, http.StatusBadRequest, "missing_ref", "base and head are required")
+		return
+	}
+	baseSHA, err := gitsvc.RevSHA(owner, name, base)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_base", "base ref cannot be resolved")
+		return
+	}
+	headSHA, err := gitsvc.RevSHA(owner, name, head)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_head", "head ref cannot be resolved")
+		return
+	}
+	files, err := gitsvc.DiffStats(owner, name, baseSHA, headSHA)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	patch, _ := gitsvc.DiffPatch(owner, name, baseSHA, headSHA)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"base":     base,
+		"head":     head,
+		"base_sha": baseSHA,
+		"head_sha": headSHA,
+		"files":    files,
+		"patch":    patch,
+	})
 }
 
 // commitDiff 查看提交差异。

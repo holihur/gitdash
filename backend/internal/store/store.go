@@ -60,7 +60,11 @@ type Repo struct {
 	Private     bool   `json:"private"`
 	IsTemplate  bool   `json:"is_template"`
 	Banned      bool   `json:"banned"`
-	CreatedAt   string `json:"created_at"`
+	// DefaultBranch 仓库默认分支（git HEAD）；旧数据为空时视为 main。
+	DefaultBranch string `json:"default_branch"`
+	// HasIssues 是否启用 issue 功能。
+	HasIssues bool   `json:"has_issues"`
+	CreatedAt string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
 	// 展示字段（由 API 层填充，store 查询不扫描）

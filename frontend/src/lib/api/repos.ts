@@ -35,6 +35,16 @@ export const reposApi = {
       method: "POST",
       body: JSON.stringify({ is_template: isTemplate }),
     }),
+  setRepoDefaultBranch: (owner: string, name: string, branch: string) =>
+    req<Repo>(`/users/${owner}/repos/${name}/default-branch`, {
+      method: "POST",
+      body: JSON.stringify({ branch }),
+    }),
+  setRepoIssues: (owner: string, name: string, hasIssues: boolean) =>
+    req<Repo>(`/users/${owner}/repos/${name}/issues-enabled`, {
+      method: "POST",
+      body: JSON.stringify({ has_issues: hasIssues }),
+    }),
   setRepoDescription: (owner: string, name: string, description: string) =>
     req<Repo>(`/users/${owner}/repos/${name}/description`, {
       method: "POST",
@@ -113,6 +123,10 @@ export const reposApi = {
     ),
   commitDiff: (owner: string, name: string, sha: string) =>
     req<PullDiff>(`/users/${owner}/repos/${name}/commits/${sha}/diff`),
+  compare: (owner: string, name: string, base: string, head: string) =>
+    req<PullDiff & { base: string; head: string }>(
+      `/users/${owner}/repos/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`,
+    ),
   createCommit: (
     owner: string,
     name: string,

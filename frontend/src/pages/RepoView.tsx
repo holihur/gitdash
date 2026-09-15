@@ -118,6 +118,7 @@ export default function RepoView() {
   const ref =
     urlRef ||
     branches.find((b) => b.is_head)?.name ||
+    repo?.default_branch ||
     branches[0]?.name ||
     "";
 
@@ -354,7 +355,7 @@ export default function RepoView() {
     () => [
       { value: "code", label: t("repo.code") },
       { value: "commits", label: t("repo.commits") },
-      { value: "issues", label: t("issues.title") },
+      ...(repo?.has_issues === false ? [] : [{ value: "issues", label: t("issues.title") }]),
       { value: "pulls", label: t("pulls.title") },
       { value: "pipeline", label: t("pipeline.tab") },
       { value: "copilot", label: t("copilot.tab") },
@@ -362,8 +363,15 @@ export default function RepoView() {
       { value: "projects", label: t("projects.tab") },
       ...(isOwner ? [{ value: "settings", label: t("repo.settings") }] : []),
     ],
-    [t, isOwner],
+    [t, isOwner, repo?.has_issues],
   );
+
+  // 关闭 issue 后，若 URL 仍指向 issues tab，回退到 code。
+  const issuesDisabled = repo?.has_issues === false;
+  const activeTab: RepoTab = issuesDisabled && tab === "issues" ? "code" : tab;
+  useEffect(() => {
+    if (issuesDisabled && tab === "issues") setParams({ tab: null });
+  }, [issuesDisabled, tab, setParams]);
 
   if (missing) {
     return (
@@ -506,10 +514,10 @@ export default function RepoView() {
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}>
+      <Tabs value={activeTab} onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}>
         <TabsListOverflow
           tabs={overflowTabs}
-          value={tab}
+          value={activeTab}
           onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}
           listClassName="w-full sm:w-auto"
         />

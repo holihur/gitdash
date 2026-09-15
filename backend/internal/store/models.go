@@ -44,7 +44,11 @@ type repoRow struct {
 	Private     bool   `gorm:"not null;default:true"`
 	IsTemplate  bool   `gorm:"not null;default:false"`
 	Banned      bool   `gorm:"not null;default:false"`
-	CreatedAt   string `gorm:"not null"`
+	// DefaultBranch 仓库默认分支（git HEAD 指向）；空值按 main 处理。
+	DefaultBranch string `gorm:"not null;default:'main';size:255"`
+	// HasIssues 是否启用 issue 功能（默认开启）；关闭后不可创建/修改 issue。
+	HasIssues bool   `gorm:"not null;default:true"`
+	CreatedAt string `gorm:"not null"`
 }
 
 func (repoRow) TableName() string { return "repos" }

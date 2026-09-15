@@ -66,6 +66,16 @@ type setRepoTemplateReq struct {
 	IsTemplate *bool `json:"is_template"` // 是否为模版仓库（必填）
 }
 
+// setRepoDefaultBranchReq 设置默认分支请求体。
+type setRepoDefaultBranchReq struct {
+	Branch string `json:"branch"` // 默认分支名（必须已存在）
+}
+
+// setRepoIssuesReq 开启/关闭 issue 功能请求体。
+type setRepoIssuesReq struct {
+	HasIssues *bool `json:"has_issues"` // 是否启用 issue（必填）
+}
+
 // setRepoDescriptionReq 修改仓库描述请求体。
 type setRepoDescriptionReq struct {
 	Description string `json:"description"` // 仓库描述（可为空，最长 500 字符）

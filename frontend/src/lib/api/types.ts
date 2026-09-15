@@ -68,6 +68,10 @@ export interface Repo {
   created_at: string;
   private?: boolean;
   is_template?: boolean;
+  /** 仓库默认分支（git HEAD） */
+  default_branch?: string;
+  /** 是否启用 issue 功能 */
+  has_issues?: boolean;
   /** 仅“可访问仓库列表”返回：owner / read / write */
   role?: "owner" | "read" | "write";
   /** star 数量与当前用户是否已 star */

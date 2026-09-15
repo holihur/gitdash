@@ -7,15 +7,21 @@ import (
 )
 
 func toRepo(r repoRow) Repo {
+	def := r.DefaultBranch
+	if def == "" {
+		def = "main"
+	}
 	return Repo{
-		ID:          r.ID,
-		Owner:       r.Owner,
-		Name:        r.Name,
-		Description: r.Description,
-		Private:     r.Private,
-		IsTemplate:  r.IsTemplate,
-		Banned:      r.Banned,
-		CreatedAt:   r.CreatedAt,
+		ID:            r.ID,
+		Owner:         r.Owner,
+		Name:          r.Name,
+		Description:   r.Description,
+		Private:       r.Private,
+		IsTemplate:    r.IsTemplate,
+		Banned:        r.Banned,
+		DefaultBranch: def,
+		HasIssues:     r.HasIssues,
+		CreatedAt:     r.CreatedAt,
 	}
 }
 
@@ -30,15 +36,17 @@ func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo,
 	if isTemplate {
 		private = false
 	}
-	row := repoRow{Owner: owner, Name: name, Description: description, Private: private, IsTemplate: isTemplate, CreatedAt: now()}
+	row := repoRow{Owner: owner, Name: name, Description: description, Private: private, IsTemplate: isTemplate, DefaultBranch: "main", HasIssues: true, CreatedAt: now()}
 	// 用 map 插入绕过 GORM 对 default 字段零值的改写（private=false 必须显式落库）
 	if err := s.db.Table("repos").Create(map[string]any{
-		"owner":       row.Owner,
-		"name":        row.Name,
-		"description": row.Description,
-		"private":     private,
-		"is_template": isTemplate,
-		"created_at":  row.CreatedAt,
+		"owner":          row.Owner,
+		"name":           row.Name,
+		"description":    row.Description,
+		"private":        private,
+		"is_template":    isTemplate,
+		"default_branch": row.DefaultBranch,
+		"has_issues":     row.HasIssues,
+		"created_at":     row.CreatedAt,
 	}).Error; err != nil {
 		if isUniqueErr(err) {
 			return toRepo(row), ErrExists
@@ -98,6 +106,32 @@ func (s *Store) SetRepoPrivate(owner, name string, private bool) error {
 func (s *Store) SetRepoTemplate(owner, name string, isTemplate bool) error {
 	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
 		Update("is_template", isTemplate)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetRepoDefaultBranch 修改仓库默认分支（仅 owner 调用）。
+func (s *Store) SetRepoDefaultBranch(owner, name, branch string) error {
+	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("default_branch", branch)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetRepoHasIssues 开启/关闭仓库 issue 功能（仅 owner 调用）。
+func (s *Store) SetRepoHasIssues(owner, name string, hasIssues bool) error {
+	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("has_issues", hasIssues)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -283,16 +317,19 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 		return nil, err
 	}
 	var collabRows []struct {
-		ID          int64
-		Owner       string
-		Name        string
-		Description string
-		Private     bool
-		CreatedAt   string
-		Perm        string `gorm:"column:permission"`
+		ID            int64
+		Owner         string
+		Name          string
+		Description   string
+		Private       bool
+		DefaultBranch string
+		HasIssues     bool
+		CreatedAt     string
+		Perm          string `gorm:"column:permission"`
 	}
 	if err := s.db.Table("repo_collabs").Select(`repos.id AS id, repos.owner AS owner, repos.name AS name,
-			repos.description AS description, repos.private AS private, repos.created_at AS created_at,
+			repos.description AS description, repos.private AS private, repos.default_branch AS default_branch,
+			repos.has_issues AS has_issues, repos.created_at AS created_at,
 			repo_collabs.permission AS permission`).
 		Joins("JOIN repos ON repos.owner = repo_collabs.owner AND repos.name = repo_collabs.repo").
 		Where("repo_collabs.username = ?", username).Scan(&collabRows).Error; err != nil {
@@ -323,7 +360,7 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 		repos = append(repos, dto)
 	}
 	for _, r := range collabRows {
-		dto := toRepo(repoRow{ID: r.ID, Owner: r.Owner, Name: r.Name, Description: r.Description, Private: r.Private, CreatedAt: r.CreatedAt})
+		dto := toRepo(repoRow{ID: r.ID, Owner: r.Owner, Name: r.Name, Description: r.Description, Private: r.Private, DefaultBranch: r.DefaultBranch, HasIssues: r.HasIssues, CreatedAt: r.CreatedAt})
 		dto.Role = r.Perm
 		repos = append(repos, dto)
 	}

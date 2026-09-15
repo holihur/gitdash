@@ -177,6 +177,25 @@ var (
 	ErrHeadBranch  = errors.New("cannot delete the default (HEAD) branch")
 )
 
+// SetHeadBranch 把仓库的默认分支（HEAD）切换到已存在的分支。
+func SetHeadBranch(owner, name, branch string) error {
+	if !ValidName(owner) || !ValidName(name) {
+		return fmt.Errorf("invalid repo")
+	}
+	if !ValidRef(branch) {
+		return fmt.Errorf("invalid branch %q", branch)
+	}
+	repo := RepoPath(owner, name)
+	if _, err := gitOut(repo, "rev-parse", "-q", "--verify", "refs/heads/"+branch); err != nil {
+		return ErrRefNotFound
+	}
+	if _, err := gitOut(repo, "symbolic-ref", "HEAD", "refs/heads/"+branch); err != nil {
+		return err
+	}
+	InvalidateRefs(owner, name)
+	return nil
+}
+
 func checkRefFormat(full string) error {
 	if _, err := gitOut("", "check-ref-format", full); err != nil {
 		return fmt.Errorf("invalid ref name %q", strings.TrimPrefix(full, "refs/heads/"))

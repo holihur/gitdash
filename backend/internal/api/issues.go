@@ -90,6 +90,15 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	me := userFrom(r)
+	repo, err := a.store.GetRepo(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if !repo.HasIssues {
+		writeCode(w, http.StatusForbidden, "issues_disabled", "issues are disabled for this repository")
+		return
+	}
 	issue, err := a.store.CreateIssue(owner, name, me, title, in.Body)
 	if err != nil {
 		internalError(w, err)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
 	"net/http"
 	"strings"
@@ -116,6 +117,100 @@ func (a *API) setRepoTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.SetRepoTemplate(owner, name, *in.IsTemplate); err != nil {
+		internalError(w, err)
+		return
+	}
+	repo, err := a.store.GetRepo(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, repo)
+}
+
+// setRepoDefaultBranch 设置仓库默认分支（git HEAD）。
+//
+//	@Summary     设置默认分支
+//	@Description 仅仓库所有者可设置，且目标分支必须已存在。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setRepoDefaultBranchReq true "branch"
+//	@Success     200 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/default-branch [post]
+func (a *API) setRepoDefaultBranch(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in setRepoDefaultBranchReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	branch := strings.TrimSpace(in.Branch)
+	if branch == "" {
+		writeCode(w, http.StatusBadRequest, "missing_branch", "missing field: branch")
+		return
+	}
+	if !gitsvc.ValidRef(branch) {
+		writeCode(w, http.StatusBadRequest, "invalid_branch", "invalid branch name")
+		return
+	}
+	switch err := gitsvc.SetHeadBranch(owner, name, branch); {
+	case errors.Is(err, gitsvc.ErrRefNotFound):
+		writeCode(w, http.StatusBadRequest, "branch_not_found", "branch does not exist")
+		return
+	case err != nil:
+		internalError(w, err)
+		return
+	}
+	if err := a.store.SetRepoDefaultBranch(owner, name, branch); err != nil {
+		internalError(w, err)
+		return
+	}
+	repo, err := a.store.GetRepo(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, repo)
+}
+
+// setRepoIssues 开启/关闭仓库 issue 功能。
+//
+//	@Summary     设置 issue 开关
+//	@Description 仅仓库所有者可设置。关闭后该仓库不可再创建 issue。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setRepoIssuesReq true "has_issues"
+//	@Success     200 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     500 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues-enabled [post]
+func (a *API) setRepoIssues(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireOwner(w, r)
+	if !ok {
+		return
+	}
+	var in setRepoIssuesReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.HasIssues == nil {
+		writeErr(w, http.StatusBadRequest, "missing field: has_issues")
+		return
+	}
+	if err := a.store.SetRepoHasIssues(owner, name, *in.HasIssues); err != nil {
 		internalError(w, err)
 		return
 	}

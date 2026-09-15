@@ -6263,6 +6263,71 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/compare": {
+            "get": {
+                "description": "返回 base..head 之间的文件统计与统一 diff；base / head 可为分支名、标签或 commit SHA。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "比较引用",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "基准引用",
+                        "name": "base",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "目标引用",
+                        "name": "head",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "base、head、base_sha、head_sha、files 与 patch",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/copilots": {
             "get": {
                 "produces": [
@@ -6430,6 +6495,86 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/store.CopilotSession"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/default-branch": {
+            "post": {
+                "description": "仅仓库所有者可设置，且目标分支必须已存在。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "设置默认分支",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "branch",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRepoDefaultBranchReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Repo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 },
@@ -6869,6 +7014,77 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/store.Issue"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues-enabled": {
+            "post": {
+                "description": "仅仓库所有者可设置。关闭后该仓库不可再创建 issue。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "设置 issue 开关",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "has_issues",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRepoIssuesReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Repo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 },
@@ -12346,6 +12562,15 @@ const docTemplate = `{
                 }
             }
         },
+        "api.setRepoDefaultBranchReq": {
+            "type": "object",
+            "properties": {
+                "branch": {
+                    "description": "默认分支名（必须已存在）",
+                    "type": "string"
+                }
+            }
+        },
         "api.setRepoDescriptionReq": {
             "type": "object",
             "properties": {
@@ -12365,6 +12590,15 @@ const docTemplate = `{
                 "value": {
                     "description": "环境变量值",
                     "type": "string"
+                }
+            }
+        },
+        "api.setRepoIssuesReq": {
+            "type": "object",
+            "properties": {
+                "has_issues": {
+                    "description": "是否启用 issue（必填）",
+                    "type": "boolean"
                 }
             }
         },
@@ -13792,6 +14026,10 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "default_branch": {
+                    "description": "DefaultBranch 仓库默认分支（git HEAD）；旧数据为空时视为 main。",
+                    "type": "string"
+                },
                 "description": {
                     "type": "string"
                 },
@@ -13800,6 +14038,10 @@ const docTemplate = `{
                 },
                 "fork_repo": {
                     "type": "string"
+                },
+                "has_issues": {
+                    "description": "HasIssues 是否启用 issue 功能。",
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"

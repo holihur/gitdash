@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { BookTemplate, KeyRound, PencilLine, Plus, ShieldCheck, Tag, Trash2 } from "lucide-react";
+import { BookTemplate, CircleDot, GitBranch, KeyRound, PencilLine, Plus, ShieldCheck, Tag, Trash2 } from "lucide-react";
 import { api, type Branch, type BranchProtection, type Repo, type RepoEnvVar } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,10 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const [templateBusy, setTemplateBusy] = useState(false);
   const [description, setDescription] = useState("");
   const [descBusy, setDescBusy] = useState(false);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [defaultBranch, setDefaultBranch] = useState("");
+  const [branchBusy, setBranchBusy] = useState(false);
+  const [issuesBusy, setIssuesBusy] = useState(false);
   const [topicsInput, setTopicsInput] = useState("");
   const [topicsBusy, setTopicsBusy] = useState(false);
   const [deleteRepoOpen, setDeleteRepoOpen] = useState(false);
@@ -37,6 +41,47 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   useEffect(() => {
     setTopicsInput((repo?.topics ?? []).join(", "));
   }, [repo?.topics]);
+
+  useEffect(() => {
+    if (repo?.role !== "owner") return;
+    api
+      .branches(owner, name)
+      .then(setBranches)
+      .catch(() => setBranches([]));
+  }, [owner, name, repo?.role]);
+
+  useEffect(() => {
+    setDefaultBranch(repo?.default_branch || branches[0]?.name || "");
+  }, [repo?.default_branch, branches]);
+
+  const saveDefaultBranch = async () => {
+    if (!repo || !defaultBranch) return;
+    setBranchBusy(true);
+    try {
+      const r = await api.setRepoDefaultBranch(owner, name, defaultBranch);
+      setRepo({ ...repo, default_branch: r.default_branch });
+      toast.success(t("repo.defaultBranchSaved", { branch: r.default_branch ?? defaultBranch }));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBranchBusy(false);
+    }
+  };
+
+  const toggleIssues = async () => {
+    if (!repo) return;
+    setIssuesBusy(true);
+    try {
+      const next = !(repo.has_issues ?? true);
+      const r = await api.setRepoIssues(owner, name, next);
+      setRepo({ ...repo, has_issues: r.has_issues });
+      toast.success(t(r.has_issues ? "repo.issuesNowOn" : "repo.issuesNowOff"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setIssuesBusy(false);
+    }
+  };
 
   const saveDescription = async () => {
     if (!repo) return;
@@ -178,6 +223,70 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
         </Card>
       )}
       <BranchProtectionsCard owner={owner} name={name} />
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <GitBranch className="h-4 w-4" />
+              {t("repo.defaultBranch")}
+            </CardTitle>
+            <CardDescription>{t("repo.defaultBranchDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="h-9 max-w-full rounded-md border bg-background px-2 text-sm"
+                value={defaultBranch}
+                disabled={branchBusy || branches.length === 0}
+                onChange={(e) => setDefaultBranch(e.target.value)}
+              >
+                {branches.map((b) => (
+                  <option key={b.name} value={b.name}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                disabled={
+                  branchBusy ||
+                  !defaultBranch ||
+                  defaultBranch === (repo?.default_branch ?? "")
+                }
+                onClick={saveDefaultBranch}
+              >
+                {t("common.save")}
+              </Button>
+            </div>
+            {branches.length === 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t("repo.defaultBranchEmpty")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {repo?.role === "owner" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CircleDot className="h-4 w-4" />
+              {t("repo.issuesFeature")}
+            </CardTitle>
+            <CardDescription>{t("repo.issuesFeatureDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant={repo.has_issues === false ? "outline" : "secondary"}>
+                {repo.has_issues === false ? t("repo.issuesOff") : t("repo.issuesOn")}
+              </Badge>
+              <Button size="sm" variant="outline" disabled={issuesBusy} onClick={toggleIssues}>
+                {repo.has_issues === false ? t("repo.enableIssues") : t("repo.disableIssues")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {repo?.role === "owner" && <PipelineCard owner={owner} name={name} />}
       {repo?.role === "owner" && <RepoEnvVarsCard owner={owner} name={name} />}
       <Card>

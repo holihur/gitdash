@@ -388,6 +388,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}", a.auth(a.deleteProjectCard))
 
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.auth(a.commitDiff))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/compare", a.auth(a.compareRefs))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits/{sha}/revert", a.auth(a.revertCommit))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits", a.auth(a.writeCommit))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tags", a.auth(a.listTags))
@@ -426,6 +427,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// collaborators
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/visibility", a.auth(a.setRepoVisibility))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/template", a.auth(a.setRepoTemplate))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/default-branch", a.auth(a.setRepoDefaultBranch))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues-enabled", a.auth(a.setRepoIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/description", a.auth(a.setRepoDescription))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/topics", a.auth(a.setRepoTops))
 	mux.HandleFunc("GET /api/topics", a.auth(a.listTopics))
