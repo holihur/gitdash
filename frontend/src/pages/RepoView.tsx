@@ -3,18 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
 import { buildRepoPath, parseRepoRoute, type RepoCodeKind, type RepoTab } from "@/lib/repo-url";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +14,7 @@ import { apiErrorMsg } from "@/lib/errors";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import RefsDialog from "@/components/refs-dialog";
 import RepoHeader from "./repoview/repo-header";
+import ForkDialog from "./repoview/fork-dialog";
 
 const CodeTab = lazy(() => import("./repoview/code-tab"));
 const CommitsTab = lazy(() => import("./repoview/commits-tab"));
@@ -576,29 +566,16 @@ export default function RepoView() {
         current={ref || branches[0]?.name || "main"}
         onRefresh={refreshRefs}
       />
-      <Dialog open={forkOpen} onOpenChange={setForkOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("social.forkTitle")}</DialogTitle>
-            <DialogDescription>
-              {t("social.forkDescription", { name: `${owner}/${name}` })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor="fork-name">{t("social.forkNameLabel")}</Label>
-            <Input
-              id="fork-name"
-              value={forkName}
-              onChange={(e) => setForkName(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button onClick={doFork} disabled={forkBusy || !forkName.trim()}>
-              {forkBusy ? t("social.forking") : t("social.fork")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ForkDialog
+        open={forkOpen}
+        onOpenChange={setForkOpen}
+        owner={owner}
+        name={name}
+        forkName={forkName}
+        onForkName={setForkName}
+        busy={forkBusy}
+        onFork={doFork}
+      />
       <ConfirmDialog
         open={pendingRemove !== null}
         onOpenChange={(o) => !o && setPendingRemove(null)}

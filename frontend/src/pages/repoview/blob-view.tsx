@@ -1,0 +1,141 @@
+import type { Ref } from "react";
+import { Pencil, Trash2 } from "lucide-react";
+import type { Blame, Blob } from "@/lib/api";
+import type { RepoLinkTarget } from "@/lib/md-links";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MarkdownView } from "@/components/markdown";
+import CodeMirrorEditor from "@/components/code-editor-lazy";
+import { formatSize } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
+
+function isMarkdown(path: string): boolean {
+  const base = path.split("/").pop() ?? "";
+  const lower = base.toLowerCase();
+  return /^readme(\.(md|markdown|txt))?$/.test(lower) || /\.(md|markdown)$/.test(lower);
+}
+
+interface Props {
+  owner: string;
+  name: string;
+  refName: string;
+  blob: Blob;
+  blame: Blame | null;
+  blameParam: boolean;
+  codeHostRef: Ref<HTMLDivElement>;
+  onToggleBlame: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onOpenRepoLink: (target: RepoLinkTarget) => void;
+}
+
+/** 单文件内容视图：blame / markdown / 代码高亮，含编辑与删除操作。 */
+export default function BlobView({
+  owner,
+  name,
+  refName,
+  blob,
+  blame,
+  blameParam,
+  codeHostRef,
+  onToggleBlame,
+  onEdit,
+  onDelete,
+  onOpenRepoLink,
+}: Props) {
+  const { t } = useI18n();
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="break-all font-mono text-sm">{blob.path}</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{formatSize(blob.size)}</Badge>
+            {blob.encoding !== "utf-8" && (
+              <Badge variant="destructive">
+                {blob.encoding === "binary" ? t("repo.binaryFile") : t("repo.fileTooLarge")}
+              </Badge>
+            )}
+            {blob.encoding === "utf-8" && (
+              <Button size="sm" variant={blameParam ? "default" : "outline"} onClick={onToggleBlame}>
+                {t("repo.blame")}
+              </Button>
+            )}
+            {blob.encoding === "utf-8" && !isMarkdown(blob.path) && (
+              <>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={onEdit}>
+                  <Pencil className="h-3.5 w-3.5" />
+                  {t("fops.editFile")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-destructive hover:text-destructive"
+                  onClick={onDelete}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {t("fops.deleteFile")}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {blob.encoding === "utf-8" && blameParam ? (
+          blame ? (
+            <div className="max-h-[70vh] overflow-auto rounded-md border">
+              <table className="w-full border-collapse font-mono text-xs">
+                <tbody>
+                  {blame.lines.map((l) => {
+                    const c = blame.commits[l.commit];
+                    return (
+                      <tr key={l.line} className="border-b border-border/50 last:border-0">
+                        <td className="w-40 max-w-40 truncate whitespace-nowrap border-r border-border/50 bg-muted/40 px-2 py-0.5 align-top text-muted-foreground">
+                          <a
+                            className="block truncate hover:underline"
+                            href={`/repo/${owner}/${name}/commits`}
+                            title={c ? `${c.author} · ${c.message}` : l.commit}
+                          >
+                            {c ? c.author : l.commit.slice(0, 7)}
+                          </a>
+                        </td>
+                        <td className="w-10 whitespace-nowrap px-2 py-0.5 align-top text-right text-muted-foreground">
+                          {l.line}
+                        </td>
+                        <td className="whitespace-pre-wrap break-all px-2 py-0.5 align-top">
+                          {l.content || " "}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+          )
+        ) : blob.encoding === "utf-8" ? (
+          isMarkdown(blob.path) ? (
+            <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
+              <MarkdownView
+                text={blob.content}
+                repo={{ owner, name, ref: refName, path: blob.path }}
+                onOpenRepoLink={onOpenRepoLink}
+              />
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-md border">
+              <div ref={codeHostRef} className="h-[65vh] overflow-auto bg-background/60">
+                <CodeMirrorEditor value={blob.content} path={blob.path} readOnly />
+              </div>
+            </div>
+          )
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("repo.previewNotAvailable")}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

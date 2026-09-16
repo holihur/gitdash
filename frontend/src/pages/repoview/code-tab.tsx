@@ -1,53 +1,38 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
-  ChevronRight,
   FilePlus2,
   FileText,
   FolderPlus,
   FolderTree,
-  GitBranch,
-  GitBranchPlus,
   GitCommitHorizontal,
-  GitCompare,
   List,
-  Pencil,
   Plus,
-  Tag as TagIcon,
-  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Blame, type Blob, type Branch, type Commit, type Tag, type TreeEntry } from "@/lib/api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn, formatDate, formatSize } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import { MarkdownView, MarkdownWithToc } from "@/components/markdown";
+import { MarkdownWithToc } from "@/components/markdown";
 import type { RepoLinkTarget } from "@/lib/md-links";
-import CodeMirrorEditor from "@/components/code-editor-lazy";
 import FileTree from "@/components/file-tree";
 import Outline from "@/components/outline";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import TreeListing from "@/components/tree-listing";
+import BlobView from "./blob-view";
+import CodeRefBar from "./code-ref-bar";
 import { CodeBlock } from "@/components/code-block";
 import { CodeSearch } from "@/components/code-search";
-import { CompareDialog } from "@/components/compare-dialog";
 
-function isMarkdown(path: string): boolean {
-  const base = path.split("/").pop() ?? "";
-  const lower = base.toLowerCase();
-  return /^readme(\.(md|markdown|txt))?$/.test(lower) || /\.(md|markdown)$/.test(lower);
-}
 
 
 export interface CodeTabProps {
@@ -276,108 +261,21 @@ export default function CodeTab({
         <div className="flex flex-wrap items-center justify-end gap-2">{toolbarActions}</div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="max-w-full gap-2" disabled={emptyRepo}>
-              <GitBranch className="h-4 w-4 shrink-0" />
-              <span className="truncate">{refName || t("repo.noBranch")}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-72 w-64 overflow-auto">
-            {branches.map((b) => (
-              <DropdownMenuItem
-                key={b.name}
-                onClick={() => setParams({ ref: b.name, path: null, file: null })}
-              >
-                <GitBranch className="shrink-0" />
-                <span className="truncate">{b.name}</span>
-                {b.is_head && (
-                  <Badge variant="secondary" className="ml-auto shrink-0">
-                    HEAD
-                  </Badge>
-                )}
-              </DropdownMenuItem>
-            ))}
-            {tags.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs">{t("refs.tags")}</DropdownMenuLabel>
-                {tags.map((tg) => (
-                  <DropdownMenuItem
-                    key={tg.name}
-                    onClick={() => setParams({ ref: tg.name, path: null, file: null })}
-                  >
-                    <TagIcon className="shrink-0" />
-                    <span className="truncate">{tg.name}</span>
-                  </DropdownMenuItem>
-                ))}
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-9 w-9 px-0"
-          title={t("refs.manage")}
-          onClick={() => openRefs()}
-        >
-          <GitBranchPlus className="h-4 w-4" />
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5"
-          disabled={emptyRepo}
-          onClick={() => setCompareOpen(true)}
-        >
-          <GitCompare className="h-4 w-4" />
-          {t("compare.title")}
-        </Button>
-
-        <CompareDialog
-          owner={owner}
-          name={name}
-          branches={branches}
-          tags={tags}
-          defaultRef={refName}
-          open={compareOpen}
-          onOpenChange={setCompareOpen}
-        />
-
-        {!emptyRepo && (
-          <nav className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
-            <button className="font-medium hover:underline" onClick={() => openDir("")}>
-              {name}
-            </button>
-            {crumbs.map((seg, i) => {
-              const isFile = blob != null && i === crumbs.length - 1;
-              return (
-                <span key={`${seg}-${i}`} className="flex items-center gap-1">
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  {isFile ? (
-                    <span className="font-medium">{seg}</span>
-                  ) : (
-                    <button
-                      className={cn(
-                        "hover:underline",
-                        i === crumbs.length - 1 ? "font-medium" : "text-muted-foreground",
-                      )}
-                      onClick={() => openDir(crumbs.slice(0, i + 1).join("/"))}
-                    >
-                      {seg}
-                    </button>
-                  )}
-                </span>
-              );
-            })}
-          </nav>
-        )}
-      </div>
+      <CodeRefBar
+        owner={owner}
+        name={name}
+        refName={refName}
+        branches={branches}
+        tags={tags}
+        emptyRepo={emptyRepo}
+        crumbs={crumbs}
+        hasBlob={blob != null}
+        compareOpen={compareOpen}
+        onCompareOpenChange={setCompareOpen}
+        onSelectRef={(ref) => setParams({ ref, path: null, file: null })}
+        onOpenRefs={openRefs}
+        onOpenDir={openDir}
+      />
 
       <div
         className={cn(
@@ -454,98 +352,19 @@ export default function CodeTab({
       )}
 
       {!emptyRepo && !error && blob && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="break-all font-mono text-sm">{blob.path}</CardTitle>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{formatSize(blob.size)}</Badge>
-                {blob.encoding !== "utf-8" && (
-                  <Badge variant="destructive">
-                    {blob.encoding === "binary" ? t("repo.binaryFile") : t("repo.fileTooLarge")}
-                  </Badge>
-                )}
-                {blob.encoding === "utf-8" && (
-                  <Button
-                    size="sm"
-                    variant={blameParam ? "default" : "outline"}
-                    onClick={() => setParams({ blame: blameParam ? null : "1" })}
-                  >
-                    {t("repo.blame")}
-                  </Button>
-                )}
-                {blob.encoding === "utf-8" && !isMarkdown(blob.path) && (
-                  <>
-                    <Button size="sm" variant="outline" className="gap-1.5"
-                      onClick={() => openEditDialog(blob.path, blob.content)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      {t("fops.editFile")}
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1.5 text-destructive hover:text-destructive"
-                      onClick={() => removeEntry(blob.path, false)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {t("fops.deleteFile")}
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {blob.encoding === "utf-8" && blameParam ? (
-              blame ? (
-                <div className="max-h-[70vh] overflow-auto rounded-md border">
-                  <table className="w-full border-collapse font-mono text-xs">
-                    <tbody>
-                      {blame.lines.map((l) => {
-                        const c = blame.commits[l.commit];
-                        return (
-                          <tr key={l.line} className="border-b border-border/50 last:border-0">
-                            <td className="w-40 max-w-40 truncate whitespace-nowrap border-r border-border/50 bg-muted/40 px-2 py-0.5 align-top text-muted-foreground">
-                              <a
-                                className="block truncate hover:underline"
-                                href={`/repo/${owner}/${name}/commits`}
-                                title={c ? `${c.author} · ${c.message}` : l.commit}
-                              >
-                                {c ? c.author : l.commit.slice(0, 7)}
-                              </a>
-                            </td>
-                            <td className="w-10 whitespace-nowrap px-2 py-0.5 align-top text-right text-muted-foreground">
-                              {l.line}
-                            </td>
-                            <td className="whitespace-pre-wrap break-all px-2 py-0.5 align-top">
-                              {l.content || " "}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-              )
-            ) : blob.encoding === "utf-8" ? (
-              isMarkdown(blob.path) ? (
-                <div className="max-h-[70vh] overflow-auto rounded-md border bg-muted/30 p-4">
-                  <MarkdownView
-                    text={blob.content}
-                    repo={{ owner, name, ref: refName, path: blob.path }}
-                    onOpenRepoLink={openRepoLink}
-                  />
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-md border">
-                  <div ref={codeHostRef} className="h-[65vh] overflow-auto bg-background/60">
-                    <CodeMirrorEditor value={blob.content} path={blob.path} readOnly />
-                  </div>
-                </div>
-              )
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("repo.previewNotAvailable")}</p>
-            )}
-          </CardContent>
-        </Card>
+        <BlobView
+          owner={owner}
+          name={name}
+          refName={refName}
+          blob={blob}
+          blame={blame}
+          blameParam={blameParam}
+          codeHostRef={codeHostRef}
+          onToggleBlame={() => setParams({ blame: blameParam ? null : "1" })}
+          onEdit={() => openEditDialog(blob.path, blob.content)}
+          onDelete={() => removeEntry(blob.path, false)}
+          onOpenRepoLink={openRepoLink}
+        />
       )}
 
       {!emptyRepo && !error && !blob && (
