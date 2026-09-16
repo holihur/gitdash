@@ -2,6 +2,8 @@
 #
 # Server CLI:
 #   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1)))
+# Command-line client (gitdash-cli):
+#   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) cli
 # Self-hosted CI runner:
 #   & $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) runner
 # Copilot agent runtime:
@@ -18,6 +20,7 @@ $ErrorActionPreference = "Stop"
 $Repo = "holihur/gitdash"
 if ($args.Count -gt 0 -and $args[0] -eq "runner") { $BinName = "gitdash-runner.exe" }
 elseif ($args.Count -gt 0 -and $args[0] -eq "agent") { $BinName = "agent.exe" }
+elseif ($args.Count -gt 0 -and $args[0] -eq "cli") { $BinName = "gitdash-cli.exe" }
 else { $BinName = "gitdash.exe" }
 $Version = $env:GITDASH_VERSION
 $InstallDir = if ($env:GITDASH_INSTALL_DIR) { $env:GITDASH_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\gitdash" }
@@ -76,11 +79,19 @@ try {
     Write-Host ""
     Write-Host "Installed $BinName $Version -> $InstallDir\$BinName" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Quick start:"
-    Write-Host "  gitdash serve                 # http://localhost:8080 / ssh :2222"
-    Write-Host "  GITDASH_TOKEN=secret gitdash serve"
-    Write-Host ""
-    Write-Host "Run as a Windows service: see packaging/gitdash.windows.md in the repository"
+    if ($BinName -eq "gitdash-cli.exe") {
+        Write-Host "Quick start:"
+        Write-Host "  gitdash-cli login                          # browser OAuth device flow (or --method pat)"
+        Write-Host "  gitdash-cli --host http://localhost:8080 login"
+        Write-Host "  gitdash-cli me                             # show the authenticated user"
+        Write-Host "  gitdash-cli repo list                      # list your repositories"
+    } else {
+        Write-Host "Quick start:"
+        Write-Host "  gitdash serve                 # http://localhost:8080 / ssh :2222"
+        Write-Host "  GITDASH_TOKEN=secret gitdash serve"
+        Write-Host ""
+        Write-Host "Run as a Windows service: see packaging/gitdash.windows.md in the repository"
+    }
 }
 finally {
     Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue

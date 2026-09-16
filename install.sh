@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # gitdash 一键安装脚本
 #
-#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash           # 安装 gitdash 服务端 CLI
+#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash           # 安装 gitdash 服务端
+#   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- cli     # 安装命令行客户端 gitdash-cli
 #   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- runner  # 安装自托管 CI runner
 #   curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- agent   # 安装 copilot agent 运行时
 #
@@ -17,6 +18,8 @@ if [ "${1:-}" = "runner" ]; then
   BIN_NAME="gitdash-runner"
 elif [ "${1:-}" = "agent" ]; then
   BIN_NAME="agent"
+elif [ "${1:-}" = "cli" ]; then
+  BIN_NAME="gitdash-cli"
 else
   BIN_NAME="gitdash"
 fi
@@ -114,10 +117,18 @@ esac
 
 log "已安装 ${BIN_NAME} ${VERSION} -> $INSTALL_DIR/$BIN_NAME"
 echo
-echo "快速开始:"
-echo "  ${BIN_NAME} serve                          # 默认 http://localhost:8080 / ssh :2222"
-echo "  GITDASH_TOKEN=自定义token ${BIN_NAME} serve # 修改 Web API token"
-echo "  systemd: 参考仓库 packaging/gitdash.service"
-if [ "$BIN_NAME" = "gitdash" ]; then
-  echo "  copilot: 已同时安装 agent（GITDASH_COPILOT_AGENT_BIN 可覆盖路径）"
+if [ "$BIN_NAME" = "gitdash-cli" ]; then
+  echo "快速开始:"
+  echo "  gitdash-cli login                          # 浏览器 OAuth 设备流登录（或 --method pat）"
+  echo "  gitdash-cli --host http://localhost:8080 login"
+  echo "  gitdash-cli me                             # 查看当前用户"
+  echo "  gitdash-cli repo list                      # 列出仓库"
+else
+  echo "快速开始:"
+  echo "  ${BIN_NAME} serve                          # 默认 http://localhost:8080 / ssh :2222"
+  echo "  GITDASH_TOKEN=自定义token ${BIN_NAME} serve # 修改 Web API token"
+  echo "  systemd: 参考仓库 packaging/gitdash.service"
+  if [ "$BIN_NAME" = "gitdash" ]; then
+    echo "  copilot: 已同时安装 agent（GITDASH_COPILOT_AGENT_BIN 可覆盖路径）"
+  fi
 fi

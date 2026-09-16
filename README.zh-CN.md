@@ -54,6 +54,16 @@ gitdash serve
 
 安装脚本支持环境变量：`GITDASH_VERSION`（指定版本）、`GITDASH_INSTALL_DIR`（安装目录）。
 
+如果只需要命令行客户端（`gitdash-cli`），在命令后追加 `cli`：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- cli
+gitdash-cli login
+# 浏览器完成授权；也可加 --method pat 使用 PAT
+```
+
+其他组件：`runner`（自托管 CI runner）、`agent`（copilot 运行时）。
+
 ### Windows
 
 ```powershell
@@ -424,7 +434,17 @@ gitdash 可作为 **OAuth 2.0 授权服务器**（授权码流程），让第三
 
 `gh`/`glab` 风格的命令行客户端，管理仓库、issue 与 PR，支持 **PAT** 或 **OAuth 2.0 设备流**登录。
 
-发布归档会附带 `gitdash-cli`；源码构建：`task cli`（或 `cd backend && go build -o gitdash-cli ./cmd/gitdash-cli`）。
+发布归档会附带 `gitdash-cli`。一键安装：
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- cli
+
+# Windows（PowerShell）
+& $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) cli
+```
+
+源码构建：`task cli`（或 `cd backend && go build -o gitdash-cli ./cmd/gitdash-cli`）。
 
 ```bash
 gitdash-cli login                      # 交互式：浏览器设备流（默认）或 PAT

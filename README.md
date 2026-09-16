@@ -54,6 +54,16 @@ gitdash serve
 
 The install script supports environment variables: `GITDASH_VERSION` (pin a version) and `GITDASH_INSTALL_DIR` (install directory).
 
+Need the command-line client (`gitdash-cli`) instead of the server? Append `cli`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- cli
+gitdash-cli login
+# Open your browser, or use --method pat
+```
+
+Other components: `runner` (self-hosted CI runner) and `agent` (copilot runtime).
+
 ### Windows
 
 ```powershell
@@ -445,9 +455,19 @@ revoke individual grants (or delete an app to revoke all its tokens) from **OAut
 A small command-line client (`gh`/`glab`-style) for repos, issues and pull requests.
 It authenticates with a **PAT** or the **OAuth 2.0 device flow**.
 
-### Build / install
+### Install
 
-The release archives ship a `gitdash-cli` binary alongside `gitdash`. From source:
+The release archives ship a `gitdash-cli` binary alongside `gitdash`.
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/holihur/gitdash/main/install.sh | bash -s -- cli
+
+# Windows (PowerShell)
+& $([ScriptBlock]::Create((irm https://raw.githubusercontent.com/holihur/gitdash/main/install.ps1))) cli
+```
+
+From source:
 
 ```bash
 task cli                       # → /tmp/gitdash-cli
