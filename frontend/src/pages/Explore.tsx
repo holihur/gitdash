@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { CircleDot, Copy, FolderGit2, Search, Star, Tag, User } from "lucide-react";
-import { api, cloneCommand, type GlobalSearchResult, type Repo, type TopicCount } from "@/lib/api";
+import { CircleDot, FolderGit2, Search, Star, Tag, User } from "lucide-react";
+import { api, type GlobalSearchResult, type Repo, type TopicCount } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
-import { copyText, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { useQueryState } from "@/lib/query-state";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -97,12 +97,6 @@ export default function Explore() {
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     }
-  };
-
-  const copy = (text: string) => {
-    copyText(text)
-      .then(() => toast.success(t("common.copied")))
-      .catch(() => toast.error(t("common.copyFailed")));
   };
 
   return (
@@ -324,19 +318,6 @@ export default function Explore() {
                   >
                     <Star className="h-3 w-3" />
                     {repo.stars ?? 0}
-                  </Button>
-                </div>
-                <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
-                  <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                    {cloneCommand(repo.owner, repo.name)}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0"
-                    onClick={() => copy(cloneCommand(repo.owner, repo.name))}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </CardContent>

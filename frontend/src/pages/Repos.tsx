@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Copy, Download, Eye, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
-import { api, cloneCommand, type Org, type Repo } from "@/lib/api";
+import { Download, Eye, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
+import { api, type Org, type Repo } from "@/lib/api";
 import { useQueryState } from "@/lib/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { copyText, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import CollaboratorsDialog from "@/components/collabs-dialog";
@@ -176,12 +176,6 @@ export default function Repos() {
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     }
-  };
-
-  const copy = (text: string) => {
-    copyText(text)
-      .then(() => toast.success(t("common.copied")))
-      .catch(() => toast.error(t("common.copyFailed")));
   };
 
   return (
@@ -442,19 +436,6 @@ export default function Repos() {
                           {t(`imports.status.${repo.import_status}`)}
                         </Badge>
                       )}
-                    </div>
-                    <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
-                      <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                        {cloneCommand(repo.owner, repo.name)}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 shrink-0"
-                        onClick={() => copy(cloneCommand(repo.owner, repo.name))}
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>

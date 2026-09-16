@@ -46,6 +46,7 @@ export const zhCN: Messages = {
     file: "文件",
     save: "保存",
     cancel: "取消",
+    done: "完成",
     delete: "删除",
     pleaseConfirm: "请确认",
     moreActions: "更多操作",
@@ -687,6 +688,14 @@ export const zhCN: Messages = {
   },
   diff: {
     addComment: "对此行评论",
+    files: "文件",
+    filterFiles: "筛选文件…",
+    searchPlaceholder: "在 diff 中搜索…",
+    noFiles: "没有变更文件",
+    matchCount: "{current}/{total}",
+    prevMatch: "上一个匹配",
+    nextMatch: "下一个匹配",
+    clearSearch: "清除搜索",
   },
   search: {
     placeholder: "搜索仓库内代码…（回车立即搜索）",

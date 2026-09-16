@@ -44,6 +44,7 @@ export const en = {
     file: "File",
     save: "Save",
     cancel: "Cancel",
+    done: "Done",
     delete: "Delete",
     pleaseConfirm: "Please confirm",
     moreActions: "More actions",
@@ -689,6 +690,14 @@ export const en = {
   },
   diff: {
     addComment: "Comment on this line",
+    files: "Files",
+    filterFiles: "Filter files…",
+    searchPlaceholder: "Search in diff…",
+    noFiles: "No changed files",
+    matchCount: "{current}/{total}",
+    prevMatch: "Previous match",
+    nextMatch: "Next match",
+    clearSearch: "Clear search",
   },
   search: {
     placeholder: "Search code in this repository… (Enter to search)",

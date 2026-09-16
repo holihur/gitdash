@@ -57,6 +57,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
+import { CommitMessage } from "@/components/commit-message";
 
 function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
@@ -868,7 +869,7 @@ export default function CodeTab({
                   <TableCell className="text-right text-sm text-muted-foreground">
                     {entry.type === "blob" ? formatSize(entry.size) : "-"}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="w-72 max-w-[18rem] text-sm text-muted-foreground">
                     {entry.last_commit || entry.modified_msg ? (
                       <div className="flex min-w-0 items-center gap-2">
                         {entry.last_commit && (
@@ -879,9 +880,7 @@ export default function CodeTab({
                             {entry.last_commit.slice(0, 7)}
                           </code>
                         )}
-                        <span className="truncate" title={entry.modified_msg || undefined}>
-                          {entry.modified_msg}
-                        </span>
+                        <CommitMessage message={entry.modified_msg} />
                       </div>
                     ) : (
                       "-"
