@@ -9,7 +9,7 @@ English | 简体中文
 一个最小的自托管 Git 服务 MVP（类似迷你 Gitea）：
 
 - **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户；资料邮箱支持设置，数据库层唯一（空值除外）
-- **组织**：创建组织、管理成员（owner / member 角色）、可将仓库建到组织命名空间下
+- **组织**：创建组织、管理成员（owner / member 角色）、可将仓库建到组织命名空间下，并提供公开的组织主页与关注（follow）
 - **Issue 与标签**：仓库 issue 支持标签、里程碑，编辑 / 删除、关键词与状态搜索、置顶；动态推送给关注者
 - **项目看板**：仓库级看板项目，支持列、泳道与卡片（关联 issue 或文本便签），网页端拖拽流转 —— 详见 [docs/projects.zh-CN.md](docs/projects.zh-CN.md)
 - **Pull Request**：基于 fork 的 PR，支持 squash 合并

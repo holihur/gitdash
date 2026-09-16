@@ -9,7 +9,7 @@
 A minimal self-hosted Git service MVP (like a mini Gitea):
 
 - **User system**: register / login (bcrypt + session token, valid for 7 days); repos and SSH keys belong to users; profile email with uniqueness enforced (partially, empty allowed)
-- **Organizations**: create orgs, manage members (owner / member roles), host repos under an org namespace
+- **Organizations**: create orgs, manage members (owner / member roles), host repos under an org namespace, and follow orgs from a public organization profile page
 - **Issues & labels**: per-repo issues with labels & milestones, edit / delete, keyword + state search, and pin-to-top; activity pushes to watchers' inboxes
 - **Projects (kanban)**: per-repo kanban projects with columns, swimlanes and cards (issue-linked or text notes), drag & drop in the web UI — see [docs/projects.md](docs/projects.md)
 - **Pull requests**: fork-based pull requests with squash merge and reviewer flow
