@@ -805,7 +805,19 @@ export const ru: DeepPartial<Messages> = {
     "quotaSSHKeys": "SSH-ключи / пользователь",
     "quotaGPGKeys": "GPG-ключи / пользователь",
     "quotaPATs": "Токены / пользователь",
-    "quotaWebhooks": "Webhooks / репозиторий"
+    "quotaWebhooks": "Webhooks / репозиторий",
+    "ipBanTitle": "Чёрный список IP",
+    "ipBanHint": "Блокирует HTTP-запросы и SSH-подключения с этих IP-адресов или диапазонов CIDR. Применяется сразу.",
+    "ipBanCIDR": "IP или CIDR",
+    "ipBanNote": "Заметка (необязательно)",
+    "ipBanAdd": "Заблокировать",
+    "ipBanRemove": "Удалить",
+    "ipBanColCIDR": "IP / CIDR",
+    "ipBanColNote": "Заметка",
+    "ipBanEmpty": "Нет заблокированных адресов",
+    "ipBanAdded": "{cidr} заблокирован",
+    "ipBanRemoved": "{cidr} разблокирован",
+    "ipBanFailed": "Запрос не выполнен",
   },
   "user": {
     "memberSince": "Присоединился {date}",
@@ -950,7 +962,10 @@ export const ru: DeepPartial<Messages> = {
     "avatar_type_invalid": "Неподдерживаемый тип изображения (только PNG/JPEG/GIF/WebP)",
     "avatar_too_large": "Изображение слишком большое (макс. 2 МБ)",
     "avatar_empty": "Выбранный файл пуст",
-    "file_required": "Пожалуйста, выберите файл"
+    "file_required": "Пожалуйста, выберите файл",
+    "invalid_cidr": "Неверный формат IP или CIDR",
+    "ip_ban_self": "Этот диапазон заблокирует ваш текущий IP",
+    "ip_ban_exists": "Этот IP или CIDR уже заблокирован",
   },
   "packages": {
     "title": "Реестр пакетов",

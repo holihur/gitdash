@@ -71,4 +71,35 @@ describe("AdminApp", () => {
       expect(screen.getByText("Signed in as root")).toBeInTheDocument(),
     );
   });
+
+  it("已登录：展示 IP 黑名单条目", async () => {
+    const handlers: Record<string, (url: string) => Promise<Response>> = {
+      "/me": () => jsonRes({ username: "root" }),
+      "/settings": () => jsonRes({ github_enabled: false, oidc_enabled: false }),
+      "/users": () => jsonRes([]),
+      "/runners": () => jsonRes([]),
+      "/ip-bans": () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: 1,
+                cidr: "203.0.113.0/24",
+                note: "abuse",
+                created_by: "admin",
+                created_at: "2026-01-01T00:00:00Z",
+              },
+            ]),
+            { status: 200, headers: { "Content-Type": "application/json", "X-Total-Count": "1" } },
+          ),
+        ),
+    };
+    vi.stubGlobal("fetch", fetchMock(handlers));
+    renderAdmin();
+    await waitFor(() =>
+      expect(screen.getByText("203.0.113.0/24")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("IP blacklist")).toBeInTheDocument();
+    expect(screen.getByText("abuse")).toBeInTheDocument();
+  });
 });

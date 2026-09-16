@@ -20,7 +20,7 @@ English | 简体中文
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
 - **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR / copilot），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
-- **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理
+- **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理、用户/仓库/组织封禁与 IP/CIDR 黑名单
 - **发现（Explore）**：浏览公开仓库；支持按标签筛选与关键词搜索；仓库设置页可切换公开 / 私有
 - **仓库设置**：owner 可设置默认分支（决定浏览/HEAD 分支）、开启或关闭 issue 功能，并管理可见性与模版标记；支持一键 **`git gc`**（仓库维护）打包松散对象、回收磁盘空间
 - **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索
@@ -189,7 +189,7 @@ go run .
 
 > 用 deb/rpm 安装时，服务通过 `EnvironmentFile=-/etc/gitdash/gitdash.env` 读取上述可选变量（包安装脚本会生成带注释的示例文件，权限 0600）。把 `GITDASH_ADMIN_PASSWORD` 等写进去后执行 `sudo systemctl restart gitdash` 即生效。
 
-管理面板：设置 `GITDASH_ADMIN_PASSWORD`（可选 `GITDASH_ADMIN_USER`）后在**无管理员**的首次启动时创建，访问 `http://<host>:8080/admin` 登录，可管理用户、全局 Runner 与 OAuth/OIDC 登录配置。
+管理面板：设置 `GITDASH_ADMIN_PASSWORD`（可选 `GITDASH_ADMIN_USER`）后在**无管理员**的首次启动时创建，访问 `http://<host>:8080/admin` 登录，可管理用户、全局 Runner、OAuth/OIDC 登录配置、用户/仓库/组织封禁以及 IP/CIDR 黑名单（命中黑名单的地址会被 HTTP 与 SSH 同时拒绝）。
 
 Runner（自托管 CI agent）功能需要 Redis（`GITDASH_QUEUE=redis`）；WS 端点 `/api/runner/ws`，注册 `POST /api/runner/register`，管理 `GET/DELETE /api/runners`。
 

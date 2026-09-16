@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -330,6 +331,11 @@ type PublicKeyAuth struct {
 
 type Store struct {
 	db *gorm.DB
+
+	// ipBanCache 是 IP 黑名单前缀的内存快照，避免每个请求都查库；
+	// 同进程写操作会失效并重载，另设 TTL 兜底多实例场景（见 ipban.go）。
+	ipBanMu    sync.RWMutex
+	ipBanCache *ipBanCache
 }
 
 // Open 打开 SQLite 数据库文件（默认后端）。

@@ -20,7 +20,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
 - **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR / copilot) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
-- **Admin panel**: admin users, settings (OAuth providers), password management
+- **Admin panel**: admin users, settings (OAuth providers), password management, user/repo/org bans and an IP/CIDR blacklist
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings; filter by tag and free-text search
 - **Repo settings**: owner-managed default branch (drives the browsed/HEAD branch), issue tracker on/off toggle, visibility and template flags; one-click **`git gc`** (repository maintenance) to pack loose objects and reclaim disk space
 - **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore
@@ -189,7 +189,7 @@ Environment variables (all optional):
 
 > With deb/rpm packages the service reads these optional variables from `EnvironmentFile=-/etc/gitdash/gitdash.env` (the package post-install script creates a commented sample, mode 0600). Add `GITDASH_ADMIN_PASSWORD` etc. there, then `sudo systemctl restart gitdash`.
 
-Admin panel: set `GITDASH_ADMIN_PASSWORD` (optionally `GITDASH_ADMIN_USER`); it is created on the first boot when no admin exists. Log in at `http://<host>:8080/admin` to manage users, global runners and OAuth/OIDC login settings.
+Admin panel: set `GITDASH_ADMIN_PASSWORD` (optionally `GITDASH_ADMIN_USER`); it is created on the first boot when no admin exists. Log in at `http://<host>:8080/admin` to manage users, global runners, OAuth/OIDC login settings, user/repo/org bans and an IP/CIDR blacklist (blacklisted addresses are rejected for both HTTP and SSH).
 
 Runner (self-hosted CI agent) support requires Redis (`GITDASH_QUEUE=redis`); WS endpoint `/api/runner/ws`, registration `POST /api/runner/register`, management `GET/DELETE /api/runners`.
 

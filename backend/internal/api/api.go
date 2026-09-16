@@ -253,6 +253,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/admin/repos/{owner}/{name}/ban", a.adminAuth(a.adminBanRepo))
 	mux.HandleFunc("GET /api/admin/orgs", a.adminAuth(a.adminListOrgs))
 	mux.HandleFunc("POST /api/admin/orgs/{name}/ban", a.adminAuth(a.adminBanOrg))
+	// IP / CIDR 黑名单
+	mux.HandleFunc("GET /api/admin/ip-bans", a.adminAuth(a.adminListIPBans))
+	mux.HandleFunc("POST /api/admin/ip-bans", a.adminAuth(a.adminAddIPBan))
+	mux.HandleFunc("DELETE /api/admin/ip-bans/{id}", a.adminAuth(a.adminDeleteIPBan))
 	// auth
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
@@ -601,7 +605,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 		mux.HandleFunc("/", a.embeddedHandler())
 	}
 
-	return telemetry.Middleware(secureHeaders(logMiddleware(csrfGuard(mux))))
+	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(mux)))))
 }
 
 // csrfGuard 校验跨站请求：带 Origin 的非安全方法必须与本站同源（cookie 会话的 CSRF 防线）。

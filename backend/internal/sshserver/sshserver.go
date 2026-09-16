@@ -107,6 +107,11 @@ func buildConfig(st *store.Store) *ssh.ServerConfig {
 }
 
 func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
+	if host, _, err := net.SplitHostPort(conn.RemoteAddr().String()); err == nil && s.st.IsIPBanned(host) {
+		logx.Infof("ssh: rejected blacklisted ip %s", host)
+		_ = conn.Close()
+		return
+	}
 	sconn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
 		logx.Infof("ssh handshake from %s: %v", conn.RemoteAddr(), err)

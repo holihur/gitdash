@@ -805,7 +805,19 @@ export const ja: DeepPartial<Messages> = {
     "quotaSSHKeys": "SSH keys / ユーザー",
     "quotaGPGKeys": "GPG keys / ユーザー",
     "quotaPATs": "Tokens / ユーザー",
-    "quotaWebhooks": "Webhooks / リポジトリ"
+    "quotaWebhooks": "Webhooks / リポジトリ",
+    "ipBanTitle": "IP ブラックリスト",
+    "ipBanHint": "これらの IP アドレスまたは CIDR 範囲からの HTTP リクエストと SSH 接続を拒否します。保存後すぐに有効になります。",
+    "ipBanCIDR": "IP または CIDR",
+    "ipBanNote": "メモ（任意）",
+    "ipBanAdd": "ブロック",
+    "ipBanRemove": "解除",
+    "ipBanColCIDR": "IP / CIDR",
+    "ipBanColNote": "メモ",
+    "ipBanEmpty": "ブロックされたアドレスはありません",
+    "ipBanAdded": "{cidr} をブロックしました",
+    "ipBanRemoved": "{cidr} のブロックを解除しました",
+    "ipBanFailed": "リクエストに失敗しました",
   },
   "user": {
     "memberSince": "{date}に参加",
@@ -950,7 +962,10 @@ export const ja: DeepPartial<Messages> = {
     "avatar_type_invalid": "サポートされていない画像形式です（PNG/JPEG/GIF/WebPのみ）",
     "avatar_too_large": "画像が大きすぎます（最大2MB）",
     "avatar_empty": "選択されたファイルが空です",
-    "file_required": "ファイルを選択してください"
+    "file_required": "ファイルを選択してください",
+    "invalid_cidr": "IP または CIDR の形式が正しくありません",
+    "ip_ban_self": "この範囲は現在の IP をブロックするため拒否されました",
+    "ip_ban_exists": "この IP または CIDR はすでにブロックされています",
   },
   "packages": {
     "title": "パッケージレジストリ",

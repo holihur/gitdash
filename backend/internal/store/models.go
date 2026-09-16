@@ -656,3 +656,14 @@ type incomingWebhookRow struct {
 }
 
 func (incomingWebhookRow) TableName() string { return "incoming_webhooks" }
+
+// ipBanRow 管理端 IP / CIDR 黑名单：命中来源 IP 的请求（HTTP 与 SSH）一律拒绝。
+type ipBanRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	CIDR      string `gorm:"column:cidr;not null;uniqueIndex;size:64"`
+	Note      string `gorm:"not null;default:''"`
+	CreatedBy string `gorm:"not null;default:''"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (ipBanRow) TableName() string { return "ip_bans" }
