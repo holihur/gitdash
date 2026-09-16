@@ -255,6 +255,15 @@ type orgMemberRow struct {
 
 func (orgMemberRow) TableName() string { return "org_members" }
 
+// orgFollowRow 用户关注组织（follower 关注 org）。单独建表，避免与用户关注混淆。
+type orgFollowRow struct {
+	Follower  string `gorm:"primaryKey;size:255;index:idx_org_follows_follower"`
+	Org       string `gorm:"primaryKey;size:255;index:idx_org_follows_org"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (orgFollowRow) TableName() string { return "org_follows" }
+
 // ---- webhooks / admin / settings / oauth ----
 
 type webhookRow struct {

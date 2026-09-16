@@ -29,6 +29,7 @@ func (s *Store) migrate() error {
 		&collabRow{},
 		&orgRow{},
 		&orgMemberRow{},
+		&orgFollowRow{},
 		&webhookRow{},
 		&webhookDeliveryRow{},
 		&adminUserRow{},

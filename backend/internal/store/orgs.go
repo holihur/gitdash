@@ -13,6 +13,15 @@ func (s *Store) IsOrg(name string) bool {
 	return err == nil && cnt > 0
 }
 
+// GetOrg 读取组织资料；不存在返回 ErrNotFound。
+func (s *Store) GetOrg(name string) (Org, error) {
+	var row orgRow
+	if err := s.db.Where("name = ?", name).First(&row).Error; err != nil {
+		return Org{}, notFoundErr(err)
+	}
+	return Org(row), nil
+}
+
 func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 	if _, err := s.GetByUsername(name); err == nil {
 		return Org{}, ErrExists // 用户名占用

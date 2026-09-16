@@ -231,3 +231,157 @@ func (a *API) removeOrgMember(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// getOrgProfile 组织主页（公开）：资料、关注统计、成员与可见仓库。
+//
+//	@Summary     组织主页
+//	@Description 返回组织公开资料、粉丝数、当前用户是否已关注、成员列表，以及可见仓库（非成员仅公开仓库）。
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {object} map[string]any
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/profile [get]
+func (a *API) getOrgProfile(w http.ResponseWriter, r *http.Request) {
+	org := r.PathValue("org")
+	me := userFrom(r)
+	o, err := a.store.GetOrg(org)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+			return
+		}
+		internalError(w, err)
+		return
+	}
+	if o.Banned {
+		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+		return
+	}
+	role := a.store.OrgRole(org, me)
+	members, err := a.store.OrgMembers(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	repos, err := a.store.ListRepos(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if role == "" { // 非成员仅可见公开仓库
+		public := make([]store.Repo, 0, len(repos))
+		for _, repo := range repos {
+			if !repo.Private {
+				public = append(public, repo)
+			}
+		}
+		repos = public
+	}
+	a.attachStars(repos, me)
+	a.attachTopics(repos)
+	followers, err := a.store.OrgFollowerCount(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"name":         o.Name,
+		"display":      o.Display,
+		"created_at":   o.CreatedAt,
+		"role":         role,
+		"members":      members,
+		"repos":        repos,
+		"followers":    followers,
+		"is_following": a.store.IsFollowingOrg(me, org),
+	})
+}
+
+// writeOrgFollowState 返回组织关注状态与粉丝数。
+func (a *API) writeOrgFollowState(w http.ResponseWriter, org, me string) {
+	followers, err := a.store.OrgFollowerCount(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"followers":    followers,
+		"is_following": a.store.IsFollowingOrg(me, org),
+	})
+}
+
+// followOrg 关注组织。
+//
+//	@Summary     关注组织
+//	@Description 幂等。返回关注状态与粉丝数。
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {object} map[string]any
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/follow [post]
+func (a *API) followOrg(w http.ResponseWriter, r *http.Request) {
+	org := r.PathValue("org")
+	me := userFrom(r)
+	o, err := a.store.GetOrg(org)
+	if err != nil || o.Banned {
+		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+		return
+	}
+	if err := a.store.FollowOrg(me, org); err != nil && !errors.Is(err, store.ErrExists) {
+		internalError(w, err)
+		return
+	}
+	a.writeOrgFollowState(w, org, me)
+}
+
+// unfollowOrg 取消关注组织。
+//
+//	@Summary     取消关注组织
+//	@Description 幂等。返回关注状态与粉丝数。
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {object} map[string]any
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/follow [delete]
+func (a *API) unfollowOrg(w http.ResponseWriter, r *http.Request) {
+	org := r.PathValue("org")
+	me := userFrom(r)
+	if _, err := a.store.GetOrg(org); err != nil {
+		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+		return
+	}
+	if err := a.store.UnfollowOrg(me, org); err != nil {
+		internalError(w, err)
+		return
+	}
+	a.writeOrgFollowState(w, org, me)
+}
+
+// listOrgFollowers 关注某组织的用户列表。
+//
+//	@Summary     组织粉丝列表
+//	@Tags        orgs
+//	@Produce     json
+//	@Param       org path string true "组织名"
+//	@Success     200 {array} store.UserSummary
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org}/followers [get]
+func (a *API) listOrgFollowers(w http.ResponseWriter, r *http.Request) {
+	org := r.PathValue("org")
+	if _, err := a.store.GetOrg(org); err != nil {
+		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+		return
+	}
+	users, err := a.store.ListOrgFollowers(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, users)
+}

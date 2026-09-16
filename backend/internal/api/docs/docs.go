@@ -3240,6 +3240,137 @@ const docTemplate = `{
                 ]
             }
         },
+        "/orgs/{org}/follow": {
+            "post": {
+                "description": "幂等。返回关注状态与粉丝数。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orgs"
+                ],
+                "summary": "关注组织",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "组织名",
+                        "name": "org",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "description": "幂等。返回关注状态与粉丝数。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orgs"
+                ],
+                "summary": "取消关注组织",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "组织名",
+                        "name": "org",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/orgs/{org}/followers": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orgs"
+                ],
+                "summary": "组织粉丝列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "组织名",
+                        "name": "org",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.UserSummary"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/orgs/{org}/members": {
             "get": {
                 "produces": [
@@ -3385,6 +3516,50 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/orgs/{org}/profile": {
+            "get": {
+                "description": "返回组织公开资料、粉丝数、当前用户是否已关注、成员列表，以及可见仓库（非成员仅公开仓库）。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orgs"
+                ],
+                "summary": "组织主页",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "组织名",
+                        "name": "org",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
