@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeft, GanttChartSquare, KanbanSquare, Layers, List, Pencil, Plus, SquarePlus, Trash2, X } from "lucide-react";
 import { api, type Project, type ProjectBoard, type ProjectCard } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
@@ -24,6 +25,79 @@ type ProjectView = "board" | "list" | "gantt";
 
 const UNGROUPED = 0;
 
+/** 列内卡片的虚拟列表：只渲染视口附近的卡片，避免大看板下 DOM 体积随卡片总数增长。 */
+function VirtualCardList({ cards, renderCard }: { cards: ProjectCard[]; renderCard: (card: ProjectCard) => ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: cards.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 72,
+    overscan: 8,
+  });
+
+  return (
+    <div ref={scrollRef} className="max-h-[45vh] overflow-y-auto px-2">
+      <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+        {virtualizer.getVirtualItems().map((vi) => {
+          const card = cards[vi.index];
+          return (
+            <div
+              key={card.id}
+              data-index={vi.index}
+              ref={virtualizer.measureElement}
+              className="pb-2"
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vi.start}px)` }}
+            >
+              {renderCard(card)}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** 单元格内的“添加卡片”入口：输入状态收敛在组件内部，敲字不触发整块看板重渲染。 */
+function AddCardCell({ label, hint, onAdd }: { label: string; hint: string; onAdd: (text: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+
+  const submit = () => {
+    const raw = text.trim();
+    setOpen(false);
+    setText("");
+    if (raw) onAdd(raw);
+  };
+
+  if (!open) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 w-full justify-center gap-1 text-xs text-muted-foreground"
+        onClick={() => { setText(""); setOpen(true); }}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {label}
+      </Button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-8 text-xs"
+      placeholder={hint}
+      value={text}
+      onBlur={() => setOpen(false)}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") submit();
+        if (e.key === "Escape") setOpen(false);
+      }}
+    />
+  );
+}
+
 export default function ProjectsBoard({ owner, name, project, role, onBack, onProjectChanged }: Props) {
   const { t, to } = useI18n();
   const canWrite = role === "owner" || role === "write";
@@ -40,9 +114,8 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
   const [pendingDeleteColumn, setPendingDeleteColumn] = useState<number | null>(null);
   const [pendingDeleteLane, setPendingDeleteLane] = useState<number | null>(null);
 
-  // "+ 添加卡片" 行内输入状态：`${swimlaneId}:${columnId}` → 输入内容
-  const [cardInputFor, setCardInputFor] = useState<string | null>(null);
-  const [cardText, setCardText] = useState("");
+  // "+ 添加卡片" 行内输入改为独立子组件本地状态（AddCardCell），
+  // 避免每敲一个字都重渲染整块看板。
   const [dragging, setDragging] = useState<number | null>(null);
 
   const load = useCallback(async () => {
@@ -57,10 +130,52 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     load();
   }, [load]);
 
-  const columns = (board?.columns ?? []).slice().sort((a, b) => a.position - b.position);
-  const lanes = (board?.swimlanes ?? []).slice().sort((a, b) => a.position - b.position);
-  const cards = board?.cards ?? [];
-  const hasUngrouped = cards.some((c) => c.swimlane_id === UNGROUPED);
+  const columns = useMemo(
+    () => (board?.columns ?? []).slice().sort((a, b) => a.position - b.position),
+    [board],
+  );
+  const lanes = useMemo(
+    () => (board?.swimlanes ?? []).slice().sort((a, b) => a.position - b.position),
+    [board],
+  );
+  const cards = useMemo(() => board?.cards ?? [], [board]);
+  const hasUngrouped = useMemo(() => cards.some((c) => c.swimlane_id === UNGROUPED), [cards]);
+  // 预分桶：一次性按 (泳道, 列) 归组并排序，避免每次渲染做 L×C 次全量 filter。
+  const cardsByCell = useMemo(() => {
+    const grouped = new Map<string, ProjectCard[]>();
+    for (const c of cards) {
+      const key = `${c.swimlane_id}:${c.column_id}`;
+      const bucket = grouped.get(key);
+      if (bucket) bucket.push(c);
+      else grouped.set(key, [c]);
+    }
+    for (const bucket of grouped.values()) {
+      bucket.sort((a, b) => a.position - b.position || a.id - b.id);
+    }
+    return grouped;
+  }, [cards]);
+  const laneRows = useMemo(
+    () => [
+      ...lanes.map((l) => ({ id: l.id, title: l.name })),
+      ...(hasUngrouped ? [{ id: UNGROUPED, title: t("projects.ungrouped") }] : []),
+    ],
+    [lanes, hasUngrouped, t],
+  );
+
+  // 泳道纵向虚拟滚动：看板自身作为滚动容器，只挂载视口附近的泳道。
+  const boardScrollRef = useRef<HTMLDivElement>(null);
+  const laneVirtualizer = useVirtualizer({
+    count: laneRows.length,
+    getScrollElement: () => boardScrollRef.current,
+    estimateSize: () => 280,
+    overscan: 1,
+  });
+  // 泳道内的列是固定宽度（w-64）+ 间距，给虚拟层一个显式最小宽度以保留横向滚动。
+  // 2.5rem = 泳道容器 px-2（1rem）+ 列容器 px-3（1.5rem）。
+  const boardMinWidth = useMemo(
+    () => `${columns.length * 16 + Math.max(0, columns.length - 1) * 0.75 + 2.5}rem`,
+    [columns.length],
+  );
 
   const act = async (fn: () => Promise<unknown>, msg?: string) => {
     setBusy(true);
@@ -91,16 +206,14 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     }
   };
 
-  const addCard = async (swimlaneId: number, columnId: number) => {
-    const raw = cardText.trim();
-    setCardInputFor(null);
-    setCardText("");
-    if (!raw) return;
-    const m = raw.match(/^#(\d+)$/);
+  const addCard = async (swimlaneId: number, columnId: number, raw: string) => {
+    const text = raw.trim();
+    if (!text) return;
+    const m = text.match(/^#(\d+)$/);
     if (m) {
       await act(() => api.createCard(owner, name, project.id, { column_id: columnId, swimlane_id: swimlaneId, issue_number: Number(m[1]) }), "projects.cardAdded");
     } else {
-      await act(() => api.createCard(owner, name, project.id, { column_id: columnId, swimlane_id: swimlaneId, note: raw }), "projects.cardAdded");
+      await act(() => api.createCard(owner, name, project.id, { column_id: columnId, swimlane_id: swimlaneId, note: text }), "projects.cardAdded");
     }
   };
 
@@ -151,11 +264,6 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
       </div>
     );
   }
-
-  const laneRows: { id: number; title: string }[] = [
-    ...lanes.map((l) => ({ id: l.id, title: l.name })),
-    ...(hasUngrouped ? [{ id: UNGROUPED, title: t("projects.ungrouped") }] : []),
-  ];
 
   return (
     <div className="space-y-4">
@@ -234,9 +342,19 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
       )}
 
       {view === "board" && (
-      <div className="space-y-3 overflow-x-auto">
-        {laneRows.map((lane) => (
-          <div key={lane.id} className="min-w-max rounded-lg border bg-muted/20">
+      <div ref={boardScrollRef} className="h-[70vh] overflow-auto rounded-lg border bg-muted/10">
+        <div className="relative" style={{ height: laneVirtualizer.getTotalSize(), minWidth: boardMinWidth }}>
+        {laneVirtualizer.getVirtualItems().map((vi) => {
+          const lane = laneRows[vi.index];
+          return (
+          <div
+            key={lane.id}
+            data-index={vi.index}
+            ref={laneVirtualizer.measureElement}
+            className="absolute left-0 top-0 w-full px-2 py-1.5"
+            style={{ transform: `translateY(${vi.start}px)` }}
+          >
+          <div className="rounded-lg border bg-muted/20">
             <div className="flex items-center justify-between gap-2 px-3 py-2">
               <p className="text-sm font-medium">{lane.title}</p>
               {lane.id !== UNGROUPED && (
@@ -252,9 +370,9 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
                 </Button>
               )}
             </div>
-            <div className="flex gap-3 overflow-x-auto px-3 pb-3">
+            <div className="flex gap-3 px-3 pb-3">
               {columns.map((col) => {
-                const colCards = cards.filter((c) => c.swimlane_id === lane.id && c.column_id === col.id);
+                const colCards = cardsByCell.get(`${lane.id}:${col.id}`) ?? [];
                 return (
                   <div
                     key={col.id}
@@ -281,10 +399,11 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    <div className="flex-1 space-y-2 px-2 pb-2">
-                      {colCards.map((card) => (
+                    {colCards.length > 0 && (
+                      <VirtualCardList
+                        cards={colCards}
+                        renderCard={(card) => (
                         <div
-                          key={card.id}
                           draggable
                           onDragStart={() => setDragging(card.id)}
                           onDragEnd={() => setDragging(null)}
@@ -336,38 +455,25 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
                             </Button>
                           </div>
                         </div>
-                      ))}
-                      {cardInputFor === `${lane.id}:${col.id}` ? (
-                        <Input
-                          autoFocus
-                          className="h-8 text-xs"
-                          placeholder={t("projects.cardInputHint")}
-                          onBlur={() => setCardInputFor(null)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") void addCard(lane.id, col.id);
-                            if (e.key === "Escape") setCardInputFor(null);
-                          }}
-                          onChange={(e) => setCardText(e.target.value)}
-                          value={cardText}
-                        />
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-full justify-center gap-1 text-xs text-muted-foreground"
-                          onClick={() => { setCardText(""); setCardInputFor(`${lane.id}:${col.id}`); }}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          {t("projects.addCard")}
-                        </Button>
-                      )}
+                        )}
+                      />
+                    )}
+                    <div className="px-2 pb-2 pt-1">
+                      <AddCardCell
+                        hint={t("projects.cardInputHint")}
+                        label={t("projects.addCard")}
+                        onAdd={(text) => void addCard(lane.id, col.id, text)}
+                      />
                     </div>
                   </div>
                 );
               })}
             </div>
           </div>
-        ))}
+          </div>
+          );
+        })}
+        </div>
       </div>
       )}
 
