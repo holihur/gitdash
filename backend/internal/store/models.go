@@ -473,14 +473,18 @@ type pipelineCfgRow struct {
 func (pipelineCfgRow) TableName() string { return "repo_pipelines" }
 
 type pipelineRunRow struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement"`
-	Owner     string `gorm:"not null;index:idx_pipeline_runs_repo;size:255"`
-	Repo      string `gorm:"not null;index:idx_pipeline_runs_repo;size:255"`
+	ID    int64  `gorm:"primaryKey;autoIncrement"`
+	Owner string `gorm:"not null;index:idx_pipeline_runs_repo;size:255"`
+	Repo  string `gorm:"not null;index:idx_pipeline_runs_repo;size:255"`
+	// File 流水线定义文件路径（如 .gitdash.yml 或 .gitdash/ci.yml）；旧记录为空。
+	File      string `gorm:"column:file;not null;default:'';size:255"`
 	SHA       string `gorm:"column:sha;not null;default:''"`
 	Ref       string `gorm:"not null;default:''"`
 	TriggerBy string `gorm:"column:trigger_by;not null;default:''"`
 	// Event 触发事件：push|pull_request|schedule|workflow_dispatch|manual
 	Event string `gorm:"not null;default:''"`
+	// RunAt 延迟执行时间（RFC3339）；空 = 立即执行。
+	RunAt string `gorm:"column:run_at;not null;default:''"`
 	// Inputs dispatch 传入的键值对（JSON；重跑时复用），其余事件为空
 	Inputs     string `gorm:"not null;default:''"`
 	Status     string `gorm:"not null;default:'pending'"`
@@ -495,11 +499,12 @@ type pipelineRunRow struct {
 
 func (pipelineRunRow) TableName() string { return "pipeline_runs" }
 
-// pipelineScheduleRow 定时触发去重：每个 (repo, cron) 记录最近一次触发时间，
+// pipelineScheduleRow 定时触发去重：每个 (repo, file, cron) 记录最近一次触发时间，
 // 多实例部署时经条件更新做原子 claim，避免重复触发。
 type pipelineScheduleRow struct {
 	Owner     string `gorm:"primaryKey;size:255"`
 	Repo      string `gorm:"primaryKey;size:255"`
+	File      string `gorm:"primaryKey;column:file;size:255"`
 	Expr      string `gorm:"primaryKey;size:128"`
 	LastFired string `gorm:"not null;default:''"`
 }

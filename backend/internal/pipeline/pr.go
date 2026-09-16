@@ -49,7 +49,7 @@ func triggerPull(st *store.Store, pr store.PullRequest, by string) {
 	if h, err := gitsvc.RevSHA(pr.Owner, pr.Repo, "refs/heads/"+pr.SourceBranch); err == nil {
 		head = h // open PR 的源分支可能已前进
 	}
-	_, err := Trigger(st, TriggerOpts{
+	_, err := TriggerAll(st, TriggerOpts{
 		Owner: pr.Owner, Repo: pr.Repo, SHA: head,
 		Ref: pr.SourceBranch, By: by, Event: "pull_request",
 	})

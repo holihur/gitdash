@@ -141,9 +141,9 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 		if prot.RequireCI {
 			status := "missing"
 			ciPassed := false
-			if run, has, cErr := a.store.LatestPipelineRunForSHA(owner, name, head); cErr == nil && has {
-				status = run.Status
-				ciPassed = run.Status == "success"
+			if ci, has, cErr := a.store.AggregatePipelineStatusForSHA(owner, name, head); cErr == nil && has {
+				status = ci.Status
+				ciPassed = ci.Status == "success"
 			}
 			gate["ci_required"] = true
 			gate["ci_status"] = status

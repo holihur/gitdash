@@ -21,11 +21,14 @@ type PipelineRun struct {
 	ID        int64  `json:"id"`
 	Owner     string `json:"-"`
 	Repo      string `json:"-"`
+	File      string `json:"file,omitempty"` // 流水线定义文件路径（多文件支持）
 	SHA       string `json:"sha"`
 	Ref       string `json:"ref"`
 	TriggerBy string `json:"trigger_by"`
 	// Event 触发事件：push|pull_request|schedule|workflow_dispatch|manual（旧记录为空）
-	Event      string            `json:"event,omitempty"`
+	Event string `json:"event,omitempty"`
+	// RunAt 延迟执行时间（RFC3339）；空 = 立即执行。
+	RunAt      string            `json:"run_at,omitempty"`
 	Inputs     map[string]string `json:"inputs,omitempty"`
 	Status     string            `json:"status"` // pending | running | success | failed
 	StepsTotal int               `json:"steps_total"`
@@ -41,8 +44,8 @@ type PipelineRun struct {
 // runRowToDTO row → DTO 转换。
 func runRowToDTO(r pipelineRunRow) PipelineRun {
 	out := PipelineRun{
-		ID: r.ID, Owner: r.Owner, Repo: r.Repo,
-		SHA: r.SHA, Ref: r.Ref, TriggerBy: r.TriggerBy, Event: r.Event, Status: r.Status,
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo, File: r.File,
+		SHA: r.SHA, Ref: r.Ref, TriggerBy: r.TriggerBy, Event: r.Event, RunAt: r.RunAt, Status: r.Status,
 		StepsTotal: r.StepsTotal, StepsDone: r.StepsDone, Error: r.Error,
 		RunnerName: r.RunnerName,
 		CreatedAt:  r.CreatedAt, FinishedAt: r.FinishedAt,
@@ -82,8 +85,9 @@ func (s *Store) SetPipeline(owner, repo string, enabled bool) error {
 }
 
 // CreatePipelineRun 新建一次运行记录（初始 pending）。
+// file 为流水线定义文件路径（单文件兼容传 ""，落库为空）。
 // event 为触发事件；inputs 为 dispatch 传入的键值对（其余事件为 nil）。
-func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy, event string, inputs map[string]string, stepsTotal int) (PipelineRun, error) {
+func (s *Store) CreatePipelineRun(owner, repo, file, sha, ref, triggerBy, event string, inputs map[string]string, stepsTotal int) (PipelineRun, error) {
 	inputsJSON := ""
 	if len(inputs) > 0 {
 		if b, err := json.Marshal(inputs); err == nil {
@@ -92,11 +96,11 @@ func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy, event string
 	}
 	ts := now()
 	r := PipelineRun{
-		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event,
+		Owner: owner, Repo: repo, File: file, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event,
 		Inputs: inputs, Status: "pending", StepsTotal: stepsTotal, CreatedAt: ts,
 	}
 	row := pipelineRunRow{
-		Owner: owner, Repo: repo, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event, Inputs: inputsJSON,
+		Owner: owner, Repo: repo, File: file, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event, Inputs: inputsJSON,
 		Status: "pending", StepsTotal: stepsTotal, StepsDone: 0, CreatedAt: ts,
 	}
 	if err := s.db.Create(&row).Error; err != nil {
@@ -107,8 +111,31 @@ func (s *Store) CreatePipelineRun(owner, repo, sha, ref, triggerBy, event string
 }
 
 // StartPipelineRun 标记为 running。
+// StartPipelineRun 标记为 running（仅当仍处于 pending；已取消/终态的不再改动）。
 func (s *Store) StartPipelineRun(id int64) error {
-	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).Update("status", "running").Error
+	return s.db.Model(&pipelineRunRow{}).Where("id = ? AND status = ?", id, "pending").Update("status", "running").Error
+}
+
+// ClaimPipelineRun 原子认领运行：pending → running。返回是否成功认领，
+// 用于避免延迟调度器与队列工人重复执行同一运行。
+func (s *Store) ClaimPipelineRun(id int64) (bool, error) {
+	res := s.db.Model(&pipelineRunRow{}).Where("id = ? AND status = ?", id, "pending").Update("status", "running")
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// CancelPipelineRun 将 pending/running 的运行标记为 cancelled（带原因）；
+// 返回是否真正发生了状态变更（已完成/已取消的运行返回 false）。
+func (s *Store) CancelPipelineRun(id int64, reason string) (bool, error) {
+	res := s.db.Model(&pipelineRunRow{}).
+		Where("id = ? AND status IN ('pending','running')", id).
+		Updates(map[string]any{"status": "cancelled", "error": reason, "finished_at": now()})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
 }
 
 // SetPipelineRunRunner 记录执行该 run 的远程 runner 名。
@@ -121,10 +148,34 @@ func (s *Store) ProgressPipelineRun(id int64, stepsDone int) error {
 	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).Update("steps_done", stepsDone).Error
 }
 
-// FinishPipelineRun 终态：success / failed（带错误信息）。
+// SetPipelineRunRunAt 设置运行的延迟执行时间（RFC3339）；仅对 pending 生效。
+func (s *Store) SetPipelineRunRunAt(id int64, runAt string) error {
+	return s.db.Model(&pipelineRunRow{}).Where("id = ? AND status = 'pending'", id).Update("run_at", runAt).Error
+}
+
+// DuePipelineRuns 返回已到执行时间的延迟运行（status=pending 且 run_at 非空且 <= now）。
+// 仅返回设置了 run_at 的运行，立即运行（run_at 为空）由 Trigger 直接派发。
+func (s *Store) DuePipelineRuns(now string, limit int) ([]PipelineRun, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	var rows []pipelineRunRow
+	if err := s.db.Where("status = 'pending' AND run_at <> '' AND run_at <= ?", now).
+		Order("run_at ASC").Limit(limit).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]PipelineRun, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, runRowToDTO(r))
+	}
+	return out, nil
+}
+
+// FinishPipelineRun 终态：success / failed / cancelled（带错误信息）。
+// 仅当仍处于 pending/running 时生效，避免已取消的运行被后续成功/失败覆盖。
 func (s *Store) FinishPipelineRun(id int64, status, errMsg string) error {
 	ts := now()
-	return s.db.Model(&pipelineRunRow{}).Where("id = ?", id).
+	return s.db.Model(&pipelineRunRow{}).Where("id = ? AND status IN ('pending','running')", id).
 		Updates(map[string]any{"status": status, "error": errMsg, "finished_at": ts}).Error
 }
 
@@ -155,35 +206,51 @@ func (s *Store) GetPipelineRun(owner, repo string, id int64) (PipelineRun, error
 	return runRowToDTO(row), nil
 }
 
-// RunningPipelineRunIDs 仍在进行中的运行（用于避免同仓库并发排队过多）。
-func (s *Store) RunningPipelineRunIDs(owner, repo string) ([]int64, error) {
+// RunningPipelineRunIDs 仍在进行中的运行（用于避免同仓库/同文件并发排队过多）。
+// file 为空时统计仓库全部文件。
+func (s *Store) RunningPipelineRunIDs(owner, repo, file string) ([]int64, error) {
 	var ids []int64
-	err := s.db.Model(&pipelineRunRow{}).
-		Where("owner = ? AND repo = ? AND status IN ('pending','running')", owner, repo).
-		Pluck("id", &ids).Error
+	db := s.db.Model(&pipelineRunRow{}).Where("owner = ? AND repo = ? AND status IN ('pending','running')", owner, repo)
+	if file != "" {
+		db = db.Where("file = ?", file)
+	}
+	err := db.Pluck("id", &ids).Error
 	return ids, err
 }
 
-// LatestPipelineRunForSHA 某提交最近一次流水线运行（PR 视图展示 CI 状态用）；无则返回 false。
-func (s *Store) LatestPipelineRunForSHA(owner, repo, sha string) (PipelineRun, bool, error) {
-	var row pipelineRunRow
+// AggregatePipelineStatusForSHA 汇总某提交上所有流水线文件的运行状态（PR CI 门禁用）：
+// 任一 pending/running → running；否则任一 failed → failed；全部 success → success。
+// RunID 为最近一次运行（供前端跳转）；无运行时 ok=false。
+func (s *Store) AggregatePipelineStatusForSHA(owner, repo, sha string) (PipelineCIStatus, bool, error) {
+	var rows []pipelineRunRow
 	err := s.db.Where("owner = ? AND repo = ? AND sha = ?", owner, repo, sha).
-		Order("id DESC").First(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return PipelineRun{}, false, nil
-	}
+		Order("id DESC").Find(&rows).Error
 	if err != nil {
-		return PipelineRun{}, false, err
+		return PipelineCIStatus{}, false, err
 	}
-	return runRowToDTO(row), true, nil
+	if len(rows) == 0 {
+		return PipelineCIStatus{}, false, nil
+	}
+	status := "success"
+	for _, r := range rows {
+		switch r.Status {
+		case "pending", "running":
+			status = "running"
+		case "failed", "cancelled":
+			if status != "running" {
+				status = "failed"
+			}
+		}
+	}
+	return PipelineCIStatus{RunID: rows[0].ID, Status: status}, true, nil
 }
 
 // ---- 定时触发去重 ----
 
-// GetScheduleLastFired 返回某 (repo, cron) 最近一次认领时间（RFC3339）；无记录时 ok=false。
-func (s *Store) GetScheduleLastFired(owner, repo, expr string) (string, bool, error) {
+// GetScheduleLastFired 返回某 (repo, file, cron) 最近一次认领时间（RFC3339）；无记录时 ok=false。
+func (s *Store) GetScheduleLastFired(owner, repo, file, expr string) (string, bool, error) {
 	var row pipelineScheduleRow
-	err := s.db.Where("owner = ? AND repo = ? AND expr = ?", owner, repo, expr).First(&row).Error
+	err := s.db.Where("owner = ? AND repo = ? AND file = ? AND expr = ?", owner, repo, file, expr).First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", false, nil
 	}
@@ -195,9 +262,9 @@ func (s *Store) GetScheduleLastFired(owner, repo, expr string) (string, bool, er
 
 // ClaimSchedule 原子认领一次定时触发：仅当无记录或 last_fired < at 时成功。
 // 多实例并发时依靠条件更新 + 主键唯一约束保证只有一个实例成功。
-func (s *Store) ClaimSchedule(owner, repo, expr, at string) (bool, error) {
+func (s *Store) ClaimSchedule(owner, repo, file, expr, at string) (bool, error) {
 	res := s.db.Model(&pipelineScheduleRow{}).
-		Where("owner = ? AND repo = ? AND expr = ? AND last_fired < ?", owner, repo, expr, at).
+		Where("owner = ? AND repo = ? AND file = ? AND expr = ? AND last_fired < ?", owner, repo, file, expr, at).
 		Update("last_fired", at)
 	if res.Error != nil {
 		return false, res.Error
@@ -205,7 +272,7 @@ func (s *Store) ClaimSchedule(owner, repo, expr, at string) (bool, error) {
 	if res.RowsAffected > 0 {
 		return true, nil
 	}
-	err := s.db.Create(&pipelineScheduleRow{Owner: owner, Repo: repo, Expr: expr, LastFired: at}).Error
+	err := s.db.Create(&pipelineScheduleRow{Owner: owner, Repo: repo, File: file, Expr: expr, LastFired: at}).Error
 	if err == nil {
 		return true, nil
 	}
@@ -230,9 +297,10 @@ func (s *Store) ListEnabledPipelines() ([]Pipeline, error) {
 
 // FailStalePipelineRuns 孤儿 run 回收：把早于 cutoff 仍停在 pending/running 的运行
 // 标记为 failed（进程重启后 memory 队列不会再执行它们）。返回受影响行数。
+// 尚未到点的延迟运行（run_at > now）不在回收范围。
 func (s *Store) FailStalePipelineRuns(cutoff string) (int64, error) {
 	res := s.db.Model(&pipelineRunRow{}).
-		Where("status IN ('pending','running') AND created_at < ?", cutoff).
+		Where("status IN ('pending','running') AND created_at < ? AND (run_at = '' OR run_at <= ?)", cutoff, now()).
 		Updates(map[string]any{
 			"status":      "failed",
 			"error":       "interrupted: server restarted",

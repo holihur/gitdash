@@ -466,10 +466,12 @@ export interface WebhookDelivery {
   created_at: string;
 }
 
-export type PipelineRunStatus = "pending" | "running" | "success" | "failed";
+export type PipelineRunStatus = "pending" | "running" | "success" | "failed" | "cancelled";
 
 export interface PipelineRun {
   id: number;
+  /** 流水线定义文件（多文件支持；旧记录可能为空） */
+  file?: string;
   sha: string;
   ref: string;
   trigger_by: string;
@@ -478,6 +480,8 @@ export interface PipelineRun {
   steps_done: number;
   /** 触发事件：push|pull_request|schedule|workflow_dispatch|manual（旧记录可能为空） */
   event?: string;
+  /** 延迟执行时间（RFC3339）；空 = 立即执行 */
+  run_at?: string;
   /** 仅 workflow_dispatch 传入的 inputs */
   inputs?: Record<string, string>;
   error?: string;
@@ -522,6 +526,8 @@ export interface PipelineGraphEdge {
 
 export interface PipelineGraph {
   ref: string;
+  /** 该图对应的流水线文件 */
+  file?: string;
   image?: string;
   timeout?: string;
   graph: { image?: string; nodes: PipelineGraphNode[]; edges: PipelineGraphEdge[] };

@@ -66,7 +66,7 @@ func TestRunScheduledTriggersDueCron(t *testing.T) {
 	}
 	// 预置 lastFired 为 2 分钟前 → cron 已到期
 	past := time.Now().UTC().Add(-2 * time.Minute).Format(time.RFC3339)
-	if claimed, err := st.ClaimSchedule("alice", "demo", "* * * * *", past); err != nil || !claimed {
+	if claimed, err := st.ClaimSchedule("alice", "demo", FileName, "* * * * *", past); err != nil || !claimed {
 		t.Fatalf("seed schedule: claimed=%v err=%v", claimed, err)
 	}
 
@@ -116,7 +116,7 @@ func TestRunScheduledSkipsWhenNotDue(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if claimed, _ := st.ClaimSchedule("alice", "demo", "0 0 1 1 *", now.Format(time.RFC3339)); !claimed {
+	if claimed, _ := st.ClaimSchedule("alice", "demo", FileName, "0 0 1 1 *", now.Format(time.RFC3339)); !claimed {
 		t.Fatal("seed failed")
 	}
 	RunScheduled(st, now)

@@ -4,6 +4,11 @@
 Each agent dials out to the gitdash server over a WebSocket, picks up jobs, runs
 `.gitdash.yml` pipelines in local Docker containers, and streams logs/status back. Start it with `gitdash-runner run -exec host` to also allow pipelines that omit `image` to run directly on the runner host via `sh` (no container sandbox — opt-in).
 
+Pipelines live in the repository root `.gitdash.yml` or, for multiple independent
+pipelines, in the `.gitdash/` directory (top-level `*.yml` / `*.yaml`). On a
+matching event every file is evaluated and triggered on its own `on:` rules;
+manual runs can target a single file.
+
 If the gitdash server is behind NAT (no public address the runner can reach), use
 **reverse mode**: the runner listens and the gitdash server dials out to it (see
 "Reverse mode" below).
@@ -83,6 +88,26 @@ Note: tag pushes trigger the pipeline too (`when: tag != ""` enables or
 gates tag-only jobs). The set of automatic triggers is controlled by `on:` in
 `.gitdash.yml` (default: `push` only); `manual` runs are always allowed. Progress
 counts each sub-step as one unit.
+
+## Run lifecycle
+
+- **Multiple pipeline files**: besides the root `.gitdash.yml`, every top-level
+  `*.yml` / `*.yaml` in `.gitdash/` is an independent pipeline. On a matching
+  event each file is evaluated against its own `on:` rules; a manual trigger can
+  target one file or all of them.
+- **Timeouts**: `timeout:` bounds a single step (default 10m, max 1h);
+  `job_timeout:` bounds the whole run (unset = unlimited, max 2h). A run that
+  exceeds it is marked failed.
+- **Cancel**: a pending or running run can be cancelled from the run detail view
+  (`POST …/pipeline/runs/{id}/cancel`). Local runs are killed immediately; remote
+  runs get a cancel message so the agent kills the container. Cancelled runs are
+  marked `cancelled`.
+- **Re-run**: finished runs (success / failed / cancelled) can be re-run from the
+  detail view (`POST …/pipeline/runs/{id}/rerun`), reusing the original commit,
+  ref, event, inputs and pipeline file.
+- **Delayed execution**: trigger a manual / dispatch run with `delay` (e.g.
+  `{"delay":"30m"}`); the run is created as `pending` with a `run_at` timestamp
+  and starts automatically when due (survives restarts).
 
 ## Host execution mode (no Docker)
 

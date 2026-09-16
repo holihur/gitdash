@@ -12873,6 +12873,14 @@ const docTemplate = `{
         "api.createPipelineRunReq": {
             "type": "object",
             "properties": {
+                "delay": {
+                    "description": "可选：延迟执行时长（如 \"30s\"、\"5m\"；最大 24h），到期后自动开始",
+                    "type": "string"
+                },
+                "file": {
+                    "description": "可选：指定流水线文件（如 .gitdash/ci.yml）；为空且为多文件时触发全部",
+                    "type": "string"
+                },
                 "inputs": {
                     "description": "可选（仅 dispatch）：注入为 INPUT_\u003cKEY\u003e 环境变量",
                     "type": "object",

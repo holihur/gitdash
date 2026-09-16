@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
@@ -18,8 +19,12 @@ import (
 	"gitdash/backend/internal/webhooks"
 )
 
-// FileName 仓库根目录中的流水线定义文件。
+// FileName 仓库根目录中的流水线定义文件（单文件向后兼容）。
 const FileName = ".gitdash.yml"
+
+// DirName 多流水线目录：其中每个 *.yml / *.yaml 都是独立的流水线定义。
+// 目录与根目录的 .gitdash.yml 可共存，推送时会分别触发对应流水线。
+const DirName = ".gitdash"
 
 // KindPipelineRun 队列任务类型：执行一次流水线运行。
 const KindPipelineRun = "pipeline:run"
@@ -53,11 +58,37 @@ const maxActiveRuns = 3
 
 const maxLogBytes = 512 << 10
 
+// pipelineExts 多流水线目录中可被识别的文件后缀。
+func isPipelineFile(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasSuffix(lower, ".yml") || strings.HasSuffix(lower, ".yaml")
+}
+
+// DiscoverFiles 返回某个提交上所有的流水线定义文件路径（排序后）。
+// 包含：根目录 .gitdash.yml（向后兼容）与 .gitdash/ 目录下顶层的 *.yml / *.yaml。
+// 读取失败或无文件时返回空切片。
+func DiscoverFiles(owner, repo, ref string) []string {
+	var files []string
+	if blob, err := gitsvc.ReadBlob(owner, repo, ref, FileName); err == nil && blob.Encoding == "utf-8" && strings.TrimSpace(blob.Content) != "" {
+		files = append(files, FileName)
+	}
+	if names, err := gitsvc.ListDir(owner, repo, ref, DirName); err == nil {
+		for _, n := range names {
+			if isPipelineFile(n) {
+				files = append(files, DirName+"/"+n)
+			}
+		}
+	}
+	sort.Strings(files)
+	return files
+}
+
 // RunJob 队列载荷：执行一次流水线所需的最小信息。
 type RunJob struct {
 	RunID int64  `json:"run_id"`
 	Owner string `json:"owner"`
 	Repo  string `json:"repo"`
+	File  string `json:"file,omitempty"` // 流水线定义文件路径；空 = 旧的 .gitdash.yml
 	SHA   string `json:"sha"`
 	Ref   string `json:"ref"`
 	Event string `json:"event,omitempty"` // push | pull_request | schedule | workflow_dispatch | manual（when 依据）
@@ -69,6 +100,39 @@ var (
 	boundStore *store.Store
 	boundQueue queue.Queue
 )
+
+// 进程内（本地 docker / host）运行的可取消上下文登记表：
+// CancelRun 据此即时终止正在执行的步骤。
+var (
+	runCancelsMu sync.Mutex
+	runCancels   = map[int64]context.CancelFunc{}
+)
+
+func registerRunCancel(id int64, cancel context.CancelFunc) {
+	runCancelsMu.Lock()
+	if old, ok := runCancels[id]; ok {
+		old()
+	}
+	runCancels[id] = cancel
+	runCancelsMu.Unlock()
+}
+
+func unregisterRunCancel(id int64) {
+	runCancelsMu.Lock()
+	delete(runCancels, id)
+	runCancelsMu.Unlock()
+}
+
+// cancelBuiltinRun 取消进程内运行的执行上下文；存在则返回 true。
+func cancelBuiltinRun(id int64) bool {
+	runCancelsMu.Lock()
+	cancel, ok := runCancels[id]
+	runCancelsMu.Unlock()
+	if ok {
+		cancel()
+	}
+	return ok
+}
 
 // Bind 绑定任务队列消费者与执行器。q 为 nil 时沿用进程内 goroutine 直接调度（默认，零依赖）；
 // exec 为 nil 时使用内置本地 docker 执行器。
@@ -141,8 +205,8 @@ func ReadLog(owner, repo string, id int64) (string, error) {
 }
 
 // PushHandler 返回挂到 webhook spool 调度器上的 push 事件处理器：
-// 仓库开启流水线且该提交含 .gitdash.yml 时触发一次运行（分支与 tag push 均可，
-// 条件步骤据此可用 when: tag / when: branch）。
+// 仓库开启流水线且该提交包含流水线定义文件时，为每个匹配的流水线各触发一次运行
+// （分支与 tag push 均可，条件步骤据此可用 when: tag / when: branch）。
 func PushHandler(st *store.Store) func(webhooks.Event) {
 	return func(ev webhooks.Event) {
 		if ev.Event != "push" || ev.New == "" || isZeroSHA(ev.New) {
@@ -161,7 +225,7 @@ func PushHandler(st *store.Store) func(webhooks.Event) {
 		if strings.HasPrefix(ev.Ref, "refs/heads/") {
 			ref = strings.TrimPrefix(ev.Ref, "refs/heads/")
 		}
-		if _, err := Trigger(st, TriggerOpts{Owner: ev.Owner, Repo: ev.Repo, SHA: ev.New, Ref: ref, By: ev.User, Event: "push"}); err != nil &&
+		if _, err := TriggerAll(st, TriggerOpts{Owner: ev.Owner, Repo: ev.Repo, SHA: ev.New, Ref: ref, By: ev.User, Event: "push"}); err != nil &&
 			!ignorableTriggerErr(err) {
 			logx.Infof("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
 		}
@@ -181,34 +245,48 @@ func ignorableTriggerErr(err error) bool {
 type TriggerOpts struct {
 	Owner string
 	Repo  string
+	// File 流水线定义文件路径；为空时表示遗留单文件 .gitdash.yml。
+	File  string
 	SHA   string
 	Ref   string // 完整 ref（refs/heads/x）或短分支名
 	By    string // 触发者（用户 / schedule / dispatch actor）
 	Event string // push | pull_request | schedule | workflow_dispatch | manual
+	// Delay > 0 时延迟执行：创建 pending 运行并记录 run_at，由延迟调度器到期后派发。
+	Delay time.Duration
 	// Inputs 仅 workflow_dispatch 使用，注入为 INPUT_<KEY> 环境变量。
 	Inputs map[string]string
 	// Force 跳过 on 白名单校验（手动触发与重跑用）。
 	Force bool
 }
 
-// Trigger 创建一次流水线运行。
-// 提交上无 .gitdash.yml 时返回 ErrNoPipeline；事件未被 on 白名单启用时返回 ErrTriggerDisabled；
-// 同仓库进行中运行达上限时返回 ErrTooManyRuns。DSL 解析错误会记为 failed 的运行，便于排查。
+// pipelineFile 归一化流水线文件路径（空 → 遗留 .gitdash.yml）。
+func pipelineFile(file string) string {
+	if strings.TrimSpace(file) == "" {
+		return FileName
+	}
+	return file
+}
+
+// Trigger 创建一次流水线运行（单文件）。
+// opts.File 为空时按遗留 .gitdash.yml 处理。
+// 目标文件不存在时返回 ErrNoPipeline；事件未被 on 白名单启用时返回 ErrTriggerDisabled；
+// 同一文件进行中运行达上限时返回 ErrTooManyRuns。DSL 解析错误会记为 failed 的运行，便于排查。
 func Trigger(st *store.Store, opts TriggerOpts) (store.PipelineRun, error) {
-	if active, err := st.RunningPipelineRunIDs(opts.Owner, opts.Repo); err == nil && len(active) >= maxActiveRuns {
+	file := pipelineFile(opts.File)
+	if active, err := st.RunningPipelineRunIDs(opts.Owner, opts.Repo, file); err == nil && len(active) >= maxActiveRuns {
 		return store.PipelineRun{}, ErrTooManyRuns
 	}
-	blob, err := gitsvc.ReadBlob(opts.Owner, opts.Repo, opts.SHA, FileName)
+	blob, err := gitsvc.ReadBlob(opts.Owner, opts.Repo, opts.SHA, file)
 	if err != nil || blob.Encoding != "utf-8" || strings.TrimSpace(blob.Content) == "" {
 		return store.PipelineRun{}, ErrNoPipeline
 	}
 	cfg, perr := Parse([]byte(blob.Content))
 	if perr != nil {
-		run, cerr := st.CreatePipelineRun(opts.Owner, opts.Repo, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, 0)
+		run, cerr := st.CreatePipelineRun(opts.Owner, opts.Repo, file, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, 0)
 		if cerr != nil {
 			return run, cerr
 		}
-		msg := "invalid " + FileName + ": " + perr.Error()
+		msg := "invalid " + file + ": " + perr.Error()
 		_ = st.FinishPipelineRun(run.ID, "failed", msg)
 		run.Status = "failed"
 		run.Error = msg
@@ -217,35 +295,92 @@ func Trigger(st *store.Store, opts TriggerOpts) (store.PipelineRun, error) {
 	if !opts.Force && !cfg.Triggers(opts.Event) {
 		return store.PipelineRun{}, ErrTriggerDisabled
 	}
-	run, err := st.CreatePipelineRun(opts.Owner, opts.Repo, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, cfg.UnitCount())
+	run, err := st.CreatePipelineRun(opts.Owner, opts.Repo, file, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, cfg.UnitCount())
 	if err != nil {
 		return run, err
 	}
-	job := RunJob{RunID: run.ID, Owner: opts.Owner, Repo: opts.Repo, SHA: opts.SHA, Ref: opts.Ref, Event: opts.Event, Inputs: opts.Inputs}
-	if boundQueue == nil {
-		// 进程内直接调度（默认）
-		go executeRun(st, job)
+	job := RunJob{RunID: run.ID, Owner: opts.Owner, Repo: opts.Repo, File: file, SHA: opts.SHA, Ref: opts.Ref, Event: opts.Event, Inputs: opts.Inputs}
+	// 延迟执行：仅落库 run_at，由 StartDelayedRunner 到期后派发。
+	if opts.Delay > 0 {
+		runAt := time.Now().UTC().Add(opts.Delay).Format(time.RFC3339)
+		if err := st.SetPipelineRunRunAt(run.ID, runAt); err != nil {
+			return run, err
+		}
+		run.RunAt = runAt
 		return run, nil
+	}
+	if err := dispatchJob(st, job); err != nil {
+		msg := "enqueue: " + err.Error()
+		_ = st.FinishPipelineRun(run.ID, "failed", msg)
+		run.Status = "failed"
+		run.Error = msg
+		// 入队失败已记为 failed 运行，调用方应拿到该运行（API 返回 201）。
+		return run, nil //nolint:nilerr
+	}
+	return run, nil
+}
+
+// dispatchJob 派发一次已创建的运行：队列模式入队，否则进程内直接执行。
+func dispatchJob(st *store.Store, job RunJob) error {
+	if boundQueue == nil {
+		go executeRun(st, job)
+		return nil
 	}
 	payload, err := json.Marshal(job)
 	if err != nil {
-		return run, err
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	qj := queue.Job{
 		Kind:    KindPipelineRun,
-		ID:      fmt.Sprintf("%s-%s-%d", opts.Owner, opts.Repo, run.ID),
+		ID:      fmt.Sprintf("%s-%s-%d", job.Owner, job.Repo, job.RunID),
 		Payload: payload,
 	}
-	if err := boundQueue.Enqueue(ctx, qj); err != nil {
-		msg := "enqueue: " + err.Error()
-		_ = st.FinishPipelineRun(run.ID, "failed", msg)
-		run.Status = "failed"
-		run.Error = msg
-		return run, nil
+	return boundQueue.Enqueue(ctx, qj)
+}
+
+// TriggerAll 为某提交上所有匹配的流水线文件各创建一次运行。
+// opts.File 非空时仅触发该文件。
+// 返回已创建/已失败的运行列表；提交上没有任何流水线文件时返回 ErrNoPipeline，
+// 有文件但没有任何文件启用该事件时返回 ErrTriggerDisabled。
+func TriggerAll(st *store.Store, opts TriggerOpts) ([]store.PipelineRun, error) {
+	files := []string{pipelineFile(opts.File)}
+	if strings.TrimSpace(opts.File) == "" {
+		files = DiscoverFiles(opts.Owner, opts.Repo, opts.SHA)
 	}
-	return run, nil
+	if len(files) == 0 {
+		return nil, ErrNoPipeline
+	}
+	runs := make([]store.PipelineRun, 0, len(files))
+	enabled := false
+	throttled := false
+	for _, f := range files {
+		one := opts
+		one.File = f
+		run, err := Trigger(st, one)
+		switch {
+		case err == nil:
+			runs = append(runs, run)
+			enabled = true
+		case errors.Is(err, ErrTooManyRuns):
+			// 同一文件并发受限：跳过
+			throttled = true
+		case errors.Is(err, ErrTriggerDisabled):
+			// 未启用该事件：跳过
+		case errors.Is(err, ErrNoPipeline):
+			// 发现与实际读取之间的竞态：忽略
+		default:
+			return runs, err
+		}
+	}
+	if !enabled && len(runs) == 0 {
+		if throttled {
+			return runs, ErrTooManyRuns
+		}
+		return runs, ErrTriggerDisabled
+	}
+	return runs, nil
 }
 
 // InputEnv 把 dispatch inputs 转成 INPUT_<KEY> 环境变量（键大写、非字母数字转下划线）。
@@ -280,7 +415,16 @@ func inputEnvKey(k string) string {
 // executeRun 执行流水线：解析 DSL（Trigger 已校验过），交由绑定的 Executor 执行并写日志。
 func executeRun(st *store.Store, job RunJob) {
 	runID, owner, repo, sha, ref := job.RunID, job.Owner, job.Repo, job.SHA, job.Ref
-	_ = st.StartPipelineRun(runID)
+	file := pipelineFile(job.File)
+	// 原子认领（pending → running）：已在别处启动或已被取消时直接跳过。
+	if started, err := st.ClaimPipelineRun(runID); err != nil || !started {
+		return
+	}
+
+	// 可取消上下文：CancelRun 通过登记表即时终止本地执行的步骤。
+	ctx, cancel := context.WithCancel(context.Background())
+	registerRunCancel(runID, cancel)
+	defer func() { unregisterRunCancel(runID); cancel() }()
 
 	lf := LogPath(owner, repo, runID)
 	if err := os.MkdirAll(filepath.Dir(lf), 0o755); err != nil {
@@ -304,12 +448,12 @@ func executeRun(st *store.Store, job RunJob) {
 	}
 
 	writeLog("== gitdash pipeline run %d ==", runID)
-	writeLog("repo: %s/%s  ref: %s  sha: %s", owner, repo, ref, sha)
+	writeLog("repo: %s/%s  file: %s  ref: %s  sha: %s", owner, repo, file, ref, sha)
 
 	// 执行时重新读取并解析 DSL（Trigger 已校验过；此处失败则直接记 failed）
-	blob, err := gitsvc.ReadBlob(owner, repo, sha, FileName)
+	blob, err := gitsvc.ReadBlob(owner, repo, sha, file)
 	if err != nil || blob.Encoding != "utf-8" || strings.TrimSpace(blob.Content) == "" {
-		fail("pipeline file %s not found at %s", FileName, sha)
+		fail("pipeline file %s not found at %s", file, sha)
 		return
 	}
 	cfg, perr := Parse([]byte(blob.Content))
@@ -318,7 +462,7 @@ func executeRun(st *store.Store, job RunJob) {
 		if strings.Contains(perr.Error(), "volume") {
 			logx.Infof("pipeline audit: REJECTED docker socket mount repo=%s/%s time=%s", owner, repo, time.Now().UTC().Format(time.RFC3339))
 		}
-		fail("invalid %s: %v", FileName, perr)
+		fail("invalid %s: %v", file, perr)
 		return
 	}
 	// 环境变量优先级（低→高）：dispatch inputs < 仓库级环境变量 < DSL env
@@ -341,9 +485,26 @@ func executeRun(st *store.Store, job RunJob) {
 	if exec == nil {
 		exec = &dispatchExecutor{}
 	}
-	if err := exec.Execute(context.Background(), job, cfg, logFile, func(stepsDone int) {
+	// 整次运行超时（job_timeout）：在取消上下文之上再包一层超时。
+	execCtx := ctx
+	if cfg.JobTimeout > 0 {
+		writeLog("job_timeout: %s", cfg.JobTimeout)
+		var timeoutCancel context.CancelFunc
+		execCtx, timeoutCancel = context.WithTimeout(ctx, cfg.JobTimeout)
+		defer timeoutCancel()
+	}
+	if err := exec.Execute(execCtx, job, cfg, logFile, func(stepsDone int) {
 		_ = st.ProgressPipelineRun(runID, stepsDone)
 	}); err != nil {
+		if errors.Is(execCtx.Err(), context.DeadlineExceeded) {
+			fail("job timeout exceeded (%s)", cfg.JobTimeout)
+			return
+		}
+		if execCtx.Err() != nil {
+			writeLog("\n== cancelled ==")
+			_ = st.FinishPipelineRun(runID, "cancelled", "cancelled by user")
+			return
+		}
 		fail("%v", err)
 		return
 	}

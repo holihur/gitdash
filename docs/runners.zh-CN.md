@@ -2,6 +2,8 @@
 
 自托管 runner 让 gitdash 的 CI 流水线不再局限于服务端本机 Docker：你可以在任意机器上部署
 `gitdash-runner` agent，它主动连接 gitdash 服务端领取任务，在本地容器中执行 `.gitdash.yml`（`gitdash-runner run -exec host` 可切换为无 Docker 的宿主执行，无容器沙箱，需显式开启）
+
+流水线定义放在仓库根目录 `.gitdash.yml`；若需要多个互相独立的流水线，放在 `.gitdash/` 目录（顶层 `*.yml` / `*.yaml`）。事件触发时每个文件按各自的 `on:` 规则独立评估并触发；手动触发可指定单个文件。
 定义的流水线，并把日志、状态实时回传。
 
 > 若 gitdash 位于内网（无公网地址）、runner 在公网无法被回连，可用**反向连接模式**：
@@ -117,6 +119,21 @@ runs-on:                     # 块列表
   - docker
   - go1.22
 ```
+
+## 运行生命周期
+
+- **多流水线文件**：除仓库根目录的 `.gitdash.yml` 外，`.gitdash/` 目录下顶层的每个
+  `*.yml` / `*.yaml` 都是独立流水线；事件触发时每个文件按各自 `on:` 规则独立评估，
+  手动触发可指定单个文件或全部。
+- **超时**：`timeout:` 限制单步（默认 10m，上限 1h）；`job_timeout:` 限制整次运行
+  （缺省 = 不限，上限 2h），超出即记为失败。
+- **取消**：pending / running 的运行可在运行详情中取消
+  （`POST …/pipeline/runs/{id}/cancel`）。本地运行立即终止；远程运行会通知 agent
+  杀掉容器。取消后状态为 `cancelled`。
+- **重跑**：已结束的运行（success / failed / cancelled）都可在运行详情中重跑
+  （`POST …/pipeline/runs/{id}/rerun`），复用原提交、ref、事件、inputs 与流水线文件。
+- **延迟执行**：手动 / dispatch 触发时可带 `delay`（如 `{"delay":"30m"}`），
+  运行以 `pending` + `run_at` 落库，到期自动开始（重启后仍生效）。
 
 ## 宿主执行模式（无 Docker）
 

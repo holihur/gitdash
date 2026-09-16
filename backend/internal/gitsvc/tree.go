@@ -136,6 +136,37 @@ func Tree(owner, name, ref, dir string) ([]Entry, error) {
 
 const MaxBlobSize = 512 * 1024
 
+// ListDir 返回 ref 下目录 dir 的直接子项名称（不含逐项提交信息，轻量）。
+// dir 为空时列出仓库根目录；目录不存在返回错误。
+func ListDir(owner, name, ref, dir string) ([]string, error) {
+	if !ValidRef(ref) {
+		return nil, fmt.Errorf("invalid ref %q", ref)
+	}
+	path := RepoPath(owner, name)
+	treeish := ref
+	if dir != "" {
+		t, err := gitOut(path, "cat-file", "-t", ref+":"+dir)
+		if err != nil {
+			return nil, fmt.Errorf("path not found: %s", dir)
+		}
+		if strings.TrimSpace(t) != "tree" {
+			return nil, fmt.Errorf("not a directory: %s", dir)
+		}
+		treeish = ref + ":" + dir
+	}
+	out, err := gitOut(path, "ls-tree", "--name-only", "-z", treeish)
+	if err != nil {
+		return nil, err
+	}
+	names := []string{}
+	for _, n := range strings.Split(out, "\x00") {
+		if n != "" {
+			names = append(names, n)
+		}
+	}
+	return names, nil
+}
+
 type Blob struct {
 	Path     string `json:"path"`
 	Size     int64  `json:"size"`

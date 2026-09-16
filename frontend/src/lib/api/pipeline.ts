@@ -4,11 +4,14 @@ import type { PipelineGraph, PipelineRun, RepoEnvVar, Runner } from "./types";
 export const pipelineApi = {
   // pipeline（CI）
   getPipeline: (owner: string, name: string) =>
-    req<{ enabled: boolean; file: string }>(`/users/${owner}/repos/${name}/pipeline`),
-  getPipelineGraph: (owner: string, name: string, ref?: string) =>
-    req<PipelineGraph>(
-      `/users/${owner}/repos/${name}/pipeline/graph${ref ? `?ref=${encodeURIComponent(ref)}` : ""}`,
-    ),
+    req<{ enabled: boolean; file: string; files: string[] }>(`/users/${owner}/repos/${name}/pipeline`),
+  getPipelineGraph: (owner: string, name: string, ref?: string, file?: string) => {
+    const params = new URLSearchParams();
+    if (ref) params.set("ref", ref);
+    if (file) params.set("file", file);
+    const qs = params.toString();
+    return req<PipelineGraph>(`/users/${owner}/repos/${name}/pipeline/graph${qs ? `?${qs}` : ""}`);
+  },
   setPipeline: (owner: string, name: string, enabled: boolean) =>
     req<{ enabled: boolean }>(`/users/${owner}/repos/${name}/pipeline`, {
       method: "PUT",
@@ -18,8 +21,8 @@ export const pipelineApi = {
     req<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?limit=50`),
   getPipelineRun: (owner: string, name: string, id: number) =>
     req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`),
-  triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string } | string) =>
-    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs`, {
+  triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string; file?: string; delay?: string } | string) =>
+    req<{ runs: PipelineRun[] }>(`/users/${owner}/repos/${name}/pipeline/runs`, {
       method: "POST",
       body: JSON.stringify(typeof body === "string" ? { ref: body } : (body ?? {})),
     }),
@@ -30,9 +33,9 @@ export const pipelineApi = {
   dispatchPipelineRun: (
     owner: string,
     name: string,
-    body?: { ref?: string; sha?: string; inputs?: Record<string, string> },
+    body?: { ref?: string; sha?: string; file?: string; inputs?: Record<string, string> },
   ) =>
-    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/dispatch`, {
+    req<{ runs: PipelineRun[] }>(`/users/${owner}/repos/${name}/pipeline/dispatch`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),

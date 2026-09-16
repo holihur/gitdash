@@ -55,8 +55,8 @@ func (a *API) enrichPull(owner, name string, pr *store.PullRequest) {
 	m, c := gitsvc.MergeCheck(owner, name, "refs/heads/"+pr.TargetBranch, "refs/heads/"+pr.SourceBranch)
 	pr.Mergeable = &m
 	pr.Conflicted = c
-	if run, ok, err := a.store.LatestPipelineRunForSHA(owner, name, pr.HeadSHA); err == nil && ok {
-		pr.CI = &store.PipelineCIStatus{RunID: run.ID, Status: run.Status}
+	if ci, ok, err := a.store.AggregatePipelineStatusForSHA(owner, name, pr.HeadSHA); err == nil && ok {
+		pr.CI = &ci
 	}
 }
 
@@ -236,12 +236,12 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		if prot.RequireCI {
 			status := "missing"
 			passed := false
-			if run, has, cErr := a.store.LatestPipelineRunForSHA(owner, name, head); cErr != nil {
+			if ci, has, cErr := a.store.AggregatePipelineStatusForSHA(owner, name, head); cErr != nil {
 				writeErr(w, http.StatusInternalServerError, cErr.Error())
 				return
 			} else if has {
-				status = run.Status
-				passed = run.Status == "success"
+				status = ci.Status
+				passed = ci.Status == "success"
 			}
 			if !passed {
 				writeCode(w, http.StatusConflict, "ci_required",

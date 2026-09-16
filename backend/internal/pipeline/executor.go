@@ -214,7 +214,7 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	// 镜像拉取/运行审计日志
 	logx.Infof("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
 		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd := newContextCommand(ctx, "docker", args...)
 	cmd.Stdout = logSink
 	cmd.Stderr = logSink
 	if err := cmd.Run(); err != nil {
@@ -230,6 +230,20 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	return nil
 }
 
+// newContextCommand 创建随 ctx 取消而整组终止的命令。
+// 除杀掉直接子进程外，还设置 WaitDelay：否则 sh 派生的子进程持有 stdout 管道时，
+// cmd.Wait 会一直阻塞到该子进程自行退出（超时/取消看起来“不生效”）。
+func newContextCommand(ctx context.Context, name string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = 3 * time.Second
+	configureProcAttr(cmd)
+	cmd.Cancel = func() error {
+		killProcessGroup(cmd)
+		return nil
+	}
+	return cmd
+}
+
 // runHostStep 无 Docker 时直接在宿主 sh 中执行步骤（image 留空即 host 模式）。
 // 注意：host 模式没有容器沙箱（无网络/资源隔离），需显式开启（服务端
 // GITDASH_PIPELINE_EXEC=host，agent 注册时 -exec host），未开启时被拒绝。
@@ -242,7 +256,7 @@ func runHostStep(parent context.Context, workdir string, cfg *Config, step Step,
 
 	logx.Infof("pipeline audit: exec=host repo=%s/%s step=%q time=%s",
 		owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
-	cmd := exec.CommandContext(ctx, "sh", "-ec", step.Run)
+	cmd := newContextCommand(ctx, "sh", "-ec", step.Run)
 	cmd.Dir = workdir
 	env := append(os.Environ(),
 		"CI=1",

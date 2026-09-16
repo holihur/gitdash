@@ -2,11 +2,13 @@ package api
 
 import (
 	"errors"
-	"gitdash/backend/internal/gitsvc"
-	"gitdash/backend/internal/pipeline"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/pipeline"
 )
 
 // getPipeline 获取仓库流水线开关状态。
@@ -29,9 +31,15 @@ func (a *API) getPipeline(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	// 列出默认分支上的流水线文件（多文件支持）
+	files := []string{}
+	if hb, herr := gitsvc.HeadBranch(owner, name); herr == nil && hb != "" {
+		files = pipeline.DiscoverFiles(owner, name, hb)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"enabled": p.Enabled,
 		"file":    pipeline.FileName,
+		"files":   files,
 	})
 }
 
@@ -62,9 +70,18 @@ func (a *API) getPipelineGraph(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "ref_required", "repository has no default branch")
 		return
 	}
-	blob, err := gitsvc.ReadBlob(owner, name, ref, pipeline.FileName)
+	file := strings.TrimSpace(r.URL.Query().Get("file"))
+	if file == "" {
+		if files := pipeline.DiscoverFiles(owner, name, ref); len(files) > 0 {
+			file = files[0]
+		}
+	}
+	if file == "" {
+		file = pipeline.FileName
+	}
+	blob, err := gitsvc.ReadBlob(owner, name, ref, file)
 	if err != nil || blob.Encoding != "utf-8" || strings.TrimSpace(blob.Content) == "" {
-		writeCode(w, http.StatusNotFound, "pipeline_not_found", "no "+pipeline.FileName+" at "+ref)
+		writeCode(w, http.StatusNotFound, "pipeline_not_found", "no "+file+" at "+ref)
 		return
 	}
 	cfg, perr := pipeline.Parse([]byte(blob.Content))
@@ -74,6 +91,7 @@ func (a *API) getPipelineGraph(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ref":     ref,
+		"file":    file,
 		"image":   cfg.Image,
 		"timeout": cfg.Timeout.String(),
 		"graph":   cfg.Graph(),
@@ -219,7 +237,7 @@ func (a *API) createPipelineRun(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	a.triggerRun(w, r, owner, name, in, "manual", true)
+	a.triggerRuns(w, r, owner, name, in, "manual", true)
 }
 
 // dispatchPipelineRun 外部 webhook dispatch 触发（需 .gitdash.yml 的 on 含 workflow_dispatch）。
@@ -245,7 +263,7 @@ func (a *API) dispatchPipelineRun(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	a.triggerRun(w, r, owner, name, in, "workflow_dispatch", false)
+	a.triggerRuns(w, r, owner, name, in, "workflow_dispatch", false)
 }
 
 // rerunPipelineRun 重跑一次既有运行（复用其提交、ref、事件与 inputs；不受 on 白名单限制）。
@@ -280,7 +298,7 @@ func (a *API) rerunPipelineRun(w http.ResponseWriter, r *http.Request) {
 		event = "manual"
 	}
 	run, terr := pipeline.Trigger(a.store, pipeline.TriggerOpts{
-		Owner: owner, Repo: name, SHA: prev.SHA, Ref: prev.Ref,
+		Owner: owner, Repo: name, File: prev.File, SHA: prev.SHA, Ref: prev.Ref,
 		By: userFrom(r), Event: event, Inputs: prev.Inputs, Force: true,
 	})
 	if !a.writeTriggerResult(w, terr) {
@@ -289,30 +307,37 @@ func (a *API) rerunPipelineRun(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, run)
 }
 
-// triggerRun 手动/dispatch 共用的目标解析与触发（event=manual 时 force 跳过 on 白名单）。
-func (a *API) triggerRun(w http.ResponseWriter, r *http.Request, owner, name string, in createPipelineRunReq, event string, force bool) {
+// triggerRuns 手动/dispatch 共用的目标解析与触发（event=manual 时 force 跳过 on 白名单）。
+// file 为空且仓库存在多个流水线文件时，会为每个文件各触发一次。
+func (a *API) triggerRuns(w http.ResponseWriter, r *http.Request, owner, name string, in createPipelineRunReq, event string, force bool) {
 	resolvedRef, sha, code, msg := resolveRunTarget(owner, name, in.Ref, in.SHA)
 	if code != "" {
 		writeCode(w, http.StatusBadRequest, code, msg)
 		return
 	}
-	if event == "workflow_dispatch" && !a.pipelineDispatchEnabled(owner, name, sha) {
+	file := strings.TrimSpace(in.File)
+	if event == "workflow_dispatch" && !a.pipelineDispatchEnabled(owner, name, sha, file) {
 		writeCode(w, http.StatusBadRequest, "dispatch_not_enabled",
-			"add \"workflow_dispatch\" to on: in "+pipeline.FileName+" to enable dispatch")
+			"add \"workflow_dispatch\" to on: in the pipeline file to enable dispatch")
 		return
 	}
 	var inputs map[string]string
 	if event == "workflow_dispatch" {
 		inputs = sanitizeInputs(in.Inputs)
 	}
-	run, err := pipeline.Trigger(a.store, pipeline.TriggerOpts{
-		Owner: owner, Repo: name, SHA: sha, Ref: resolvedRef,
-		By: userFrom(r), Event: event, Inputs: inputs, Force: force,
+	delay, derr := parseRunDelay(in.Delay)
+	if derr != nil {
+		writeCode(w, http.StatusBadRequest, "invalid_delay", derr.Error())
+		return
+	}
+	runs, err := pipeline.TriggerAll(a.store, pipeline.TriggerOpts{
+		Owner: owner, Repo: name, File: file, SHA: sha, Ref: resolvedRef,
+		By: userFrom(r), Event: event, Inputs: inputs, Delay: delay, Force: force,
 	})
 	if !a.writeTriggerResult(w, err) {
 		return
 	}
-	writeJSON(w, http.StatusCreated, run)
+	writeJSON(w, http.StatusCreated, map[string]any{"runs": runs})
 }
 
 // writeTriggerResult 统一处理 Trigger 错误；返回 true 表示可继续写 201。
@@ -321,10 +346,10 @@ func (a *API) writeTriggerResult(w http.ResponseWriter, err error) bool {
 	case err == nil:
 		return true
 	case errors.Is(err, pipeline.ErrNoPipeline):
-		writeCode(w, http.StatusBadRequest, "pipeline_file_missing", "no "+pipeline.FileName+" found at the target commit")
+		writeCode(w, http.StatusBadRequest, "pipeline_file_missing", "no pipeline definition found at the target commit")
 	case errors.Is(err, pipeline.ErrTriggerDisabled):
 		writeCode(w, http.StatusBadRequest, "trigger_disabled",
-			"this pipeline does not enable the requested trigger (see on: in "+pipeline.FileName+")")
+			"this pipeline does not enable the requested trigger (see on: in the pipeline file)")
 	case errors.Is(err, pipeline.ErrTooManyRuns):
 		writeCode(w, http.StatusTooManyRequests, "too_many_runs", "too many active pipeline runs")
 	default:
@@ -333,9 +358,23 @@ func (a *API) writeTriggerResult(w http.ResponseWriter, err error) bool {
 	return false
 }
 
-// pipelineDispatchEnabled 目标提交的 DSL 是否启用了外部 dispatch。
-func (a *API) pipelineDispatchEnabled(owner, name, sha string) bool {
-	blob, err := gitsvc.ReadBlob(owner, name, sha, pipeline.FileName)
+// pipelineDispatchEnabled 目标提交是否启用了外部 dispatch：file 非空时只检查该文件，
+// 否则检查所有流水线文件（任一启用即可）。
+func (a *API) pipelineDispatchEnabled(owner, name, sha, file string) bool {
+	if file != "" {
+		return a.pipelineFileDispatchEnabled(owner, name, sha, file)
+	}
+	for _, f := range pipeline.DiscoverFiles(owner, name, sha) {
+		if a.pipelineFileDispatchEnabled(owner, name, sha, f) {
+			return true
+		}
+	}
+	return false
+}
+
+// pipelineFileDispatchEnabled 单个流水线文件的 DSL 是否启用了外部 dispatch。
+func (a *API) pipelineFileDispatchEnabled(owner, name, sha, file string) bool {
+	blob, err := gitsvc.ReadBlob(owner, name, sha, file)
 	if err != nil || blob.Encoding != "utf-8" {
 		return false
 	}
@@ -376,6 +415,25 @@ func resolveRunTarget(owner, name, ref, sha string) (resolvedRef, resolvedSHA, c
 		return "", "", "ref_not_found", "branch not found: " + branch
 	}
 	return branch, s, "", ""
+}
+
+// parseRunDelay 解析延迟执行时长；空/0 = 立即执行。最大 24h。
+func parseRunDelay(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, errors.New("invalid delay (use a Go duration such as '30s' or '5m')")
+	}
+	if d < 0 {
+		return 0, errors.New("delay must not be negative")
+	}
+	if d > 24*time.Hour {
+		return 0, errors.New("delay must not exceed 24h")
+	}
+	return d, nil
 }
 
 // sanitizeInputs 限制 dispatch inputs 的数量与长度，过滤非法键。

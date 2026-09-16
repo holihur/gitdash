@@ -168,13 +168,17 @@ func (h *Hub) streamWorkspace(ctx context.Context, runnerName string, runID int6
 	}
 }
 
-// Cancel 取消正在远程执行的 run（通知 agent 杀容器）。
+// Cancel 取消正在远程执行的 run（通知 agent 杀容器，并终止服务端等待）。
 func (h *Hub) Cancel(runID int64) {
 	h.mu.Lock()
-	_, ok := h.sessions[runID]
+	s, ok := h.sessions[runID]
 	h.mu.Unlock()
 	if !ok {
 		return
+	}
+	// 终止服务端 RunRemote 等待，避免 agent 无响应时卡住。
+	if s.cancel != nil {
+		s.cancel()
 	}
 	// MVP：向本实例全部连接广播 cancel，agent 端按 runID 过滤
 	h.mu.Lock()

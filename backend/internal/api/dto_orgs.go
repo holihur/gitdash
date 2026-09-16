@@ -37,5 +37,7 @@ type setPipelineReq struct {
 type createPipelineRunReq struct {
 	Ref    string            `json:"ref"`    // 可选：分支或 tag 短名，为空且无 sha 时用默认分支
 	SHA    string            `json:"sha"`    // 可选：直接指定提交（分支名/tag/SHA 均可）
+	File   string            `json:"file"`   // 可选：指定流水线文件（如 .gitdash/ci.yml）；为空且为多文件时触发全部
+	Delay  string            `json:"delay"`  // 可选：延迟执行时长（如 "30s"、"5m"；最大 24h），到期后自动开始
 	Inputs map[string]string `json:"inputs"` // 可选（仅 dispatch）：注入为 INPUT_<KEY> 环境变量
 }

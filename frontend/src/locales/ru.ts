@@ -516,7 +516,7 @@ export const ru: DeepPartial<Messages> = {
   "pipeline": {
     "tab": "Pipeline",
     "title": "CI Pipeline",
-    "hint": "При каждом push gitdash выполняет шаги, определенные в .gitdash.yml, внутри контейнеров Docker.",
+    "hint": "При каждом push gitdash выполняет шаги из .gitdash.yml или .gitdash/*.yml в контейнерах Docker.",
     "statusOn": "Включен",
     "statusOff": "Выключен",
     "turnOn": "Включить",
@@ -526,9 +526,14 @@ export const ru: DeepPartial<Messages> = {
     "runNow": "Запустить сейчас",
     "triggered": "Запуск Pipeline #{id} начат",
     "runs": "Запуски",
-    "noRuns": "Пока нет запусков. Выполните push с .gitdash.yml или запустите вручную.",
+    "noRuns": "Запусков пока нет. Отправьте файл пайплайна или запустите вручную.",
     "statusLabel": "Статус",
     "branch": "Ветка",
+    "fileLabel": "Пайплайн",
+    "allFiles": "Все пайплайны",
+    "delayPlaceholder": "задержка (5m)",
+    "delayHint": "Необязательная задержка перед запуском (Go duration, напр. 30s, 5m)",
+    "scheduledFor": "старт {time}",
     "trigger": "Триггер",
     "log": "Журнал",
     "refresh": "Обновить",
@@ -545,7 +550,8 @@ export const ru: DeepPartial<Messages> = {
       "pending": "Ожидание",
       "running": "Выполняется",
       "success": "Успешно",
-      "failed": "Ошибка"
+      "failed": "Ошибка",
+      "cancelled": "Отменено",
     },
     "dslTitle": "Конфигурация конвейера (.gitdash.yml)",
     "dslHint": "Настраиваемый YAML DSL: образ + упорядоченные шаги (опустите образ, чтобы выполнять непосредственно на хосте — требуется, чтобы сервер разрешил выполнение на хосте). `on` выбирает автоматические триггеры (push/pull_request/schedule/workflow_dispatch, по умолчанию push), а `schedule` содержит cron-выражения. Любой неудачный шаг останавливает запуск. Рабочая область репозитория монтируется в /workspace.",
@@ -1103,7 +1109,7 @@ export const ru: DeepPartial<Messages> = {
     "status": {
       "idle": "Простаивает",
       "running": "Выполняется",
-      "failed": "Ошибка"
+      "failed": "Ошибка",
     }
   }
 };

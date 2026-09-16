@@ -34,6 +34,8 @@ func BindHub(h RemoteHub) { boundHub = h }
 type dispatchExecutor struct{}
 
 // CancelRun 取消远程流水线运行（仅 remote run 支持；builtin run 不支持）。
+// CancelRun 取消一次进行中的运行（pending/running）：
+// 先落库为 cancelled，再取消本地执行上下文；远程运行额外通知 agent 杀死容器。
 func CancelRun(st *store.Store, owner, repo string, id int64) error {
 	run, err := st.GetPipelineRun(owner, repo, id)
 	if err != nil {
@@ -42,12 +44,18 @@ func CancelRun(st *store.Store, owner, repo string, id int64) error {
 	if run.Status != "running" && run.Status != "pending" {
 		return errors.New("run already finished")
 	}
-	if run.RunnerName == "" {
-		return errors.New("cancel not supported for builtin runs")
+	changed, err := st.CancelPipelineRun(id, "cancelled by user")
+	if err != nil {
+		return err
 	}
-	if boundHub != nil {
+	if !changed {
+		return errors.New("run already finished")
+	}
+	// 远程运行：通知 agent 杀容器；本地运行：取消进程上下文。
+	if run.RunnerName != "" && boundHub != nil {
 		boundHub.Cancel(id)
 	}
+	cancelBuiltinRun(id)
 	return nil
 }
 
@@ -76,7 +84,7 @@ func (d *dispatchExecutor) Execute(ctx context.Context, job RunJob, cfg *Config,
 	// 重新读取 DSL 原文（agent 端自行解析）
 	dsl := ""
 	if boundStore != nil {
-		if blob, err := gitsvc.ReadBlob(job.Owner, job.Repo, job.SHA, FileName); err == nil && blob.Encoding == "utf-8" {
+		if blob, err := gitsvc.ReadBlob(job.Owner, job.Repo, job.SHA, pipelineFile(job.File)); err == nil && blob.Encoding == "utf-8" {
 			dsl = blob.Content
 		}
 	}

@@ -7,6 +7,7 @@
 //	image: alpine:3.19      # 可选：每步运行所用镜像（Docker 沙箱执行）；
 //	                        # 省略时直接在宿主 sh 中执行（需服务端/agent 允许 host 执行）
 //	timeout: 10m            # 可选：单步超时（默认 10m，上限 1h）
+//	job_timeout: 30m        # 可选：整次运行超时（缺省 = 不限，上限 2h）
 //	on: [push, pull_request] # 可选：自动触发事件白名单（push|pull_request|schedule|workflow_dispatch）
 //	                        # 省略时仅 push 触发（手动触发始终允许）
 //	schedule:               # 可选：cron 表达式列表（需 on 包含 schedule）
@@ -50,9 +51,11 @@ import (
 // MaxStepTimeout 单步最大时长。
 const (
 	MaxStepTimeout = time.Hour
-	MaxSteps       = 20
-	MaxEnvVars     = 20
-	MaxRunLength   = 8 << 10
+	// MaxJobTimeout 整次运行的最大时长（job_timeout）。
+	MaxJobTimeout = 2 * time.Hour
+	MaxSteps      = 20
+	MaxEnvVars    = 20
+	MaxRunLength  = 8 << 10
 	// MaxSchedules 单仓库定时触发表达式上限。
 	MaxSchedules = 5
 )
@@ -76,10 +79,12 @@ type Step struct {
 type Config struct {
 	Image   string
 	Timeout time.Duration
-	Env     []string
-	Volumes []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
-	RunsOn  []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
-	Steps   []Step
+	// JobTimeout 整次运行（所有步骤合计）的最大时长；0 = 不限。
+	JobTimeout time.Duration
+	Env        []string
+	Volumes    []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
+	RunsOn     []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
+	Steps      []Step
 	// On 可选：自动触发事件白名单。省略时仅 push 生效（手动触发始终允许）。
 	On []string
 	// Schedule 可选：cron（5 字段：分 时 日 月 周）表达式列表，需 On 包含 schedule。
@@ -214,6 +219,13 @@ func Parse(data []byte) (*Config, error) {
 			}
 			cfg.Timeout = d
 			i++
+		case "job_timeout":
+			d, err := parseJobTimeout(val, i+1)
+			if err != nil {
+				return nil, err
+			}
+			cfg.JobTimeout = d
+			i++
 		case "env":
 			var err error
 			i, err = readListItems(lines, i+1, func(item string, lineNo int) error {
@@ -312,7 +324,7 @@ func Parse(data []byte) (*Config, error) {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, on, schedule, env, volumes, runs-on, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, volumes, runs-on, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -408,6 +420,24 @@ func stepUnitCount(s Step) int {
 		return n
 	}
 	return 1
+}
+
+// parseJobTimeout 解析整次运行的超时（job_timeout）：空 = 不限；上限 MaxJobTimeout，下限 1s。
+func parseJobTimeout(val string, lineNo int) (time.Duration, error) {
+	if val == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("line %d: invalid job_timeout %q", lineNo, val)
+	}
+	if d < time.Second {
+		d = time.Second
+	}
+	if d > MaxJobTimeout {
+		d = MaxJobTimeout
+	}
+	return d, nil
 }
 
 // parseTimeout 解析 Go duration（上限 MaxStepTimeout，下限 1s）。

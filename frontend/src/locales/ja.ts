@@ -510,13 +510,13 @@ export const ja: DeepPartial<Messages> = {
     "status": {
       "success": "成功",
       "retry": "再試行中",
-      "failed": "失敗"
+      "failed": "失敗",
     }
   },
   "pipeline": {
     "tab": "パイプライン",
     "title": "CIパイプライン",
-    "hint": "プッシュされるたびに、gitdashはDockerコンテナ内で.gitdash.ymlに定義されたステップを実行します。",
+    "hint": "push のたびに、gitdash は .gitdash.yml または .gitdash/*.yml に定義されたステップを Docker コンテナ内で実行します。",
     "statusOn": "有効",
     "statusOff": "無効",
     "turnOn": "有効にする",
@@ -526,9 +526,14 @@ export const ja: DeepPartial<Messages> = {
     "runNow": "今すぐ実行",
     "triggered": "パイプライン実行 #{id} が開始されました",
     "runs": "実行",
-    "noRuns": "まだ実行されていません。.gitdash.ymlを使用してプッシュするか、手動実行をトリガーしてください。",
+    "noRuns": "実行履歴はまだありません。パイプライン定義を push するか手動で実行してください。",
     "statusLabel": "ステータス",
     "branch": "ブランチ",
+    "fileLabel": "パイプライン",
+    "allFiles": "すべてのパイプライン",
+    "delayPlaceholder": "遅延（5m）",
+    "delayHint": "実行開始までの遅延（Go duration、例: 30s, 5m、任意）",
+    "scheduledFor": "{time} 開始",
     "trigger": "トリガー",
     "log": "ログ",
     "refresh": "更新",
@@ -545,7 +550,8 @@ export const ja: DeepPartial<Messages> = {
       "pending": "保留中",
       "running": "実行中",
       "success": "成功",
-      "failed": "失敗"
+      "failed": "失敗",
+      "cancelled": "キャンセル済み",
     },
     "dslTitle": "パイプライン DSL (.gitdash.yml)",
     "dslHint": "カスタム YAML DSL: image + 順序付きステップ（image を省略するとホスト上で直接実行 — サーバーでホスト実行を有効にする必要があります）。`on` は自動トリガーを選択し（push/pull_request/schedule/workflow_dispatch、デフォルトは push）、`schedule` は cron 式を保持します。いずれかのステップが失敗すると実行は停止します。リポジトリのワークスペースは /workspace にマウントされます。",

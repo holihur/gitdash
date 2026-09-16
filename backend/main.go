@@ -276,6 +276,7 @@ func run() {
 
 	// 定时触发：扫描已开启流水线的仓库，按 .gitdash.yml 的 schedule（cron）触发
 	go pipeline.StartScheduler(st, 30*time.Second)
+	go pipeline.StartDelayedRunner(st, 15*time.Second)
 	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
 	jobsMgr.RequeuePending()
 

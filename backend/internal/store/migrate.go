@@ -9,6 +9,13 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+	// pipeline_schedules 旧主键为 (owner, repo, expr)；多流水线需纳入 file，而 AutoMigrate
+	// 不会修改既有主键，故缺列时重建该表（仅定时去重记录；重建后重新登记基准，不影响后续触发）。
+	if s.db.Migrator().HasTable("pipeline_schedules") && !s.db.Migrator().HasColumn(&pipelineScheduleRow{}, "File") {
+		if err := s.db.Migrator().DropTable("pipeline_schedules"); err != nil {
+			return err
+		}
+	}
 	if err := s.db.AutoMigrate(
 		&userRow{},
 		&sessionRow{},

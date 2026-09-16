@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, PauseCircle, Play, Terminal, Workflow, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, Loader2, PauseCircle, Play, Terminal, Workflow, XCircle } from "lucide-react";
 import { api, type PipelineGraph, type PipelineRun, type PipelineRunStatus } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,11 @@ import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MermaidDiagram } from "@/components/mermaid";
 
-export const PIPELINE_EXAMPLE = `image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行（需服务端开启）
+export const PIPELINE_EXAMPLE = `# 单文件：仓库根目录 .gitdash.yml
+# 多文件：.gitdash/*.yml 或 *.yaml（每个文件是独立流水线，按各自 on: 触发）
+image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行（需服务端开启）
+# job_timeout: 30m      # 可选：整次运行超时（缺省 = 不限，上限 2h）
+# timeout: 10m          # 可选：单步超时（默认 10m，上限 1h）
 # on: [push, pull_request, schedule, workflow_dispatch]  # 自动触发白名单（默认仅 push）
 # schedule:              # on 含 schedule 时必填（cron：分 时 日 月 周）
 #   - "0 2 * * *"
@@ -48,6 +52,7 @@ function StatusBadge({ status }: { status: PipelineRunStatus }) {
     running: { icon: <Loader2 className="h-3 w-3 animate-spin" />, cls: "border-blue-600/40 text-blue-600" },
     success: { icon: <CheckCircle2 className="h-3 w-3" />, cls: "border-green-600/40 text-green-600" },
     failed: { icon: <XCircle className="h-3 w-3" />, cls: "border-destructive/50 text-destructive" },
+    cancelled: { icon: <Ban className="h-3 w-3" />, cls: "border-muted-foreground/40 text-muted-foreground" },
   };
   const s = map[status] ?? map.pending;
   return (
@@ -97,11 +102,14 @@ export default function RepoPipeline({ owner, name, role }: Props) {
   const canWrite = role === "owner" || role === "write";
 
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [files, setFiles] = useState<string[]>([]);
+  const [file, setFile] = useState("");
   const [runs, setRuns] = useState<PipelineRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [ref, setRef] = useState("");
+  const [delay, setDelay] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [runDetail, setRunDetail] = useState<PipelineRun | null>(null);
   const [graph, setGraph] = useState<PipelineGraph | null>(null);
@@ -113,6 +121,9 @@ export default function RepoPipeline({ owner, name, role }: Props) {
     try {
       const [cfg, rs] = await Promise.all([api.getPipeline(owner, name), api.listPipelineRuns(owner, name)]);
       setEnabled(cfg.enabled);
+      const discovered = cfg.files ?? [];
+      setFiles(discovered);
+      setFile((prev) => prev || discovered[0] || "");
       setRuns(rs);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -158,7 +169,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
     setGraphBusy(true);
     setGraphErr("");
     try {
-      setGraph(await api.getPipelineGraph(owner, name, ref.trim() || undefined));
+      setGraph(await api.getPipelineGraph(owner, name, ref.trim() || undefined, file || undefined));
     } catch (e) {
       setGraphErr(apiErrorMsg(to, e));
       setGraph(null);
@@ -171,10 +182,16 @@ export default function RepoPipeline({ owner, name, role }: Props) {
     setTriggering(true);
     try {
       const target = ref.trim();
-      const run = await api.triggerPipelineRun(owner, name, target ? { ref: target } : {});
-      toast.success(t("pipeline.triggered", { id: run.id }));
-      setRuns((rs) => [run, ...rs]);
-      setExpanded(run.id);
+      const body: { ref?: string; file?: string; delay?: string } = {};
+      if (target) body.ref = target;
+      if (file) body.file = file;
+      const delayVal = delay.trim();
+      if (delayVal) body.delay = delayVal;
+      const { runs: created } = await api.triggerPipelineRun(owner, name, body);
+      if (created.length === 0) return;
+      toast.success(t("pipeline.triggered", { id: created.map((r) => r.id).join(", ") }));
+      setRuns((rs) => [...created, ...rs]);
+      setExpanded(created[0].id);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {
@@ -257,11 +274,31 @@ export default function RepoPipeline({ owner, name, role }: Props) {
               )}
               {canWrite && (
                 <div className="flex items-center gap-2">
+                  {files.length > 0 && (
+                    <select
+                      value={file}
+                      onChange={(e) => setFile(e.target.value)}
+                      className="h-8 max-w-[14rem] rounded-md border border-input bg-background px-2 text-xs"
+                      title={t("pipeline.fileLabel")}
+                    >
+                      {files.length > 1 && <option value="">{t("pipeline.allFiles")}</option>}
+                      {files.map((f) => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  )}
                   <Input
                     value={ref}
                     onChange={(e) => setRef(e.target.value)}
                     placeholder={t("pipeline.refPlaceholder")}
                     className="h-8 w-40 text-xs"
+                  />
+                  <Input
+                    value={delay}
+                    onChange={(e) => setDelay(e.target.value)}
+                    placeholder={t("pipeline.delayPlaceholder")}
+                    title={t("pipeline.delayHint")}
+                    className="h-8 w-28 text-xs"
                   />
                   <Button variant="outline" size="sm" className="gap-1.5" disabled={triggering} onClick={trigger}>
                     <Play className="h-3.5 w-3.5" />
@@ -291,7 +328,9 @@ export default function RepoPipeline({ owner, name, role }: Props) {
             <Badge variant={enabled ? "default" : "secondary"}>
               {enabled === null ? "…" : t(enabled ? "pipeline.statusOn" : "pipeline.statusOff")}
             </Badge>
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">.gitdash.yml</code>
+            {(files.length > 0 ? files : [".gitdash.yml"]).map((f) => (
+              <code key={f} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{f}</code>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -301,7 +340,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
           <CardHeader className="pb-2">
             <CardTitle className="text-base">{t("pipeline.visualize")}</CardTitle>
             <CardDescription>
-              {graph ? `${graph.ref}${graph.image ? " · " + graph.image : ""}` : t("pipeline.hint")}
+              {graph ? `${graph.file ?? ".gitdash.yml"} · ${graph.ref}${graph.image ? " · " + graph.image : ""}` : t("pipeline.hint")}
             </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -332,6 +371,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-14">#</TableHead>
+                    <TableHead className="w-40">{t("pipeline.fileLabel")}</TableHead>
                     <TableHead className="w-24">{t("pipeline.statusLabel")}</TableHead>
                     <TableHead>{t("repo.commit")}</TableHead>
                     <TableHead className="w-24">{t("pipeline.branch")}</TableHead>
@@ -347,11 +387,19 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                         onClick={() => openRun(r)}
                       >
                         <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                        <TableCell className="truncate font-mono text-xs" title={r.file || ".gitdash.yml"}>
+                          {r.file || ".gitdash.yml"}
+                        </TableCell>
                         <TableCell>
                           <StatusBadge status={r.status} />
                           <span className="ml-2 text-xs text-muted-foreground">
                             {r.steps_done}/{r.steps_total}
                           </span>
+                          {r.status === "pending" && r.run_at && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {t("pipeline.scheduledFor", { time: formatDate(r.run_at, locale) })}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{r.sha.slice(0, 7)}</code>
@@ -373,7 +421,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                       </TableRow>
                       {expanded === r.id && (
                         <TableRow>
-                          <TableCell colSpan={6} className="bg-muted/30 p-0">
+                          <TableCell colSpan={7} className="bg-muted/30 p-0">
                             <div className="p-3">
                               {r.error && (
                                 <p className="mb-2 text-xs text-destructive">{r.error}</p>
@@ -390,14 +438,14 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                                       )}
                                     </span>
                                     <div className="flex items-center gap-2">
-                                      {canWrite && (runDetail.status === "success" || runDetail.status === "failed") && (
+                                      {canWrite && (runDetail.status === "success" || runDetail.status === "failed" || runDetail.status === "cancelled") && (
                                         <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => rerun(r.id)}>
                                           {t("pipeline.rerun")}
                                         </Button>
                                       )}
                                       {(runDetail.status === "pending" || runDetail.status === "running") && (
                                         <>
-                                          {canWrite && runDetail.runner_name && (
+                                          {canWrite && (
                                             <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => cancelRun(r.id)}>
                                               {t("pipeline.cancel")}
                                             </Button>

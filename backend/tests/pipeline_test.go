@@ -80,6 +80,21 @@ func getRun(t *testing.T, c *Client, owner, repo string, id int64) pipelineRun {
 	return run
 }
 
+// firstRunID 从 {runs:[...]} 触发响应中取出第一个运行 ID（多流水线触发可能返回多个）。
+func firstRunID(t *testing.T, m map[string]any) int64 {
+	t.Helper()
+	runs, ok := m["runs"].([]any)
+	if !ok || len(runs) == 0 {
+		t.Fatalf("no runs in trigger response: %v", m)
+	}
+	first, _ := runs[0].(map[string]any)
+	id, _ := first["id"].(float64)
+	if id <= 0 {
+		t.Fatalf("bad run id: %v", m)
+	}
+	return int64(id)
+}
+
 func waitTerminalRun(t *testing.T, c *Client, owner, repo string, id int64) pipelineRun {
 	t.Helper()
 	// 拉取失败/网络慢时 docker 可能要等较久才返回错误，放宽到 120s
@@ -145,11 +160,7 @@ func TestPipelineSettingsAndRuns(t *testing.T) {
 
 	// 手动触发一次运行（docker 缺失或镜像拉取失败都会以 failed 结束）
 	m = alice.mustStatus("POST", "/users/pipea/repos/ci/pipeline/runs", map[string]string{}, 201)
-	id, ok := m["id"].(float64)
-	if !ok {
-		t.Fatalf("run id = %v", m)
-	}
-	run := waitTerminalRun(t, alice, "pipea", "ci", int64(id))
+	run := waitTerminalRun(t, alice, "pipea", "ci", firstRunID(t, m))
 	if run.Status != "failed" {
 		t.Fatalf("run status = %q (want failed: docker missing or image pull failure)", run.Status)
 	}
@@ -172,7 +183,7 @@ func TestPipelineSettingsAndRuns(t *testing.T) {
 	// DSL 解析错误 -> 直接记为 failed 运行
 	commitFile(t, alice, "pipea", "ci", ".gitdash.yml", "foo: bar\n")
 	m = alice.mustStatus("POST", "/users/pipea/repos/ci/pipeline/runs", map[string]string{}, 201)
-	run2 := waitTerminalRun(t, alice, "pipea", "ci", int64(m["id"].(float64)))
+	run2 := waitTerminalRun(t, alice, "pipea", "ci", firstRunID(t, m))
 	if run2.Status != "failed" {
 		t.Fatalf("bad dsl run status = %q", run2.Status)
 	}
@@ -186,6 +197,129 @@ func TestPipelineSettingsAndRuns(t *testing.T) {
 	// 删除仓库级联清理流水线数据
 	alice.mustStatus("DELETE", "/repos/ci", nil, 204)
 	alice.mustFail("GET", "/users/pipea/repos/ci/pipeline", nil, 404)
+}
+
+// TestPipelineMultipleFiles 验证多流水线文件：发现、批量触发、按文件触发与运行记录带 file。
+func TestPipelineMultipleFiles(t *testing.T) {
+	t.Setenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT", "5s")
+	env := start(t)
+	if err := pipeline.Init(env.DataDir); err != nil {
+		t.Fatalf("pipeline init: %v", err)
+	}
+	alice := register(t, env, "pipem", "pipe-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]any{"name": "multi", "private": false}, 201)
+	commitFile(t, alice, "pipem", "multi", "README.md", "# multi\n")
+	alice.mustStatus("PUT", "/users/pipem/repos/multi/pipeline", map[string]any{"enabled": true}, 200)
+	commitFile(t, alice, "pipem", "multi", ".gitdash/ci.yml", "steps:\n  - run: echo ci\n")
+	commitFile(t, alice, "pipem", "multi", ".gitdash/deploy.yaml", "steps:\n  - run: echo deploy\n")
+	commitFile(t, alice, "pipem", "multi", ".gitdash.yml", "steps:\n  - run: echo legacy\n")
+
+	// 发现全部流水线文件
+	m := alice.mustStatus("GET", "/users/pipem/repos/multi/pipeline", nil, 200)
+	files, _ := m["files"].([]any)
+	if len(files) != 3 {
+		t.Fatalf("files = %v", m["files"])
+	}
+
+	// 手动触发（未指定 file）→ 为每个文件各建一个运行
+	resp := alice.mustStatus("POST", "/users/pipem/repos/multi/pipeline/runs", map[string]string{}, 201)
+	runsRaw, _ := resp["runs"].([]any)
+	if len(runsRaw) != 3 {
+		t.Fatalf("trigger runs = %v", resp)
+	}
+	seen := map[string]bool{}
+	for _, r := range runsRaw {
+		id := int64(r.(map[string]any)["id"].(float64))
+		file, _ := r.(map[string]any)["file"].(string)
+		if file == "" {
+			t.Fatalf("run missing file: %v", r)
+		}
+		seen[file] = true
+		waitTerminalRun(t, alice, "pipem", "multi", id)
+	}
+	for _, want := range []string{".gitdash.yml", ".gitdash/ci.yml", ".gitdash/deploy.yaml"} {
+		if !seen[want] {
+			t.Fatalf("missing run for %s: %v", want, seen)
+		}
+	}
+
+	// 指定文件触发 → 仅一个运行
+	resp = alice.mustStatus("POST", "/users/pipem/repos/multi/pipeline/runs", map[string]string{"file": ".gitdash/ci.yml"}, 201)
+	runsRaw, _ = resp["runs"].([]any)
+	if len(runsRaw) != 1 {
+		t.Fatalf("single-file trigger = %v", resp)
+	}
+	if f, _ := runsRaw[0].(map[string]any)["file"].(string); f != ".gitdash/ci.yml" {
+		t.Fatalf("single-file run file = %q", f)
+	}
+	waitTerminalRun(t, alice, "pipem", "multi", int64(runsRaw[0].(map[string]any)["id"].(float64)))
+
+	// 运行列表带 file，总计 4 条
+	all := listPipelineRuns(t, alice, "pipem", "multi")
+	if len(all) != 4 {
+		t.Fatalf("runs count = %d, want 4", len(all))
+	}
+
+	// 可视化图支持指定 file
+	g := alice.mustStatus("GET", "/users/pipem/repos/multi/pipeline/graph?file=.gitdash/deploy.yaml", nil, 200)
+	if g["file"] != ".gitdash/deploy.yaml" {
+		t.Fatalf("graph file = %v", g["file"])
+	}
+}
+
+// TestPipelineDelayCancelRerun 验证延迟执行、取消与重跑：
+// 延迟触发的运行停在 pending（带 run_at），可取消；取消后可重跑。
+func TestPipelineDelayCancelRerun(t *testing.T) {
+	t.Setenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT", "5s")
+	env := start(t)
+	if err := pipeline.Init(env.DataDir); err != nil {
+		t.Fatalf("pipeline init: %v", err)
+	}
+	alice := register(t, env, "piped", "pipe-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]any{"name": "delay", "private": false}, 201)
+	alice.mustStatus("PUT", "/users/piped/repos/delay/pipeline", map[string]any{"enabled": true}, 200)
+	commitFile(t, alice, "piped", "delay", ".gitdash.yml", "steps:\n  - run: echo x\n")
+
+	// 非法 delay → 400
+	m := alice.mustStatus("POST", "/users/piped/repos/delay/pipeline/runs", map[string]string{"delay": "nope"}, 400)
+	if m["code"] != "invalid_delay" {
+		t.Fatalf("expect invalid_delay, got %v", m)
+	}
+
+	// 延迟 1h：运行停在 pending 且带 run_at
+	m = alice.mustStatus("POST", "/users/piped/repos/delay/pipeline/runs", map[string]string{"delay": "1h"}, 201)
+	runsRaw, _ := m["runs"].([]any)
+	if len(runsRaw) != 1 {
+		t.Fatalf("trigger runs = %v", m)
+	}
+	first := runsRaw[0].(map[string]any)
+	id := int64(first["id"].(float64))
+	if first["status"] != "pending" || first["run_at"] == nil || first["run_at"] == "" {
+		t.Fatalf("delayed run = %v", first)
+	}
+	// 确认未执行
+	if got := getRun(t, alice, "piped", "delay", id); got.Status != "pending" {
+		t.Fatalf("delayed run status = %q, want pending", got.Status)
+	}
+
+	// 取消 pending 运行
+	m = alice.mustStatus("POST", "/users/piped/repos/delay/pipeline/runs/"+strconv.FormatInt(id, 10)+"/cancel", map[string]string{}, 200)
+	if m["cancelled"] != true {
+		t.Fatalf("cancel resp = %v", m)
+	}
+	if got := getRun(t, alice, "piped", "delay", id); got.Status != "cancelled" {
+		t.Fatalf("after cancel = %q, want cancelled", got.Status)
+	}
+
+	// 重跑已取消的运行 → 新运行（立即执行，host 未开启→failed）
+	m = alice.mustStatus("POST", "/users/piped/repos/delay/pipeline/runs/"+strconv.FormatInt(id, 10)+"/rerun", map[string]string{}, 201)
+	newID := int64(m["id"].(float64))
+	if newID == id {
+		t.Fatalf("rerun should create a new run: %v", m)
+	}
+	if got := waitTerminalRun(t, alice, "piped", "delay", newID); got.Status != "failed" {
+		t.Fatalf("rerun status = %q, want failed (host disabled)", got.Status)
+	}
 }
 
 func TestPipelineDeleteLogsCleanup(t *testing.T) {
@@ -256,7 +390,7 @@ func TestPipelineAsynqQueue(t *testing.T) {
 
 	// 手动触发：任务应经 redis 队列被 asynq 工人取走执行
 	m := alice.mustStatus("POST", "/users/pipeq/repos/ciq/pipeline/runs", map[string]string{}, 201)
-	run := waitTerminalRun(t, alice, "pipeq", "ciq", int64(m["id"].(float64)))
+	run := waitTerminalRun(t, alice, "pipeq", "ciq", firstRunID(t, m))
 	if run.Status != "failed" {
 		t.Fatalf("asynq run status = %q (want failed: docker missing or image pull failure)", run.Status)
 	}

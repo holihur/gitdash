@@ -34,7 +34,7 @@ func RunScheduled(st *store.Store, now time.Time) {
 	}
 }
 
-// runRepoSchedule 检查单仓库的 cron 是否到期并触发（基于默认分支的 DSL）。
+// runRepoSchedule 检查单仓库下所有流水线文件的 cron 是否到期并触发（基于默认分支）。
 func runRepoSchedule(st *store.Store, owner, repo string, now time.Time) {
 	branch, err := gitsvc.HeadBranch(owner, repo)
 	if err != nil || branch == "" {
@@ -44,7 +44,14 @@ func runRepoSchedule(st *store.Store, owner, repo string, now time.Time) {
 	if err != nil || sha == "" {
 		return
 	}
-	blob, err := gitsvc.ReadBlob(owner, repo, sha, FileName)
+	for _, file := range DiscoverFiles(owner, repo, sha) {
+		runFileSchedule(st, owner, repo, file, branch, sha, now)
+	}
+}
+
+// runFileSchedule 检查单个流水线文件的 cron 是否到期并触发。
+func runFileSchedule(st *store.Store, owner, repo, file, branch, sha string, now time.Time) {
+	blob, err := gitsvc.ReadBlob(owner, repo, sha, file)
 	if err != nil || blob.Encoding != "utf-8" || strings.TrimSpace(blob.Content) == "" {
 		return
 	}
@@ -58,13 +65,13 @@ func runRepoSchedule(st *store.Store, owner, repo string, now time.Time) {
 		if cerr != nil {
 			continue
 		}
-		lastFired, ok, gerr := st.GetScheduleLastFired(owner, repo, expr)
+		lastFired, ok, gerr := st.GetScheduleLastFired(owner, repo, file, expr)
 		if gerr != nil {
 			continue
 		}
 		if !ok {
 			// 首次观察：仅登记基准时间，不立即补触发（避免服务重启即触发）
-			_, _ = st.ClaimSchedule(owner, repo, expr, nowStr)
+			_, _ = st.ClaimSchedule(owner, repo, file, expr, nowStr)
 			continue
 		}
 		base, perr := time.Parse(time.RFC3339, lastFired)
@@ -74,12 +81,12 @@ func runRepoSchedule(st *store.Store, owner, repo string, now time.Time) {
 		if sched.Next(base).After(now) {
 			continue
 		}
-		claimed, cerr := st.ClaimSchedule(owner, repo, expr, nowStr)
+		claimed, cerr := st.ClaimSchedule(owner, repo, file, expr, nowStr)
 		if cerr != nil || !claimed {
 			continue
 		}
 		if _, terr := Trigger(st, TriggerOpts{
-			Owner: owner, Repo: repo, SHA: sha, Ref: branch,
+			Owner: owner, Repo: repo, File: file, SHA: sha, Ref: branch,
 			By: "schedule", Event: "schedule",
 		}); terr != nil && !ignorableTriggerErr(terr) {
 			logx.Infof("pipeline: schedule trigger %s/%s (%s): %v", owner, repo, expr, terr)
