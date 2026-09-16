@@ -246,3 +246,67 @@ func TestWebhookDeliveries(t *testing.T) {
 	bob := register(t, env, "bobby2", "bob-pass-123456")
 	bob.mustFail("GET", whPath("alice", "deliv", fmt.Sprintf("/%d/deliveries", hook1)), nil, 404)
 }
+
+// waitSpoolEvent 轮询 spool 目录，直到出现指定 event（可选 action）的事件。
+func waitSpoolEvent(t *testing.T, dir, event, action string) map[string]any {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		files, _ := filepath.Glob(filepath.Join(dir, "*.json"))
+		for _, f := range files {
+			b, err := os.ReadFile(f)
+			if err != nil {
+				continue
+			}
+			var m map[string]any
+			if json.Unmarshal(b, &m) != nil {
+				continue
+			}
+			if m["event"] == event && (action == "" || m["action"] == action) {
+				return m
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no spooled %s/%s event in %s", event, action, dir)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// TestAPIEventsSpooled 验证 API 侧操作会写出正确的出站 webhook 事件：
+// star / watch / issue / comment / create / release / fork（此前 star/watch/fork 未发布）。
+func TestAPIEventsSpooled(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	bob := register(t, env, "bobby", "bob-pass-123456")
+	alice.mustStatus("POST", "/repos", map[string]any{"name": "ev", "private": false}, 201)
+
+	alice.mustStatus("PUT", "/users/alice/repos/ev/star", nil, 200)
+	waitSpoolEvent(t, env.APISpool, "star", "created")
+	// 仓库 owner 默认已 watch，用 bob 触发 watch 事件
+	bob.mustStatus("PUT", "/users/alice/repos/ev/watch", nil, 200)
+	waitSpoolEvent(t, env.APISpool, "watch", "started")
+
+	m := alice.mustStatus("POST", "/users/alice/repos/ev/issues", map[string]string{"title": "hi", "body": "b"}, 201)
+	num := int64(m["number"].(float64))
+	if ev := waitSpoolEvent(t, env.APISpool, "issues", "opened"); ev["actor"] != "alice" {
+		t.Fatalf("issue event = %v", ev)
+	}
+	alice.mustStatus("POST", fmt.Sprintf("/users/alice/repos/ev/issues/%d/comments", num), map[string]string{"body": "c"}, 201)
+	waitSpoolEvent(t, env.APISpool, "comment", "commented")
+
+	// create tag + release
+	commitFile(t, alice, "alice", "ev", "README.md", "# ev\n")
+	alice.mustStatus("POST", "/users/alice/repos/ev/refs", map[string]string{"type": "tag", "name": "v1"}, 201)
+	waitSpoolEvent(t, env.APISpool, "create", "")
+	alice.mustStatus("POST", "/users/alice/repos/ev/releases", map[string]string{"tag_name": "v1"}, 201)
+	waitSpoolEvent(t, env.APISpool, "release", "published")
+
+	// fork（bob fork alice/ev）
+	bob.mustStatus("POST", "/users/alice/repos/ev/fork", map[string]string{}, 201)
+	waitSpoolEvent(t, env.APISpool, "fork", "created")
+
+	// 取消收藏
+	alice.mustStatus("DELETE", "/users/alice/repos/ev/star", nil, 200)
+	waitSpoolEvent(t, env.APISpool, "star", "deleted")
+}

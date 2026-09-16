@@ -4,6 +4,7 @@ import (
 	"errors"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webhooks"
 	"net/http"
 	"strings"
 )
@@ -41,6 +42,7 @@ func (a *API) starRepo(w http.ResponseWriter, r *http.Request) {
 			internalError(w, err)
 			return
 		}
+		a.emitWebhook(webhooks.Event{Event: "star", Owner: owner, Repo: name, Action: "created", Actor: me})
 	}
 	a.writeStarState(w, owner, name, me)
 }
@@ -63,9 +65,13 @@ func (a *API) unstarRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	me := userFrom(r)
+	wasStarred := a.store.IsStarred(me, owner, name)
 	if err := a.store.UnstarRepo(me, owner, name); err != nil {
 		internalError(w, err)
 		return
+	}
+	if wasStarred {
+		a.emitWebhook(webhooks.Event{Event: "star", Owner: owner, Repo: name, Action: "deleted", Actor: me})
 	}
 	a.writeStarState(w, owner, name, me)
 }
@@ -169,5 +175,9 @@ func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
 	_ = a.store.WatchRepo(me, targetOwner, targetName)
 	repo.Watchers = 1
 	repo.Watching = true
+	a.emitWebhook(webhooks.Event{
+		Event: "fork", Owner: srcOwner, Repo: srcName, Action: "created", Actor: me,
+		Title: targetOwner + "/" + targetName,
+	})
 	writeJSON(w, http.StatusCreated, repo)
 }

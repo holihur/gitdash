@@ -3,11 +3,13 @@ package pipeline
 import (
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webhooks"
 )
 
 // waitRunStatus 轮询直到运行到达期望状态之一（超时报错）。
@@ -43,6 +45,52 @@ func openPipelineStore(t *testing.T, dir string) *store.Store {
 		t.Fatalf("store: %v", err)
 	}
 	return st
+}
+
+// TestPipelineEventsPublished 验证运行生命周期会发布 queued/started/success 事件。
+func TestPipelineEventsPublished(t *testing.T) {
+	dir := t.TempDir()
+	st := openPipelineStore(t, dir)
+	SetHostAllowed(true)
+	t.Cleanup(func() { SetHostAllowed(false) })
+
+	var mu sync.Mutex
+	var events []webhooks.Event
+	SetEventPublisher(func(ev webhooks.Event) {
+		mu.Lock()
+		events = append(events, ev)
+		mu.Unlock()
+	})
+	t.Cleanup(func() { SetEventPublisher(nil) })
+
+	sha := seedRepoFiles(t, "alice", "evt", map[string]string{
+		".gitdash.yml": "steps:\n  - run: echo hi\n",
+	})
+	if err := st.SetPipeline("alice", "evt", true); err != nil {
+		t.Fatal(err)
+	}
+	run, err := Trigger(st, TriggerOpts{Owner: "alice", Repo: "evt", SHA: sha, Ref: "main", By: "tester", Event: "manual", Force: true})
+	if err != nil {
+		t.Fatalf("trigger: %v", err)
+	}
+	waitRunStatus(t, st, "alice", "evt", run.ID, "success")
+
+	mu.Lock()
+	defer mu.Unlock()
+	got := map[string]bool{}
+	for _, ev := range events {
+		if ev.Event == "pipeline" && ev.Number == run.ID {
+			got[ev.Action] = true
+			if ev.Actor != "tester" {
+				t.Fatalf("pipeline event actor = %q", ev.Actor)
+			}
+		}
+	}
+	for _, a := range []string{"queued", "started", "success"} {
+		if !got[a] {
+			t.Fatalf("missing pipeline %q event: %v", a, got)
+		}
+	}
 }
 
 func TestDockerRunArgsNamesContainer(t *testing.T) {

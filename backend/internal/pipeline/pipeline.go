@@ -92,6 +92,7 @@ type RunJob struct {
 	SHA   string `json:"sha"`
 	Ref   string `json:"ref"`
 	Event string `json:"event,omitempty"` // push | pull_request | schedule | workflow_dispatch | manual（when 依据）
+	By    string `json:"by,omitempty"`    // 触发者（webhook pipeline 事件的 actor）
 	// Inputs dispatch 传入的键值对（注入为 INPUT_<KEY> 环境变量，优先级低于仓库级/DSL env）。
 	Inputs map[string]string `json:"inputs,omitempty"`
 }
@@ -132,6 +133,25 @@ func cancelBuiltinRun(id int64) bool {
 		cancel()
 	}
 	return ok
+}
+
+// eventPublisher 出站 pipeline webhook 事件发布器（main 注入；nil = 不发布）。
+var eventPublisher func(webhooks.Event)
+
+// SetEventPublisher 注入 pipeline webhook 事件发布器。
+func SetEventPublisher(fn func(webhooks.Event)) { eventPublisher = fn }
+
+// emitPipelineEvent 发布一条 pipeline 事件（queued / started / success / failed / cancelled）。
+func emitPipelineEvent(job RunJob, action string) {
+	if eventPublisher == nil {
+		return
+	}
+	eventPublisher(webhooks.Event{
+		Event: "pipeline", Owner: job.Owner, Repo: job.Repo,
+		Kind: job.File, Action: action, Number: job.RunID, Title: job.File,
+		Actor: job.By, Ref: job.Ref, New: job.SHA,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // Bind 绑定任务队列消费者与执行器。q 为 nil 时沿用进程内 goroutine 直接调度（默认，零依赖）；
@@ -299,7 +319,8 @@ func Trigger(st *store.Store, opts TriggerOpts) (store.PipelineRun, error) {
 	if err != nil {
 		return run, err
 	}
-	job := RunJob{RunID: run.ID, Owner: opts.Owner, Repo: opts.Repo, File: file, SHA: opts.SHA, Ref: opts.Ref, Event: opts.Event, Inputs: opts.Inputs}
+	job := RunJob{RunID: run.ID, Owner: opts.Owner, Repo: opts.Repo, File: file, SHA: opts.SHA, Ref: opts.Ref, Event: opts.Event, By: opts.By, Inputs: opts.Inputs}
+	emitPipelineEvent(job, "queued")
 	// 延迟执行：仅落库 run_at，由 StartDelayedRunner 到期后派发。
 	if opts.Delay > 0 {
 		runAt := time.Now().UTC().Add(opts.Delay).Format(time.RFC3339)
@@ -420,6 +441,7 @@ func executeRun(st *store.Store, job RunJob) {
 	if started, err := st.ClaimPipelineRun(runID); err != nil || !started {
 		return
 	}
+	emitPipelineEvent(job, "started")
 
 	// 可取消上下文：CancelRun 通过登记表即时终止本地执行的步骤。
 	ctx, cancel := context.WithCancel(context.Background())
@@ -445,6 +467,7 @@ func executeRun(st *store.Store, job RunJob) {
 		msg := fmt.Sprintf(format, args...)
 		writeLog("!! %s", msg)
 		_ = st.FinishPipelineRun(runID, "failed", msg)
+		emitPipelineEvent(job, "failed")
 	}
 
 	writeLog("== gitdash pipeline run %d ==", runID)
@@ -503,6 +526,7 @@ func executeRun(st *store.Store, job RunJob) {
 		if execCtx.Err() != nil {
 			writeLog("\n== cancelled ==")
 			_ = st.FinishPipelineRun(runID, "cancelled", "cancelled by user")
+			emitPipelineEvent(job, "cancelled")
 			return
 		}
 		fail("%v", err)
@@ -511,6 +535,7 @@ func executeRun(st *store.Store, job RunJob) {
 
 	writeLog("\n== pipeline success ==")
 	_ = st.FinishPipelineRun(runID, "success", "")
+	emitPipelineEvent(job, "success")
 }
 
 func isZeroSHA(s string) bool {

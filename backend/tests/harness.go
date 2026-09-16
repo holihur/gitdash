@@ -37,6 +37,7 @@ import (
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/sshserver"
 	"gitdash/backend/internal/store"
+	"gitdash/backend/internal/webhooks"
 	"gitdash/backend/internal/webui"
 )
 
@@ -54,6 +55,8 @@ type Env struct {
 	SSHPort  string
 	ReposDir string
 	DataDir  string
+	// APISpool API 侧出站事件 spool 目录（issue/pull/评论/star/watch/fork/release/pipeline）
+	APISpool string
 	// Store 服务端使用的同一存储实例（需要直连 store 的用例使用，如 pipeline 队列绑定）
 	Store *store.Store
 }
@@ -77,7 +80,10 @@ func start(t *testing.T) *Env {
 	// 内容寻址 blob 存储（包 / Docker 注册表）；与 main.go 保持一致。
 	store.SetBlobDir(filepath.Join(dir, "packages-blobs"))
 
-	hs := httptest.NewServer(api.New(st, "test").Handler(""))
+	a := api.New(st, "test")
+	apiSpool := filepath.Join(dir, "webhooks-spool-api")
+	a.Publish = func(ev webhooks.Event) { _ = webhooks.WriteSpool(apiSpool, ev) }
+	hs := httptest.NewServer(a.Handler(""))
 	t.Cleanup(hs.Close)
 
 	srv, err := sshserver.NewServer(st, gitsvc.ReposDir(), dir)
@@ -92,7 +98,7 @@ func start(t *testing.T) *Env {
 	go func() { _ = srv.ServeOn(ln) }()
 
 	_, port, _ := net.SplitHostPort(ln.Addr().String())
-	return &Env{t: t, BaseURL: hs.URL, SSHPort: port, ReposDir: gitsvc.ReposDir(), DataDir: dir, Store: st}
+	return &Env{t: t, BaseURL: hs.URL, SSHPort: port, ReposDir: gitsvc.ReposDir(), DataDir: dir, APISpool: apiSpool, Store: st}
 }
 
 // startHTTPOnly 仅启动 HTTP API（无需 SSH 的用例）。

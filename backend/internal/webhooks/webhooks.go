@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
@@ -61,6 +62,33 @@ func Subscribes(events []string, event string) bool {
 		}
 	}
 	return false
+}
+
+// WriteSpool 把事件原子写入 spool 目录（临时文件 + rename）。
+// 并发调用安全：文件名含 pid 与纳秒时间戳，保证唯一。
+func WriteSpool(dir string, ev Event) error {
+	b, err := json.Marshal(ev)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	name := fmt.Sprintf("%s__%s-%d-%d.json", ev.Owner, ev.Repo, os.Getpid(), time.Now().UnixNano())
+	tmp, err := os.CreateTemp(dir, name+".tmp")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(b); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), filepath.Join(dir, name))
 }
 
 // client 使用 ssrf.DialContext：解析后直接拨已校验的 IP，消除 DNS 重绑定（TOCTOU）窗口。

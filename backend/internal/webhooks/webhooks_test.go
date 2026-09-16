@@ -141,6 +141,22 @@ func TestWebhookSignatureHeader(t *testing.T) {
 	}
 }
 
+func TestSubscribesCoversAllAdvertisedEvents(t *testing.T) {
+	// 空订阅 = 全部
+	if !Subscribes(nil, "push") || !Subscribes([]string{}, "pipeline") {
+		t.Fatal("empty subscription should match every event")
+	}
+	// 每个对外声明的事件类型都应可被精确订阅
+	for _, e := range EventTypes {
+		if !Subscribes([]string{e}, e) {
+			t.Fatalf("event %q is not subscribable", e)
+		}
+	}
+	if Subscribes([]string{"star"}, "pipeline") {
+		t.Fatal("star subscription should not match pipeline")
+	}
+}
+
 func TestDeliverBlocksPrivateWhenNotAllowed(t *testing.T) {
 	t.Setenv("GITDASH_SSRF_ALLOW_PRIVATE", "")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

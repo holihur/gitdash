@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -57,23 +56,8 @@ func resolveStaticDir() string {
 
 // spoolWrite 原子写一个事件 JSON 到 spool 目录（临时文件 + rename）。
 func spoolWrite(dir string, ev webhooks.Event) {
-	b, err := json.Marshal(ev)
-	if err != nil {
-		return
-	}
-	name := fmt.Sprintf("%s__%s-%d-%d.json", ev.Owner, ev.Repo, os.Getpid(), time.Now().UnixNano())
-	tmp, err := os.CreateTemp(dir, name+".tmp")
-	if err != nil {
-		return
-	}
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-		return
-	}
-	_ = tmp.Close()
-	if err := os.Rename(tmp.Name(), filepath.Join(dir, name)); err != nil {
-		_ = os.Remove(tmp.Name())
+	if err := webhooks.WriteSpool(dir, ev); err != nil {
+		logx.Infof("spool write %s/%s: %v", ev.Owner, ev.Repo, err)
 	}
 }
 
@@ -272,6 +256,8 @@ func run() {
 		logx.Fatalf("create api spool dir: %v", err)
 	}
 	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
+	// pipeline 生命周期事件（queued/started/success/failed/cancelled）也投递到订阅方
+	pipeline.SetEventPublisher(func(ev webhooks.Event) { spoolWrite(apiSpool, ev) })
 	go dispatcher.Run(apiSpool, 2*time.Second, notify.EmailHandler(st, sender), pipeline.PullHandler(st))
 
 	// 定时触发：扫描已开启流水线的仓库，按 .gitdash.yml 的 schedule（cron）触发

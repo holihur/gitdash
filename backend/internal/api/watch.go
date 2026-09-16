@@ -38,6 +38,7 @@ func (a *API) watchRepo(w http.ResponseWriter, r *http.Request) {
 			internalError(w, err)
 			return
 		}
+		a.emitWebhook(webhooks.Event{Event: "watch", Owner: owner, Repo: name, Action: "started", Actor: me})
 	}
 	a.writeWatchState(w, owner, name, me)
 }
@@ -48,9 +49,13 @@ func (a *API) unwatchRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	me := userFrom(r)
+	wasWatching := a.store.IsWatching(me, owner, name)
 	if err := a.store.UnwatchRepo(me, owner, name); err != nil {
 		internalError(w, err)
 		return
+	}
+	if wasWatching {
+		a.emitWebhook(webhooks.Event{Event: "watch", Owner: owner, Repo: name, Action: "stopped", Actor: me})
 	}
 	a.writeWatchState(w, owner, name, me)
 }

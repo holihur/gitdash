@@ -15,7 +15,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Pull requests**: fork-based pull requests with squash merge and reviewer flow
 - **Stars & forks**: star repos and fork them with one click
 - **Repo mirroring & import**: import from a remote URL and push-mirror to GitHub/GitLab-like remotes
-- **Webhooks**: per-repo outbound webhooks with per-event subscriptions (push / issues / pull requests / comments / branches & tags / releases / pipeline) and HMAC signature delivery, dispatched asynchronously through the job queue with backoff retries; plus an **incoming webhook** token that lets external systems create issues
+- **Webhooks**: per-repo outbound webhooks with per-event subscriptions (push / issues / pull requests / comments / branches & tags / releases / pipeline / fork / star / watch) and HMAC signature delivery, dispatched asynchronously through the job queue with backoff retries; plus an **incoming webhook** token that lets external systems create issues
 - **GPG keys**: upload GPG public keys to verify commit signatures
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
