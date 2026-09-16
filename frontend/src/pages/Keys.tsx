@@ -320,13 +320,7 @@ function PATSection({ t, to, locale }: SectionProps) {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">{t("pats.subtitle")}</p>
-        <Dialog
-          open={open}
-          onOpenChange={(o) => {
-            setOpen(o);
-            if (o) setCreated(null);
-          }}
-        >
+        <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 sm:self-start">
               <Plus className="h-4 w-4" />
@@ -334,103 +328,100 @@ function PATSection({ t, to, locale }: SectionProps) {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
-            {created ? (
-              <>
-                <DialogHeader>
-                  <DialogTitle>{t("pats.createdTitle")}</DialogTitle>
-                  <DialogDescription>{t("pats.createdHint")}</DialogDescription>
-                </DialogHeader>
-                <div className="flex items-center gap-2">
-                  <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-2 font-mono text-xs">
-                    {created.token}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    onClick={() =>
-                      copyText(created.token)
-                        .then(() => {
-                          setCopied(true);
-                          toast.success(t("common.copied"));
-                        })
-                        .catch(() => toast.error(t("common.copyFailed")))
-                    }
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
+            <DialogHeader>
+              <DialogTitle>{t("pats.create")}</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="pat-name">{t("pats.name")}</Label>
+                <Input
+                  id="pat-name"
+                  placeholder={t("pats.namePlaceholder")}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t("pats.scopes")}</Label>
+                <div className="flex flex-wrap gap-4">
+                  {["repo", "inbox", "keys"].map((s) => (
+                    <label key={s} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={scopes.includes(s)}
+                        onChange={() => toggleScope(s)}
+                      />
+                      {scopeLabel(s)}
+                    </label>
+                  ))}
                 </div>
-                <DialogFooter>
-                  <Button onClick={() => setCreated(null)}>{t("common.save")}</Button>
-                </DialogFooter>
-              </>
-            ) : (
-              <>
-                <DialogHeader>
-                  <DialogTitle>{t("pats.create")}</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="pat-name">{t("pats.name")}</Label>
-                    <Input
-                      id="pat-name"
-                      placeholder={t("pats.namePlaceholder")}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>{t("pats.scopes")}</Label>
-                    <div className="flex flex-wrap gap-4">
-                      {["repo", "inbox", "keys"].map((s) => (
-                        <label key={s} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-primary"
-                            checked={scopes.includes(s)}
-                            onChange={() => toggleScope(s)}
-                          />
-                          {scopeLabel(s)}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="pat-cidrs">{t("pats.cidrs")}</Label>
-                    <Input
-                      id="pat-cidrs"
-                      placeholder={t("pats.cidrsPlaceholder")}
-                      className="font-mono text-xs"
-                      value={cidrs}
-                      onChange={(e) => setCidrs(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">{t("pats.cidrsHint")}</p>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="pat-expiry">{t("pats.expires")}</Label>
-                    <select
-                      id="pat-expiry"
-                      className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={expiryDays === null ? "" : String(expiryDays)}
-                      onChange={(e) =>
-                        setExpiryDays(e.target.value === "" ? null : Number(e.target.value))
-                      }
-                    >
-                      {EXPIRY_OPTIONS.map((o) => (
-                        <option key={o.value === null ? "never" : o.value} value={o.value ?? ""}>
-                          {t(o.labelKey)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={create} disabled={busy || !name.trim() || scopes.length === 0}>
-                    {t("pats.create")}
-                  </Button>
-                </DialogFooter>
-              </>
-            )}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pat-cidrs">{t("pats.cidrs")}</Label>
+                <Input
+                  id="pat-cidrs"
+                  placeholder={t("pats.cidrsPlaceholder")}
+                  className="font-mono text-xs"
+                  value={cidrs}
+                  onChange={(e) => setCidrs(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t("pats.cidrsHint")}</p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pat-expiry">{t("pats.expires")}</Label>
+                <select
+                  id="pat-expiry"
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={expiryDays === null ? "" : String(expiryDays)}
+                  onChange={(e) =>
+                    setExpiryDays(e.target.value === "" ? null : Number(e.target.value))
+                  }
+                >
+                  {EXPIRY_OPTIONS.map((o) => (
+                    <option key={o.value === null ? "never" : o.value} value={o.value ?? ""}>
+                      {t(o.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={create} disabled={busy || !name.trim() || scopes.length === 0}>
+                {t("pats.create")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={created !== null} onOpenChange={(o) => !o && setCreated(null)}>
+          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{t("pats.createdTitle")}</DialogTitle>
+              <DialogDescription>{t("pats.createdHint")}</DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-3">
+              <code className="min-w-0 flex-1 break-all font-mono text-xs">{created?.token}</code>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                onClick={() =>
+                  created &&
+                  copyText(created.token)
+                    .then(() => {
+                      setCopied(true);
+                      toast.success(t("common.copied"));
+                    })
+                    .catch(() => toast.error(t("common.copyFailed")))
+                }
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setCreated(null)}>{t("common.done")}</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
