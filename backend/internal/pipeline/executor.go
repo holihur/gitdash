@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gitdash/backend/internal/gitsvc"
@@ -179,6 +180,34 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	ctx, cancel := context.WithTimeout(parent, cfg.Timeout)
 	defer cancel()
 
+	// 每次步骤用唯一容器名，取消/超时时可强制清理（杀掉 docker 客户端并不会停止容器）。
+	name := containerName(job.RunID)
+	defer removeContainer(name)
+
+	args := dockerRunArgs(name, workdir, cfg, step, job)
+
+	// 镜像拉取/运行审计日志
+	logx.Infof("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
+		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
+	cmd := newContextCommand(ctx, "docker", args...)
+	cmd.Stdout = logSink
+	cmd.Stderr = logSink
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("timeout after %s", cfg.Timeout)
+		}
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return fmt.Errorf("exit code %d", ee.ExitCode())
+		}
+		return err
+	}
+	return nil
+}
+
+// dockerRunArgs 构造 `docker run` 参数（含唯一 --name，便于取消/超时时清理容器）。
+func dockerRunArgs(name, workdir string, cfg *Config, step Step, job RunJob) []string {
+	owner, repo, ref, sha := job.Owner, job.Repo, job.Ref, job.SHA
 	// 网络开关：默认 none（沙箱）；GITDASH_PIPELINE_NETWORK 显式指定时用该值
 	network := strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_NETWORK"))
 	if network == "" {
@@ -186,6 +215,7 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	}
 	args := []string{
 		"run", "--rm",
+		"--name", name,
 		"--workdir", "/workspace",
 		"-v", workdir + ":/workspace",
 		// 沙箱加固：默认禁外网（依赖拉取需镜像内预装或镜像自身可达源）、
@@ -209,25 +239,26 @@ func (e *builtinDockerExecutor) runStep(parent context.Context, workdir string, 
 	for _, m := range cfg.Volumes { // DSL 声明的额外挂载卷（docker.sock 已在 validate 拒绝）
 		args = append(args, "-v", m)
 	}
-	args = append(args, cfg.Image, "sh", "-ec", step.Run)
+	return append(args, cfg.Image, "sh", "-ec", step.Run)
+}
 
-	// 镜像拉取/运行审计日志
-	logx.Infof("pipeline audit: image=%s repo=%s/%s step=%q time=%s",
-		cfg.Image, owner, repo, step.Name, time.Now().UTC().Format(time.RFC3339))
-	cmd := newContextCommand(ctx, "docker", args...)
-	cmd.Stdout = logSink
-	cmd.Stderr = logSink
-	if err := cmd.Run(); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("timeout after %s", cfg.Timeout)
-		}
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			return fmt.Errorf("exit code %d", ee.ExitCode())
-		}
-		return err
+// containerSeq 为容器名提供进程内唯一后缀（并行子步骤也会得到不同名字）。
+var containerSeq atomic.Uint64
+
+// containerName 为一次 docker 步骤生成唯一容器名。
+func containerName(runID int64) string {
+	return fmt.Sprintf("gitdash-run-%d-%d", runID, containerSeq.Add(1))
+}
+
+// removeContainer 强制删除容器（忽略“不存在”等错误）。
+// 用独立超时而非步骤 ctx：取消/超时时步骤 ctx 已结束，但清理仍必须执行。
+func removeContainer(name string) {
+	if name == "" {
+		return
 	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = exec.CommandContext(ctx, "docker", "rm", "-f", name).Run()
 }
 
 // newContextCommand 创建随 ctx 取消而整组终止的命令。

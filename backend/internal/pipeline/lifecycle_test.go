@@ -45,6 +45,30 @@ func openPipelineStore(t *testing.T, dir string) *store.Store {
 	return st
 }
 
+func TestDockerRunArgsNamesContainer(t *testing.T) {
+	n1 := containerName(7)
+	n2 := containerName(7)
+	if n1 == n2 {
+		t.Fatalf("container names should be unique: %q", n1)
+	}
+	if !strings.HasPrefix(n1, "gitdash-run-7-") {
+		t.Fatalf("container name = %q", n1)
+	}
+
+	args := dockerRunArgs(n1, "/tmp/ws", &Config{Image: "alpine"}, Step{Name: "x", Run: "echo hi"},
+		RunJob{RunID: 7, Owner: "a", Repo: "b", Ref: "main", SHA: "s"})
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--name "+n1) {
+		t.Fatalf("missing --name: %v", args)
+	}
+	if !strings.Contains(joined, "--rm") {
+		t.Fatalf("missing --rm: %v", args)
+	}
+	if args[len(args)-1] != "echo hi" {
+		t.Fatalf("script not last: %v", args)
+	}
+}
+
 func TestParseJobTimeout(t *testing.T) {
 	cfg, err := Parse([]byte("job_timeout: 5m\nsteps:\n  - run: echo x\n"))
 	if err != nil {
