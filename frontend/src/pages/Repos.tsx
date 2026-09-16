@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Download, Eye, FolderGit2, MoreVertical, Plus, Star, Trash2, Users, Webhook } from "lucide-react";
+import { Download, FolderGit2, Plus } from "lucide-react";
 import { api, type Org, type Repo } from "@/lib/api";
 import { useQueryState } from "@/lib/query-state";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,24 +14,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import CollaboratorsDialog from "@/components/collabs-dialog";
 import WebhooksDialog from "@/components/webhooks-dialog";
+import RepoCard from "./repos/RepoCard";
+import ImportRepoDialog from "./repos/ImportRepoDialog";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -343,102 +335,16 @@ export default function Repos() {
             {show.map((repo) => {
               const isOwner = isMine && (repo.role === undefined || repo.role === "owner");
               return (
-                <Card key={`${repo.owner}/${repo.name}`} className="flex min-w-0 flex-col">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="min-w-0 text-lg">
-                        <Link
-                          to={`/repo/${repo.owner}/${repo.name}`}
-                          className="block truncate hover:underline"
-                        >
-                          {repo.name}
-                        </Link>
-                      </CardTitle>
-                      {isOwner && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 shrink-0"
-                              aria-label={`${repo.name} ${t("common.moreActions")}`}
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setCollabRepo(repo)}>
-                              <Users />
-                              {t("collabs.manage")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setHookRepo(repo)}>
-                              <Webhook />
-                              {t("webhooks.manage")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setPendingDelete(repo)}
-                            >
-                              <Trash2 />
-                              {t("repos.delete")}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-                    <CardDescription className="min-h-10">
-                      <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                        {!isMine && (
-                          <Badge variant="secondary" className="font-normal">
-                            {repo.owner}
-                          </Badge>
-                        )}
-                        {isMine && !isOwner && repo.role && (
-                          <Badge variant="secondary" className="font-normal">
-                            {t("collabs.sharedBy", { owner: repo.owner })} ·
-                            {repo.role === "write" ? t("collabs.write") : t("collabs.read")}
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="line-clamp-2 block">
-                        {repo.description || t("common.noDescription")}
-                      </span>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="mt-auto space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary" className="font-normal">
-                        {formatDate(repo.created_at, dateLocale(lang))}
-                      </Badge>
-                      {repo.is_template && (
-                        <Badge variant="outline" className="font-normal">
-                          {t("repos.templateBadge")}
-                        </Badge>
-                      )}
-                      <Badge variant="secondary" className="gap-1 font-normal">
-                        <Star className="h-3 w-3" />
-                        {repo.stars ?? 0}
-                      </Badge>
-                      <Badge variant="secondary" className="gap-1 font-normal">
-                        <Eye className="h-3 w-3" />
-                        {repo.watchers ?? 0}
-                      </Badge>
-                      {repo.import_status && repo.import_status !== "synced" && (
-                        <Badge
-                          variant="outline"
-                          className={
-                            repo.import_status === "failed"
-                              ? "font-normal text-destructive"
-                              : "font-normal text-amber-600 dark:text-amber-400"
-                          }
-                          title={repo.import_error || undefined}
-                        >
-                          {t(`imports.status.${repo.import_status}`)}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                <RepoCard
+                  key={`${repo.owner}/${repo.name}`}
+                  repo={repo}
+                  isMine={isMine}
+                  isOwner={isOwner}
+                  locale={dateLocale(lang)}
+                  onManageCollabs={setCollabRepo}
+                  onManageWebhooks={setHookRepo}
+                  onDelete={setPendingDelete}
+                />
               );
             })}
           </div>
@@ -478,63 +384,20 @@ export default function Repos() {
         owner={hookRepo?.owner ?? ""}
         repo={hookRepo?.name ?? ""}
       />
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("imports.importTitle")}</DialogTitle>
-            <DialogDescription>{t("imports.importDescription")}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="import-url">{t("imports.urlLabel")}</Label>
-              <Input
-                id="import-url"
-                placeholder="https://github.com/owner/repo.git"
-                value={importUrl}
-                onChange={(e) => setImportUrl(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="import-name">{t("imports.nameLabel")}</Label>
-              <Input
-                id="import-name"
-                placeholder={t("common.optional")}
-                value={importName}
-                onChange={(e) => setImportName(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                id="import-private"
-                type="checkbox"
-                checked={importPrivate}
-                onChange={(e) => setImportPrivate(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="import-private" className="text-sm font-normal">
-                {t("imports.privateLabel")}
-              </Label>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="import-key">{t("imports.keyLabel")}</Label>
-              <Textarea
-                id="import-key"
-                rows={4}
-                placeholder={t("imports.keyPlaceholder")}
-                value={importKey}
-                onChange={(e) => setImportKey(e.target.value)}
-                className="font-mono text-xs"
-              />
-              <p className="text-xs text-muted-foreground">{t("imports.keyHint")}</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={doImport} disabled={importBusy || !importUrl.trim()}>
-              {t("imports.import")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ImportRepoDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        url={importUrl}
+        onUrl={setImportUrl}
+        name={importName}
+        onName={setImportName}
+        privateRepo={importPrivate}
+        onPrivate={setImportPrivate}
+        key={importKey}
+        onKey={setImportKey}
+        busy={importBusy}
+        onImport={doImport}
+      />
     </div>
   );
 }

@@ -1,0 +1,296 @@
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Check, Copy, KeySquare, Plus, Trash2 } from "lucide-react";
+import { api, type CreatedPAT, type PAT } from "@/lib/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import ConfirmDialog from "@/components/confirm-dialog";
+import { copyText, formatDate } from "@/lib/utils";
+import { apiErrorMsg } from "@/lib/errors";
+import { EXPIRY_OPTIONS, SCOPE_LABEL_KEY, expiryRFC3339, type SectionProps } from "./shared";
+
+export function PATSection({ t, to, locale }: SectionProps) {
+  const [pats, setPats] = useState<PAT[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<string[]>(["repo"]);
+  const [cidrs, setCidrs] = useState("");
+  const [expiryDays, setExpiryDays] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<PAT | null>(null);
+  const [created, setCreated] = useState<CreatedPAT | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setPats(await api.listPATs());
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setLoading(false);
+    }
+  }, [to]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggleScope = (s: string) => {
+    setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+  };
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      const cidrList = cidrs
+        .split(/[\s,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const pat = await api.createPAT(name.trim(), scopes, cidrList, expiryRFC3339(expiryDays));
+      setOpen(false);
+      setName("");
+      setScopes(["repo"]);
+      setCidrs("");
+      setExpiryDays(null);
+      setCreated(pat);
+      setCopied(false);
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (pat: PAT) => {
+    setPendingDelete(null);
+    try {
+      await api.deletePAT(pat.id);
+      toast.success(t("keys.deleted"));
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    }
+  };
+
+  const scopeLabel = (s: string) =>
+    SCOPE_LABEL_KEY[s] ? t(SCOPE_LABEL_KEY[s]) : s;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">{t("pats.subtitle")}</p>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2 sm:self-start">
+              <Plus className="h-4 w-4" />
+              {t("pats.create")}
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{t("pats.create")}</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="pat-name">{t("pats.name")}</Label>
+                <Input
+                  id="pat-name"
+                  placeholder={t("pats.namePlaceholder")}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t("pats.scopes")}</Label>
+                <div className="flex flex-wrap gap-4">
+                  {["repo", "inbox", "keys"].map((s) => (
+                    <label key={s} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={scopes.includes(s)}
+                        onChange={() => toggleScope(s)}
+                      />
+                      {scopeLabel(s)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pat-cidrs">{t("pats.cidrs")}</Label>
+                <Input
+                  id="pat-cidrs"
+                  placeholder={t("pats.cidrsPlaceholder")}
+                  className="font-mono text-xs"
+                  value={cidrs}
+                  onChange={(e) => setCidrs(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t("pats.cidrsHint")}</p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pat-expiry">{t("pats.expires")}</Label>
+                <select
+                  id="pat-expiry"
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={expiryDays === null ? "" : String(expiryDays)}
+                  onChange={(e) =>
+                    setExpiryDays(e.target.value === "" ? null : Number(e.target.value))
+                  }
+                >
+                  {EXPIRY_OPTIONS.map((o) => (
+                    <option key={o.value === null ? "never" : o.value} value={o.value ?? ""}>
+                      {t(o.labelKey)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={create} disabled={busy || !name.trim() || scopes.length === 0}>
+                {t("pats.create")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={created !== null} onOpenChange={(o) => !o && setCreated(null)}>
+          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>{t("pats.createdTitle")}</DialogTitle>
+              <DialogDescription>{t("pats.createdHint")}</DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-3">
+              <code className="min-w-0 flex-1 break-all font-mono text-xs">{created?.token}</code>
+              <Button
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                onClick={() =>
+                  created &&
+                  copyText(created.token)
+                    .then(() => {
+                      setCopied(true);
+                      toast.success(t("common.copied"));
+                    })
+                    .catch(() => toast.error(t("common.copyFailed")))
+                }
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setCreated(null)}>{t("common.done")}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 rounded-lg border p-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-6 w-full" />
+          ))}
+        </div>
+      ) : pats.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 px-4 text-center">
+          <KeySquare className="h-10 w-10 text-muted-foreground" />
+          <p className="font-medium">{t("pats.empty")}</p>
+          <p className="text-sm text-muted-foreground">{t("pats.emptyHint")}</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table className="min-w-[760px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("pats.name")}</TableHead>
+                <TableHead>{t("pats.scopes")}</TableHead>
+                <TableHead>{t("pats.expires")}</TableHead>
+                <TableHead>{t("pats.created")}</TableHead>
+                <TableHead>{t("pats.lastUsed")}</TableHead>
+                <TableHead className="w-12" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pats.map((pat) => {
+                const expired = pat.expires_at !== "" && new Date(pat.expires_at) <= new Date();
+                return (
+                  <TableRow key={pat.id}>
+                    <TableCell className="font-medium">{pat.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {pat.scopes.map((s) => (
+                          <Badge key={s} variant="secondary">
+                            {scopeLabel(s)}
+                          </Badge>
+                        ))}
+                        {pat.cidrs.length > 0 && (
+                          <span className="ml-1 flex flex-wrap gap-1">
+                            {pat.cidrs.map((c) => (
+                              <code
+                                key={c}
+                                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground"
+                              >
+                                {c}
+                              </code>
+                            ))}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {expired ? (
+                        <span className="font-medium text-destructive">{t("pats.expired")}</span>
+                      ) : pat.expires_at ? (
+                        <span className="text-muted-foreground">{formatDate(pat.expires_at, locale)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">{t("pats.neverExpires")}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatDate(pat.created_at, locale)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {pat.last_used_at ? formatDate(pat.last_used_at, locale) : t("pats.never")}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setPendingDelete(pat)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => !o && setPendingDelete(null)}
+        description={t("pats.confirmDelete", { name: pendingDelete?.name ?? "" })}
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+      />
+    </div>
+  );
+}

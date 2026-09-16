@@ -7,12 +7,11 @@ import {
   GitPullRequestClosed,
   Plus,
 } from "lucide-react";
-import { api, type MergeGate, type PullDiff, type PullRequest } from "@/lib/api";
+import { api, type PullRequest } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { MergeGateBadges } from "@/components/merge-gate";
-import { PullDiffView as InlinePullDiffView } from "@/components/diff-view";
 import CommentSection from "@/components/comment-section";
 import PullReviewSection from "@/components/pull-review";
+import { MergeGateBadge, PullDiffView } from "./repoview/pull-diff";
 import { apiErrorMsg } from "@/lib/errors";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -394,68 +393,3 @@ export default function RepoPulls({
   );
 }
 
-function PullDiffView({
-  owner,
-  name,
-  number,
-  canWrite,
-}: {
-  owner: string;
-  name: string;
-  number: number;
-  canWrite: boolean;
-}) {
-  const [diff, setDiff] = useState<PullDiff | null>(null);
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    let alive = true;
-    api
-      .pullDiff(owner, name, number)
-      .then((d) => alive && setDiff(d))
-      .catch((e) => alive && setErr(e instanceof Error ? e.message : String(e)));
-    return () => {
-      alive = false;
-    };
-  }, [owner, name, number]);
-  if (err) return <p className="text-xs text-destructive">{err}</p>;
-  if (!diff) return <p className="py-4 text-center text-xs text-muted-foreground">…</p>;
-  return (
-    <InlinePullDiffView
-      owner={owner}
-      name={name}
-      number={number}
-      files={diff.files}
-      patch={diff.patch}
-      canWrite={canWrite}
-    />
-  );
-}
-
-/** 合并门禁徽章：GET reviews 的 gate 字段（approvals/required，是否可合并）。 */
-export function MergeGateBadge({
-  owner,
-  name,
-  number,
-  refreshKey,
-}: {
-  owner: string;
-  name: string;
-  number: number;
-  refreshKey?: number;
-}) {
-  const [gate, setGate] = useState<MergeGate | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    api
-      .listPullReviews(owner, name, number)
-      .then((r) => alive && setGate(r.gate ?? null))
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [owner, name, number, refreshKey]);
-
-  if (!gate) return null;
-  return <MergeGateBadges gate={gate} />;
-}
