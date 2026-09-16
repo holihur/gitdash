@@ -118,6 +118,24 @@ export interface Org {
   role: string;
 }
 
+export interface OrgProfile {
+  name: string;
+  display: string;
+  created_at: string;
+  /** 当前用户在该组织中的角色：""（非成员）/ member / owner */
+  role: string;
+  members: OrgMember[];
+  /** 可见仓库：成员含私有，非成员仅公开 */
+  repos: Repo[];
+  followers: number;
+  is_following: boolean;
+}
+
+export interface OrgFollowState {
+  followers: number;
+  is_following: boolean;
+}
+
 export interface OrgMember {
   org: string;
   username: string;

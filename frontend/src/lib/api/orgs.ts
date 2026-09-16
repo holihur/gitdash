@@ -1,5 +1,5 @@
 import { req } from "./core";
-import type { Collab, Org, OrgMember, Repo } from "./types";
+import type { Collab, Org, OrgFollowState, OrgMember, OrgProfile, Repo, UserSummary } from "./types";
 
 export const orgsApi = {
   // orgs（组织）
@@ -7,6 +7,10 @@ export const orgsApi = {
   createOrg: (name: string, display: string) =>
     req<Org>("/orgs", { method: "POST", body: JSON.stringify({ name, display }) }),
   deleteOrg: (name: string) => req<null>(`/orgs/${name}`, { method: "DELETE" }),
+  getOrgProfile: (org: string) => req<OrgProfile>(`/orgs/${org}/profile`),
+  followOrg: (org: string) => req<OrgFollowState>(`/orgs/${org}/follow`, { method: "POST" }),
+  unfollowOrg: (org: string) => req<OrgFollowState>(`/orgs/${org}/follow`, { method: "DELETE" }),
+  listOrgFollowers: (org: string) => req<UserSummary[]>(`/orgs/${org}/followers`),
   listOrgMembers: (org: string) => req<OrgMember[]>(`/orgs/${org}/members`),
   addOrgMember: (org: string, username: string, role: string) =>
     req<{ org: string; username: string; role: string }>(`/orgs/${org}/members`, {

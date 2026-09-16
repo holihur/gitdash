@@ -370,6 +370,9 @@ export const en = {
     noRepos: "No repositories in this organization yet",
     updatedAt: "Created {date}",
     deleteOrg: "Delete organization",
+    followers: "Followers",
+    noFollowers: "No followers yet",
+    since: "Created {date}",
   },
   keys: {
     title: "SSH Keys",

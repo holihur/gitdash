@@ -369,6 +369,9 @@ export const zhCN: Messages = {
     noRepos: "该组织还没有仓库",
     updatedAt: "创建于 {date}",
     deleteOrg: "删除组织",
+    followers: "粉丝",
+    noFollowers: "还没有粉丝",
+    since: "创建于 {date}",
   },
   keys: {
     title: "SSH Keys",
