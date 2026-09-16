@@ -985,6 +985,7 @@ export const ru: DeepPartial<Messages> = {
   },
   "projects": {
     "tab": "Проекты",
+    "count": "Проектов: {count}",
     "add": "Новый проект",
     "added": "Проект создан",
     "nameLabel": "Название",

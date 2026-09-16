@@ -1056,6 +1056,7 @@ export const en = {
   },
   projects: {
     tab: "Projects",
+    count: "{count} projects",
     add: "New project",
     added: "Project created",
     nameLabel: "Name",

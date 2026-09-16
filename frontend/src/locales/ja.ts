@@ -985,6 +985,7 @@ export const ja: DeepPartial<Messages> = {
   },
   "projects": {
     "tab": "プロジェクト",
+    "count": "プロジェクト {count} 件",
     "add": "新規プロジェクト",
     "added": "プロジェクトを作成しました",
     "nameLabel": "名前",

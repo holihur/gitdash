@@ -992,6 +992,7 @@ export const ko: DeepPartial<Messages> = {
   },
   projects: {
     tab: "프로젝트",
+    count: "프로젝트 {count}개",
     add: "새 프로젝트",
     added: "프로젝트를 만들었습니다",
     nameLabel: "이름",

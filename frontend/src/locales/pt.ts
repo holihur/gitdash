@@ -992,6 +992,7 @@ export const pt: DeepPartial<Messages> = {
   },
   projects: {
     tab: "Projetos",
+    count: "{count} projetos",
     add: "Novo projeto",
     added: "Projeto criado",
     nameLabel: "Nome",

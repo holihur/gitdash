@@ -1051,6 +1051,7 @@ export const zhCN: Messages = {
   },
   projects: {
     tab: "项目",
+    count: "共 {count} 个项目",
     add: "新建项目",
     added: "项目已创建",
     nameLabel: "名称",

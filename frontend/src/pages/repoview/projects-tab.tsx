@@ -5,6 +5,14 @@ import { api, type Project } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,9 +27,11 @@ interface Props {
 
 export default function ProjectsTab({ owner, name, role }: Props) {
   const { t, to } = useI18n();
+  const canWrite = role === "owner" || role === "write";
   const [items, setItems] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
@@ -44,6 +54,7 @@ export default function ProjectsTab({ owner, name, role }: Props) {
     try {
       await api.createProject(owner, name, newName.trim(), newDesc.trim());
       toast.success(t("projects.added"));
+      setOpen(false);
       setNewName("");
       setNewDesc("");
       load();
@@ -84,6 +95,56 @@ export default function ProjectsTab({ owner, name, role }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          {t("projects.count", { count: items.length })}
+        </p>
+        {canWrite && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
+                {t("projects.add")}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{t("projects.add")}</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <FieldLabel htmlFor="proj-name">{t("projects.nameLabel")}</FieldLabel>
+                  <Input
+                    id="proj-name"
+                    placeholder={t("projects.namePlaceholder")}
+                    maxLength={100}
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && add()}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <FieldLabel htmlFor="proj-desc">{t("projects.descriptionLabel")}</FieldLabel>
+                  <Textarea
+                    id="proj-desc"
+                    rows={2}
+                    placeholder={t("projects.descriptionPlaceholder")}
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={add} disabled={busy || !newName.trim()}>
+                  <Plus className="h-4 w-4" />
+                  {t("projects.add")}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
+
       {items.length === 0 ? (
         <p className="flex items-center justify-center gap-2 rounded-lg border border-dashed py-10 text-sm text-muted-foreground">
           <KanbanSquare className="h-4 w-4" />
@@ -102,49 +163,21 @@ export default function ProjectsTab({ owner, name, role }: Props) {
                   {t("projects.cardCount", { count: p.card_count })}
                 </p>
               </button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive"
-                onClick={() => setPendingDelete(p)}
-                title={t("projects.remove")}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {canWrite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={() => setPendingDelete(p)}
+                  title={t("projects.remove")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           ))}
         </div>
       )}
-
-      <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
-        <div className="grid gap-2">
-          <FieldLabel htmlFor="proj-name">{t("projects.nameLabel")}</FieldLabel>
-          <Input
-            id="proj-name"
-            placeholder={t("projects.namePlaceholder")}
-            maxLength={100}
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-          />
-        </div>
-        <div className="grid gap-2">
-          <FieldLabel htmlFor="proj-desc">{t("projects.descriptionLabel")}</FieldLabel>
-          <Textarea
-            id="proj-desc"
-            rows={2}
-            placeholder={t("projects.descriptionPlaceholder")}
-            value={newDesc}
-            onChange={(e) => setNewDesc(e.target.value)}
-          />
-        </div>
-        <div>
-          <Button onClick={add} disabled={busy || !newName.trim()}>
-            <Plus className="h-4 w-4" />
-            {t("projects.add")}
-          </Button>
-        </div>
-      </div>
 
       <ConfirmDialog
         open={pendingDelete !== null}
