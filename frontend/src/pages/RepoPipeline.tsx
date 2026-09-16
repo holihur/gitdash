@@ -1,44 +1,18 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Ban, BookOpen, CheckCircle2, Loader2, PauseCircle, Play, Terminal, Workflow, XCircle } from "lucide-react";
-import { api, type PipelineGraph, type PipelineRun, type PipelineRunStatus } from "@/lib/api";
+import { Loader2, Play, Workflow } from "lucide-react";
+import { api, type PipelineGraph, type PipelineRun } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn, formatDate } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { MermaidDiagram } from "@/components/mermaid";
-
-export const PIPELINE_EXAMPLE = `# 单文件：仓库根目录 .gitdash.yml
-# 多文件：.gitdash/*.yml 或 *.yaml（每个文件是独立流水线，按各自 on: 触发）
-image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行（需服务端开启）
-# job_timeout: 30m      # 可选：整次运行超时（缺省 = 不限，上限 2h）
-# timeout: 10m          # 可选：单步超时（默认 10m，上限 1h）
-# on: [push, pull_request, schedule, workflow_dispatch]  # 自动触发白名单（默认仅 push）
-# schedule:              # on 含 schedule 时必填（cron：分 时 日 月 周）
-#   - "0 2 * * *"
-env:
-  - CGO_ENABLED=0
-# runs-on: [docker]   # 可选：指定远程 runner 标签
-steps:
-  - name: build
-    run: echo build
-  - name: test
-    run: |
-      echo test
-      echo done`;
+import PipelineDocs from "@/components/pipeline-docs";
+import PipelineRunsCard from "@/components/pipeline-runs";
+import { toMermaid } from "@/components/pipeline-shared";
 
 interface Props {
   owner: string;
@@ -46,54 +20,10 @@ interface Props {
   role?: "owner" | "read" | "write";
 }
 
-function StatusBadge({ status }: { status: PipelineRunStatus }) {
-  const { t } = useI18n();
-  const map: Record<PipelineRunStatus, { icon: ReactNode; cls: string }> = {
-    pending: { icon: <PauseCircle className="h-3 w-3" />, cls: "border-muted-foreground/40 text-muted-foreground" },
-    running: { icon: <Loader2 className="h-3 w-3 animate-spin" />, cls: "border-blue-600/40 text-blue-600" },
-    success: { icon: <CheckCircle2 className="h-3 w-3" />, cls: "border-green-600/40 text-green-600" },
-    failed: { icon: <XCircle className="h-3 w-3" />, cls: "border-destructive/50 text-destructive" },
-    cancelled: { icon: <Ban className="h-3 w-3" />, cls: "border-muted-foreground/40 text-muted-foreground" },
-  };
-  const s = map[status] ?? map.pending;
-  return (
-    <Badge variant="outline" className={cn("gap-1", s.cls)}>
-      {s.icon}
-      {t(`pipeline.status.${status}`)}
-    </Badge>
-  );
-}
-
-/** 把流水线图转为 Mermaid flowchart（mermaid 内部用 dagre 布局引擎排版，与 D2 默认引擎一致）。 */
-function toMermaid(g: PipelineGraph): string {
-  const id = (s: string) => "n" + s.replace(/[^a-zA-Z0-9]/g, "_");
-  const esc = (s: string) => s.replace(/"/g, "'");
-  const lines = ["flowchart TD"];
-  const terminals: string[] = [];
-  const parallels: string[] = [];
-  for (const n of g.graph.nodes) {
-    const lid = id(n.id);
-    const label = n.when ? `${n.label} (when: ${n.when})` : n.label;
-    if (n.kind === "start" || n.kind === "end") {
-      lines.push(`  ${lid}(["${esc(n.label)}"])`);
-      terminals.push(lid);
-    } else if (n.kind === "parallel") {
-      lines.push(`  ${lid}{{"${esc(label)}"}}`);
-      parallels.push(lid);
-    } else {
-      lines.push(`  ${lid}["${esc(label)}"]`);
-    }
-  }
-  for (const e of g.graph.edges) lines.push(`  ${id(e.from)} --> ${id(e.to)}`);
-  if (terminals.length) {
-    lines.push("  classDef gitdashTerminal fill:#6b7280,stroke:#374151,color:#fff;");
-    lines.push(`  class ${terminals.join(",")} gitdashTerminal;`);
-  }
-  if (parallels.length) {
-    lines.push("  classDef gitdashParallel fill:#2563eb,stroke:#1e40af,color:#fff;");
-    lines.push(`  class ${parallels.join(",")} gitdashParallel;`);
-  }
-  return lines.join("\n");
+interface Props {
+  owner: string;
+  name: string;
+  role?: "owner" | "read" | "write";
 }
 
 export default function RepoPipeline({ owner, name, role }: Props) {
@@ -356,240 +286,20 @@ export default function RepoPipeline({ owner, name, role }: Props) {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{t("pipeline.runs")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {runs.length === 0 ? (
-            <p className="flex items-center justify-center gap-2 rounded-lg border border-dashed py-8 text-sm text-muted-foreground">
-              <Terminal className="h-4 w-4" />
-              {t("pipeline.noRuns")}
-            </p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <Table className="min-w-[640px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-14">#</TableHead>
-                    <TableHead className="w-40">{t("pipeline.fileLabel")}</TableHead>
-                    <TableHead className="w-24">{t("pipeline.statusLabel")}</TableHead>
-                    <TableHead>{t("repo.commit")}</TableHead>
-                    <TableHead className="w-24">{t("pipeline.branch")}</TableHead>
-                    <TableHead className="w-32">{t("pipeline.trigger")}</TableHead>
-                    <TableHead className="w-44">{t("common.date")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {runs.map((r) => (
-                    <Fragment key={r.id}>
-                      <TableRow
-                        className="cursor-pointer"
-                        onClick={() => openRun(r)}
-                      >
-                        <TableCell className="font-mono text-xs">{r.id}</TableCell>
-                        <TableCell className="truncate font-mono text-xs" title={r.file || ".gitdash.yml"}>
-                          {r.file || ".gitdash.yml"}
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={r.status} />
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {r.steps_done}/{r.steps_total}
-                          </span>
-                          {r.status === "pending" && r.run_at && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {t("pipeline.scheduledFor", { time: formatDate(r.run_at, locale) })}
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{r.sha.slice(0, 7)}</code>
-                        </TableCell>
-                        <TableCell className="truncate text-sm">{r.ref}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1.5">
-                            {r.event && (
-                              <Badge variant="secondary" className="shrink-0 text-[10px]">
-                                {t(`pipeline.event.${r.event}`)}
-                              </Badge>
-                            )}
-                            <span className="truncate">{r.trigger_by}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {formatDate(r.created_at, locale)}
-                        </TableCell>
-                      </TableRow>
-                      {expanded === r.id && (
-                        <TableRow>
-                          <TableCell colSpan={7} className="bg-muted/30 p-0">
-                            <div className="p-3">
-                              {r.error && (
-                                <p className="mb-2 text-xs text-destructive">{r.error}</p>
-                              )}
-                              {runDetail && runDetail.id === r.id ? (
-                                <>
-                                  <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-xs text-muted-foreground">
-                                      {t("pipeline.log")}
-                                      {runDetail.runner_name && (
-                                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 font-mono">
-                                          runner: {runDetail.runner_name}
-                                        </span>
-                                      )}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      {canWrite && (runDetail.status === "success" || runDetail.status === "failed" || runDetail.status === "cancelled") && (
-                                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => rerun(r.id)}>
-                                          {t("pipeline.rerun")}
-                                        </Button>
-                                      )}
-                                      {(runDetail.status === "pending" || runDetail.status === "running") && (
-                                        <>
-                                          {canWrite && (
-                                            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => cancelRun(r.id)}>
-                                              {t("pipeline.cancel")}
-                                            </Button>
-                                          )}
-                                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => refreshOne(r.id)}>
-                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                            {t("pipeline.refresh")}
-                                          </Button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <pre className="max-h-[50vh] overflow-auto rounded-md border bg-background/80 p-3 font-mono text-xs leading-relaxed">
-                                    {runDetail.log || "…"}
-                                  </pre>
-                                </>
-                              ) : (
-                                <p className="py-6 text-center text-sm text-muted-foreground">…</p>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                       )}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <PipelineRunsCard
+        runs={runs}
+        expanded={expanded}
+        runDetail={runDetail}
+        canWrite={canWrite}
+        locale={locale}
+        onOpen={openRun}
+        onRerun={rerun}
+        onCancel={cancelRun}
+        onRefresh={refreshOne}
+      />
 
       <PipelineDocs />
     </div>
   );
 }
 
-const DSL_FIELDS: [string, string][] = [
-  ["image", "dslImage"],
-  ["timeout", "dslTimeout"],
-  ["job_timeout", "dslJobTimeout"],
-  ["on", "dslOn"],
-  ["schedule", "dslSchedule"],
-  ["env", "dslEnv"],
-  ["volumes", "dslVolumes"],
-  ["runs-on", "dslRunsOn"],
-  ["steps", "dslSteps"],
-];
-
-const TRIGGERS: [string, string][] = [
-  ["push", "trigPush"],
-  ["pull_request", "trigPr"],
-  ["schedule", "trigSchedule"],
-  ["workflow_dispatch", "trigDispatch"],
-  ["manual", "trigManual"],
-];
-
-/** Pipeline 说明文档：文件布局 / DSL 字段 / 触发事件 / 运行生命周期 / 示例。 */
-function PipelineDocs() {
-  const { t } = useI18n();
-  const header = (
-    <TableHeader>
-      <TableRow>
-        <TableHead className="w-40">{t("pipeline.docs.dslKey")}</TableHead>
-        <TableHead>{t("pipeline.docs.dslDesc")}</TableHead>
-      </TableRow>
-    </TableHeader>
-  );
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <BookOpen className="h-4 w-4" />
-          {t("pipeline.docs.title")}
-        </CardTitle>
-        <CardDescription>{t("pipeline.docs.hint")}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="files">
-          <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="files">{t("pipeline.docs.tabFiles")}</TabsTrigger>
-            <TabsTrigger value="dsl">{t("pipeline.docs.tabDsl")}</TabsTrigger>
-            <TabsTrigger value="triggers">{t("pipeline.docs.tabTriggers")}</TabsTrigger>
-            <TabsTrigger value="lifecycle">{t("pipeline.docs.tabLifecycle")}</TabsTrigger>
-            <TabsTrigger value="example">{t("pipeline.docs.tabExample")}</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="files" className="space-y-2 pt-3 text-sm text-muted-foreground">
-            <p>{t("pipeline.docs.files1")}</p>
-            <p>{t("pipeline.docs.files2")}</p>
-            <p>{t("pipeline.docs.files3")}</p>
-            <code className="block rounded bg-muted px-2 py-1 font-mono text-xs">.gitdash.yml</code>
-            <code className="block rounded bg-muted px-2 py-1 font-mono text-xs">
-              .gitdash/ci.yml · .gitdash/deploy.yaml
-            </code>
-          </TabsContent>
-
-          <TabsContent value="dsl" className="pt-3">
-            <Table>
-              {header}
-              <TableBody>
-                {DSL_FIELDS.map(([k, d]) => (
-                  <TableRow key={k}>
-                    <TableCell className="align-top">
-                      <code className="font-mono text-xs">{k}</code>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t(`pipeline.docs.${d}`)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
-
-          <TabsContent value="triggers" className="pt-3">
-            <Table>
-              {header}
-              <TableBody>
-                {TRIGGERS.map(([k, d]) => (
-                  <TableRow key={k}>
-                    <TableCell className="align-top">
-                      <code className="font-mono text-xs">{k}</code>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{t(`pipeline.docs.${d}`)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TabsContent>
-
-          <TabsContent value="lifecycle" className="space-y-2 pt-3 text-sm text-muted-foreground">
-            <p>{t("pipeline.docs.life1")}</p>
-            <p>{t("pipeline.docs.life2")}</p>
-            <p>{t("pipeline.docs.life3")}</p>
-            <p>{t("pipeline.docs.life4")}</p>
-          </TabsContent>
-
-          <TabsContent value="example" className="pt-3">
-            <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-xs leading-relaxed">
-              {PIPELINE_EXAMPLE}
-            </pre>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
-  );
-}
