@@ -1,28 +1,10 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  Copy,
-  Eye,
-  GitBranch,
-  GitFork,
-  HardDrive,
-  MoreVertical,
-  Star,
-} from "lucide-react";
 import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
 import { buildRepoPath, parseRepoRoute, type RepoCodeKind, type RepoTab } from "@/lib/repo-url";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -37,11 +19,12 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { cn, copyText, formatSize } from "@/lib/utils";
+import { copyText } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import RefsDialog from "@/components/refs-dialog";
+import RepoHeader from "./repoview/repo-header";
 
 const CodeTab = lazy(() => import("./repoview/code-tab"));
 const CommitsTab = lazy(() => import("./repoview/commits-tab"));
@@ -467,99 +450,18 @@ export default function RepoView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-2xl font-bold">
-            <Link to={`/users/${owner}`} className="hover:underline">
-              {owner}
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            {name}
-          </h1>
-          <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
-          {repo?.topics && repo.topics.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {repo.topics.map((tp) => (
-                <Link key={tp} to={`/explore?tag=${encodeURIComponent(tp)}`}>
-                  <Badge variant="secondary" className="font-normal">
-                    {tp}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-          )}
-          {repo?.fork_owner && repo?.fork_repo && (
-            <p className="text-xs text-muted-foreground">
-              {t("social.forkedFrom")}{" "}
-              <button
-                className="hover:underline"
-                onClick={() => navigate(`/repo/${repo.fork_owner}/${repo.fork_repo}`)}
-              >
-                {repo.fork_owner}/{repo.fork_repo}
-              </button>
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            disabled={watchBusy}
-            onClick={toggleWatch}
-            title={t("social.watchTitle")}
-          >
-            <Eye className={cn("h-4 w-4", repo?.watching && "fill-current text-blue-500")} />
-            {repo?.watching ? t("social.watchingBtn") : t("social.watch")}
-            <span className="text-muted-foreground">{repo?.watchers ?? 0}</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            disabled={starBusy}
-            onClick={toggleStar}
-          >
-            <Star className={cn("h-4 w-4", repo?.starred && "fill-current text-yellow-500")} />
-            {repo?.starred ? t("social.starredBtn") : t("social.star")}
-            <span className="text-muted-foreground">{repo?.stars ?? 0}</span>
-          </Button>
-          {typeof repo?.size === "number" && (
-            <span
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground"
-              title={t("common.size")}
-            >
-              <HardDrive className="h-4 w-4" />
-              {formatSize(repo.size)}
-            </span>
-          )}
-          {!isOwner && (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={openFork}>
-              <GitFork className="h-4 w-4" />
-              {t("social.fork")}
-            </Button>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="w-full gap-2 font-mono text-xs sm:w-auto">
-                <GitBranch className="h-3.5 w-3.5" />
-                SSH
-                <MoreVertical className="ml-auto h-3.5 w-3.5 sm:ml-0" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
-              <DropdownMenuLabel className="break-all font-mono text-xs normal-case">
-                {cloneCommand(owner, name)}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => copy(cloneCommand(owner, name))}>
-                <Copy />
-                {t("repo.copyCloneCommand")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+      <RepoHeader
+        owner={owner}
+        name={name}
+        repo={repo}
+        isOwner={isOwner}
+        watchBusy={watchBusy}
+        starBusy={starBusy}
+        onToggleWatch={toggleWatch}
+        onToggleStar={toggleStar}
+        onFork={openFork}
+        onCopy={copy}
+      />
 
       <Tabs value={activeTab} onValueChange={(v) => setParams({ tab: v === "code" ? null : v })}>
         <TabsListOverflow

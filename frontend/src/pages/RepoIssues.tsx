@@ -19,17 +19,7 @@ import { api, type ByokKey, type Issue, type Label, type Milestone } from "@/lib
 import { useQueryState } from "@/lib/query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label as FieldLabel } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { MarkdownEditor } from "@/components/markdown-editor";
 import Pagination from "@/components/ui/pagination";
 import { cn, formatDate } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
@@ -41,6 +31,7 @@ import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
 import ListSkeleton from "@/components/list-skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { CreateIssueDialog, EditIssueDialog, CopilotLaunchDialog } from "@/components/issues/dialogs";
 
 interface Draft {
   labels: number[];
@@ -355,46 +346,16 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
               {t("issues.new")}
             </Button>
           )}
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{t("issues.newDialogTitle")}</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-4">
-                <div className="grid gap-2">
-                  <FieldLabel htmlFor="issue-title">{t("issues.titleLabel")}</FieldLabel>
-                  <Input
-                    id="issue-title"
-                    placeholder={t("issues.titlePlaceholder")}
-                    maxLength={200}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        create();
-                      }
-                    }}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <FieldLabel htmlFor="issue-body">{t("issues.bodyLabel")}</FieldLabel>
-                  <MarkdownEditor
-                    id="issue-body"
-                    rows={5}
-                    placeholder={t("issues.bodyPlaceholder")}
-                    value={body}
-                    onChange={setBody}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={create} disabled={creating || !title.trim()}>
-                  {t("issues.new")}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <CreateIssueDialog
+            open={open}
+            onOpenChange={setOpen}
+            title={title}
+            onTitleChange={setTitle}
+            body={body}
+            onBodyChange={setBody}
+            busy={creating}
+            onSubmit={create}
+          />
         </div>
       </div>
 
@@ -705,101 +666,30 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         />
       )}
 
-      <Dialog open={editTarget !== null} onOpenChange={(o) => !o && setEditTarget(null)}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {t("issues.editDialogTitle", { number: editTarget?.number ?? 0 })}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <FieldLabel htmlFor="edit-issue-title">{t("issues.titleLabel")}</FieldLabel>
-              <Input
-                id="edit-issue-title"
-                maxLength={200}
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <FieldLabel htmlFor="edit-issue-body">{t("issues.bodyLabel")}</FieldLabel>
-              <MarkdownEditor
-                id="edit-issue-body"
-                rows={6}
-                value={editBody}
-                onChange={setEditBody}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button onClick={saveEdit} disabled={savingEdit || !editTitle.trim()}>
-              {t("issues.saveEdit")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EditIssueDialog
+        open={editTarget !== null}
+        number={editTarget?.number ?? 0}
+        title={editTitle}
+        onTitleChange={setEditTitle}
+        body={editBody}
+        onBodyChange={setEditBody}
+        busy={savingEdit}
+        onSubmit={saveEdit}
+        onCancel={() => setEditTarget(null)}
+      />
 
-      <Dialog open={copilotTarget !== null} onOpenChange={(o) => !o && setCopilotTarget(null)}>
-        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {t("issues.fixWithCopilot")} · #{copilotTarget?.number ?? 0}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <p className="text-sm text-muted-foreground">{t("issues.fixWithCopilotHint")}</p>
-            {byokKeys !== null && byokKeys.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
-                {t("copilot.noByok")}
-              </p>
-            ) : (
-              <>
-                <div className="grid gap-2">
-                  <FieldLabel htmlFor="copilot-issue-byok">{t("copilot.byok")}</FieldLabel>
-                  <select
-                    id="copilot-issue-byok"
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={copilotByokId}
-                    onChange={(e) => setCopilotByokId(Number(e.target.value))}
-                  >
-                    {(byokKeys ?? []).map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {k.name} ({k.model || "claude"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <FieldLabel htmlFor="copilot-issue-note">{t("copilot.prompt")}</FieldLabel>
-                  <Textarea
-                    id="copilot-issue-note"
-                    rows={3}
-                    value={copilotNote}
-                    onChange={(e) => setCopilotNote(e.target.value)}
-                    placeholder={t("copilot.promptPlaceholder")}
-                  />
-                </div>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCopilotTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              onClick={launchCopilot}
-              disabled={copilotBusy || !copilotByokId || (byokKeys !== null && byokKeys.length === 0)}
-            >
-              <Bot className="h-4 w-4" />
-              {t("copilot.launch")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CopilotLaunchDialog
+        open={copilotTarget !== null}
+        number={copilotTarget?.number ?? 0}
+        byokKeys={byokKeys}
+        byokId={copilotByokId}
+        onByokChange={setCopilotByokId}
+        note={copilotNote}
+        onNoteChange={setCopilotNote}
+        busy={copilotBusy}
+        onSubmit={launchCopilot}
+        onCancel={() => setCopilotTarget(null)}
+      />
 
       <ConfirmDialog
         open={deleteTarget !== null}

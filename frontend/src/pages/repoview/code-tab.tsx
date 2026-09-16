@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
-  Copy,
   FilePlus2,
   FileText,
-  Folder,
   FolderPlus,
   FolderTree,
   GitBranch,
@@ -15,12 +13,11 @@ import {
   List,
   Pencil,
   Plus,
-  Search,
   Tag as TagIcon,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Blame, type Blob, type Branch, type Commit, type SearchResult, type Tag, type TreeEntry } from "@/lib/api";
+import { api, type Blame, type Blob, type Branch, type Commit, type Tag, type TreeEntry } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,14 +29,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn, formatDate, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -49,15 +38,10 @@ import CodeMirrorEditor from "@/components/code-editor-lazy";
 import FileTree from "@/components/file-tree";
 import Outline from "@/components/outline";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { DiffView, type DiffFileInfo } from "@/components/diff-view";
-import { CommitMessage } from "@/components/commit-message";
+import TreeListing from "@/components/tree-listing";
+import { CodeBlock } from "@/components/code-block";
+import { CodeSearch } from "@/components/code-search";
+import { CompareDialog } from "@/components/compare-dialog";
 
 function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
@@ -65,140 +49,6 @@ function isMarkdown(path: string): boolean {
   return /^readme(\.(md|markdown|txt))?$/.test(lower) || /\.(md|markdown)$/.test(lower);
 }
 
-function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }) {
-  return (
-    <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre text-xs">{text}</code>
-      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCopy}>
-        <Copy className="h-3.5 w-3.5" />
-      </Button>
-    </div>
-  );
-}
-
-/** 高亮命中子串（大小写不敏感，只高亮第一处） */
-function HighlightText({ text, q }: { text: string; q: string }) {
-  if (!q) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
-  if (idx < 0) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark className="rounded-sm bg-yellow-200/80 text-inherit dark:bg-yellow-500/30">
-        {text.slice(idx, idx + q.length)}
-      </mark>
-      {text.slice(idx + q.length)}
-    </>
-  );
-}
-
-/** 代码搜索：防抖 300ms，Enter 立即搜索 */
-function CodeSearch({
-  owner,
-  name,
-  refName,
-  setParams,
-  actions,
-}: {
-  owner: string;
-  name: string;
-  refName: string;
-  setParams: (patch: Record<string, string | null>) => void;
-  /** 与搜索框同行的操作按钮（新建文件/文件夹等） */
-  actions?: ReactNode;
-}) {
-  const { t } = useI18n();
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<SearchResult[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(true);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const run = useMemo(
-    () => async (query: string) => {
-      const trimmed = query.trim();
-      if (!trimmed) {
-        setResults(null);
-        return;
-      }
-      setLoading(true);
-      try {
-        setResults(await api.searchRepo(owner, name, trimmed, refName || undefined));
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : String(e));
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [owner, name, refName],
-  );
-
-  const onChange = (value: string) => {
-    setQ(value);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => run(value), 300);
-  };
-
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 basis-52">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (timer.current) clearTimeout(timer.current);
-                run(q);
-              }
-            }}
-            placeholder={t("search.placeholder")}
-            className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
-        {actions}
-      </div>
-      {results !== null && (
-        <div className="rounded-lg border bg-card">
-          <button
-            type="button"
-            className="flex w-full items-center gap-2 border-b px-3 py-2 text-xs text-muted-foreground"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {loading ? "…" : t("search.count", { count: results.length })}
-            <span className="ml-auto">{expanded ? "▾" : "▸"}</span>
-          </button>
-          {expanded && (
-            <div className="max-h-72 overflow-auto p-1">
-              {results.length === 0 && !loading && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">{t("search.empty")}</p>
-              )}
-              {results.map((r, i) => (
-                <button
-                  key={`${r.path}:${r.line}:${i}`}
-                  className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-muted"
-                  onClick={() => setParams({ file: r.path, line: String(r.line) })}
-                  title={`${r.path}:${r.line}`}
-                >
-                  <span className="mr-2 font-mono font-medium">{r.path}:{r.line}</span>
-                  <span className="font-mono text-muted-foreground">
-                    <HighlightText text={r.text} q={q.trim()} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export interface CodeTabProps {
   owner: string;
@@ -228,117 +78,6 @@ export interface CodeTabProps {
   copy: (text: string) => void;
 }
 
-function CompareDialog({
-  owner,
-  name,
-  branches,
-  tags,
-  defaultRef,
-  open,
-  onOpenChange,
-}: {
-  owner: string;
-  name: string;
-  branches: Branch[];
-  tags: Tag[];
-  defaultRef: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const { t, to } = useI18n();
-  const [base, setBase] = useState("");
-  const [head, setHead] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
-
-  const options = useMemo(
-    () => [...branches.map((b) => b.name), ...tags.map((tg) => tg.name)],
-    [branches, tags],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    setResult(null);
-    const def = defaultRef || branches[0]?.name || "";
-    setBase((cur) => cur || branches[0]?.name || def);
-    setHead((cur) => cur || def);
-  }, [open, branches, defaultRef]);
-
-  const run = async () => {
-    if (!base || !head || base === head) return;
-    setBusy(true);
-    try {
-      const r = await api.compare(owner, name, base, head);
-      setResult({ files: r.files, patch: r.patch });
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitCompare className="h-4 w-4" />
-            {t("compare.title")}
-          </DialogTitle>
-          <DialogDescription>{t("compare.hint")}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            {t("compare.base")}
-            <select
-              className="h-9 min-w-40 rounded-md border bg-background px-2 text-sm"
-              value={base}
-              onChange={(e) => setBase(e.target.value)}
-            >
-              {options.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="pb-2 text-muted-foreground">→</span>
-          <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-            {t("compare.head")}
-            <select
-              className="h-9 min-w-40 rounded-md border bg-background px-2 text-sm"
-              value={head}
-              onChange={(e) => setHead(e.target.value)}
-            >
-              {options.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-          </label>
-          <Button
-            size="sm"
-            className="gap-1.5"
-            disabled={busy || !base || !head || base === head}
-            onClick={run}
-          >
-            <GitCompare className="h-3.5 w-3.5" />
-            {t("compare.run")}
-          </Button>
-        </div>
-        {result &&
-          (result.files.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("compare.empty")}
-            </p>
-          ) : (
-            <DiffView files={result.files} patch={result.patch} />
-          ))}
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function CodeTab({
   owner,
@@ -387,6 +126,14 @@ export default function CodeTab({
 
   const openFile = (file: string) => {
     setParams({ file, line: null, blame: null });
+  };
+
+  // 目录列表「编辑」：先取文件内容，再打开编辑对话框
+  const editPath = (targetPath: string) => {
+    api
+      .blob(owner, name, refName, targetPath)
+      .then((b) => b.encoding === "utf-8" && openEditDialog(targetPath, b.content))
+      .catch((e) => toast.error(apiErrorMsg(to, e)));
   };
 
   // README / Markdown 文件里的仓库内引用：在代码浏览器内跳转，保持当前 ref。
@@ -802,114 +549,14 @@ export default function CodeTab({
       )}
 
       {!emptyRepo && !error && !blob && (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table className="min-w-[860px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("common.name")}</TableHead>
-                <TableHead className="w-28 text-right">{t("common.size")}</TableHead>
-                <TableHead className="w-72">{t("fops.lastCommit")}</TableHead>
-                <TableHead className="w-32">{t("common.author")}</TableHead>
-                <TableHead className="w-40 whitespace-nowrap">{t("fops.lastCommitTime")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries
-                .filter((e) => e.name !== ".gitkeep")
-                .map((entry) => {
-                const targetPath = currentDir ? currentDir + "/" + entry.name : entry.name;
-                return (
-                <TableRow key={entry.name}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="flex min-w-0 items-center gap-2 hover:underline"
-                        onClick={() => openEntry(entry)}
-                      >
-                        {entry.type === "tree" ? (
-                          <Folder className="h-4 w-4 shrink-0 text-blue-500" />
-                        ) : (
-                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        )}
-                        <span className={cn("truncate", entry.type === "tree" ? "font-medium" : "")}>
-                          {entry.name}
-                        </span>
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                            <ChevronRight className="h-3.5 w-3.5 rotate-90" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {entry.type === "blob" && (
-                            <DropdownMenuItem
-                              onClick={() =>
-                                api
-                                  .blob(owner, name, refName, targetPath)
-                                  .then((b) => b.encoding === "utf-8" && openEditDialog(targetPath, b.content))
-                                  .catch((e) => toast.error(apiErrorMsg(to, e)))
-                              }
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              {t("fops.editFile")}
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => removeEntry(targetPath, entry.type === "tree")}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            {entry.type === "tree" ? t("fops.deleteFolder") : t("fops.deleteFile")}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">
-                    {entry.type === "blob" ? formatSize(entry.size) : "-"}
-                  </TableCell>
-                  <TableCell className="w-72 max-w-[18rem] text-sm text-muted-foreground">
-                    {entry.last_commit || entry.modified_msg ? (
-                      <div className="flex min-w-0 items-center gap-2">
-                        {entry.last_commit && (
-                          <code
-                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
-                            title={entry.last_commit}
-                          >
-                            {entry.last_commit.slice(0, 7)}
-                          </code>
-                        )}
-                        <CommitMessage message={entry.modified_msg} />
-                      </div>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    <span className="block truncate" title={entry.modified_by || undefined}>
-                      {entry.modified_by || "-"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {entry.modified_at ? formatDate(entry.modified_at, locale) : "-"}
-                  </TableCell>
-                </TableRow>
-                );
-                })}
-              {entries.filter((e) => e.name !== ".gitkeep").length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
-                    {t("repo.emptyDir")}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <TreeListing
+          entries={entries}
+          currentDir={currentDir}
+          locale={locale}
+          onOpenEntry={openEntry}
+          onEditPath={editPath}
+          onRemove={removeEntry}
+        />
       )}
 
       {!emptyRepo && !error && !blob && readmeContent !== null && readmeEntry && (
@@ -995,3 +642,4 @@ export default function CodeTab({
     </div>
   );
 }
+
