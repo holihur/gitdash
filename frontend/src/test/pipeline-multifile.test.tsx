@@ -129,4 +129,17 @@ describe("RepoPipeline multi-file", () => {
       }),
     );
   });
+
+  it("renders the pipeline documentation tabs", async () => {
+    const user = userEvent.setup();
+    renderPipeline();
+    await screen.findByRole("table");
+
+    expect(screen.getByText("Pipeline documentation")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: /dsl fields/i }));
+    expect(await screen.findByText("job_timeout")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: /lifecycle/i }));
+    expect(await screen.findByText(/cancel stops/i)).toBeInTheDocument();
+  });
 });
