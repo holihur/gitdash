@@ -613,6 +613,8 @@ export const zhCN: Messages = {
       dslOn: "自动触发事件：push、pull_request、schedule、workflow_dispatch（默认 push）。手动触发始终允许。",
       dslSchedule: "cron 表达式（5 字段：分 时 日 月 周）；需在 `on` 中包含 `schedule`。",
       dslEnv: "注入每个步骤的环境变量，`KEY=VALUE`。",
+      dslSecrets: "允许注入为环境变量的仓库 secret 名称白名单（值静态加密，日志中打码）。",
+      dslCache: "缓存块：`key`（桶名，默认 default）与 `paths`（相对工作区的路径），在多次运行间保留。",
       dslVolumes: "额外 `host:container[:opts]` 挂载；宿主路径必须在服务端允许的目录下。",
       dslRunsOn: "runner 标签；设置后派发给匹配的自托管 runner，而非本地 Docker。",
       dslSteps: "1～20 个有序步骤；每步含 `name`、`run` 或 `parallel:` 子步骤，以及可选的 `when` 条件。",

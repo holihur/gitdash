@@ -15,6 +15,11 @@ image: alpine:3.19  # 可选：容器镜像；省略则直接在宿主 sh 执行
 env:
   - CGO_ENABLED=0
 # runs-on: [docker]   # 可选：指定远程 runner 标签
+# secrets: [TOKEN]    # 可选：引用仓库 secret（在仓库设置页配置，日志中打码）
+# cache:              # 可选：跨运行缓存（key 默认 default）
+#   key: deps
+#   paths:
+#     - vendor
 steps:
   - name: build
     run: echo build
@@ -30,6 +35,8 @@ const DSL_FIELDS: [string, string][] = [
   ["on", "dslOn"],
   ["schedule", "dslSchedule"],
   ["env", "dslEnv"],
+  ["secrets", "dslSecrets"],
+  ["cache", "dslCache"],
   ["volumes", "dslVolumes"],
   ["runs-on", "dslRunsOn"],
   ["steps", "dslSteps"],

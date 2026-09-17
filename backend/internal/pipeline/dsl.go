@@ -14,6 +14,11 @@
 //	  - "0 2 * * *"
 //	env:                    # 可选：注入容器的环境变量
 //	  - CGO_ENABLED=0
+//	secrets: [TOKEN]        # 可选：引用仓库 secret（设置页配置），日志中打码
+//	cache:                  # 可选：跨运行缓存（key 默认 default）
+//	  key: deps
+//	  paths:
+//	    - vendor
 //	steps:                  # 必填：1..20 个步骤单元（并行子步骤各自计数），顺序执行，任一失败即终止
 //	  - name: build
 //	    run: go build ./...
@@ -60,6 +65,8 @@ const (
 	MaxSchedules = 5
 	// MaxSecrets 单条流水线可引用的 secret 名称上限。
 	MaxSecrets = 50
+	// MaxCachePaths 单条流水线可缓存/归档的路径数上限。
+	MaxCachePaths = 10
 )
 
 // DefaultStepTimeout 单步默认超时，可被 GITDASH_PIPELINE_DEFAULT_TIMEOUT 覆盖
@@ -86,7 +93,10 @@ type Config struct {
 	Env        []string
 	// Secrets 允许注入的仓库 secret 名称白名单（值由服务端解析，按名注入为环境变量）。
 	Secrets []string
-	Volumes []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
+	// CacheKey 缓存桶名（默认 default）；CachePaths 为相对工作区、需在运行间保留的路径。
+	CacheKey   string
+	CachePaths []string
+	Volumes    []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
 	RunsOn     []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
 	Steps      []Step
 	// On 可选：自动触发事件白名单。省略时仅 push 生效（手动触发始终允许）。
@@ -183,6 +193,7 @@ var (
 	imageRe    = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._:/-]{0,127}$`)
 	stepNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 	envKeyRe   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	cacheKeyRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 )
 
 // Parse 解析 DSL 文本（拒绝制表符缩进，未知顶层键报错）。
@@ -247,6 +258,15 @@ func Parse(data []byte) (*Config, error) {
 				cfg.Env = append(cfg.Env, k+"="+v)
 				return nil
 			})
+			if err != nil {
+				return nil, err
+			}
+		case "cache":
+			if val != "" {
+				return nil, fmt.Errorf("line %d: cache takes a block (key / paths)", i+1)
+			}
+			var err error
+			i, err = readCache(lines, i+1, cfg)
 			if err != nil {
 				return nil, err
 			}
@@ -348,7 +368,7 @@ func Parse(data []byte) (*Config, error) {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, volumes, runs-on, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, cache, volumes, runs-on, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -384,6 +404,15 @@ func (c *Config) validate() error {
 	}
 	if len(c.Secrets) > MaxSecrets {
 		return fmt.Errorf("too many secrets (max %d)", MaxSecrets)
+	}
+	if len(c.CachePaths) > MaxCachePaths {
+		return fmt.Errorf("too many cache paths (max %d)", MaxCachePaths)
+	}
+	if len(c.CachePaths) == 0 && c.CacheKey != "" {
+		return fmt.Errorf("cache key requires cache paths")
+	}
+	if len(c.CachePaths) > 0 && c.CacheKey == "" {
+		c.CacheKey = "default"
 	}
 	for i, s := range c.Steps {
 		if err := validateStep("step", i+1, s); err != nil {
@@ -541,6 +570,109 @@ func readListItems(lines []string, i int, add func(item string, lineNo int) erro
 		i++
 	}
 	return i, nil
+}
+
+// readCache 解析 cache 块：key（可选）+ paths（相对工作区的缩进列表）。
+func readCache(lines []string, start int, cfg *Config) (int, error) {
+	i := start
+	for i < len(lines) {
+		line := lines[i]
+		if blankOrComment(line) {
+			i++
+			continue
+		}
+		ind := indentOf(line)
+		if ind < 2 {
+			break
+		}
+		if ind != 2 {
+			return i, fmt.Errorf("line %d: unexpected indentation in cache block", i+1)
+		}
+		key, val, err := splitKeyValue(line, i+1)
+		if err != nil {
+			return i, err
+		}
+		switch key {
+		case "key":
+			if val == "" || !cacheKeyRe.MatchString(val) {
+				return i, fmt.Errorf("line %d: invalid cache key %q (must match [A-Za-z0-9][A-Za-z0-9._-]*)", i+1, val)
+			}
+			cfg.CacheKey = val
+			i++
+		case "paths":
+			if val != "" {
+				return i, fmt.Errorf("line %d: cache paths takes an indented list", i+1)
+			}
+			var rerr error
+			i, rerr = readNestedList(lines, i+1, 4, func(item string, lineNo int) error {
+				if err := validateCachePath(item); err != nil {
+					return fmt.Errorf("line %d: %w", lineNo, err)
+				}
+				cfg.CachePaths = append(cfg.CachePaths, item)
+				return nil
+			})
+			if rerr != nil {
+				return i, rerr
+			}
+		default:
+			return i, fmt.Errorf("line %d: unknown cache key %q (allowed: key, paths)", i+1, key)
+		}
+	}
+	if len(cfg.CachePaths) == 0 {
+		return i, fmt.Errorf("line %d: cache block requires a non-empty paths list", start)
+	}
+	return i, nil
+}
+
+// readNestedList 消费指定缩进的 `- item` 列表；缩进低于 listInd 即返回上层。
+func readNestedList(lines []string, i, listInd int, add func(item string, lineNo int) error) (int, error) {
+	found := false
+	for i < len(lines) {
+		line := lines[i]
+		if blankOrComment(line) {
+			i++
+			continue
+		}
+		ind := indentOf(line)
+		if ind < listInd {
+			break
+		}
+		trimmed := strings.TrimSpace(line)
+		if ind != listInd || !strings.HasPrefix(trimmed, "- ") {
+			return i, fmt.Errorf("line %d: expected list item at indent %d", i+1, listInd)
+		}
+		item := strings.TrimSpace(unquote(stripComment(trimmed[2:])))
+		if item == "" {
+			return i, fmt.Errorf("line %d: empty list item", i+1)
+		}
+		if err := add(item, i+1); err != nil {
+			return i, err
+		}
+		found = true
+		i++
+	}
+	if !found {
+		return i, fmt.Errorf("line %d: expected at least one list item", i+1)
+	}
+	return i, nil
+}
+
+// validateCachePath 校验缓存路径：必须位于工作区内的相对路径。
+func validateCachePath(p string) error {
+	if p == "" {
+		return fmt.Errorf("cache path cannot be empty")
+	}
+	if len(p) > 512 {
+		return fmt.Errorf("cache path too long")
+	}
+	if strings.HasPrefix(p, "/") || filepath.IsAbs(p) {
+		return fmt.Errorf("cache path must be relative to the workspace")
+	}
+	clean := filepath.Clean(p)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("cache path must stay inside the workspace")
+	}
+	return nil
 }
 
 // readSteps 消费一段列表：`- ` 项目落在 listInd 缩进，字段行落在更深缩进。

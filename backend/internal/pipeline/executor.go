@@ -41,6 +41,8 @@ func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, lo
 	wctx := WhenCtx{Ref: job.Ref, Event: job.Event, Sha: job.SHA, Repo: job.Owner + "/" + job.Repo}
 	total := cfg.UnitCount()
 	done := 0
+	// 运行开始前恢复缓存（失败不影响运行）
+	cacheRestore(cfg, job, dir, logSink)
 	for _, step := range cfg.Steps {
 		if step.whenCond != nil && !step.when(wctx) {
 			_, _ = fmt.Fprintf(logSink, "\n==> [%d/%d] %s (skipped: when \"%s\" not satisfied)\n",
@@ -72,6 +74,8 @@ func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, lo
 			progress(done)
 		}
 	}
+	// 全部步骤成功后保存缓存
+	cacheSave(cfg, job, dir, logSink)
 	return nil
 }
 

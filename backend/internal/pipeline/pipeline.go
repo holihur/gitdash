@@ -193,7 +193,11 @@ func Init(dataDir string) error {
 		DefaultStepTimeout = d
 	}
 	logsDir = filepath.Join(dataDir, "pipelines")
-	return os.MkdirAll(logsDir, 0o755)
+	cacheDir = filepath.Join(dataDir, "cache")
+	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+		return err
+	}
+	return os.MkdirAll(cacheDir, 0o755)
 }
 
 // LogPath 运行日志落盘位置：data/pipelines/{owner}/{repo}/run-{id}.log。

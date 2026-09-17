@@ -615,6 +615,8 @@ export const en = {
       dslOn: "Automatic triggers: push, pull_request, schedule, workflow_dispatch (default: push). Manual runs are always allowed.",
       dslSchedule: "Cron expressions (5 fields: minute hour day month weekday); requires `schedule` in `on`.",
       dslEnv: "Environment variables injected into every step, `KEY=VALUE`.",
+      dslSecrets: "Allowlisted repo secret names injected as environment variables (values are encrypted at rest and masked in logs).",
+      dslCache: "Cache block: `key` (bucket, default `default`) and `paths` (workspace-relative paths) persisted between runs.",
       dslVolumes: "Extra `host:container[:opts]` mounts; the host path must be under the server's allowed directory.",
       dslRunsOn: "Runner labels. When set, the run is dispatched to a matching self-hosted runner instead of the local Docker.",
       dslSteps: "1–20 ordered steps. Each step has a `name`, either `run` or `parallel:` sub-steps, and an optional `when` condition.",
