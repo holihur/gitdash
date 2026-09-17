@@ -710,6 +710,8 @@ export const en = {
     count: "{count} pull requests",
     new: "New pull request",
     newDialogTitle: "New pull request",
+    patchHint: "Prefer email? Submit a patch series",
+    patchHintDesc: "Send an mbox from git format-patch or git send-email to patches+{owner}+{repo}@<mail domain>; gitdash applies it with git am and opens the pull request automatically.",
     titlePlaceholder: "Title of your change",
     source: "Source branch",
     target: "Target branch",

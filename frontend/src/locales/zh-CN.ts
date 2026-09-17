@@ -708,6 +708,8 @@ export const zhCN: Messages = {
     count: "{count} 个 Pull Request",
     new: "新建 Pull Request",
     newDialogTitle: "新建 Pull Request",
+    patchHint: "更喜欢用邮件？提交补丁系列",
+    patchHintDesc: "把 git format-patch / git send-email 产出的 mbox 发到 patches+{owner}+{repo}@<邮件域名>，gitdash 会用 git am 应用并自动开 PR。",
     titlePlaceholder: "本次改动的标题",
     source: "源分支",
     target: "目标分支",

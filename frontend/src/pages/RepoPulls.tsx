@@ -235,6 +235,15 @@ export default function RepoPulls({
         </Dialog>
       </div>
 
+      <details className="rounded-lg border bg-card px-3 py-2 text-sm">
+        <summary className="cursor-pointer text-muted-foreground">
+          {t("pulls.patchHint")}
+        </summary>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {t("pulls.patchHintDesc", { owner, repo: name })}
+        </p>
+      </details>
+
       {error && (
         <Card className="border-destructive">
           <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
