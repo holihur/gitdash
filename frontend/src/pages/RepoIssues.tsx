@@ -1,46 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  Bot,
-  CheckCircle2,
-  Circle,
-  Flag,
-  MessageSquare,
-  Pencil,
-  Pin,
-  PinOff,
-  Plus,
-  Search,
-  Tag,
-  Trash2,
-} from "lucide-react";
+import { Flag, MessageSquare, Plus, Search, Tag } from "lucide-react";
 import { api, type ByokKey, type Issue, type Label, type Milestone } from "@/lib/api";
 import { useQueryState } from "@/lib/query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import Pagination from "@/components/ui/pagination";
-import { cn, formatDate } from "@/lib/utils";
-import { dateLocale, useI18n } from "@/lib/i18n";
+import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import LabelChip from "@/components/label-chip";
-import { MarkdownView } from "@/components/markdown";
-import CommentSection from "@/components/comment-section";
-import LabelsManager from "@/components/labels-manager";
-import MilestonesManager from "@/components/milestones-manager";
 import ListSkeleton from "@/components/list-skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
+import LabelsManager from "@/components/labels-manager";
+import MilestonesManager from "@/components/milestones-manager";
 import { CreateIssueDialog, EditIssueDialog, CopilotLaunchDialog } from "@/components/issues/dialogs";
-
-interface Draft {
-  labels: number[];
-  milestone: number; // 0 = 无
-}
+import { IssueItem, type IssueDraft } from "@/components/issues/issue-item";
+import { IssueFilters } from "@/components/issues/issue-filters";
 
 export default function RepoIssues({ owner, name, role }: { owner: string; name: string; role?: "owner" | "read" | "write" }) {
-  const { t, lang, to } = useI18n();
-  const locale = dateLocale(lang);
+  const { t, to } = useI18n();
   const navigate = useNavigate();
   const canWrite = role === "owner" || role === "write";
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -66,7 +44,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
-  const [drafts, setDrafts] = useState<Record<number, Draft>>({});
+  const [drafts, setDrafts] = useState<Record<number, IssueDraft>>({});
   const [savingMeta, setSavingMeta] = useState<number | null>(null);
 
   // 管理对话框
@@ -359,53 +337,15 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder={t("issues.searchPlaceholder")}
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          {(["", "open", "closed"] as const).map((s) => (
-            <Button
-              key={s || "all"}
-              size="sm"
-              variant={stateFilter === s ? "secondary" : "outline"}
-              onClick={() => setStateFilter(s)}
-            >
-              {s === ""
-                ? t("issues.filterAll")
-                : s === "open"
-                  ? t("issues.open")
-                  : t("issues.closed")}
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      {labels.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-xs text-muted-foreground">{t("issues.filterHint")}</span>
-          {labels.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              onClick={() => setFilterLabel(filterLabel === l.id ? null : l.id)}
-              className={cn(
-                "rounded-full outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring",
-                filterLabel === l.id ? "ring-2 ring-ring ring-offset-1" : "opacity-70 hover:opacity-100",
-              )}
-              title={l.name}
-            >
-              <LabelChip label={l} />
-            </button>
-          ))}
-        </div>
-      )}
+      <IssueFilters
+        searchInput={searchInput}
+        onSearchInput={setSearchInput}
+        stateFilter={stateFilter}
+        onStateFilter={setStateFilter}
+        labels={labels}
+        filterLabel={filterLabel}
+        onFilterLabel={setFilterLabel}
+      />
 
       {error && !loading && (
         <Card className="border-destructive">
@@ -465,7 +405,6 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
       {!loading && shown.length > 0 && (
         <div className="divide-y divide-border overflow-hidden rounded-lg border bg-card">
           {shown.map((issue) => {
-            const isOpen = issue.state === "open";
             const busy = busyIds.has(issue.id);
             const openDetail = expanded === issue.number;
             const issueLabels = issue.labels ?? [];
@@ -475,182 +414,29 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
               draft.labels.some((id) => !issueLabels.some((l) => l.id === id)) ||
               (issue.milestone?.id ?? 0) !== draft.milestone;
             return (
-              <div key={issue.id}>
-                <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-3">
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-start gap-2 text-left"
-                    onClick={() => toggleExpand(issue)}
-                  >
-                    {isOpen ? (
-                      <Circle className="mt-0.5 h-4 w-4 shrink-0 fill-green-500 text-green-600" />
-                    ) : (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1">
-                        {issue.pinned && (
-                          <Pin className="h-3.5 w-3.5 shrink-0 fill-current text-amber-500" />
-                        )}
-                        <span
-                          className={cn(
-                            "min-w-0 truncate font-medium hover:underline",
-                            !isOpen && "text-muted-foreground",
-                          )}
-                        >
-                          {issue.title}
-                        </span>
-                      </span>
-                      {(issueLabels.length > 0 || issue.milestone) && (
-                        <span className="mt-1 flex flex-wrap items-center gap-1">
-                          {issueLabels.map((l) => (
-                            <LabelChip key={l.id} label={l} />
-                          ))}
-                          {issue.milestone && (
-                            <span
-                              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
-                              title={issue.milestone.description || issue.milestone.title}
-                            >
-                              <Flag className="h-3 w-3" />
-                              <span className="max-w-40 truncate">{issue.milestone.title}</span>
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                        #{issue.number} ·{" "}
-                        {isOpen
-                          ? t("issues.openedOn", {
-                              author: issue.author,
-                              date: formatDate(issue.created_at, locale),
-                            })
-                          : t("issues.closedOn", {
-                              author: issue.author,
-                              date: formatDate(issue.closed_at ?? issue.updated_at, locale),
-                            })}
-                      </span>
-                    </span>
-                  </button>
-                  <div className="flex shrink-0 items-center gap-2 pl-6 sm:pl-0">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0"
-                      disabled={busy}
-                      onClick={() => setState(issue, isOpen ? "closed" : "open")}
-                    >
-                      {isOpen ? t("issues.close") : t("issues.reopen")}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 shrink-0 p-0"
-                      title={issue.pinned ? t("issues.unpin") : t("issues.pin")}
-                      disabled={busy}
-                      onClick={() => togglePin(issue)}
-                    >
-                      {issue.pinned ? (
-                        <PinOff className="h-3.5 w-3.5" />
-                      ) : (
-                        <Pin className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 shrink-0 p-0"
-                      title={t("issues.edit")}
-                      onClick={() => openEdit(issue)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    {canWrite && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 w-8 shrink-0 p-0"
-                        title={t("issues.fixWithCopilot")}
-                        onClick={() => openCopilot(issue)}
-                      >
-                        <Bot className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 shrink-0 p-0 text-destructive"
-                      title={t("issues.delete")}
-                      onClick={() => setDeleteTarget(issue)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                {openDetail && (
-                  <div className="space-y-3 border-t bg-muted/30 px-4 py-3">
-                    {issue.body.trim() ? (
-                      <MarkdownView text={issue.body} />
-                    ) : (
-                      <p className="text-sm text-muted-foreground">{t("issues.noBody")}</p>
-                    )}
-                    <div className="space-y-3 rounded-lg border bg-card p-3">
-                      <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                          {t("issues.labels")}
-                        </p>
-                        {labels.length === 0 ? (
-                          <p className="text-xs text-muted-foreground">{t("labels.emptyHint")}</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5">
-                            {labels.map((l) => {
-                              const selected = draft.labels.includes(l.id);
-                              return (
-                                <button
-                                  key={l.id}
-                                  type="button"
-                                  onClick={() => toggleDraftLabel(issue.number, l.id)}
-                                  className={cn(
-                                    "rounded-full outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring",
-                                    selected ? "ring-2 ring-ring ring-offset-1" : "opacity-50 hover:opacity-80",
-                                  )}
-                                >
-                                  <LabelChip label={l} />
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          {t("issues.milestone")}
-                        </p>
-                        <select
-                          value={draft.milestone || ""}
-                          onChange={(e) => setDraftMilestone(issue.number, Number(e.target.value) || 0)}
-                          className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <option value="">{t("issues.noMilestone")}</option>
-                          {milestones.map((m) => (
-                            <option key={m.id} value={m.id} disabled={m.state === "closed"}>
-                              {m.title}
-                              {m.state === "closed" ? ` · ${t("issues.closed")}` : ""}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          size="sm"
-                          disabled={savingMeta === issue.number || !metaChanged}
-                          onClick={() => saveMeta(issue)}
-                        >
-                          {t("issues.saveMeta")}
-                        </Button>
-                      </div>
-                    </div>
-                    <CommentSection owner={owner} name={name} number={issue.number} />
-                  </div>
-                )}
-              </div>
+              <IssueItem
+                key={issue.id}
+                issue={issue}
+                openDetail={openDetail}
+                busy={busy}
+                draft={draft}
+                labels={labels}
+                milestones={milestones}
+                canWrite={canWrite}
+                savingMeta={savingMeta === issue.number}
+                metaChanged={metaChanged}
+                owner={owner}
+                name={name}
+                onToggleExpand={() => toggleExpand(issue)}
+                onToggleState={() => setState(issue, issue.state === "open" ? "closed" : "open")}
+                onTogglePin={() => togglePin(issue)}
+                onEdit={() => openEdit(issue)}
+                onFixWithCopilot={() => openCopilot(issue)}
+                onDelete={() => setDeleteTarget(issue)}
+                onToggleLabel={(id) => toggleDraftLabel(issue.number, id)}
+                onSetMilestone={(id) => setDraftMilestone(issue.number, id)}
+                onSaveMeta={() => saveMeta(issue)}
+              />
             );
           })}
         </div>

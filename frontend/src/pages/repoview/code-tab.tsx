@@ -1,37 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ChevronDown,
-  FilePlus2,
-  FileText,
-  FolderPlus,
-  FolderTree,
-  GitCommitHorizontal,
-  List,
-  Plus,
-} from "lucide-react";
+import { ChevronDown, FilePlus2, FolderPlus, FolderTree, List, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Blame, type Blob, type Branch, type Commit, type Tag, type TreeEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import { MarkdownWithToc } from "@/components/markdown";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import FileTree from "@/components/file-tree";
 import Outline from "@/components/outline";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import TreeListing from "@/components/tree-listing";
-import BlobView from "./blob-view";
 import CodeRefBar from "./code-ref-bar";
-import { CodeBlock } from "@/components/code-block";
 import { CodeSearch } from "@/components/code-search";
+import { RepoCodeBody } from "./repo-code-body";
 
 
 
@@ -178,8 +165,6 @@ export default function CodeTab({
     jumpToLine(line);
   };
 
-  const readmeEntry = readmeEntryName ? { name: readmeEntryName } : null;
-
   // 面包屑：打开文件时按文件完整路径显示，避免与当前目录不同步
   const crumbs = blob ? blob.path.split("/") : path;
 
@@ -307,93 +292,33 @@ export default function CodeTab({
         </aside>
       )}
 
-      <div className="min-w-0 space-y-4">
-
-      {!emptyRepo && !error && latestCommit && (
-        <div className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2 text-sm">
-          <GitCommitHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate font-medium" title={latestCommit.message}>
-            {latestCommit.message}
-          </span>
-          <span className="hidden shrink-0 text-muted-foreground sm:inline">
-            {latestCommit.author}
-          </span>
-          <code
-            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
-            title={latestCommit.sha}
-          >
-            {latestCommit.sha.slice(0, 7)}
-          </code>
-          <span className="shrink-0 whitespace-nowrap text-muted-foreground">
-            {formatDate(latestCommit.date, locale)}
-          </span>
-        </div>
-      )}
-
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
-        </Card>
-      )}
-
-      {emptyRepo && !error && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t("repo.emptyRepo")}</CardTitle>
-            <CardDescription>{t("repo.emptyRepoHint")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {commands.map((cmd) => (
-              <CodeBlock key={cmd} text={cmd} onCopy={() => copy(cmd)} />
-            ))}
-            <p className="pt-2 text-xs text-muted-foreground">{t("repo.sshHint")}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {!emptyRepo && !error && blob && (
-        <BlobView
-          owner={owner}
-          name={name}
-          refName={refName}
-          blob={blob}
-          blame={blame}
-          blameParam={blameParam}
-          codeHostRef={codeHostRef}
-          onToggleBlame={() => setParams({ blame: blameParam ? null : "1" })}
-          onEdit={() => openEditDialog(blob.path, blob.content)}
-          onDelete={() => removeEntry(blob.path, false)}
-          onOpenRepoLink={openRepoLink}
-        />
-      )}
-
-      {!emptyRepo && !error && !blob && (
-        <TreeListing
-          entries={entries}
-          currentDir={currentDir}
-          locale={locale}
-          onOpenEntry={openEntry}
-          onEditPath={editPath}
-          onRemove={removeEntry}
-        />
-      )}
-
-      {!emptyRepo && !error && !blob && readmeContent !== null && readmeEntry && (
-        <div className="rounded-lg border bg-card">
-          <div className="flex items-center gap-2 border-b px-4 py-2">
-            <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">{readmeEntry.name}</span>
-          </div>
-          <div className="p-4">
-            <MarkdownWithToc
-              text={readmeContent}
-              repo={{ owner, name, ref: refName, path: readmePath }}
-              onOpenRepoLink={openRepoLink}
-            />
-          </div>
-        </div>
-      )}
-      </div>
+      <RepoCodeBody
+        owner={owner}
+        name={name}
+        refName={refName}
+        locale={locale}
+        latestCommit={latestCommit}
+        error={error}
+        emptyRepo={emptyRepo}
+        commands={commands}
+        copy={copy}
+        blob={blob}
+        blame={blame}
+        blameParam={blameParam}
+        codeHostRef={codeHostRef}
+        onToggleBlame={() => setParams({ blame: blameParam ? null : "1" })}
+        onEditBlob={openEditDialog}
+        onDeleteBlob={(p) => removeEntry(p, false)}
+        onOpenRepoLink={openRepoLink}
+        entries={entries}
+        currentDir={currentDir}
+        onOpenEntry={openEntry}
+        onEditPath={editPath}
+        onRemoveEntry={removeEntry}
+        readmeContent={readmeContent}
+        readmeEntryName={readmeEntryName}
+        readmePath={readmePath}
+      />
 
       {showOutline && blob && (
         <aside className="sticky top-20 hidden self-start rounded-lg border bg-card lg:block">

@@ -1,8 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { api, cloneCommand, type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
-import { buildRepoPath, parseRepoRoute, type RepoCodeKind, type RepoTab } from "@/lib/repo-url";
+import { api, cloneCommand } from "@/lib/api";
+import type { RepoTab } from "@/lib/repo-url";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabsListOverflow } from "@/components/ui/tabs-overflow";
@@ -15,6 +15,8 @@ import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import RefsDialog from "@/components/refs-dialog";
 import RepoHeader from "./repoview/repo-header";
 import ForkDialog from "./repoview/fork-dialog";
+import { useRepoRouting } from "./repoview/use-repo-routing";
+import { useRepoData } from "./repoview/use-repo-data";
 
 const CodeTab = lazy(() => import("./repoview/code-tab"));
 const CommitsTab = lazy(() => import("./repoview/commits-tab"));
@@ -29,104 +31,35 @@ const SettingsTab = lazy(() => import("./repoview/settings-tab"));
 export default function RepoView() {
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
-  const { owner = "", name = "", "*": splat = "" } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // 路径化路由派生：/repo/:owner/:name/{tree|blob|blame}/... 及其余 tab。
-  // ref / line 仍走查询参数（ref 可能包含 `/`，放路径里会与文件路径歧义）。
-  const route = useMemo(() => parseRepoRoute(splat), [splat]);
-  const tab: RepoTab = route.tab;
-  const fileParam = route.tab === "code" && route.kind !== "tree" ? route.path : "";
-  const path =
-    route.tab === "code" && route.kind === "tree" && route.path ? route.path.split("/") : [];
-  const currentDir = route.tab === "code" && route.kind === "tree" ? route.path : "";
-  const blameParam = route.tab === "code" && route.kind === "blame";
-  const urlRef = searchParams.get("ref") ?? "";
-  const lineParam = Number(searchParams.get("line")) || null;
+  const { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, setParams } =
+    useRepoRouting();
 
-  // 兼容既有 `setParams` 语义（CodeTab / tab 切换均调用），把变更翻译为路径化导航。
-  const setParams = useCallback(
-    (patch: Record<string, string | null>) => {
-      const nextTab: RepoTab = "tab" in patch ? ((patch.tab as RepoTab) ?? "code") : tab;
-      let kind: RepoCodeKind = route.kind;
-      let dirPath = route.kind === "tree" ? route.path : "";
-      let filePath = route.kind !== "tree" ? route.path : "";
-      let nextBlame = route.kind === "blame";
-      let nextRef = urlRef;
-      let nextLine: number | null = lineParam;
-      let nextHash = "";
+  const {
+    repo,
+    setRepo,
+    branches,
+    entries,
+    treeLatestCommit,
+    blob,
+    blame,
+    error,
+    missing,
+    readmeContent,
+    readmeEntryName,
+    tags,
+    ref,
+    refreshRefs,
+    refreshBranches,
+    reloadTree,
+  } = useRepoData({ owner, name, currentDir, fileParam, blameParam, urlRef, setParams });
 
-      if ("path" in patch) dirPath = patch.path ?? "";
-      if ("file" in patch) {
-        filePath = patch.file ?? "";
-        kind = filePath ? (nextBlame ? "blame" : "blob") : "tree";
-      }
-      if ("blame" in patch) {
-        nextBlame = patch.blame === "1" || patch.blame === "true";
-        if (filePath) kind = nextBlame ? "blame" : "blob";
-      }
-      if ("ref" in patch) nextRef = patch.ref ?? "";
-      if ("line" in patch) nextLine = patch.line ? Number(patch.line) : null;
-      // 支持跨文件锚点：patch.hash 不进查询参数，只拼成 URL 片段。
-      if ("hash" in patch) nextHash = patch.hash ?? "";
-
-      const pathname =
-        nextTab === "code"
-          ? buildRepoPath(owner, name, {
-              tab: "code",
-              kind,
-              path: kind === "tree" ? dirPath : filePath,
-            })
-          : buildRepoPath(owner, name, { tab: nextTab });
-
-      const next = new URLSearchParams(searchParams);
-      if (nextRef) next.set("ref", nextRef);
-      else next.delete("ref");
-      if (nextTab === "code" && nextLine && filePath) next.set("line", String(nextLine));
-      else next.delete("line");
-      const qs = next.toString();
-      navigate(`${pathname}${qs ? `?${qs}` : ""}${nextHash ? `#${nextHash}` : ""}`);
-    },
-    [owner, name, tab, route, urlRef, lineParam, searchParams, navigate],
-  );
-
-  // 兼容旧的查询参数式 URL（?tab=&path=&file=&blame=），自动重定向到路径化地址。
-  useEffect(() => {
-    const legacyTab = searchParams.get("tab");
-    const legacyPath = searchParams.get("path") ?? "";
-    const legacyFile = searchParams.get("file") ?? "";
-    const legacyBlame = searchParams.get("blame") === "1";
-    if (!legacyTab && !legacyPath && !legacyFile && !legacyBlame) return;
-    const kind: RepoCodeKind = legacyFile ? (legacyBlame ? "blame" : "blob") : "tree";
-    const pathname =
-      legacyTab && legacyTab !== "code"
-        ? buildRepoPath(owner, name, { tab: legacyTab as RepoTab })
-        : buildRepoPath(owner, name, { tab: "code", kind, path: legacyFile || legacyPath });
-    const next = new URLSearchParams(searchParams);
-    next.delete("tab");
-    next.delete("path");
-    next.delete("file");
-    next.delete("blame");
-    const qs = next.toString();
-    navigate(`${pathname}${qs ? `?${qs}` : ""}`, { replace: true });
-  }, [searchParams, navigate, owner, name]);
-
-  const [repo, setRepo] = useState<Repo | null>(null);
   // 仓库角色由后端按 owner / 协作者 / 组织角色计算；组织仓库的 owner 也是"owner"，
   // 不能用 me === owner 判断（组织仓库 owner 是组织名）。
   const isOwner = repo?.role === "owner";
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [entries, setEntries] = useState<TreeEntry[]>([]);
-  const [treeLatestCommit, setTreeLatestCommit] = useState<Commit | null>(null);
-  const [blob, setBlob] = useState<Blob | null>(null);
-  const [blame, setBlame] = useState<Blame | null>(null);
-  const [error, setError] = useState("");
-  const [missing, setMissing] = useState(false);
-  const [readmeContent, setReadmeContent] = useState<string | null>(null);
+
   const [fileOp, setFileOp] = useState<FileOp | null>(null);
-  const [loadTick, setLoadTick] = useState(0);
-  const [tags, setTags] = useState<Tag[]>([]);
   const [refsOpen, setRefsOpen] = useState(false);
   const [starBusy, setStarBusy] = useState(false);
   const [watchBusy, setWatchBusy] = useState(false);
@@ -134,23 +67,6 @@ export default function RepoView() {
   const [forkName, setForkName] = useState("");
   const [forkBusy, setForkBusy] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<{ path: string; isDir: boolean } | null>(null);
-
-  const ref =
-    urlRef ||
-    branches.find((b) => b.is_head)?.name ||
-    repo?.default_branch ||
-    branches[0]?.name ||
-    "";
-
-  const refreshRefs = useCallback(async () => {
-    try {
-      const [bs, ts] = await Promise.all([api.branches(owner, name), api.listTags(owner, name)]);
-      setBranches(bs);
-      setTags(ts);
-    } catch {
-      /* ignore */
-    }
-  }, [owner, name]);
 
   const copy = useCallback(
     (text: string) => {
@@ -210,114 +126,6 @@ export default function RepoView() {
     }
   };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [r, bs] = await Promise.all([api.getRepo(owner, name), api.branches(owner, name)]);
-        setRepo(r);
-        setBranches(bs);
-        api.listTags(owner, name).then(setTags).catch(() => undefined);
-      } catch (e) {
-        setMissing(true);
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-  }, [name, owner]);
-
-  const loadTree = useCallback(async () => {
-    void loadTick;
-    if (!ref) return;
-    try {
-      const data = await api.tree(owner, name, ref, currentDir);
-      setEntries(data.entries);
-      setTreeLatestCommit(data.latest_commit ?? null);
-      setBlob(null);
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, [name, owner, ref, currentDir, loadTick]);
-
-  useEffect(() => {
-    loadTree();
-  }, [loadTree]);
-
-  // blob 内容跟随 ?file= 参数加载
-  useEffect(() => {
-    let alive = true;
-    if (!fileParam || !ref) {
-      setBlob(null);
-      return;
-    }
-    api
-      .blob(owner, name, ref, fileParam)
-      .then((b) => {
-        if (alive) setBlob(b);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setBlob(null);
-        // 目录链接可能没有尾随 `/`（Markdown 相对链接常见）：先按目录尝试。
-        void (async () => {
-          try {
-            await api.tree(owner, name, ref, fileParam);
-            if (!alive) return;
-            setParams({ path: fileParam, file: null, line: null, blame: null });
-          } catch {
-            if (!alive) return;
-            setParams({ file: null });
-            toast.error(apiErrorMsg(to, err));
-          }
-        })();
-      });
-    return () => {
-      alive = false;
-    };
-  }, [fileParam, ref, owner, name, setParams, to]);
-
-  // blame 数据跟随 ?blame=1 & ?file= 参数加载
-  useEffect(() => {
-    let alive = true;
-    if (!blameParam || !fileParam || !ref) {
-      setBlame(null);
-      return;
-    }
-    api
-      .blame(owner, name, ref, fileParam)
-      .then((b) => {
-        if (alive) setBlame(b);
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setBlame(null);
-        toast.error(apiErrorMsg(to, e));
-      });
-    return () => {
-      alive = false;
-    };
-  }, [blameParam, fileParam, ref, owner, name, to]);
-
-  // 目录 README：列表底部渲染
-  const readmeEntry = entries.find(
-    (e) => e.type === "blob" && /^readme(\..+)?$/i.test(e.name),
-  );
-  useEffect(() => {
-    let alive = true;
-    if (!ref || blob || !readmeEntry) {
-      setReadmeContent(null);
-      return;
-    }
-    const full = currentDir ? currentDir + "/" + readmeEntry.name : readmeEntry.name;
-    api
-      .blob(owner, name, ref, full)
-      .then((b) => alive && b.encoding === "utf-8" && setReadmeContent(b.content))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ref, entries, blob, owner, name, currentDir]);
-
   const openCreateDialog = (kind: "create-file" | "create-dir") => {
     const prefix = currentDir ? currentDir + "/" : "";
     setFileOp({
@@ -336,6 +144,18 @@ export default function RepoView() {
     setPendingRemove({ path: targetPath, isDir });
   };
 
+  const afterCommit = async (branch: string, backToDir?: string) => {
+    const nextPath =
+      backToDir !== undefined ? (backToDir ? backToDir.split("/") : []) : blob ? [] : path;
+    setParams({
+      ref: branch,
+      path: nextPath.length ? nextPath.join("/") : null,
+      file: null,
+    });
+    reloadTree();
+    await refreshBranches();
+  };
+
   const confirmRemove = async () => {
     if (!pendingRemove) return;
     const { path: targetPath, isDir } = pendingRemove;
@@ -349,22 +169,6 @@ export default function RepoView() {
       afterCommit(branch, isDir ? currentDir : undefined);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
-    }
-  };
-
-  const afterCommit = async (branch: string, backToDir?: string) => {
-    const nextPath =
-      backToDir !== undefined ? (backToDir ? backToDir.split("/") : []) : blob ? [] : path;
-    setParams({
-      ref: branch,
-      path: nextPath.length ? nextPath.join("/") : null,
-      file: null,
-    });
-    setLoadTick((n) => n + 1);
-    try {
-      setBranches(await api.branches(owner, name));
-    } catch {
-      /* ignore */
     }
   };
 
@@ -479,7 +283,7 @@ export default function RepoView() {
               error={error}
               emptyRepo={emptyRepo}
               readmeContent={readmeContent}
-              readmeEntryName={readmeEntry?.name ?? null}
+              readmeEntryName={readmeEntryName}
               blameParam={blameParam}
               lineParam={lineParam}
               setParams={setParams}
@@ -505,29 +309,29 @@ export default function RepoView() {
           </Suspense>
         </TabsContent>
 
-          <TabsContent value="pulls">
-            <Suspense fallback={<TabFallback />}>
-              <PullsTab owner={owner} name={name} role={repo?.role} />
-            </Suspense>
-          </TabsContent>
+        <TabsContent value="pulls">
+          <Suspense fallback={<TabFallback />}>
+            <PullsTab owner={owner} name={name} role={repo?.role} />
+          </Suspense>
+        </TabsContent>
 
-          <TabsContent value="pipeline">
-            <Suspense fallback={<TabFallback />}>
-              <PipelineTab owner={owner} name={name} role={repo?.role} />
-            </Suspense>
-          </TabsContent>
+        <TabsContent value="pipeline">
+          <Suspense fallback={<TabFallback />}>
+            <PipelineTab owner={owner} name={name} role={repo?.role} />
+          </Suspense>
+        </TabsContent>
 
-          <TabsContent value="copilot">
-            <Suspense fallback={<TabFallback />}>
-              <CopilotTab owner={owner} name={name} role={repo?.role} />
-            </Suspense>
-          </TabsContent>
+        <TabsContent value="copilot">
+          <Suspense fallback={<TabFallback />}>
+            <CopilotTab owner={owner} name={name} role={repo?.role} />
+          </Suspense>
+        </TabsContent>
 
-          <TabsContent value="releases">
-            <Suspense fallback={<TabFallback />}>
-              <ReleasesTab owner={owner} name={name} role={repo?.role} />
-            </Suspense>
-          </TabsContent>
+        <TabsContent value="releases">
+          <Suspense fallback={<TabFallback />}>
+            <ReleasesTab owner={owner} name={name} role={repo?.role} />
+          </Suspense>
+        </TabsContent>
 
         <TabsContent value="projects">
           <Suspense fallback={<TabFallback />}>
