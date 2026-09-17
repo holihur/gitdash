@@ -106,14 +106,41 @@ func actionText(ev webhooks.Event) string {
 	}
 }
 
+// PushEmails 是否对 push 事件发送邮件（默认关闭；GITDASH_EMAIL_PUSH=1 开启）。
+// push 事件没有 issue/PR 编号，因此不生成回复 token。
+func PushEmails() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("GITDASH_EMAIL_PUSH"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// shortRef 把 refs/heads/main 简化为 main（邮件文案用）。
+func shortRef(ref string) string {
+	ref = strings.TrimPrefix(ref, "refs/heads/")
+	ref = strings.TrimPrefix(ref, "refs/tags/")
+	if ref == "" {
+		return "(unknown)"
+	}
+	return ref
+}
+
 // EmailHandler 返回挂在 webhook 调度器上的消费者：给开启邮件通知的接收者发邮件。
-// sender 为 nil 或 push 事件时直接跳过。
+// sender 为 nil 或 push 事件未开启（GITDASH_EMAIL_PUSH）时直接跳过。
 func EmailHandler(st *store.Store, sender *Sender) func(webhooks.Event) {
 	if sender == nil {
 		return func(webhooks.Event) {}
 	}
 	return func(ev webhooks.Event) {
-		if ev.Event == "push" || ev.Event == "" {
+		if ev.Event == "" {
+			return
+		}
+		if ev.Event == "push" {
+			if !PushEmails() {
+				return
+			}
+			sender.sendPush(st, ev)
 			return
 		}
 		users := st.NotifyRecipients(ev.Owner, ev.Repo, ev.Actor)
@@ -137,6 +164,26 @@ func EmailHandler(st *store.Store, sender *Sender) func(webhooks.Event) {
 			if err := sender.SendWithHeaders(t.Email, subject, body, h); err != nil {
 				logx.Infof("notify: email to %s: %v", t.Username, err)
 			}
+		}
+	}
+}
+
+// sendPush 给 push 事件的关注者发邮件（无回复 token）。
+func (s *Sender) sendPush(st *store.Store, ev webhooks.Event) {
+	users := st.NotifyRecipients(ev.Owner, ev.Repo, ev.User)
+	targets := st.EmailTargets(users)
+	if len(targets) == 0 {
+		return
+	}
+	branch := shortRef(ev.Ref)
+	subject := fmt.Sprintf("[%s/%s] push to %s", ev.Owner, ev.Repo, branch)
+	body := fmt.Sprintf("%s pushed to %s in %s/%s", ev.User, branch, ev.Owner, ev.Repo)
+	if ev.New != "" {
+		body += "\nhead: " + ev.New
+	}
+	for _, t := range targets {
+		if err := s.Send(t.Email, subject, body); err != nil {
+			logx.Infof("notify: push email to %s: %v", t.Username, err)
 		}
 	}
 }

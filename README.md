@@ -191,6 +191,10 @@ Environment variables (all optional):
 | `GITDASH_SMTP_PORT` | `587` | SMTP port |
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | empty | SMTP username / password |
 | `GITDASH_SMTP_FROM` | SMTP user | From address |
+| `GITDASH_EMAIL_PUSH` | off | Set to `1` to also send email notifications for `push` events |
+| `GITDASH_MAIL_REPLY_DOMAIN` | empty (off) | Domain used for reply-by-email `Reply-To` / `Message-ID` (see `docs/email-replies.md`) |
+| `GITDASH_MAIL_SECRET` | `GITDASH_SECRET_KEY` | HMAC secret for reply-by-email tokens |
+| `GITDASH_MAIL_INBOUND_SECRET` | `GITDASH_MAIL_SECRET` | Shared secret required by `POST /api/mail/inbound` |
 | `GITDASH_TRUSTED_PROXIES` | empty (loopback only) | Comma-separated proxy IP/CIDR allowed to set `X-Forwarded-For`. The proxy **must strip/overwrite** the incoming `X-Forwarded-For` (not append client headers), otherwise a client can spoof the left-most IP and bypass PAT IP allow-lists / login rate limits |
 | `GITDASH_SECURE_COOKIES` | off | Set to `1` behind a TLS-terminating proxy so session/admin cookies get `Secure` |
 | `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | empty | Built-in HTTPS certificate/key paths |
