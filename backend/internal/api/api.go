@@ -502,6 +502,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/env", a.auth(a.listRepoEnvVars))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/env", a.auth(a.setRepoEnvVar))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/env/{key}", a.auth(a.deleteRepoEnvVar))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/secrets", a.auth(a.listRepoSecrets))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/secrets", a.auth(a.setRepoSecret))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/secrets/{secret}", a.auth(a.deleteRepoSecret))
 
 	// runners（自托管 CI agent）
 	mux.HandleFunc("POST /api/runners/registration-token", a.auth(a.createRunnerToken))

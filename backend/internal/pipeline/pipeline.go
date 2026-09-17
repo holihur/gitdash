@@ -497,6 +497,23 @@ func executeRun(st *store.Store, job RunJob) {
 	if len(job.Inputs) > 0 {
 		cfg.Env = append(InputEnv(job.Inputs), cfg.Env...)
 	}
+	// CI secrets：按 DSL 白名单解析并注入（优先级最低，DSL/repo env 可覆盖同名变量）。
+	var secretValues []string
+	if len(cfg.Secrets) > 0 {
+		vals, serr := st.RepoSecretValues(owner, repo, cfg.Secrets)
+		if serr != nil {
+			writeLog("!! load secrets: %v", serr)
+		} else {
+			env := make([]string, 0, len(vals))
+			for name, v := range vals {
+				env = append(env, name+"="+v)
+				secretValues = append(secretValues, v)
+			}
+			sort.Strings(env)
+			cfg.Env = append(env, cfg.Env...)
+			writeLog("secrets: %d injected", len(vals))
+		}
+	}
 
 	img := cfg.Image
 	if img == "" {
@@ -516,7 +533,7 @@ func executeRun(st *store.Store, job RunJob) {
 		execCtx, timeoutCancel = context.WithTimeout(ctx, cfg.JobTimeout)
 		defer timeoutCancel()
 	}
-	if err := exec.Execute(execCtx, job, cfg, logFile, func(stepsDone int) {
+	if err := exec.Execute(execCtx, job, cfg, newMaskingWriter(logFile, secretValues), func(stepsDone int) {
 		_ = st.ProgressPipelineRun(runID, stepsDone)
 	}); err != nil {
 		if errors.Is(execCtx.Err(), context.DeadlineExceeded) {

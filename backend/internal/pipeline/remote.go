@@ -94,6 +94,16 @@ func (d *dispatchExecutor) Execute(ctx context.Context, job RunJob, cfg *Config,
 		repoEnv, _ = boundStore.RepoEnvVars(job.Owner, job.Repo)
 	}
 	repoEnv = append(InputEnv(job.Inputs), repoEnv...)
+	// CI secrets：按 DSL 白名单解析并随任务下发（优先级最低，agent 端 DSL env 可覆盖）。
+	if boundStore != nil && len(cfg.Secrets) > 0 {
+		if vals, err := boundStore.RepoSecretValues(job.Owner, job.Repo, cfg.Secrets); err == nil {
+			env := make([]string, 0, len(vals))
+			for name, v := range vals {
+				env = append(env, name+"="+v)
+			}
+			repoEnv = append(env, repoEnv...)
+		}
+	}
 	rjob := runner.Job{
 		JobID: fmt.Sprintf("%s-%s-%d", job.Owner, job.Repo, job.RunID),
 		RunID: job.RunID, Owner: job.Owner, Repo: job.Repo, SHA: job.SHA, Ref: job.Ref, Event: job.Event, DSL: dsl, Env: repoEnv,

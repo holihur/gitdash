@@ -3,6 +3,7 @@ import { IncomingWebhookCard } from "./settings/IncomingWebhookCard";
 import { OutgoingWebhooksCard } from "./settings/OutgoingWebhooksCard";
 import { BranchProtectionsCard } from "./settings/BranchProtectionsCard";
 import { RepoEnvVarsCard } from "./settings/RepoEnvVarsCard";
+import { SecretsCard } from "./settings/SecretsCard";
 import { PipelineCard } from "./settings/PipelineCard";
 import { DescriptionCard } from "./settings/DescriptionCard";
 import { TopicsCard } from "./settings/TopicsCard";
@@ -34,6 +35,7 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       {isOwner && <OutgoingWebhooksCard owner={owner} name={name} />}
       {isOwner && <PipelineCard owner={owner} name={name} />}
       {isOwner && <RepoEnvVarsCard owner={owner} name={name} />}
+      {isOwner && <SecretsCard owner={owner} name={name} />}
       <VisibilityCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
       {isOwner && <TemplateCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
       {isOwner && <GcCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}

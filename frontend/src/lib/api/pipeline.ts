@@ -1,5 +1,5 @@
 import { req } from "./core";
-import type { PipelineGraph, PipelineRun, RepoEnvVar, Runner } from "./types";
+import type { PipelineGraph, PipelineRun, RepoEnvVar, RepoSecret, Runner } from "./types";
 
 export const pipelineApi = {
   // pipeline（CI）
@@ -56,6 +56,20 @@ export const pipelineApi = {
     req<{ deleted: boolean }>(`/users/${owner}/repos/${name}/env/${encodeURIComponent(key)}`, {
       method: "DELETE",
     }),
+
+  // 仓库 CI secrets（仅 owner，值加密存储且永不回传）
+  listRepoSecrets: (owner: string, name: string) =>
+    req<RepoSecret[]>(`/users/${owner}/repos/${name}/secrets`),
+  setRepoSecret: (owner: string, name: string, secretName: string, value: string) =>
+    req<RepoSecret[]>(`/users/${owner}/repos/${name}/secrets`, {
+      method: "PUT",
+      body: JSON.stringify({ name: secretName, value }),
+    }),
+  deleteRepoSecret: (owner: string, name: string, secretName: string) =>
+    req<{ deleted: boolean }>(
+      `/users/${owner}/repos/${name}/secrets/${encodeURIComponent(secretName)}`,
+      { method: "DELETE" },
+    ),
 
 
   // runners（自托管 CI agent）

@@ -92,3 +92,9 @@ type setRepoEnvVarReq struct {
 	Key   string `json:"key"`   // 环境变量名（[A-Za-z_][A-Za-z0-9_]*）
 	Value string `json:"value"` // 环境变量值
 }
+
+// setRepoSecretReq 设置仓库 CI secret 请求体（值加密存储，永不回传）。
+type setRepoSecretReq struct {
+	Name  string `json:"name"`  // secret 名（[A-Za-z_][A-Za-z0-9_]*）
+	Value string `json:"value"` // secret 值
+}

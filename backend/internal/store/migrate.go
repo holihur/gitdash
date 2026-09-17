@@ -58,6 +58,7 @@ func (s *Store) migrate() error {
 		&pipelineRunRow{},
 		&pipelineScheduleRow{},
 		&repoEnvVarRow{},
+		&repoSecretRow{},
 		&releaseRow{},
 		&releaseAssetRow{},
 		&packageRow{},

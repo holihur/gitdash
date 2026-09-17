@@ -11512,6 +11512,168 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/secrets": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "列出仓库 secrets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "设置仓库 secret",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "name 与 value",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRepoSecretReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/secrets/{secret}": {
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pipeline"
+                ],
+                "summary": "删除仓库 secret",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "secret 名",
+                        "name": "secret",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/star": {
             "put": {
                 "description": "幂等；返回当前收藏状态与 star 数。",
@@ -13406,6 +13568,19 @@ const docTemplate = `{
                 "has_issues": {
                     "description": "是否启用 issue（必填）",
                     "type": "boolean"
+                }
+            }
+        },
+        "api.setRepoSecretReq": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "secret 名（[A-Za-z_][A-Za-z0-9_]*）",
+                    "type": "string"
+                },
+                "value": {
+                    "description": "secret 值",
+                    "type": "string"
                 }
             }
         },

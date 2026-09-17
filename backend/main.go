@@ -100,6 +100,8 @@ func run() {
 	}
 	// 包文件内容寻址 blob 存储
 	store.SetBlobDir(filepath.Join(dataDir, "packages-blobs"))
+	// CI secrets 静态加密密钥（GITDASH_SECRET_KEY 优先，否则使用数据目录下的密钥文件）
+	store.SetSecretKeyFile(filepath.Join(dataDir, "secrets.key"))
 
 	// 系统专用 template 用户：幂等 seed（封禁禁止登录，其仓库自动成为模板）
 	templateHash, terr := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("gitdash-template-%d", time.Now().UnixNano())), api.BcryptCost)

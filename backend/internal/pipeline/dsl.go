@@ -58,6 +58,8 @@ const (
 	MaxRunLength  = 8 << 10
 	// MaxSchedules 单仓库定时触发表达式上限。
 	MaxSchedules = 5
+	// MaxSecrets 单条流水线可引用的 secret 名称上限。
+	MaxSecrets = 50
 )
 
 // DefaultStepTimeout 单步默认超时，可被 GITDASH_PIPELINE_DEFAULT_TIMEOUT 覆盖
@@ -82,7 +84,9 @@ type Config struct {
 	// JobTimeout 整次运行（所有步骤合计）的最大时长；0 = 不限。
 	JobTimeout time.Duration
 	Env        []string
-	Volumes    []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
+	// Secrets 允许注入的仓库 secret 名称白名单（值由服务端解析，按名注入为环境变量）。
+	Secrets []string
+	Volumes []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
 	RunsOn     []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
 	Steps      []Step
 	// On 可选：自动触发事件白名单。省略时仅 push 生效（手动触发始终允许）。
@@ -246,6 +250,26 @@ func Parse(data []byte) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "secrets":
+			var err error
+			i, err = readInlineOrBlockList(lines, i, val, func(item string, lineNo int) error {
+				if !envKeyRe.MatchString(item) || len(item) > 128 {
+					return fmt.Errorf("line %d: invalid secret name %q (must match [A-Za-z_][A-Za-z0-9_]*)", lineNo, item)
+				}
+				for _, s := range cfg.Secrets {
+					if s == item {
+						return fmt.Errorf("line %d: duplicate secret %q", lineNo, item)
+					}
+				}
+				if len(cfg.Secrets) >= MaxSecrets {
+					return fmt.Errorf("line %d: too many secrets (max %d)", lineNo, MaxSecrets)
+				}
+				cfg.Secrets = append(cfg.Secrets, item)
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
 		case "volumes":
 			var err error
 			i, err = readListItems(lines, i+1, func(item string, lineNo int) error {
@@ -324,7 +348,7 @@ func Parse(data []byte) (*Config, error) {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, volumes, runs-on, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, volumes, runs-on, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -357,6 +381,9 @@ func (c *Config) validate() error {
 	}
 	if len(c.Env) > MaxEnvVars {
 		return fmt.Errorf("too many env vars (max %d)", MaxEnvVars)
+	}
+	if len(c.Secrets) > MaxSecrets {
+		return fmt.Errorf("too many secrets (max %d)", MaxSecrets)
 	}
 	for i, s := range c.Steps {
 		if err := validateStep("step", i+1, s); err != nil {

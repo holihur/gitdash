@@ -526,6 +526,18 @@ type repoEnvVarRow struct {
 
 func (repoEnvVarRow) TableName() string { return "repo_env_vars" }
 
+// repoSecretRow 仓库 CI secret（值经 AES-GCM 加密或明文存储，见 secrets.go）。
+type repoSecretRow struct {
+	Owner     string `gorm:"primaryKey;size:255"`
+	Repo      string `gorm:"primaryKey;size:255"`
+	Name      string `gorm:"primaryKey;size:255"`
+	Value     string `gorm:"not null;default:''"`
+	CreatedAt string `gorm:"not null"`
+	UpdatedAt string `gorm:"not null;default:''"`
+}
+
+func (repoSecretRow) TableName() string { return "repo_secrets" }
+
 // ---- releases / release assets ----
 
 type releaseRow struct {

@@ -517,6 +517,12 @@ export interface RepoEnvVar {
   created_at: string;
 }
 
+/** 仓库 CI secret 元信息（永不包含明文值）。 */
+export interface RepoSecret {
+  name: string;
+  updated_at: string;
+}
+
 export interface PipelineGraphNode {
   id: string;
   label: string;
