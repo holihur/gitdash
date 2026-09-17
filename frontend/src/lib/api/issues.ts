@@ -61,6 +61,11 @@ export const issuesApi = {
       method: "POST",
       body: JSON.stringify(loc ? { body, ...loc } : { body }),
     }),
+  applySuggestion: (owner: string, name: string, number: number, commentId: number) =>
+    req<{ sha: string; comment: IssueComment }>(
+      `/users/${owner}/repos/${name}/pulls/${number}/comments/${commentId}/apply`,
+      { method: "POST" },
+    ),
   deleteComment: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/comments/${id}`, { method: "DELETE" }),
 

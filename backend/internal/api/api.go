@@ -379,6 +379,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/repos/{name}/issues/{number}/comments", a.auth(issueAdd))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullList))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullAdd))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments/{id}/apply", a.auth(a.applySuggestion))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/comments/{id}", a.auth(a.deleteComment))
 
 	// issue labels & milestones

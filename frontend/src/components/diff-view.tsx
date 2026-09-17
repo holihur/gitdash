@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { MessageSquare } from "lucide-react";
+import { Check, MessageSquare } from "lucide-react";
 import { api, type IssueComment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { MarkdownView } from "@/components/markdown";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { apiErrorMsg } from "@/lib/errors";
 import SplitDiff from "@/components/split-diff";
 import {
   commentKey,
@@ -16,6 +17,13 @@ import {
 } from "@/components/diff-parse";
 
 export type { DiffFileInfo } from "@/components/diff-parse";
+
+/** 从评论正文提取首个 ```suggestion 代码块内容。 */
+function parseSuggestion(body: string): string | null {
+  const m = body.replace(/\r\n/g, "\n").match(/```suggestion[ \t]*\n([\s\S]*?)```/);
+  if (!m) return null;
+  return m[1].replace(/\n$/, "");
+}
 
 /** PR diff 展示：左侧文件列表、右侧单文件 patch、搜索与行级 hover 行内评论。 */
 export function PullDiffView({
@@ -39,6 +47,7 @@ export function PullDiffView({
   const [active, setActive] = useState<CommentTarget | null>(null);
   const [body, setBody] = useState("");
   const [posting, setPosting] = useState(false);
+  const [applying, setApplying] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +83,19 @@ export function PullDiffView({
       side: line.new != null ? "new" : "old",
     };
   }, []);
+
+  const apply = async (c: IssueComment) => {
+    setApplying(c.id);
+    try {
+      await api.applySuggestion(owner, name, number, c.id);
+      toast.success(t("diff.suggestionAppliedToast"));
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setApplying(null);
+    }
+  };
 
   const post = async () => {
     if (!active || !body.trim()) return;
@@ -137,15 +159,39 @@ export function PullDiffView({
         if (lineComments.length === 0 && !isActive) return null;
         return (
           <div className="my-1 ml-4 space-y-1.5 rounded-md border bg-muted/30 p-2 font-sans">
-            {lineComments.map((c) => (
-              <div key={c.id} className="text-xs">
-                <span className="font-medium">{c.author}</span>
-                <span className="ml-2 text-muted-foreground">
-                  {formatDate(c.created_at, locale)}
-                </span>
-                <MarkdownView text={c.body} className="mt-0.5 text-xs leading-5" />
-              </div>
-            ))}
+            {lineComments.map((c) => {
+              const suggestion = parseSuggestion(c.body);
+              const applied = !!c.suggestion_applied_sha;
+              return (
+                <div key={c.id} className="text-xs">
+                  <span className="font-medium">{c.author}</span>
+                  <span className="ml-2 text-muted-foreground">
+                    {formatDate(c.created_at, locale)}
+                  </span>
+                  <MarkdownView text={c.body} className="mt-0.5 text-xs leading-5" />
+                  {suggestion !== null && c.line_side !== "old" && (
+                    <div className="mt-1">
+                      {applied ? (
+                        <span className="text-[11px] text-green-600 dark:text-green-400">
+                          {t("diff.suggestionApplied", { sha: c.suggestion_applied_sha!.slice(0, 7) })}
+                        </span>
+                      ) : canWrite ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 gap-1 text-[11px]"
+                          disabled={applying === c.id}
+                          onClick={() => apply(c)}
+                        >
+                          <Check className="h-3 w-3" />
+                          {t("diff.applySuggestion")}
+                        </Button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {isActive && (
               <div className="space-y-1.5">
                 <Textarea

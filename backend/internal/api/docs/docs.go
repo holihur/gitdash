@@ -10546,6 +10546,80 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/pulls/{number}/comments/{id}/apply": {
+            "post": {
+                "description": "需要仓库写权限；在 PR 源分支上创建提交，替换被评论行，并记录应用的提交 SHA。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "应用代码建议",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "PR 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "sha 与更新后的评论",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/pulls/{number}/diff": {
             "get": {
                 "produces": [
@@ -14312,6 +14386,10 @@ const docTemplate = `{
                 },
                 "number": {
                     "type": "integer"
+                },
+                "suggestion_applied_sha": {
+                    "description": "SuggestionAppliedSHA 非空表示该评论内的 suggestion 已被应用（对应提交 SHA）。",
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"

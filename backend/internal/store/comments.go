@@ -81,6 +81,20 @@ func (s *Store) GetComment(owner, repo string, id int64) (Comment, error) {
 	return commentToDTO(r), nil
 }
 
+// MarkSuggestionApplied 记录某条评论的 suggestion 已应用（写入提交 SHA）。
+func (s *Store) MarkSuggestionApplied(owner, repo string, id int64, sha string) (Comment, error) {
+	res := s.db.Model(&commentRow{}).
+		Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).
+		Updates(map[string]any{"suggestion_applied_sha": sha, "updated_at": now()})
+	if res.Error != nil {
+		return Comment{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return Comment{}, ErrNotFound
+	}
+	return s.GetComment(owner, repo, id)
+}
+
 // DeleteComment 删除评论（返回是否存在）。
 func (s *Store) DeleteComment(owner, repo string, id int64) error {
 	res := s.db.Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).

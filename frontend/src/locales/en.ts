@@ -756,6 +756,9 @@ export const en = {
   },
   diff: {
     addComment: "Comment on this line",
+    applySuggestion: "Apply suggestion",
+    suggestionApplied: "Applied in {sha}",
+    suggestionAppliedToast: "Suggestion applied",
     files: "Files",
     filterFiles: "Filter files…",
     searchPlaceholder: "Search in diff…",

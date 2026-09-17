@@ -754,6 +754,9 @@ export const zhCN: Messages = {
   },
   diff: {
     addComment: "对此行评论",
+    applySuggestion: "应用建议",
+    suggestionApplied: "已应用于 {sha}",
+    suggestionAppliedToast: "建议已应用",
     files: "文件",
     filterFiles: "筛选文件…",
     searchPlaceholder: "在 diff 中搜索…",

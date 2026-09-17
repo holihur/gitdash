@@ -153,6 +153,9 @@ type Comment struct {
 	FilePath *string `json:"file_path"`
 	Line     *int64  `json:"line"`
 	LineSide string  `json:"line_side"`
+
+	// SuggestionAppliedSHA 非空表示该评论内的 suggestion 已被应用（对应提交 SHA）。
+	SuggestionAppliedSHA string `json:"suggestion_applied_sha,omitempty"`
 }
 
 // Collab 仓库协作者（read=可克隆/浏览，write=可 push）

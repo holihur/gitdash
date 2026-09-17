@@ -143,6 +143,8 @@ type commentRow struct {
 	FilePath *string `gorm:"size:255"`
 	Line     *int64
 	LineSide string `gorm:"not null;default:'';size:8"`
+	// suggestion 应用后记录提交 SHA（非空表示已应用，禁止重复应用）
+	SuggestionAppliedSHA string `gorm:"not null;default:'';size:64"`
 }
 
 func (commentRow) TableName() string { return "issue_comments" }

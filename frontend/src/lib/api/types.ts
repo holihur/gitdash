@@ -336,6 +336,8 @@ export interface IssueComment {
   file_path?: string | null;
   line?: number | null;
   line_side?: "old" | "new" | null;
+  /** 非空表示该评论内的 suggestion 已被应用（提交 SHA） */
+  suggestion_applied_sha?: string;
 }
 
 export type ReviewState = "approve" | "request_changes" | "comment";

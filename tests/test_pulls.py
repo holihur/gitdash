@@ -278,3 +278,52 @@ def test_pr_draft(pr_env):
         expect=201,
     ).json()
     assert plain["draft"] is False
+
+
+def test_pr_suggestion_apply(pr_env):
+    """行内评论里的 ```suggestion 可一键应用到源分支，且只能应用一次。"""
+    c = pr_env["client"]
+    owner, repo = pr_env["owner"], pr_env["repo"]
+
+    pr = c.post(
+        _p(owner, repo),
+        json={"title": "suggest", "source_branch": "feat", "target_branch": "main"},
+        expect=201,
+    ).json()
+
+    comment = c.post(
+        _p(owner, repo, f"/{pr['number']}/comments"),
+        json={
+            "body": "```suggestion\nhello suggested\n```",
+            "file_path": "feat.txt",
+            "line": 1,
+            "line_side": "new",
+        },
+        expect=201,
+    ).json()
+    assert comment["file_path"] == "feat.txt" and comment["line"] == 1
+
+    res = c.post(
+        _p(owner, repo, f"/{pr['number']}/comments/{comment['id']}/apply"), expect=200
+    ).json()
+    assert res["sha"]
+    assert res["comment"]["suggestion_applied_sha"] == res["sha"]
+
+    # 源分支文件已被替换
+    blob = c.get(
+        f"/users/{owner}/repos/{repo}/blob",
+        params={"ref": "feat", "path": "feat.txt"},
+        expect=200,
+    ).json()
+    assert "hello suggested" in blob["content"], blob
+
+    # 重复应用 → 409
+    c.post(_p(owner, repo, f"/{pr['number']}/comments/{comment['id']}/apply"), expect=409)
+
+    # 不含 suggestion 的行内评论 → 400
+    plain = c.post(
+        _p(owner, repo, f"/{pr['number']}/comments"),
+        json={"body": "just a note", "file_path": "feat.txt", "line": 1, "line_side": "new"},
+        expect=201,
+    ).json()
+    c.post(_p(owner, repo, f"/{pr['number']}/comments/{plain['id']}/apply"), expect=400)
