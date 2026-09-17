@@ -2078,6 +2078,67 @@ const docTemplate = `{
                 ]
             }
         },
+        "/mail/inbound": {
+            "post": {
+                "description": "邮件提供商/MTA 管道调用；凭 X-Gitdash-Mail-Secret 头鉴权，\n从收件地址 reply+\u003ctoken\u003e@domain 还原仓库与 issue/PR，\n清洗正文后以 token 绑定用户身份创建评论。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "mail"
+                ],
+                "summary": "入站邮件（reply-by-email）",
+                "parameters": [
+                    {
+                        "description": "收件人/发件人/主题/正文",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.mailInboundReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.Comment"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/me": {
             "get": {
                 "description": "返回当前会话用户的用户名、邮箱、创建时间与 MFA 状态。",
@@ -13786,6 +13847,23 @@ const docTemplate = `{
                 },
                 "username": {
                     "description": "用户名",
+                    "type": "string"
+                }
+            }
+        },
+        "api.mailInboundReq": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "text": {
+                    "type": "string"
+                },
+                "to": {
                     "type": "string"
                 }
             }

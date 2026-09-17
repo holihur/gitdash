@@ -494,6 +494,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.deleteIncomingWebhook))
 	mux.HandleFunc("POST /api/hooks/incoming/{owner}/{repo}", a.createIssueFromIncomingWebhook)
 
+	// 入站邮件（reply-by-email）：由邮件服务商/MTA 管道调用，凭共享密钥鉴权
+	mux.HandleFunc("POST /api/mail/inbound", a.inboundMail)
+
 	// pipeline（CI）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline", a.auth(a.getPipeline))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/graph", a.auth(a.getPipelineGraph))

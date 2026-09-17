@@ -114,6 +114,12 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_ADMIN_PASSWORD="admin-test-pass-123456",
         # 关闭“注册自动建同名仓库”，保持黑盒用例对仓库数量的确定性
         GITDASH_PROFILE_REPO="0",
+        # 邮件回复（reply-by-email）：固定的签名与入站共享密钥，便于用例构造 token
+        GITDASH_MAIL_SECRET=os.environ.get("GITDASH_MAIL_SECRET", "test-mail-secret"),
+        GITDASH_MAIL_INBOUND_SECRET=os.environ.get(
+            "GITDASH_MAIL_INBOUND_SECRET", "test-mail-inbound-secret"
+        ),
+        GITDASH_MAIL_REPLY_DOMAIN=os.environ.get("GITDASH_MAIL_REPLY_DOMAIN", "gitdash.test"),
     )
     # SMTP 透传：允许 email MFA / 邮箱验证黑盒测试注入本地 SMTP sink
     for var in ("GITDASH_SMTP_HOST", "GITDASH_SMTP_PORT", "GITDASH_SMTP_USER", "GITDASH_SMTP_PASS", "GITDASH_SMTP_FROM"):

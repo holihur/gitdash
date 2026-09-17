@@ -19,6 +19,11 @@ type Sender struct {
 	user string
 	pass string
 	from string
+
+	// replyDomain 配置后，通知邮件带上 Reply-To，支持 reply-by-email。
+	replyDomain string
+	// mailSecret 用于签名回复路由 token（为空则不带 Reply-To）。
+	mailSecret string
 }
 
 // NewSender 从环境变量构建发送器；GITDASH_SMTP_HOST 未设置时返回 nil（no-op）。
@@ -36,18 +41,31 @@ func NewSender() *Sender {
 		from = os.Getenv("GITDASH_SMTP_USER")
 	}
 	return &Sender{
-		host: host,
-		port: port,
-		user: os.Getenv("GITDASH_SMTP_USER"),
-		pass: os.Getenv("GITDASH_SMTP_PASS"),
-		from: from,
+		host:        host,
+		port:        port,
+		user:        os.Getenv("GITDASH_SMTP_USER"),
+		pass:        os.Getenv("GITDASH_SMTP_PASS"),
+		from:        from,
+		replyDomain: MailReplyDomain(),
+		mailSecret:  MailSecret(),
 	}
 }
 
-// Send 发送纯文本邮件。
+// Headers 可选邮件头（Message-ID / Reply-To），零值表示不写入。
+type Headers struct {
+	MessageID string
+	ReplyTo   string
+}
+
+// Send 发送纯文本邮件（无附加头）。
 func (s *Sender) Send(to, subject, body string) error {
+	return s.SendWithHeaders(to, subject, body, Headers{})
+}
+
+// SendWithHeaders 发送纯文本邮件，可携带 Message-ID / Reply-To 头。
+func (s *Sender) SendWithHeaders(to, subject, body string, h Headers) error {
 	addr := s.host + ":" + s.port
-	msg := buildMessage(s.from, to, subject, body)
+	msg := buildMessage(s.from, to, subject, body, h)
 	var auth smtp.Auth
 	if s.user != "" {
 		auth = smtp.PlainAuth("", s.user, s.pass, s.host)
@@ -55,10 +73,16 @@ func (s *Sender) Send(to, subject, body string) error {
 	return smtp.SendMail(addr, auth, s.from, []string{to}, msg)
 }
 
-func buildMessage(from, to, subject, body string) []byte {
+func buildMessage(from, to, subject, body string, h Headers) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "From: %s\r\n", from)
 	fmt.Fprintf(&b, "To: %s\r\n", to)
+	if h.MessageID != "" {
+		fmt.Fprintf(&b, "Message-ID: %s\r\n", h.MessageID)
+	}
+	if h.ReplyTo != "" {
+		fmt.Fprintf(&b, "Reply-To: %s\r\n", h.ReplyTo)
+	}
 	fmt.Fprintf(&b, "Subject: %s\r\n", subject)
 	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n")
 	b.WriteString(body)
@@ -103,7 +127,14 @@ func EmailHandler(st *store.Store, sender *Sender) func(webhooks.Event) {
 			body += "\n\n" + ev.Comment
 		}
 		for _, t := range targets {
-			if err := sender.Send(t.Email, subject, body); err != nil {
+			h := Headers{}
+			if sender.replyDomain != "" && sender.mailSecret != "" {
+				// 回复 token 绑定收件人身份：谁收到邮件，谁就能以此身份回复评论。
+				tok := SignReplyToken(sender.mailSecret, ev.Owner, ev.Repo, ev.Kind, ev.Number, t.Username)
+				h.ReplyTo = ReplyAddress(sender.replyDomain, tok)
+				h.MessageID = MessageID(sender.replyDomain, ev.Owner, ev.Repo, ev.Kind, ev.Number)
+			}
+			if err := sender.SendWithHeaders(t.Email, subject, body, h); err != nil {
 				logx.Infof("notify: email to %s: %v", t.Username, err)
 			}
 		}
