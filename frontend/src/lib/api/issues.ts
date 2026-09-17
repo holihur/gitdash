@@ -129,6 +129,7 @@ export const issuesApi = {
       min_approvals: number;
       require_ci: boolean;
       require_codeowners: boolean;
+      merge_queue: boolean;
       block_deletion: boolean;
       block_force_push: boolean;
     },
@@ -145,6 +146,10 @@ export const issuesApi = {
   // PR CODEOWNERS 状态
   pullCodeowners: (owner: string, name: string, number: number) =>
     req<CodeownersStatus>(`/users/${owner}/repos/${name}/pulls/${number}/codeowners`),
+  dequeuePull: (owner: string, name: string, number: number) =>
+    req<{ dequeued: boolean }>(`/users/${owner}/repos/${name}/pulls/${number}/merge-queue`, {
+      method: "DELETE",
+    }),
 
 
   // pull requests

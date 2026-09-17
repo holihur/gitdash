@@ -464,12 +464,27 @@ type branchProtectionRow struct {
 	MinApprovals      int    `gorm:"not null;default:0;column:min_approvals"`          // 合并门禁：需要的最少 approve 数
 	RequireCI         bool   `gorm:"not null;default:false;column:require_ci"`         // 合并门禁：要求 head 的 CI 通过
 	RequireCodeowners bool   `gorm:"not null;default:false;column:require_codeowners"` // 合并门禁：要求 CODEOWNERS 所有者批准
+	MergeQueue        bool   `gorm:"not null;default:false;column:merge_queue"`        // 合并队列：合并请求入队串行执行
 	BlockDeletion     bool   `gorm:"not null;default:true;column:block_deletion"`
 	BlockForcePush    bool   `gorm:"not null;default:true;column:block_force_push"`
 	CreatedAt         string `gorm:"not null"`
 }
 
 func (branchProtectionRow) TableName() string { return "branch_protections" }
+
+// mergeQueueRow 分支合并队列中的一次入队（按 ID 顺序串行合并）。
+type mergeQueueRow struct {
+	ID         int64  `gorm:"primaryKey;autoIncrement"`
+	Owner      string `gorm:"not null;uniqueIndex:uq_merge_queue;size:255"`
+	Repo       string `gorm:"not null;uniqueIndex:uq_merge_queue;size:255"`
+	Branch     string `gorm:"not null;index:idx_merge_queue_branch;size:255"`
+	Number     int64  `gorm:"not null;uniqueIndex:uq_merge_queue"`
+	Method     string `gorm:"not null;default:'';size:16"`
+	EnqueuedBy string `gorm:"not null;default:'';size:255"`
+	EnqueuedAt string `gorm:"not null"`
+}
+
+func (mergeQueueRow) TableName() string { return "merge_queue" }
 
 // ---- pipelines ----
 

@@ -8,7 +8,7 @@ func pullToDTO(r pullRequestRow) PullRequest {
 		SourceBranch: r.SourceBranch, TargetBranch: r.TargetBranch,
 		BaseSHA: r.BaseSHA, HeadSHA: r.HeadSHA,
 		State: r.State, Draft: r.Draft, AutoMerge: r.AutoMerge, AutoMergeMethod: r.AutoMergeMethod,
-		Author: r.Author,
+		Author:    r.Author,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, MergedBy: r.MergedBy,
 	}
 	if r.MergedAt != nil {

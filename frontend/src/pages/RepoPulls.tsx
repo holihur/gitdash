@@ -108,6 +108,29 @@ export default function RepoPulls({
     }
   };
 
+  const merge = async (
+    pr: PullRequest,
+    method: "merge" | "squash" | "rebase" | undefined,
+    doneKey: string,
+  ) => {
+    setBusy((s) => new Set(s).add(pr.id));
+    try {
+      const res = await api.mergePull(owner, name, pr.number, method);
+      toast.success(
+        res.merge_queued ? t("pulls.queued", { number: pr.number }) : t(doneKey, { number: pr.number }),
+      );
+      load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy((s) => {
+        const n = new Set(s);
+        n.delete(pr.id);
+        return n;
+      });
+    }
+  };
+
   const act = async (pr: PullRequest, fn: () => Promise<unknown>, msgKey: string) => {
     setBusy((s) => new Set(s).add(pr.id));
     try {
@@ -284,13 +307,7 @@ export default function RepoPulls({
                             size="sm"
                             className="gap-1"
                             disabled={busyId || pr.draft}
-                            onClick={() =>
-                              act(
-                                pr,
-                                () => api.mergePull(owner, name, pr.number),
-                                "pulls.merged",
-                              )
-                            }
+                            onClick={() => merge(pr, undefined, "pulls.merged")}
                           >
                             <GitMerge className="h-3.5 w-3.5" />
                             {t("pulls.merge")}
@@ -323,6 +340,27 @@ export default function RepoPulls({
                           >
                             {t("pulls.close")}
                           </Button>
+                          {pr.merge_queued && (
+                            <>
+                              <Badge variant="outline" className="gap-1 text-xs text-muted-foreground">
+                                {t("pulls.inMergeQueue")}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busyId}
+                                onClick={() =>
+                                  act(
+                                    pr,
+                                    () => api.dequeuePull(owner, name, pr.number),
+                                    "pulls.dequeued",
+                                  )
+                                }
+                              >
+                                {t("pulls.dequeue")}
+                              </Button>
+                            </>
+                          )}
                           {pr.auto_merge ? (
                             <>
                               <Badge variant="outline" className="text-xs text-muted-foreground">
@@ -417,15 +455,15 @@ export default function RepoPulls({
                           />
                           <CodeownersBadge owner={owner} name={name} number={pr.number} />
                           <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
-                            onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "squash"), "pulls.squashMerged")}>
+                            onClick={() => merge(pr, "squash", "pulls.squashMerged")}>
                             {t("pulls.squashMerge")}
                           </Button>
                           <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
-                            onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "merge"), "pulls.mergeCommitted")}>
+                            onClick={() => merge(pr, "merge", "pulls.mergeCommitted")}>
                             {t("pulls.mergeCommit")}
                           </Button>
                           <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
-                            onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "rebase"), "pulls.rebaseMerged")}>
+                            onClick={() => merge(pr, "rebase", "pulls.rebaseMerged")}>
                             {t("pulls.rebaseMerge")}
                           </Button>
                         </>

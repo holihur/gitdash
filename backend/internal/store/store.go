@@ -190,9 +190,10 @@ type PullRequest struct {
 	MergedAt        *string `json:"merged_at"`
 	MergedBy        string  `json:"merged_by"`
 	// API enrich（仅 open PR / 详情接口填充）
-	Mergeable  *bool             `json:"mergeable,omitempty"`  // 可合并（fast-forward 或干净合并）
-	Conflicted bool              `json:"conflicted,omitempty"` // 分支分叉且存在合并冲突
-	CI         *PipelineCIStatus `json:"ci,omitempty"`         // head 提交的流水线状态
+	Mergeable   *bool             `json:"mergeable,omitempty"`    // 可合并（fast-forward 或干净合并）
+	Conflicted  bool              `json:"conflicted,omitempty"`   // 分支分叉且存在合并冲突
+	MergeQueued bool              `json:"merge_queued,omitempty"` // 已加入合并队列
+	CI          *PipelineCIStatus `json:"ci,omitempty"`           // head 提交的流水线状态
 }
 
 // PipelineCIStatus PR head 提交的 CI 概要。

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -130,13 +131,44 @@ func (a *API) executeMerge(owner, name string, pr store.PullRequest, method, act
 	return merged, nil
 }
 
+// branchHasMergeQueue 目标分支是否启用合并队列。
+func (a *API) branchHasMergeQueue(owner, name, branch string) bool {
+	prot, err := a.store.GetBranchProtection(owner, name, branch)
+	return err == nil && prot.MergeQueue
+}
+
 // tryAutoMerge 若 PR 开启自动合并且门禁已满足，则按记录方式合并（尽力而为，失败保持开启）。
+// 目标分支启用合并队列时改为入队并尝试处理队列。
 func (a *API) tryAutoMerge(owner, name string, number int64) {
 	pr, err := a.store.GetPull(owner, name, number)
 	if err != nil || pr.State != "open" || !pr.AutoMerge {
 		return
 	}
+	if a.branchHasMergeQueue(owner, name, pr.TargetBranch) {
+		_ = a.store.EnqueueMerge(owner, name, pr.TargetBranch, pr.Number, pr.AutoMergeMethod, pr.Author)
+		a.processMergeQueue(owner, name, pr.TargetBranch)
+		return
+	}
 	_, _ = a.executeMerge(owner, name, pr, pr.AutoMergeMethod, pr.Author)
+}
+
+// processMergeQueue 按入队顺序串行合并：逐个校验门禁，队首未满足则停止（保持顺序）。
+func (a *API) processMergeQueue(owner, name, branch string) {
+	entries, err := a.store.ListMergeQueue(owner, name, branch)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		pr, perr := a.store.GetPull(owner, name, e.Number)
+		if perr != nil || pr.State != "open" {
+			_ = a.store.RemoveMergeEntry(owner, name, e.Number)
+			continue
+		}
+		if _, ge := a.executeMerge(owner, name, pr, e.Method, e.EnqueuedBy); ge != nil {
+			return // 队首未满足：等待后续 review / CI 事件再处理
+		}
+		_ = a.store.RemoveMergeEntry(owner, name, e.Number)
+	}
 }
 
 // autoMergeForRepo 尝试合并仓库内全部已开启自动合并的 PR（如 CI 成功后触发）。
@@ -150,5 +182,47 @@ func (a *API) autoMergeForRepo(owner, name string) {
 	}
 }
 
-// AutoMergeForRepo 供流水线成功回调使用：对仓库内开启自动合并的 PR 再评估一次门禁。
-func (a *API) AutoMergeForRepo(owner, repo, _ string) { a.autoMergeForRepo(owner, repo) }
+// AutoMergeForRepo 供流水线成功回调使用：对仓库内开启自动合并的 PR 再评估一次门禁，
+// 并处理启用了合并队列的分支。
+func (a *API) AutoMergeForRepo(owner, repo, _ string) {
+	a.autoMergeForRepo(owner, repo)
+	if prots, err := a.store.ListBranchProtections(owner, repo); err == nil {
+		for _, p := range prots {
+			if p.MergeQueue {
+				a.processMergeQueue(owner, repo, p.Branch)
+			}
+		}
+	}
+}
+
+// dequeuePull 把 PR 从合并队列移除。
+//
+//	@Summary     移出合并队列
+//	@Tags        pulls
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Success     200 {object} map[string]any
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number}/merge-queue [delete]
+func (a *API) dequeuePull(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	pr, err := a.getPullOr404(w, owner, name, r.PathValue("number"))
+	if err != nil {
+		return
+	}
+	if err := a.store.RemoveMergeEntry(owner, name, pr.Number); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeNotFound(w, "merge queue entry")
+		} else {
+			internalError(w, err)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"dequeued": true})
+}

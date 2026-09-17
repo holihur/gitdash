@@ -57,6 +57,9 @@ func (a *API) enrichPull(owner, name string, pr *store.PullRequest) {
 	if ci, ok, err := a.store.AggregatePipelineStatusForSHA(owner, name, pr.HeadSHA); err == nil && ok {
 		pr.CI = &ci
 	}
+	if _, ok := a.store.GetMergeEntry(owner, name, pr.Number); ok {
+		pr.MergeQueued = true
+	}
 }
 
 // createPull 创建 pull request。
@@ -228,6 +231,36 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		if rerr := readJSON(w, r, &in); rerr != nil {
 			return
 		}
+	}
+	// 目标分支开启合并队列时：入队串行合并，而非立即合并。
+	if a.branchHasMergeQueue(owner, name, pr.TargetBranch) {
+		switch in.Method {
+		case "", "fast-forward", "merge", "squash", "rebase":
+		default:
+			writeCode(w, http.StatusBadRequest, "invalid_merge_method", "method must be 'fast-forward', 'merge', 'squash' or 'rebase'")
+			return
+		}
+		if pr.State != "open" {
+			writeCode(w, http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged")
+			return
+		}
+		if err := a.store.EnqueueMerge(owner, name, pr.TargetBranch, pr.Number, in.Method, userFrom(r)); err != nil {
+			internalError(w, err)
+			return
+		}
+		a.processMergeQueue(owner, name, pr.TargetBranch)
+		fresh, ferr := a.store.GetPull(owner, name, pr.Number)
+		if ferr != nil {
+			internalError(w, ferr)
+			return
+		}
+		if fresh.State == "open" {
+			a.enrichPull(owner, name, &fresh)
+			writeJSON(w, http.StatusAccepted, fresh)
+			return
+		}
+		writeJSON(w, http.StatusOK, fresh)
+		return
 	}
 	merged, ge := a.executeMerge(owner, name, pr, in.Method, userFrom(r))
 	if ge != nil {

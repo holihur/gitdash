@@ -344,6 +344,7 @@ const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
 	JOIN repos r ON r.owner = src.owner AND r.name = src.name
 	WHERE r.banned = ? AND NOT EXISTS (SELECT 1 FROM orgs o WHERE o.name = r.owner AND o.banned = ?)
 	GROUP BY r.id`
+
 func roleFromRank(rank int) string {
 	switch {
 	case rank >= 3:

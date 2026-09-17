@@ -63,6 +63,7 @@ func (a *API) setBranchProtection(w http.ResponseWriter, r *http.Request) {
 	bp := store.BranchProtection{
 		Owner: owner, Repo: name, Branch: branch,
 		MinApprovals: in.MinApprovals, RequireCI: in.RequireCI, RequireCodeowners: in.RequireCodeowners,
+		MergeQueue:    in.MergeQueue,
 		BlockDeletion: in.BlockDeletion, BlockForcePush: in.BlockForcePush,
 	}
 	if err := a.store.SetBranchProtection(&bp); err != nil {

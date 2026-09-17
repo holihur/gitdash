@@ -349,6 +349,7 @@ export interface BranchProtection {
   min_approvals: number;
   require_ci: boolean;
   require_codeowners: boolean;
+  merge_queue: boolean;
   block_deletion: boolean;
   block_force_push: boolean;
 }
@@ -430,6 +431,8 @@ export interface PullRequest {
   /** 开启后合并门禁满足时自动合并 */
   auto_merge: boolean;
   auto_merge_method?: string;
+  /** 已加入目标分支的合并队列 */
+  merge_queued?: boolean;
   author: string;
   created_at: string;
   updated_at: string;

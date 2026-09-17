@@ -122,6 +122,7 @@ type setBranchProtectionReq struct {
 	MinApprovals      int  `json:"min_approvals"`
 	RequireCI         bool `json:"require_ci"`
 	RequireCodeowners bool `json:"require_codeowners"`
+	MergeQueue        bool `json:"merge_queue"`
 	BlockDeletion     bool `json:"block_deletion"`
 	BlockForcePush    bool `json:"block_force_push"`
 }

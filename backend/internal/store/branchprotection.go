@@ -16,6 +16,7 @@ type BranchProtection struct {
 	MinApprovals      int    `json:"min_approvals"`      // 合并门禁：需要的最少 approve 数（0 = 不设门禁）
 	RequireCI         bool   `json:"require_ci"`         // 合并门禁：要求 head 的 CI 通过
 	RequireCodeowners bool   `json:"require_codeowners"` // 合并门禁：要求变更文件的 CODEOWNERS 所有者批准
+	MergeQueue        bool   `json:"merge_queue"`        // 合并队列：合并请求入队串行执行
 	BlockDeletion     bool   `json:"block_deletion"`     // 禁止删除该分支
 	BlockForcePush    bool   `json:"block_force_push"`   // 禁止非快进（force push）
 	CreatedAt         string `json:"created_at"`
@@ -35,6 +36,7 @@ func (s *Store) SetBranchProtection(bp *BranchProtection) error {
 	row := branchProtectionRow{
 		Owner: bp.Owner, Repo: bp.Repo, Branch: bp.Branch,
 		MinApprovals: bp.MinApprovals, RequireCI: bp.RequireCI, RequireCodeowners: bp.RequireCodeowners,
+		MergeQueue:    bp.MergeQueue,
 		BlockDeletion: bp.BlockDeletion, BlockForcePush: bp.BlockForcePush, CreatedAt: now(),
 	}
 	// upsert：SQLite/PG 通用写法（先删后插在事务里）会有唯一键间隙，用 gorm clause OnConflict
@@ -43,6 +45,7 @@ func (s *Store) SetBranchProtection(bp *BranchProtection) error {
 			"min_approvals":      row.MinApprovals,
 			"require_ci":         row.RequireCI,
 			"require_codeowners": row.RequireCodeowners,
+			"merge_queue":        row.MergeQueue,
 			"block_deletion":     row.BlockDeletion,
 			"block_force_push":   row.BlockForcePush,
 		}).FirstOrCreate(&row)

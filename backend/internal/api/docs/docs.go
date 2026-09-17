@@ -10910,6 +10910,63 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/pulls/{number}/merge-queue": {
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "移出合并队列",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "PR 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/pulls/{number}/reviews": {
             "get": {
                 "produces": [
@@ -13835,6 +13892,9 @@ const docTemplate = `{
                 "block_force_push": {
                     "type": "boolean"
                 },
+                "merge_queue": {
+                    "type": "boolean"
+                },
                 "min_approvals": {
                     "type": "integer"
                 },
@@ -14411,6 +14471,10 @@ const docTemplate = `{
                 },
                 "created_at": {
                     "type": "string"
+                },
+                "merge_queue": {
+                    "description": "合并队列：合并请求入队串行执行",
+                    "type": "boolean"
                 },
                 "min_approvals": {
                     "description": "合并门禁：需要的最少 approve 数（0 = 不设门禁）",
@@ -15299,6 +15363,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "merge_queued": {
+                    "description": "已加入合并队列",
+                    "type": "boolean"
                 },
                 "mergeable": {
                     "description": "API enrich（仅 open PR / 详情接口填充）",
