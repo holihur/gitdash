@@ -436,6 +436,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// pull requests
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.auth(a.listPulls))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls", a.auth(a.createPull))
+	// patch-by-email：接收 git format-patch/send-email 的 mbox，自动开 PR
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/patches", a.auth(a.receivePatches))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}", a.auth(a.getPull))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/diff", a.auth(a.pullDiff))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/codeowners", a.auth(a.pullCodeowners))

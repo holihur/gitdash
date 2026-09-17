@@ -8818,6 +8818,80 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/patches": {
+            "post": {
+                "description": "提交 ` + "`" + `git format-patch` + "`" + ` / ` + "`" + `git send-email` + "`" + ` 风格的 mbox（text/plain）。\n服务端 ` + "`" + `git am --3way` + "`" + ` 到新分支 patches/\u003cts\u003e 后自动开 PR。",
+                "consumes": [
+                    "text/plain"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "通过补丁邮件创建 PR",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "目标分支（默认仓库默认分支）",
+                        "name": "target",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "PR 标题（默认取补丁首个 Subject）",
+                        "name": "title",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.PullRequest"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/pipeline": {
             "get": {
                 "produces": [
