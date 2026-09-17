@@ -194,6 +194,17 @@ export const issuesApi = {
       method: "POST",
       body: JSON.stringify({ draft }),
     }),
+  setPullAutoMerge: (
+    owner: string,
+    name: string,
+    number: number,
+    enabled: boolean,
+    method?: "fast-forward" | "merge" | "squash" | "rebase",
+  ) =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/auto-merge`, {
+      method: "POST",
+      body: JSON.stringify({ enabled, method: method ?? "" }),
+    }),
 
 
   // PR reviews

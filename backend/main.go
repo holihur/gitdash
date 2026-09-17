@@ -260,6 +260,8 @@ func run() {
 	a.Publish = func(ev webhooks.Event) { spoolWrite(apiSpool, ev) }
 	// pipeline 生命周期事件（queued/started/success/failed/cancelled）也投递到订阅方
 	pipeline.SetEventPublisher(func(ev webhooks.Event) { spoolWrite(apiSpool, ev) })
+	// 流水线成功后，重新评估开启了自动合并的 PR（CI 门禁可能因此满足）
+	pipeline.SetRunSuccessHook(a.AutoMergeForRepo)
 	go dispatcher.Run(apiSpool, 2*time.Second, notify.EmailHandler(st, sender), pipeline.PullHandler(st))
 
 	// 定时触发：扫描已开启流水线的仓库，按 .gitdash.yml 的 schedule（cron）触发

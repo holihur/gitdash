@@ -169,23 +169,26 @@ type Collab struct {
 
 // PullRequest 仓库内的拉取请求（同仓库分支合并，MVP：仅支持 fast-forward 合并）
 type PullRequest struct {
-	ID           int64   `json:"id"`
-	Owner        string  `json:"-"`
-	Repo         string  `json:"-"`
-	Number       int64   `json:"number"`
-	Title        string  `json:"title"`
-	Body         string  `json:"body"`
-	SourceBranch string  `json:"source_branch"`
-	TargetBranch string  `json:"target_branch"`
-	BaseSHA      string  `json:"base_sha"`
-	HeadSHA      string  `json:"head_sha"`
-	State        string  `json:"state"` // open | merged | closed
-	Draft        bool    `json:"draft"`
-	Author       string  `json:"author"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
-	MergedAt     *string `json:"merged_at"`
-	MergedBy     string  `json:"merged_by"`
+	ID           int64  `json:"id"`
+	Owner        string `json:"-"`
+	Repo         string `json:"-"`
+	Number       int64  `json:"number"`
+	Title        string `json:"title"`
+	Body         string `json:"body"`
+	SourceBranch string `json:"source_branch"`
+	TargetBranch string `json:"target_branch"`
+	BaseSHA      string `json:"base_sha"`
+	HeadSHA      string `json:"head_sha"`
+	State        string `json:"state"` // open | merged | closed
+	Draft        bool   `json:"draft"`
+	// AutoMerge 开启后，合并门禁满足时由服务端自动合并。
+	AutoMerge       bool    `json:"auto_merge"`
+	AutoMergeMethod string  `json:"auto_merge_method,omitempty"`
+	Author          string  `json:"author"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+	MergedAt        *string `json:"merged_at"`
+	MergedBy        string  `json:"merged_by"`
 	// API enrich（仅 open PR / 详情接口填充）
 	Mergeable  *bool             `json:"mergeable,omitempty"`  // 可合并（fast-forward 或干净合并）
 	Conflicted bool              `json:"conflicted,omitempty"` // 分支分叉且存在合并冲突

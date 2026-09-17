@@ -7,7 +7,8 @@ func pullToDTO(r pullRequestRow) PullRequest {
 		Title: r.Title, Body: r.Body,
 		SourceBranch: r.SourceBranch, TargetBranch: r.TargetBranch,
 		BaseSHA: r.BaseSHA, HeadSHA: r.HeadSHA,
-		State: r.State, Draft: r.Draft, Author: r.Author,
+		State: r.State, Draft: r.Draft, AutoMerge: r.AutoMerge, AutoMergeMethod: r.AutoMergeMethod,
+		Author: r.Author,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, MergedBy: r.MergedBy,
 	}
 	if r.MergedAt != nil {
@@ -144,6 +145,34 @@ func (s *Store) SetPullDraft(owner, repo string, number int64, draft bool) (Pull
 	return s.getPull(owner, repo, number)
 }
 
+// SetPullAutoMerge 开启/关闭自动合并，并记录合并方式（空 = fast-forward）。
+func (s *Store) SetPullAutoMerge(owner, repo string, number int64, enabled bool, method string) (PullRequest, error) {
+	res := s.db.Model(&pullRequestRow{}).
+		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		Updates(map[string]any{"auto_merge": enabled, "auto_merge_method": method, "updated_at": now()})
+	if res.Error != nil {
+		return PullRequest{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return PullRequest{}, ErrNotFound
+	}
+	return s.getPull(owner, repo, number)
+}
+
+// ListAutoMergePulls 列出仓库中开启了自动合并的 open PR。
+func (s *Store) ListAutoMergePulls(owner, repo string) ([]PullRequest, error) {
+	var rows []pullRequestRow
+	if err := s.db.Where("owner = ? AND repo = ? AND state = ? AND auto_merge = ?", owner, repo, "open", true).
+		Order("number").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := []PullRequest{}
+	for _, r := range rows {
+		out = append(out, pullToDTO(r))
+	}
+	return out, nil
+}
+
 // MarkPullMerged 记录合并结果（fast-forward 后 target 指向 headSHA）。
 func (s *Store) MarkPullMerged(owner, repo string, number int64, headSHA, mergedBy string) (PullRequest, error) {
 	now := now()
@@ -151,7 +180,7 @@ func (s *Store) MarkPullMerged(owner, repo string, number int64, headSHA, merged
 		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
 		Updates(map[string]any{
 			"state": "merged", "head_sha": headSHA, "merged_by": mergedBy,
-			"merged_at": now, "updated_at": now,
+			"merged_at": now, "updated_at": now, "auto_merge": false,
 		})
 	if res.Error != nil {
 		return PullRequest{}, res.Error

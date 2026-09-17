@@ -323,6 +323,42 @@ export default function RepoPulls({
                           >
                             {t("pulls.close")}
                           </Button>
+                          {pr.auto_merge ? (
+                            <>
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                {t("pulls.autoMerge")}
+                              </Badge>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={busyId}
+                                onClick={() =>
+                                  act(
+                                    pr,
+                                    () => api.setPullAutoMerge(owner, name, pr.number, false),
+                                    "pulls.autoMergeDisabled",
+                                  )
+                                }
+                              >
+                                {t("pulls.autoMergeCancel")}
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busyId || pr.draft}
+                              onClick={() =>
+                                act(
+                                  pr,
+                                  () => api.setPullAutoMerge(owner, name, pr.number, true, "squash"),
+                                  "pulls.autoMergeEnabled",
+                                )
+                              }
+                            >
+                              {t("pulls.autoMergeEnable")}
+                            </Button>
+                          )}
                         </>
                       )}
                       {pr.state === "closed" && (

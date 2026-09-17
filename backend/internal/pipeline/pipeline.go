@@ -141,6 +141,12 @@ var eventPublisher func(webhooks.Event)
 // SetEventPublisher 注入 pipeline webhook 事件发布器。
 func SetEventPublisher(fn func(webhooks.Event)) { eventPublisher = fn }
 
+// runSuccessHook 流水线成功回调（main 注入；用于触发 PR 自动合并）。
+var runSuccessHook func(owner, repo, sha string)
+
+// SetRunSuccessHook 注入流水线成功回调。
+func SetRunSuccessHook(fn func(owner, repo, sha string)) { runSuccessHook = fn }
+
 // emitPipelineEvent 发布一条 pipeline 事件（queued / started / success / failed / cancelled）。
 func emitPipelineEvent(job RunJob, action string) {
 	if eventPublisher == nil {
@@ -572,6 +578,9 @@ func executeRun(st *store.Store, job RunJob) {
 	writeLog("\n== pipeline success ==")
 	_ = st.FinishPipelineRun(runID, "success", "")
 	emitPipelineEvent(job, "success")
+	if runSuccessHook != nil {
+		runSuccessHook(owner, repo, sha)
+	}
 }
 
 func isZeroSHA(s string) bool {

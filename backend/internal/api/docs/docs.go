@@ -10399,6 +10399,75 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/pulls/{number}/auto-merge": {
+            "post": {
+                "description": "需要仓库写权限；开启后当合并门禁满足时由服务端自动按指定方式合并。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "设置 PR 自动合并",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "PR 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "enabled 与可选 method",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.PullRequest"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/pulls/{number}/codeowners": {
             "get": {
                 "produces": [
@@ -15192,6 +15261,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "author": {
+                    "type": "string"
+                },
+                "auto_merge": {
+                    "description": "AutoMerge 开启后，合并门禁满足时由服务端自动合并。",
+                    "type": "boolean"
+                },
+                "auto_merge_method": {
                     "type": "string"
                 },
                 "base_sha": {

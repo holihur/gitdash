@@ -427,6 +427,9 @@ export interface PullRequest {
   state: PullState;
   /** 草稿 PR（未准备好合并） */
   draft: boolean;
+  /** 开启后合并门禁满足时自动合并 */
+  auto_merge: boolean;
+  auto_merge_method?: string;
   author: string;
   created_at: string;
   updated_at: string;

@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"fmt"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
 	"net/http"
@@ -222,128 +221,80 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	if pr.State != "open" {
-		writeCode(w, http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged")
-		return
-	}
-	if pr.Draft {
-		writeCode(w, http.StatusConflict, "pull_is_draft", "draft pull requests cannot be merged; mark it ready for review first")
-		return
-	}
-	// 合并门禁：CODEOWNERS 所有者批准（变更文件中声明的 owner 需逐个批准）。
-	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && prot.RequireCodeowners {
-		_, _, _, missing, coErr := a.codeownersStatus(owner, name, pr)
-		if coErr != nil {
-			internalError(w, coErr)
-			return
-		}
-		if len(missing) > 0 {
-			writeCode(w, http.StatusConflict, "codeowners_required",
-				fmt.Sprintf("merge blocked: code owner approval required from %s", strings.Join(missing, ", ")))
-			return
-		}
-	}
-	// 合并门禁：目标分支保护规则要求的最少 approve 数。
-	// 有效 approve = reviewer 最新状态为 approve、reviewer 非 PR 作者、针对当前 head（head 前进后过期失效）。
-	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && (prot.MinApprovals > 0 || prot.Branch != "") {
-		head := pr.HeadSHA
-		if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
-			head = h
-		}
-		// 要求的 CI 检查必须在当前 head 上通过。
-		if prot.RequireCI {
-			status := "missing"
-			passed := false
-			if ci, has, cErr := a.store.AggregatePipelineStatusForSHA(owner, name, head); cErr != nil {
-				writeErr(w, http.StatusInternalServerError, cErr.Error())
-				return
-			} else if has {
-				status = ci.Status
-				passed = ci.Status == "success"
-			}
-			if !passed {
-				writeCode(w, http.StatusConflict, "ci_required",
-					fmt.Sprintf("merge blocked: branch %q requires a successful CI run on the current head (current: %s)", pr.TargetBranch, status))
-				return
-			}
-		}
-		reviews, _, lErr := a.store.ListReviews(owner, name, pr.Number)
-		if lErr != nil {
-			writeErr(w, http.StatusInternalServerError, lErr.Error())
-			return
-		}
-		latest := map[string]store.PullReview{}
-		for _, rv := range reviews {
-			if prev, ok := latest[rv.Reviewer]; !ok || rv.ID > prev.ID {
-				latest[rv.Reviewer] = rv
-			}
-		}
-		valid := 0
-		blocked := false
-		for _, rv := range latest {
-			switch {
-			case rv.State == "approve" && rv.Reviewer != pr.Author && rv.CommitSHA == head:
-				valid++
-			case rv.State == "request_changes" && rv.Reviewer != pr.Author && rv.CommitSHA == head:
-				blocked = true
-			}
-		}
-		if blocked {
-			writeCode(w, http.StatusConflict, "changes_requested",
-				"merge blocked: a reviewer requested changes (a new approve or a new head commit clears it)")
-			return
-		}
-		if valid < prot.MinApprovals {
-			writeCode(w, http.StatusConflict, "review_required",
-				fmt.Sprintf("branch %q requires %d approval(s) from reviewers other than the PR author (current: %d; approvals on an older head do not count)",
-					pr.TargetBranch, prot.MinApprovals, valid))
-			return
-		}
-	}
 	var in struct {
-		Method string `json:"method"` // ""(fast-forward) | merge | squash
+		Method string `json:"method"` // ""(fast-forward) | merge | squash | rebase
 	}
 	if r.ContentLength > 0 {
 		if rerr := readJSON(w, r, &in); rerr != nil {
 			return
 		}
 	}
-	var headSHA string
+	merged, ge := a.executeMerge(owner, name, pr, in.Method, userFrom(r))
+	if ge != nil {
+		if ge.internal {
+			writeErr(w, ge.status, ge.msg)
+		} else {
+			writeCode(w, ge.status, ge.code, ge.msg)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, merged)
+}
+
+// setPullAutoMerge 开启/关闭 PR 自动合并。
+//
+//	@Summary     设置 PR 自动合并
+//	@Description 需要仓库写权限；开启后当合并门禁满足时由服务端自动按指定方式合并。
+//	@Tags        pulls
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Param       body   body object true "enabled 与可选 method"
+//	@Success     200 {object} store.PullRequest
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number}/auto-merge [post]
+func (a *API) setPullAutoMerge(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	pr, err := a.getPullOr404(w, owner, name, r.PathValue("number"))
+	if err != nil {
+		return
+	}
+	var in struct {
+		Enabled bool   `json:"enabled"`
+		Method  string `json:"method"`
+	}
+	if rerr := readJSON(w, r, &in); rerr != nil {
+		return
+	}
 	switch in.Method {
-	case "", "fast-forward":
-		h, mErr := gitsvc.MergeFastForward(owner, name, pr.TargetBranch, pr.SourceBranch)
-		if mErr != nil {
-			writeCode(w, http.StatusConflict, "merge_not_ff",
-				"branches diverged; merge with method \"merge\", \"squash\" or \"rebase\", or merge locally: "+mErr.Error())
-			return
-		}
-		headSHA = h
-	case "merge", "squash":
-		msg := fmt.Sprintf("Merge pull request #%d from %s: %s", pr.Number, pr.SourceBranch, pr.Title)
-		h, mErr := gitsvc.MergeNonFF(owner, name, pr.TargetBranch, pr.SourceBranch, msg, userFrom(r), in.Method)
-		if mErr != nil {
-			writeCode(w, http.StatusConflict, "merge_conflict", mErr.Error())
-			return
-		}
-		headSHA = h
-	case "rebase":
-		h, mErr := gitsvc.MergeRebase(owner, name, pr.TargetBranch, pr.SourceBranch, userFrom(r))
-		if mErr != nil {
-			writeCode(w, http.StatusConflict, "merge_conflict", mErr.Error())
-			return
-		}
-		headSHA = h
+	case "", "fast-forward", "merge", "squash", "rebase":
 	default:
 		writeCode(w, http.StatusBadRequest, "invalid_merge_method", "method must be 'fast-forward', 'merge', 'squash' or 'rebase'")
 		return
 	}
-	merged, err := a.store.MarkPullMerged(owner, name, pr.Number, headSHA, userFrom(r))
+	if pr.State != "open" {
+		writeCode(w, http.StatusBadRequest, "pull_not_open", "auto-merge can only be set on open pull requests")
+		return
+	}
+	updated, err := a.store.SetPullAutoMerge(owner, name, pr.Number, in.Enabled, in.Method)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	a.notify(owner, name, "pull", "merged", userFrom(r), merged.Number, merged.Title, "")
-	writeJSON(w, http.StatusOK, merged)
+	if updated.AutoMerge {
+		// 立即尝试一次；门禁未满足则保持开启，等待后续 review / CI 事件。
+		a.tryAutoMerge(owner, name, updated.Number)
+		if fresh, ferr := a.store.GetPull(owner, name, updated.Number); ferr == nil {
+			updated = fresh
+		}
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // setPullState 修改 pull request 状态（open/closed）。

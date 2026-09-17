@@ -81,6 +81,8 @@ func (a *API) createReview(w http.ResponseWriter, r *http.Request) {
 			CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
+	// 新 approve 可能让开启自动合并的 PR 满足门禁
+	a.tryAutoMerge(owner, name, pr.Number)
 	writeJSON(w, http.StatusCreated, review)
 }
 

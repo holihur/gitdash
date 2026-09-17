@@ -442,6 +442,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/merge", a.auth(a.mergePull))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/state", a.auth(a.setPullState))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/draft", a.auth(a.setPullDraft))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/auto-merge", a.auth(a.setPullAutoMerge))
 
 	// branch protection
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branch-protections", a.auth(a.listBranchProtections))

@@ -417,23 +417,25 @@ func (mirrorRow) TableName() string { return "repo_mirrors" }
 // ---- pull requests ----
 
 type pullRequestRow struct {
-	ID           int64  `gorm:"primaryKey;autoIncrement"`
-	Owner        string `gorm:"not null;uniqueIndex:uq_pr;size:255"`
-	Repo         string `gorm:"not null;uniqueIndex:uq_pr;size:255"`
-	Number       int64  `gorm:"not null;uniqueIndex:uq_pr"`
-	Title        string `gorm:"not null"`
-	Body         string `gorm:"not null;default:''"`
-	SourceBranch string `gorm:"not null"`
-	TargetBranch string `gorm:"not null"`
-	BaseSHA      string `gorm:"not null;default:''"`
-	HeadSHA      string `gorm:"not null;default:''"`
-	State        string `gorm:"not null;default:'open';index:idx_pulls_owner_repo"`
-	Draft        bool   `gorm:"not null;default:false"`
-	Author       string `gorm:"not null"`
-	CreatedAt    string `gorm:"not null"`
-	UpdatedAt    string `gorm:"not null"`
-	MergedAt     *string
-	MergedBy     string `gorm:"not null;default:''"`
+	ID              int64  `gorm:"primaryKey;autoIncrement"`
+	Owner           string `gorm:"not null;uniqueIndex:uq_pr;size:255"`
+	Repo            string `gorm:"not null;uniqueIndex:uq_pr;size:255"`
+	Number          int64  `gorm:"not null;uniqueIndex:uq_pr"`
+	Title           string `gorm:"not null"`
+	Body            string `gorm:"not null;default:''"`
+	SourceBranch    string `gorm:"not null"`
+	TargetBranch    string `gorm:"not null"`
+	BaseSHA         string `gorm:"not null;default:''"`
+	HeadSHA         string `gorm:"not null;default:''"`
+	State           string `gorm:"not null;default:'open';index:idx_pulls_owner_repo"`
+	Draft           bool   `gorm:"not null;default:false"`
+	AutoMerge       bool   `gorm:"not null;default:false"`
+	AutoMergeMethod string `gorm:"not null;default:'';size:16"`
+	Author          string `gorm:"not null"`
+	CreatedAt       string `gorm:"not null"`
+	UpdatedAt       string `gorm:"not null"`
+	MergedAt        *string
+	MergedBy        string `gorm:"not null;default:''"`
 }
 
 func (pullRequestRow) TableName() string { return "pull_requests" }
