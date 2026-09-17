@@ -87,3 +87,29 @@ func (s *Store) SearchUsers(q string, limit int) ([]SearchUsersResult, error) {
 	}
 	return out, nil
 }
+
+// CodeSearchRepos 返回全局代码搜索的候选仓库：当前用户可访问的仓库
+// （自有 / 组织 / 协作者）+ 公开仓库，过滤封禁仓库与被封禁组织，去重后排序。
+// max<=0 表示不限制；否则在 SQL 层限制条数。
+func (s *Store) CodeSearchRepos(username string, max int) ([]Repo, error) {
+	sql := `SELECT r.id, r.owner, r.name, r.description, r.private, r.is_template, r.banned,
+			r.default_branch, r.has_issues, r.created_at
+		FROM repos r
+		WHERE r.banned = ? AND NOT EXISTS (SELECT 1 FROM orgs o WHERE o.name = r.owner AND o.banned = ?)
+		  AND (r.private = ? OR r.id IN (SELECT t.id FROM (` + accessibleReposSubquery + `) t))
+		ORDER BY r.owner, r.name`
+	args := []any{false, true, false, username, username, username, false, true}
+	if max > 0 {
+		sql += " LIMIT ?"
+		args = append(args, max)
+	}
+	var rows []repoRow
+	if err := s.db.Raw(sql, args...).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]Repo, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toRepo(r))
+	}
+	return out, nil
+}

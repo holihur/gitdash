@@ -5668,6 +5668,73 @@ const docTemplate = `{
                 ]
             }
         },
+        "/search/code": {
+            "get": {
+                "description": "在当前用户可访问的仓库 + 公开仓库上做固定字符串搜索。\nq 支持内联限定符 repo:owner/name、lang:go、path:src/、symbol:Foo。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "search"
+                ],
+                "summary": "全局代码搜索",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "关键词与内联限定符",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库限定（owner/name 或 name）",
+                        "name": "repo",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "语言限定",
+                        "name": "lang",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "路径前缀限定",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "符号（单词边界匹配）",
+                        "name": "symbol",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "results / truncated / repos_searched",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/starred": {
             "get": {
                 "produces": [
