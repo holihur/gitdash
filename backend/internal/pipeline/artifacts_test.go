@@ -87,6 +87,35 @@ func TestArtifactArchiveRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRemoteArtifactArchiveRoundTrip(t *testing.T) {
+	if err := Init(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	work := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(work, "out"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "out", "a.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := BuildArtifactArchive(&Config{ArtifactPaths: []string{"out"}}, work)
+	if err != nil || len(data) == 0 {
+		t.Fatalf("build: err=%v len=%d", err, len(data))
+	}
+	if err := ExtractArtifactArchive("alice", "r", 9, bytes.NewReader(data)); err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(ArtifactDir("alice", "r", 9), "out", "a.txt"))
+	if err != nil || string(b) != "hello" {
+		t.Fatalf("content=%q err=%v", b, err)
+	}
+	// 未匹配到路径时返回 nil 归档
+	if d, err := BuildArtifactArchive(&Config{ArtifactPaths: []string{"nope"}}, work); err != nil || d != nil {
+		t.Fatalf("expected nil archive, len=%d err=%v", len(d), err)
+	}
+}
+
 func TestPipelineArtifactsEndToEnd(t *testing.T) {
 	dir := t.TempDir()
 	st := openPipelineStore(t, dir)

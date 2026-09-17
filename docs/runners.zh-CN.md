@@ -134,6 +134,9 @@ runs-on:                     # 块列表
   （`POST …/pipeline/runs/{id}/rerun`），复用原提交、ref、事件、inputs 与流水线文件。
 - **延迟执行**：手动 / dispatch 触发时可带 `delay`（如 `{"delay":"30m"}`），
   运行以 `pending` + `run_at` 落库，到期自动开始（重启后仍生效）。
+- **产物（artifacts）**：`artifacts.paths` 在 builtin（本地）执行时由服务端归档；
+  远程执行时由 agent 经 WS 回传后落盘（均存于 `data/artifacts/{owner}/{repo}/run-{id}`）。
+  缓存由 agent 侧通过 `GITDASH_RUNNER_CACHE` / 临时目录处理。
 
 ## 宿主执行模式（无 Docker）
 

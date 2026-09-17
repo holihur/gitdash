@@ -188,6 +188,7 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	ws.SetReadLimit(WSReadLimit)
 	h.serveConn(r.Context(), name, ws)
 }
 
@@ -260,7 +261,7 @@ func (h *Hub) readPump(ctx context.Context, name string, conn *agentConn) {
 		case TypeHeartbeat:
 			_ = h.rdb.Set(ctx, lastSeenKey(name), time.Now().Unix(), heartbeatTTL).Err()
 			_ = h.st.SetRunnerStatus(name, "online")
-		case TypeAck, TypeJobStatus, TypeJobLog:
+		case TypeAck, TypeJobStatus, TypeJobLog, TypeJobArtifacts:
 			h.handleAgentEvent(ctx, name, msg)
 		}
 	}
@@ -282,6 +283,11 @@ func (h *Hub) handleAgentEvent(ctx context.Context, name string, msg Message) {
 		var js JobStatus
 		if json.Unmarshal(msg.Payload, &js) == nil {
 			runID = js.RunID
+		}
+	case TypeJobArtifacts:
+		var ja JobArtifacts
+		if json.Unmarshal(msg.Payload, &ja) == nil {
+			runID = ja.RunID
 		}
 	case TypeJobData, TypeJobCancel:
 		return // 不会出现在 agent → server 方向

@@ -22,8 +22,8 @@ import (
 	"gitdash/backend/internal/store"
 )
 
-// fakeAgent 模拟 agent：hello → ack → 收工作区 → 验证 tar.gz → 回传日志与成功状态。
-func fakeAgentRun(t *testing.T, srv *httptest.Server, name, secret string) {
+// fakeAgent 模拟 agent：hello → ack → 收工作区 → 验证 tar.gz → 回传日志/产物与成功状态。
+func fakeAgentRun(t *testing.T, srv *httptest.Server, name, secret string, artifacts []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/api/runner/ws"
@@ -86,6 +86,15 @@ func fakeAgentRun(t *testing.T, srv *httptest.Server, name, secret string) {
 				return
 			}
 			send(Message{Type: TypeJobLog, Payload: mustJSON(JobLog{RunID: runID, Chunk: "workspace ok\n"})})
+			for i := 0; i < len(artifacts); i += 8 {
+				end := i + 8
+				if end > len(artifacts) {
+					end = len(artifacts)
+				}
+				send(Message{Type: TypeJobArtifacts, Payload: mustJSON(JobArtifacts{
+					RunID: runID, Seq: i / 8, Eof: end == len(artifacts), Data: artifacts[i:end],
+				})})
+			}
 			send(Message{Type: TypeJobStatus, Payload: mustJSON(JobStatus{RunID: runID, Status: "success"})})
 		}
 	}
@@ -139,7 +148,15 @@ func TestRunRemoteEndToEnd(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(h.HandleWS))
 	t.Cleanup(srv.Close)
-	go fakeAgentRun(t, srv, "agent-e2e", "sec")
+	artifactData := []byte("fake-artifact-archive-bytes")
+	var gotArtifact []byte
+	ArtifactsSink = func(owner, repo string, runID int64, r io.Reader) error {
+		b, _ := io.ReadAll(r)
+		gotArtifact = b
+		return nil
+	}
+	t.Cleanup(func() { ArtifactsSink = nil })
+	go fakeAgentRun(t, srv, "agent-e2e", "sec", artifactData)
 
 	var r store.Runner
 	deadline := time.Now().Add(5 * time.Second)
@@ -175,6 +192,9 @@ func TestRunRemoteEndToEnd(t *testing.T) {
 	}
 	if !strings.Contains(logSink.String(), "workspace ok") {
 		t.Fatalf("log missing chunk: %q", logSink.String())
+	}
+	if !bytes.Equal(gotArtifact, artifactData) {
+		t.Fatalf("artifact round-trip = %q, want %q", gotArtifact, artifactData)
 	}
 }
 

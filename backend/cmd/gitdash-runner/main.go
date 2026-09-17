@@ -273,6 +273,7 @@ func (a *agent) serveWS(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	ws.SetReadLimit(runner.WSReadLimit)
 	logx.Infof("gitdash-runner %s 服务端已拨入", version)
 	_ = a.runConn(r.Context(), ws)
 }
@@ -309,6 +310,7 @@ func (a *agent) session(ctx context.Context) error {
 		return err
 	}
 	_ = wresp // coder/websocket v1.8: 成功握手时 resp 非 nil，Body 由连接管理，不应外部关闭
+	ws.SetReadLimit(runner.WSReadLimit)
 	logx.Infof("gitdash-runner %s 已连接 %s", version, a.cfg.Server)
 	return a.runConn(wsCtx, ws)
 }
@@ -514,8 +516,34 @@ func (a *agent) execJob(ctx context.Context, job runner.Job, st *jobState) {
 		return
 	}
 	lw.flush()
+	a.uploadArtifacts(job, cfg, workdir)
 	status("success", "", 0)
 	logx.Infof("job %s: success", job.JobID)
+}
+
+// uploadArtifacts 把 DSL 配置的产物打成 tar.gz 分块回传服务端（无产物则跳过）。
+// 在成功状态之前发送，保证服务端在收尾前拿到归档。
+func (a *agent) uploadArtifacts(job runner.Job, cfg *pipeline.Config, workdir string) {
+	data, err := pipeline.BuildArtifactArchive(cfg, workdir)
+	if err != nil {
+		logx.Infof("job %s: build artifacts: %v", job.JobID, err)
+		return
+	}
+	if len(data) == 0 {
+		return
+	}
+	const chunk = 32 << 10
+	seq := 0
+	for off := 0; off < len(data); off += chunk {
+		end := off + chunk
+		if end > len(data) {
+			end = len(data)
+		}
+		a.send(runner.Message{Type: runner.TypeJobArtifacts, Payload: mustJSON(runner.JobArtifacts{
+			RunID: job.RunID, Seq: seq, Eof: end == len(data), Data: data[off:end],
+		})})
+		seq++
+	}
 }
 
 // recvWorkspace 消费 session 读循环路由来的 job_data 分块直到 eof，写入临时 tar.gz 文件。

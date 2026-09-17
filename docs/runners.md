@@ -108,6 +108,10 @@ counts each sub-step as one unit.
 - **Delayed execution**: trigger a manual / dispatch run with `delay` (e.g.
   `{"delay":"30m"}`); the run is created as `pending` with a `run_at` timestamp
   and starts automatically when due (survives restarts).
+- **Artifacts**: `artifacts.paths` are archived server-side for builtin (local)
+  runs, and streamed back from the agent over the WS connection for remote runs
+  (both land in `data/artifacts/{owner}/{repo}/run-{id}`). Cache is handled on
+  the agent via `GITDASH_RUNNER_CACHE` / a temp dir.
 
 ## Host execution mode (no Docker)
 

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,10 @@ var (
 	ErrNoRunner   = errors.New("no online runner matches")
 	ErrCancelled  = errors.New("job cancelled")
 )
+
+// ArtifactsSink 保存远程运行回传的产物归档（由 pipeline 注入；nil = 忽略）。
+// 注入而非直接调用 pipeline 以避免包循环依赖。
+var ArtifactsSink func(owner, repo string, runID int64, r io.Reader) error
 
 const (
 	workspaceChunkSize = 32 << 10 // 工作区分块大小（base64 前）
@@ -98,6 +103,7 @@ func (h *Hub) RunRemote(ctx context.Context, runnerName string, job Job, workspa
 	// 等待执行结果，同时转发日志
 	var runErr error
 	total := 0
+	var artifactBuf *bytes.Buffer
 	for {
 		select {
 		case msg := <-s.events:
@@ -127,6 +133,20 @@ func (h *Hub) RunRemote(ctx context.Context, runnerName string, job Job, workspa
 						runErr = errors.New("runner reported failure")
 					}
 					return runErr
+				}
+			case TypeJobArtifacts:
+				var ja JobArtifacts
+				if json.Unmarshal(msg.Payload, &ja) != nil {
+					continue
+				}
+				if artifactBuf == nil {
+					artifactBuf = &bytes.Buffer{}
+				}
+				_, _ = artifactBuf.Write(ja.Data)
+				if ja.Eof && ArtifactsSink != nil {
+					if err := ArtifactsSink(job.Owner, job.Repo, job.RunID, bytes.NewReader(artifactBuf.Bytes())); err != nil {
+						logx.Infof("runner: artifacts run=%d: %v", job.RunID, err)
+					}
 				}
 			case TypeError:
 				return fmt.Errorf("runner error: %s", string(msg.Payload))

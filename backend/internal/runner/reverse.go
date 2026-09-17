@@ -141,6 +141,7 @@ func (h *Hub) dialReverse(ctx context.Context, name, url string) error {
 	if err != nil {
 		return err
 	}
+	ws.SetReadLimit(WSReadLimit)
 	logx.Infof("runner audit: REVERSE CONNECT runner=%s url=%s time=%s", name, url, time.Now().UTC().Format(time.RFC3339))
 	h.serveConn(ctx, name, ws)
 	return nil

@@ -13,17 +13,22 @@ import (
 // 用于服务端位于内网（无公网地址）、runner 暴露在公网的部署。
 const ModeReverse = "reverse"
 
+// WSReadLimit 单条 WS 消息的读取上限。coder/websocket 默认仅 32 KiB，
+// 而工作区快照 / 产物归档分块的 base64 会超过该值，故两端均需显式抬高。
+const WSReadLimit = 8 << 20
+
 // WS 消息类型（server <-> agent）
 const (
-	TypeHello     = "hello"      // agent → server：连接后首个消息（labels/version）
-	TypeHeartbeat = "heartbeat"  // agent → server：每 10s
-	TypeJob       = "job"        // server → agent：派发任务
-	TypeAck       = "ack"        // agent → server：5s 内确认收到
-	TypeJobData   = "job_data"   // server → agent：工作区快照分块（tar.gz）
-	TypeJobStatus = "job_status" // agent → server：状态变化（running|success|failed）
-	TypeJobLog    = "job_log"    // agent → server：日志分片
-	TypeJobCancel = "job_cancel" // server → agent：取消任务
-	TypeError     = "error"      // 双向：错误
+	TypeHello        = "hello"         // agent → server：连接后首个消息（labels/version）
+	TypeHeartbeat    = "heartbeat"     // agent → server：每 10s
+	TypeJob          = "job"           // server → agent：派发任务
+	TypeAck          = "ack"           // agent → server：5s 内确认收到
+	TypeJobData      = "job_data"      // server → agent：工作区快照分块（tar.gz）
+	TypeJobStatus    = "job_status"    // agent → server：状态变化（running|success|failed）
+	TypeJobLog       = "job_log"       // agent → server：日志分片
+	TypeJobArtifacts = "job_artifacts" // agent → server：产物归档 tar.gz 分片
+	TypeJobCancel    = "job_cancel"    // server → agent：取消任务
+	TypeError        = "error"         // 双向：错误
 )
 
 // Message WS 帧。
@@ -80,6 +85,14 @@ type JobStatus struct {
 type JobLog struct {
 	RunID int64  `json:"run_id"`
 	Chunk string `json:"chunk"`
+}
+
+// JobArtifacts 产物归档分片载荷（agent → server，base64 tar.gz 片段；eof=true 结束）。
+type JobArtifacts struct {
+	RunID int64  `json:"run_id"`
+	Seq   int    `json:"seq"`
+	Eof   bool   `json:"eof"`
+	Data  []byte `json:"data"`
 }
 
 // JobCancel 取消载荷。

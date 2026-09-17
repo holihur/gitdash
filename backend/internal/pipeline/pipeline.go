@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/queue"
+	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/webhooks"
 )
@@ -206,6 +208,10 @@ func Init(dataDir string) error {
 	}
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return err
+	}
+	// 远程 runner 回传的产物归档落盘（避免 runner 包反向依赖 pipeline）。
+	runner.ArtifactsSink = func(owner, repo string, runID int64, r io.Reader) error {
+		return ExtractArtifactArchive(owner, repo, runID, r)
 	}
 	return os.MkdirAll(artifactsDir, 0o755)
 }
