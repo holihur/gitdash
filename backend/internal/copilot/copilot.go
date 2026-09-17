@@ -531,7 +531,7 @@ func (m *Manager) maybeOpenPull(session store.CopilotSession, branch string) {
 		title = string(r[:120]) + "…"
 	}
 	body := fmt.Sprintf("Closes #%d\n\n由 Copilot 会话 #%d 自动生成。", issue.Number, session.ID)
-	pr, err := m.st.CreatePull(owner, repo, session.CreatedBy, title, body, branch, target, baseSHA, srcSHA)
+	pr, err := m.st.CreatePull(owner, repo, session.CreatedBy, title, body, branch, target, baseSHA, srcSHA, false)
 	if err != nil {
 		logx.Warnf("copilot: auto PR session %d: %v", session.ID, err)
 		return

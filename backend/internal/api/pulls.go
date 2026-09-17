@@ -82,6 +82,7 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 		Body         string `json:"body"`
 		SourceBranch string `json:"source_branch"`
 		TargetBranch string `json:"target_branch"`
+		Draft        bool   `json:"draft"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -111,7 +112,7 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "branch_not_found", "target branch not found: "+in.TargetBranch)
 		return
 	}
-	pr, err := a.store.CreatePull(owner, name, userFrom(r), in.Title, in.Body, in.SourceBranch, in.TargetBranch, baseSHA, srcSHA)
+	pr, err := a.store.CreatePull(owner, name, userFrom(r), in.Title, in.Body, in.SourceBranch, in.TargetBranch, baseSHA, srcSHA, in.Draft)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -223,6 +224,10 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 	}
 	if pr.State != "open" {
 		writeCode(w, http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged")
+		return
+	}
+	if pr.Draft {
+		writeCode(w, http.StatusConflict, "pull_is_draft", "draft pull requests cannot be merged; mark it ready for review first")
 		return
 	}
 	// 合并门禁：目标分支保护规则要求的最少 approve 数。
@@ -373,6 +378,56 @@ func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
 		}
 		a.notify(owner, name, "pull", action, userFrom(r), updated.Number, updated.Title, "")
 	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// setPullDraft 切换 PR 草稿状态（仅 open）。
+//
+//	@Summary     切换 PR 草稿状态
+//	@Tags        pulls
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "PR 编号"
+//	@Param       body   body object true "draft: true/false"
+//	@Success     200 {object} store.PullRequest
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pulls/{number}/draft [post]
+func (a *API) setPullDraft(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	pr, err := a.getPullOr404(w, owner, name, r.PathValue("number"))
+	if err != nil {
+		return
+	}
+	var in struct {
+		Draft bool `json:"draft"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if pr.State != "open" {
+		writeCode(w, http.StatusBadRequest, "invalid_state", "only open pull requests can change draft state")
+		return
+	}
+	if pr.Draft == in.Draft {
+		writeJSON(w, http.StatusOK, pr)
+		return
+	}
+	updated, err := a.store.SetPullDraft(owner, name, pr.Number, in.Draft)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	action := "converted_to_draft"
+	if !updated.Draft {
+		action = "ready_for_review"
+	}
+	a.notify(owner, name, "pull", action, userFrom(r), updated.Number, updated.Title, "")
 	writeJSON(w, http.StatusOK, updated)
 }
 

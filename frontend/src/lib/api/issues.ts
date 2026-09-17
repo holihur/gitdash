@@ -148,10 +148,17 @@ export const issuesApi = {
     body: string,
     sourceBranch: string,
     targetBranch: string,
+    draft = false,
   ) =>
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls`, {
       method: "POST",
-      body: JSON.stringify({ title, body, source_branch: sourceBranch, target_branch: targetBranch }),
+      body: JSON.stringify({
+        title,
+        body,
+        source_branch: sourceBranch,
+        target_branch: targetBranch,
+        draft,
+      }),
     }),
   getPull: (owner: string, name: string, number: number) =>
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}`),
@@ -166,6 +173,11 @@ export const issuesApi = {
     req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/state`, {
       method: "POST",
       body: JSON.stringify({ state }),
+    }),
+  setPullDraft: (owner: string, name: string, number: number, draft: boolean) =>
+    req<PullRequest>(`/users/${owner}/repos/${name}/pulls/${number}/draft`, {
+      method: "POST",
+      body: JSON.stringify({ draft }),
     }),
 
 

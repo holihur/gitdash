@@ -177,6 +177,7 @@ type PullRequest struct {
 	BaseSHA      string  `json:"base_sha"`
 	HeadSHA      string  `json:"head_sha"`
 	State        string  `json:"state"` // open | merged | closed
+	Draft        bool    `json:"draft"`
 	Author       string  `json:"author"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`

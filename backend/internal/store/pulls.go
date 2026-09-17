@@ -7,7 +7,7 @@ func pullToDTO(r pullRequestRow) PullRequest {
 		Title: r.Title, Body: r.Body,
 		SourceBranch: r.SourceBranch, TargetBranch: r.TargetBranch,
 		BaseSHA: r.BaseSHA, HeadSHA: r.HeadSHA,
-		State: r.State, Author: r.Author,
+		State: r.State, Draft: r.Draft, Author: r.Author,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, MergedBy: r.MergedBy,
 	}
 	if r.MergedAt != nil {
@@ -26,7 +26,7 @@ func (s *Store) getPull(owner, repo string, number int64) (PullRequest, error) {
 	return pullToDTO(r), nil
 }
 
-func (s *Store) CreatePull(owner, repo, author, title, body, source, target, baseSHA, headSHA string) (PullRequest, error) {
+func (s *Store) CreatePull(owner, repo, author, title, body, source, target, baseSHA, headSHA string, draft bool) (PullRequest, error) {
 	var pr PullRequest
 	now := now()
 	var err error
@@ -41,7 +41,7 @@ func (s *Store) CreatePull(owner, repo, author, title, body, source, target, bas
 			Owner: owner, Repo: repo, Number: max,
 			Title: title, Body: body,
 			SourceBranch: source, TargetBranch: target,
-			BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Author: author,
+			BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Draft: draft, Author: author,
 			CreatedAt: now, UpdatedAt: now,
 		}
 		e := s.db.Create(&r).Error
@@ -49,7 +49,7 @@ func (s *Store) CreatePull(owner, repo, author, title, body, source, target, bas
 			return PullRequest{
 				ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
 				Title: title, Body: body, SourceBranch: source, TargetBranch: target,
-				BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Author: author,
+				BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Draft: draft, Author: author,
 				CreatedAt: now, UpdatedAt: now,
 			}, nil
 		}
@@ -121,6 +121,20 @@ func (s *Store) SetPullState(owner, repo string, number int64, state string) (Pu
 	res := s.db.Model(&pullRequestRow{}).
 		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
 		Updates(map[string]any{"state": state, "updated_at": now()})
+	if res.Error != nil {
+		return PullRequest{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return PullRequest{}, ErrNotFound
+	}
+	return s.getPull(owner, repo, number)
+}
+
+// SetPullDraft 切换 PR 草稿状态。
+func (s *Store) SetPullDraft(owner, repo string, number int64, draft bool) (PullRequest, error) {
+	res := s.db.Model(&pullRequestRow{}).
+		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		Updates(map[string]any{"draft": draft, "updated_at": now()})
 	if res.Error != nil {
 		return PullRequest{}, res.Error
 	}

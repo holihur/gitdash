@@ -426,6 +426,7 @@ type pullRequestRow struct {
 	BaseSHA      string `gorm:"not null;default:''"`
 	HeadSHA      string `gorm:"not null;default:''"`
 	State        string `gorm:"not null;default:'open';index:idx_pulls_owner_repo"`
+	Draft        bool   `gorm:"not null;default:false"`
 	Author       string `gorm:"not null"`
 	CreatedAt    string `gorm:"not null"`
 	UpdatedAt    string `gorm:"not null"`

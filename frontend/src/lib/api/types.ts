@@ -408,6 +408,8 @@ export interface PullRequest {
   base_sha: string;
   head_sha: string;
   state: PullState;
+  /** 草稿 PR（未准备好合并） */
+  draft: boolean;
   author: string;
   created_at: string;
   updated_at: string;
@@ -596,7 +598,16 @@ export interface CopilotMessage {
 }
 
 export type NotifKind = "issue" | "pull" | "system";
-export type NotifAction = "opened" | "closed" | "reopened" | "merged" | "banned_user" | "banned_repo" | "banned_org";
+export type NotifAction =
+  | "opened"
+  | "closed"
+  | "reopened"
+  | "merged"
+  | "ready_for_review"
+  | "converted_to_draft"
+  | "banned_user"
+  | "banned_repo"
+  | "banned_org";
 
 export interface Notification {
   id: number;

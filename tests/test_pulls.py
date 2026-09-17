@@ -232,3 +232,49 @@ def test_pr_squash_merge_and_commit_diff(nonff_env):
     c.post(_p(owner, repo), json={"title": "bad method", "source_branch": "t2", "target_branch": "main"}, expect=201)
     c.post(_p(owner, repo, "/3/merge"), json={"method": "bogus"}, expect=400)
     c.get(f"/users/{owner}/repos/{repo}/commits/not-a-sha/diff", expect=400)
+
+
+def test_pr_draft(pr_env):
+    """草稿 PR：创建为 draft、不可合并、可标记 ready / 转回 draft，关闭后不可切换。"""
+    c = pr_env["client"]
+    owner, repo = pr_env["owner"], pr_env["repo"]
+
+    pr = c.post(
+        _p(owner, repo),
+        json={
+            "title": "draft change",
+            "body": "",
+            "source_branch": "feat",
+            "target_branch": "main",
+            "draft": True,
+        },
+        expect=201,
+    ).json()
+    assert pr["draft"] is True and pr["state"] == "open"
+
+    # 草稿不可合并
+    body = c.post(_p(owner, repo, f"/{pr['number']}/merge"), expect=409).json()
+    assert body["code"] == "pull_is_draft"
+
+    # 标记为可评审（重复同值幂等）
+    ready = c.post(_p(owner, repo, f"/{pr['number']}/draft"), json={"draft": False}, expect=200).json()
+    assert ready["draft"] is False
+    assert c.get(_p(owner, repo, f"/{pr['number']}"), expect=200).json()["draft"] is False
+    again = c.post(_p(owner, repo, f"/{pr['number']}/draft"), json={"draft": False}, expect=200).json()
+    assert again["draft"] is False
+
+    # 转回草稿
+    back = c.post(_p(owner, repo, f"/{pr['number']}/draft"), json={"draft": True}, expect=200).json()
+    assert back["draft"] is True
+
+    # 关闭后不可切换草稿状态
+    c.post(_p(owner, repo, f"/{pr['number']}/state"), json={"state": "closed"}, expect=200)
+    c.post(_p(owner, repo, f"/{pr['number']}/draft"), json={"draft": False}, expect=400)
+
+    # 普通 PR 默认 draft=false
+    plain = c.post(
+        _p(owner, repo),
+        json={"title": "plain", "source_branch": "feat", "target_branch": "main"},
+        expect=201,
+    ).json()
+    assert plain["draft"] is False

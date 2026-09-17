@@ -62,6 +62,7 @@ export default function RepoPulls({
   const [body, setBody] = useState("");
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
+  const [draft, setDraft] = useState(false);
   const [branches, setBranches] = useState<string[]>([]);
 
   const load = useCallback(async () => {
@@ -90,9 +91,10 @@ export default function RepoPulls({
     if (!title.trim() || !source || !target) return;
     setBusy((s) => new Set(s).add(0));
     try {
-      const pr = await api.createPull(owner, name, title.trim(), body.trim(), source, target);
+      const pr = await api.createPull(owner, name, title.trim(), body.trim(), source, target, draft);
       toast.success(t("pulls.created", { number: pr.number }));
       setOpen(false);
+      setDraft(false);
       load();
       setExpanded(pr.number);
     } catch (e) {
@@ -191,6 +193,15 @@ export default function RepoPulls({
                   onChange={setBody}
                 />
               </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input"
+                  checked={draft}
+                  onChange={(e) => setDraft(e.target.checked)}
+                />
+                {t("pulls.createAsDraft")}
+              </label>
             </div>
             <DialogFooter>
               <Button onClick={create} disabled={busy.has(0) || !title.trim() || !source || !target}>
@@ -251,6 +262,11 @@ export default function RepoPulls({
                     >
                       {pr.title}
                     </span>
+                    {pr.state === "open" && pr.draft && (
+                      <Badge variant="outline" className="shrink-0 text-xs text-muted-foreground">
+                        {t("pulls.draft")}
+                      </Badge>
+                    )}
                   </button>
                   <div className="flex items-center gap-2 pl-6 sm:min-w-0 sm:pl-0">
                     <span className="text-xs text-muted-foreground">
@@ -267,7 +283,7 @@ export default function RepoPulls({
                           <Button
                             size="sm"
                             className="gap-1"
-                            disabled={busyId}
+                            disabled={busyId || pr.draft}
                             onClick={() =>
                               act(
                                 pr,
@@ -278,6 +294,20 @@ export default function RepoPulls({
                           >
                             <GitMerge className="h-3.5 w-3.5" />
                             {t("pulls.merge")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busyId}
+                            onClick={() =>
+                              act(
+                                pr,
+                                () => api.setPullDraft(owner, name, pr.number, !pr.draft),
+                                pr.draft ? "pulls.markedReady" : "pulls.convertedToDraft",
+                              )
+                            }
+                          >
+                            {pr.draft ? t("pulls.readyForReview") : t("pulls.convertToDraft")}
                           </Button>
                           <Button
                             size="sm"
@@ -349,15 +379,15 @@ export default function RepoPulls({
                             number={pr.number}
                             refreshKey={busy.has(pr.id) ? 1 : 0}
                           />
-                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted}
+                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
                             onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "squash"), "pulls.squashMerged")}>
                             {t("pulls.squashMerge")}
                           </Button>
-                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted}
+                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
                             onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "merge"), "pulls.mergeCommitted")}>
                             {t("pulls.mergeCommit")}
                           </Button>
-                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted}
+                          <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
                             onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "rebase"), "pulls.rebaseMerged")}>
                             {t("pulls.rebaseMerge")}
                           </Button>
