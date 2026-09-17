@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { CircleDot, FileCode, FolderGit2, Search, Star, Tag, User } from "lucide-react";
-import { api, type CodeSearchResponse, type GlobalSearchResult, type Repo, type TopicCount } from "@/lib/api";
+import { CircleDot, FolderGit2, Search, Star, Tag, User } from "lucide-react";
+import { api, type GlobalSearchResult, type Repo, type TopicCount } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,6 @@ export default function Explore() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(get("q", ""));
   const [results, setResults] = useState<GlobalSearchResult | null>(null);
-  const [codeResults, setCodeResults] = useState<CodeSearchResponse | null>(null);
   const [searching, setSearching] = useState(false);
 
   const updateQuery = (q: string) => {
@@ -62,7 +61,6 @@ export default function Explore() {
   useEffect(() => {
     if (query.trim()) return;
     setResults(null);
-    setCodeResults(null);
     load();
   }, [load, query]);
 
@@ -72,9 +70,7 @@ export default function Explore() {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const [g, c] = await Promise.all([api.globalSearch(q), api.searchCode(q)]);
-        setResults(g);
-        setCodeResults(c);
+        setResults(await api.globalSearch(q));
         setError("");
       } catch (e) {
         toast.error(apiErrorMsg(to, e));
@@ -177,33 +173,6 @@ export default function Explore() {
                   </span>
                 </Link>
               ))}
-            </div>
-          )}
-          {codeResults && codeResults.results.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs font-medium uppercase text-muted-foreground">
-                {t("explore.sectionCode")}
-              </p>
-              {codeResults.results.map((r, i) => (
-                <Link
-                  key={`${r.owner}/${r.repo}:${r.path}:${r.line}:${i}`}
-                  to={`/repo/${r.owner}/${r.repo}?file=${encodeURIComponent(r.path)}&line=${r.line}`}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
-                >
-                  <FileCode className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 shrink-0 font-mono text-xs">
-                    {r.owner}/{r.repo}:{r.path}:{r.line}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
-                    {r.text}
-                  </span>
-                </Link>
-              ))}
-              {codeResults.truncated && (
-                <p className="px-2 pt-1 text-xs text-muted-foreground">
-                  {t("explore.codeTruncated")}
-                </p>
-              )}
             </div>
           )}
           {results.issues.length > 0 && (

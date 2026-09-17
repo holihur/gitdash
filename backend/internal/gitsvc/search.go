@@ -3,7 +3,6 @@ package gitsvc
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -18,44 +17,24 @@ type SearchHit struct {
 	Text string `json:"text"`
 }
 
-// SearchOpts 代码搜索选项。
-type SearchOpts struct {
-	// Ref 分支/标签/commit；为空时使用默认分支。
-	Ref string
-	// Pathspec 额外的 git pathspec（如 "*.go"、"src/"）。
-	Pathspec []string
-	// Word 为 true 时按单词边界匹配（`git grep -w`），用于 symbol 搜索。
-	Word bool
-	// Max 返回条数上限（默认 50，最大 200）。
-	Max int
-}
-
 // Search 在指定 ref（缺省默认分支）上做固定字符串全文搜索。
 // 底层 `git grep -n -I --fixed-strings -e <query> <ref> --`：
 // query 作为 -e 参数值传入，git 把它当 pattern 数据，无注入风险；
 // --fixed-strings 避免正则语义；-I 跳过二进制文件。
 // 无命中（退出码 1）返回空切片而非错误。
 func Search(owner, name, query, ref string, max int) ([]SearchHit, error) {
-	return SearchWith(context.Background(), owner, name, query, SearchOpts{Ref: ref, Max: max})
-}
-
-// SearchWith 与 Search 相同，但支持 pathspec / 单词匹配，并可通过 ctx 取消
-// （用于全局搜索的总超时）。ctx 取消时子进程会被杀掉。
-func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts) ([]SearchHit, error) {
 	if !ValidName(owner) || !ValidName(name) {
 		return nil, fmt.Errorf("invalid repo %s/%s", owner, name)
 	}
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("empty query")
 	}
-	max := opts.Max
 	if max <= 0 {
 		max = 50
 	}
 	if max > 200 {
 		max = 200
 	}
-	ref := opts.Ref
 	if ref == "" {
 		// 任何错误（含空仓库）都视为无可搜索内容
 		head, _ := HeadBranch(owner, name)
@@ -67,17 +46,9 @@ func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts)
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
-	args := []string{"-C", RepoPath(owner, name), "grep", "-n", "-I", "--fixed-strings"}
-	if opts.Word {
-		args = append(args, "-w")
-	}
-	args = append(args, "-e", query, ref, "--")
-	for _, p := range opts.Pathspec {
-		if s := strings.TrimSpace(p); s != "" {
-			args = append(args, s)
-		}
-	}
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.Command("git", "-C", RepoPath(owner, name),
+		"grep", "-n", "-I", "--fixed-strings",
+		"-e", query, ref, "--")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -110,9 +81,6 @@ func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts)
 		return hits, nil
 	}
 	if err := cmd.Wait(); err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ee.ExitCode() == 1 {
 			return []SearchHit{}, nil // git grep 无命中

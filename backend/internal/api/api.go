@@ -465,7 +465,6 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/templates", a.auth(a.listTemplateRepos))
 	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
 	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))
-	mux.HandleFunc("GET /api/search/code", a.auth(a.searchCode))
 
 	// orgs (namespace)
 	mux.HandleFunc("POST /api/orgs", a.auth(a.createOrg))
