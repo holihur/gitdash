@@ -71,6 +71,22 @@ class ApiClient:
         return self.request("DELETE", path, **kw)
 
 
+def first_run(body):
+    """流水线触发接口的响应解析。
+
+    支持多流水线文件后，手动触发 / dispatch 返回 {"runs": [...]}；
+    仅创建单个运行时（或旧版本）也可能直接返回 run 对象，这里统一取首个。
+    body 可为 requests.Response（标准 ApiClient）或已解析的 dict（_Mini 等）。
+    """
+    if hasattr(body, "json"):
+        body = body.json()
+    if isinstance(body, dict) and "runs" in body:
+        runs = body.get("runs") or []
+        assert runs, f"trigger returned no runs: {body}"
+        return runs[0]
+    return body
+
+
 # 若本会话由本夹具自启实例（GITDASH_BIN 模式），记录 SSH 端口供 git 相关黑盒测试使用
 _SPAWNED_SSH_PORT: dict = {"port": None}
 

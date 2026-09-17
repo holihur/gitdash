@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from conftest import first_run
 import os
 import socket
 import subprocess
@@ -155,7 +156,7 @@ def test_pipeline_bad_dsl_recorded_failed(pl_env):
     an, _, alice, _, repo = pl_env
     _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)
 
-    run = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    run = first_run(alice.post(_p(an, repo, "/runs"), json={}, expect=201))
     assert run["id"] >= 1 and run["ref"] == "main"
     assert run["steps_total"] == 0
 
@@ -176,7 +177,7 @@ def test_pipeline_run_execution(pl_env):
     an, _, alice, _, repo = pl_env
     _commit(alice, an, repo, ".gitdash.yml", PIPELINE_YAML)
 
-    run = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    run = first_run(alice.post(_p(an, repo, "/runs"), json={}, expect=201))
     assert run["status"] in ("pending", "running", "failed")  # 入队即返回
     assert run["steps_total"] == 2
     assert run["sha"]
@@ -218,7 +219,7 @@ def test_pipeline_repo_delete_cascades(pl_env):
     an, _, alice, _, repo = pl_env
     alice.put(_p(an, repo), json={"enabled": True}, expect=200)
     _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)
-    run = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    run = first_run(alice.post(_p(an, repo, "/runs"), json={}, expect=201))
 
     alice.delete(f"/repos/{repo}", expect=204)
     alice.get(_p(an, repo), expect=404)
@@ -238,7 +239,7 @@ def test_pipeline_manual_by_ref_and_sha(pl_env):
     an, _, alice, _, repo = pl_env
     _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)  # DSL 错误 → 快速 failed，不依赖 docker
 
-    base = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    base = first_run(alice.post(_p(an, repo, "/runs"), json={}, expect=201))
     assert base["ref"] == "main"
     sha = base["sha"]
     assert sha
@@ -250,11 +251,11 @@ def test_pipeline_manual_by_ref_and_sha(pl_env):
         expect=201,
     )
     # 按 tag 触发（ref 存完整 refs/tags/...）
-    tagged = alice.post(_p(an, repo, "/runs"), json={"ref": "v1"}, expect=201).json()
+    tagged = first_run(alice.post(_p(an, repo, "/runs"), json={"ref": "v1"}, expect=201))
     assert tagged["ref"] == "refs/tags/v1"
     assert tagged["sha"] == sha
     # 按 sha 触发
-    by_sha = alice.post(_p(an, repo, "/runs"), json={"sha": sha}, expect=201).json()
+    by_sha = first_run(alice.post(_p(an, repo, "/runs"), json={"sha": sha}, expect=201))
     assert by_sha["sha"] == sha
 
     # 不存在的 ref / sha
@@ -265,7 +266,7 @@ def test_pipeline_manual_by_ref_and_sha(pl_env):
 def test_pipeline_rerun(pl_env):
     an, _, alice, _, repo = pl_env
     _commit(alice, an, repo, ".gitdash.yml", BAD_PIPELINE_YAML)
-    run = alice.post(_p(an, repo, "/runs"), json={}, expect=201).json()
+    run = first_run(alice.post(_p(an, repo, "/runs"), json={}, expect=201))
     run = _wait_terminal(alice, an, repo, run["id"], timeout=15)
     assert run["status"] == "failed"
     assert run["event"] == "manual"
@@ -290,12 +291,12 @@ def test_pipeline_dispatch_requires_optin(pl_env):
     # 声明后 → 201，event=workflow_dispatch，inputs 持久化
     opt_in = "on: [workflow_dispatch]\nsteps:\n  - name: x\n    run: echo hi\n"
     _commit(alice, an, repo, ".gitdash.yml", opt_in, action="update")
-    run = alice.post(_p(an, repo, "/dispatch"), json={"inputs": {"greeting": "hi"}}, expect=201).json()
+    run = first_run(alice.post(_p(an, repo, "/dispatch"), json={"inputs": {"greeting": "hi"}}, expect=201))
     assert run["event"] == "workflow_dispatch"
     assert run["inputs"] == {"greeting": "hi"}
 
     # 手动触发不接收 inputs（仅 dispatch 生效）
-    manual = alice.post(_p(an, repo, "/runs"), json={"inputs": {"greeting": "hi"}}, expect=201).json()
+    manual = first_run(alice.post(_p(an, repo, "/runs"), json={"inputs": {"greeting": "hi"}}, expect=201))
     assert not manual.get("inputs")
     assert manual["event"] == "manual"
 
@@ -469,7 +470,7 @@ def test_pipeline_run_via_redis_queue(queue_env):
         expect=201,
     )
 
-    run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201)
+    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
     assert run["id"] >= 1
 
     deadline = time.time() + 150

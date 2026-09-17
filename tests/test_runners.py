@@ -8,6 +8,7 @@ Redis 实例（需 GITDASH_BIN + redis-server，缺一则跳过）：完整生�
 
 from __future__ import annotations
 
+from conftest import first_run
 import os
 import socket
 import subprocess
@@ -117,7 +118,7 @@ def test_runson_no_agent_fails_immediately(base_url, user_factory, repo_factory)
         },
         expect=201,
     )
-    run = c.post(f"/users/{owner}/repos/{name}/pipeline/runs", json={}, expect=201).json()
+    run = first_run(c.post(f"/users/{owner}/repos/{name}/pipeline/runs", json={}, expect=201))
 
     deadline = time.time() + 30
     detail = None
@@ -462,7 +463,7 @@ def test_reverse_pipeline_end_to_end(runner_env, tmp_path):
             },
             expect=201,
         )
-        run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201).json()
+        run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
         detail = _wait_run(base, c, username, repo, run["id"], "success", timeout=180)
         assert detail["runner_name"] == rname
         assert "hello-from-reverse" in detail["log"]
@@ -515,7 +516,7 @@ def test_remote_pipeline_end_to_end(runner_env, tmp_path):
             },
             expect=201,
         )
-        run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201).json()
+        run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
 
         detail = _wait_run(base, c, username, repo, run["id"], "success", timeout=180)
         assert detail["runner_name"] == rname
@@ -537,7 +538,7 @@ def test_remote_pipeline_end_to_end(runner_env, tmp_path):
 
 
 def test_remote_pipeline_cancel(runner_env, tmp_path):
-    """运行中取消：agent 杀容器，run 记 failed（cancelled）。"""
+    """运行中取消：agent 杀容器，run 记为 cancelled。"""
     base = runner_env
     agent_bin = _agent_bin(tmp_path)
 
@@ -568,11 +569,11 @@ def test_remote_pipeline_cancel(runner_env, tmp_path):
             },
             expect=201,
         )
-        run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201).json()
+        run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
         _wait_run(base, c, username, repo, run["id"], "running", timeout=120)
 
         c.post(f"/users/{username}/repos/{repo}/pipeline/runs/{run['id']}/cancel", expect=200)
-        detail = _wait_run(base, c, username, repo, run["id"], "failed", timeout=60)
+        detail = _wait_run(base, c, username, repo, run["id"], "cancelled", timeout=60)
         assert "cancel" in detail["error"].lower(), detail
     finally:
         agent_proc.terminate()
@@ -615,7 +616,7 @@ def test_agent_offline_fails_running(runner_env, tmp_path):
             },
             expect=201,
         )
-        run = c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201).json()
+        run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
         _wait_run(base, c, username, repo, run["id"], "running", timeout=120)
 
         agent_proc.kill()  # 模拟机器断电（非优雅退出）
