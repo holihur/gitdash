@@ -34,6 +34,28 @@ signed `Reply-To` address, so no server-side token table is needed.
    signatures and `On ... wrote:` attribution lines), creates the comment as the
    token's user, and fans out the usual inbox / webhook notifications.
 
+## Threading & idempotency
+
+Every comment is assigned a `Message-ID` when it is created, and the notification
+email for that comment reuses the same value — so replies thread under the original
+notification in any mail client. The MTA adapter should forward the reply's own
+`Message-ID` and its `In-Reply-To` / `References` headers:
+
+```json
+{"to": "reply+<payload>.<sig>@mail.example.com",
+ "from": "alice@example.com",
+ "subject": "Re: [acme/web#42] Fix the thing",
+ "text": "Looks good to me!",
+ "message_id": "<reply-123@mail.example.com>",
+ "in_reply_to": "<gitdash.issue.acme.web.42.9f1c@mail.example.com>",
+ "references": "<gitdash...@mail.example.com>"}
+```
+
+gitdash stores both on the comment (`message_id` / `in_reply_to`, visible in the
+comments API) and uses `message_id` as an idempotency key: redelivering the same
+message returns the existing comment (`200`) instead of creating a duplicate. When
+`in_reply_to` is absent, the last token of `references` is used.
+
 ## Token format
 
 - `payload = base64url(owner|repo|kind|number|username|exp)`, no padding.

@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ---- users & sessions ----
 
@@ -20,6 +23,18 @@ func (s *Store) CreateUser(username, passwordHash string) (User, error) {
 func (s *Store) GetByUsername(username string) (UserAuth, error) {
 	var row userRow
 	err := s.db.Where("username = ?", username).First(&row).Error
+	if err != nil {
+		return UserAuth{}, notFoundErr(err)
+	}
+	return UserAuth(row), nil
+}
+
+// GetByEmail 按邮箱（大小写不敏感）查找用户；不存在返回 ErrNotFound。
+// 用于 patch-by-email：把入站邮件发件人映射为仓库有写权限的用户。
+func (s *Store) GetByEmail(email string) (UserAuth, error) {
+	var row userRow
+	err := s.db.Where("LOWER(email) = ? AND email <> ''", strings.ToLower(strings.TrimSpace(email))).
+		First(&row).Error
 	if err != nil {
 		return UserAuth{}, notFoundErr(err)
 	}

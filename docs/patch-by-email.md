@@ -19,6 +19,23 @@ target is the repository's default branch (override with `?target=<branch>`).
 The PR title comes from the first patch's `Subject:` (override with `?title=`);
 the PR body lists every patch subject in the series.
 
+## Submitting by email
+
+The same flow is available by email, so `git send-email` works without a PAT:
+
+```
+git send-email --to="patches+acme+web@mail.example.com" *.patch
+```
+
+- The address format is `patches+<owner>+<repo>@<GITDASH_MAIL_REPLY_DOMAIN>`.
+- The subject must contain `[PATCH` (e.g. `git format-patch` default).
+- The sender (`From`) is matched to a user by email; that user must have a
+  **verified email** and **write access** to the repository. Unknown senders get
+  `400 unknown_sender`, missing permission `404`, unverified `403`.
+- The endpoint is the shared-secret `POST /api/mail/inbound` from
+  [reply by email](./email-replies.md); MTA adapters should forward the raw mbox
+  as `text`.
+
 ## API
 
 | | |

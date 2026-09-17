@@ -175,3 +175,80 @@ def test_patch_requires_write_permission(patch_env, user_factory):
 def test_patch_requires_auth(patch_env, anon):
     env = patch_env
     anon.post(_p(env["owner"], env["repo"], "/patches"), data=b"x", expect=401)
+
+
+# ---- 入站邮件提交补丁（Subject: [PATCH]）----
+
+INBOUND_SECRET = os.environ.get("GITDASH_MAIL_INBOUND_SECRET", "test-mail-inbound-secret")
+REPLY_DOMAIN = os.environ.get("GITDASH_MAIL_REPLY_DOMAIN", "gitdash.test")
+
+# 发件人邮件需已验证；SMTP 已配置时测试无验证途径，跳过。
+_needs_no_smtp = pytest.mark.skipif(
+    bool(os.environ.get("GITDASH_SMTP_HOST")),
+    reason="inbound patch maps sender email to a user; SMTP would require verification",
+)
+
+
+def _inbound_patch(anon, owner, repo, mbox, sender, *, subject="[PATCH] series", expect=201):
+    return anon.post(
+        f"/mail/inbound?secret={INBOUND_SECRET}",
+        json={
+            "to": f"patches+{owner}+{repo}@{REPLY_DOMAIN}",
+            "from": sender,
+            "subject": subject,
+            "text": mbox,
+        },
+        expect=expect,
+    )
+
+
+@_needs_no_smtp
+def test_patch_email_opens_pr(patch_env, anon):
+    env = patch_env
+    client, owner, repo = env["client"], env["owner"], env["repo"]
+    sender = f"{owner}@example.com"
+    client.post("/me/profile", json={"email": sender}, expect=200)
+    _reset_main(env)
+    _commit_file(env, "email-feature.txt", "via email\n")
+    mbox = _format_patch(env, 1)
+
+    pr = _inbound_patch(anon, owner, repo, mbox, sender).json()
+    assert pr["state"] == "open"
+    assert pr["source_branch"].startswith("patches/")
+    assert pr["title"] == "add email-feature.txt"
+    diff = client.get(_p(owner, repo, f"/pulls/{pr['number']}/diff"), expect=200).json()
+    assert "email-feature.txt" in [f["path"] for f in diff["files"]]
+
+
+@_needs_no_smtp
+def test_patch_email_unknown_sender(patch_env, anon):
+    env = patch_env
+    owner, repo = env["owner"], env["repo"]
+    r = _inbound_patch(
+        anon, owner, repo, "From 0000\nSubject: [PATCH] x\n", "nobody@example.com", expect=400
+    ).json()
+    assert r["code"] == "unknown_sender"
+
+
+@_needs_no_smtp
+def test_patch_email_requires_write(patch_env, anon, user_factory):
+    env = patch_env
+    _, _, bob = user_factory("bob")
+    sender = f"bob-{uuid.uuid4().hex[:8]}@example.com"
+    bob.post("/me/profile", json={"email": sender}, expect=200)
+    r = _inbound_patch(
+        anon, env["owner"], env["repo"], "From 0000\nSubject: [PATCH] x\n", sender, expect=404
+    )
+    assert r.status_code == 404
+
+
+@_needs_no_smtp
+def test_patch_email_subject_required(patch_env, anon):
+    env = patch_env
+    owner, repo = env["owner"], env["repo"]
+    sender = f"{owner}@example.com"
+    env["client"].post("/me/profile", json={"email": sender}, expect=200)
+    r = _inbound_patch(
+        anon, owner, repo, "From 0000\n", sender, subject="hello", expect=400
+    ).json()
+    assert r["code"] == "not_a_patch"

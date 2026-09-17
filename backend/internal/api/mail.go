@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/subtle"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -16,6 +17,37 @@ type mailInboundReq struct {
 	From    string `json:"from"`
 	Subject string `json:"subject"`
 	Text    string `json:"text"`
+	// 以下为可选的邮件线程/幂等字段（MTA 适配层尽量回传）。
+	MessageID  string `json:"message_id"`
+	InReplyTo  string `json:"in_reply_to"`
+	References string `json:"references"`
+}
+
+// lastMessageRef 从 References 头（空白分隔的 Message-ID 列表）取最后一个作为线程父节点。
+func lastMessageRef(refs string) string {
+	fields := strings.Fields(refs)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[len(fields)-1]
+}
+
+// patchAddressParts 解析 patch 邮件地址 `patches+<owner>+<repo>@domain`。
+// 不匹配时返回 ok=false。
+func patchAddressParts(addr string) (owner, repo string, ok bool) {
+	at := strings.LastIndexByte(addr, '@')
+	if at <= 0 {
+		return "", "", false
+	}
+	parts := strings.Split(addr[:at], "+")
+	if len(parts) != 3 || !strings.EqualFold(parts[0], "patches") {
+		return "", "", false
+	}
+	owner, repo = strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2])
+	if owner == "" || repo == "" {
+		return "", "", false
+	}
+	return owner, repo, true
 }
 
 // addrAngleRe 从 "Name <a@b>" 中提取 <a@b>。
@@ -119,9 +151,15 @@ func (a *API) inboundMail(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	token := replyTokenFromAddress(inboundMailAddress(in.To))
+	addr := inboundMailAddress(in.To)
+	// patch-by-email：`patches+<owner>+<repo>@domain` 且 Subject 含 [PATCH]。
+	if owner, repo, ok := patchAddressParts(addr); ok {
+		a.inboundPatch(w, r, owner, repo, in)
+		return
+	}
+	token := replyTokenFromAddress(addr)
 	if token == "" {
-		writeCode(w, http.StatusBadRequest, "invalid_to", "to address is not a reply address")
+		writeCode(w, http.StatusBadRequest, "invalid_to", "to address is not a reply or patch address")
 		return
 	}
 	owner, repo, kind, number, username, err := notify.ParseReplyToken(notify.MailSecret(), token)
@@ -160,7 +198,20 @@ func (a *API) inboundMail(w http.ResponseWriter, r *http.Request) {
 		}
 		title = pr.Title
 	}
-	comment, err := a.store.CreateComment(owner, repo, kind, number, username, body, nil)
+	// 线程/幂等：优先用入站邮件自身的 Message-ID；重复投递直接返回已有评论。
+	messageID := strings.TrimSpace(in.MessageID)
+	if messageID == "" {
+		messageID = notify.MessageID(notify.MailReplyDomain(), owner, repo, kind, number)
+	}
+	if existing, ok := a.store.CommentByMessageID(messageID); ok {
+		writeJSON(w, http.StatusOK, existing)
+		return
+	}
+	inReplyTo := strings.TrimSpace(in.InReplyTo)
+	if inReplyTo == "" {
+		inReplyTo = lastMessageRef(in.References)
+	}
+	comment, err := a.store.CreateCommentMeta(owner, repo, kind, number, username, body, nil, messageID, inReplyTo)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -169,7 +220,61 @@ func (a *API) inboundMail(w http.ResponseWriter, r *http.Request) {
 	if len(summary) > 200 {
 		summary = summary[:200]
 	}
-	a.notify(owner, repo, kind, "commented", username, number, title, string(summary))
+	a.notifyMessage(owner, repo, kind, "commented", username, number, title, string(summary), messageID)
 	logx.Infof("mail: reply comment by %s on %s/%s#%d", username, owner, repo, number)
 	writeJSON(w, http.StatusCreated, comment)
+}
+
+// inboundPatch 处理发往 `patches+<owner>+<repo>@domain` 的补丁邮件：
+// 发件人邮箱映射为有写权限的用户，正文作为 mbox 应用并自动开 PR。
+// 发件人身份依赖 MTA 对 From 的解析与共享密钥保护，不做 DKIM 校验。
+func (a *API) inboundPatch(w http.ResponseWriter, r *http.Request, owner, repo string, in mailInboundReq) {
+	if !strings.Contains(strings.ToUpper(in.Subject), "[PATCH") {
+		writeCode(w, http.StatusBadRequest, "not_a_patch", "subject does not contain [PATCH]")
+		return
+	}
+	from := strings.TrimSpace(inboundMailAddress(in.From))
+	if from == "" {
+		writeCode(w, http.StatusBadRequest, "invalid_from", "from address is required")
+		return
+	}
+	user, err := a.store.GetByEmail(from)
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "unknown_sender", "sender email does not match a user")
+		return
+	}
+	if user.Banned {
+		writeCode(w, http.StatusForbidden, "sender_banned", "sender is banned")
+		return
+	}
+	if !user.EmailVerified {
+		writeCode(w, http.StatusForbidden, "sender_unverified", "sender email is not verified")
+		return
+	}
+	info, err := a.store.GetRepo(owner, repo)
+	if err != nil || info.Banned || a.store.IsOrgBanned(owner) {
+		writeNotFound(w, "repo")
+		return
+	}
+	if !a.store.CanWrite(owner, repo, user.Username) {
+		writeNotFound(w, "repo")
+		return
+	}
+	data := []byte(in.Text)
+	if len(strings.TrimSpace(string(data))) == 0 {
+		writeCode(w, http.StatusBadRequest, "empty_patch", "patch series is empty")
+		return
+	}
+	pr, err := a.createPatchPR(owner, repo, user.Username, "", "", data)
+	if err != nil {
+		if errors.Is(err, errEmptyPatch) {
+			writeCode(w, http.StatusBadRequest, "empty_patch", err.Error())
+			return
+		}
+		writeCode(w, http.StatusBadRequest, "patch_failed", err.Error())
+		return
+	}
+	a.notify(owner, repo, "pull", "opened", user.Username, pr.Number, pr.Title, "")
+	logx.Infof("mail: patch PR #%d by %s on %s/%s", pr.Number, user.Username, owner, repo)
+	writeJSON(w, http.StatusCreated, pr)
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/store"
 	"net/http"
 	"strconv"
@@ -115,18 +116,29 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 		}
 		inline = &store.InlineRef{FilePath: fp, Line: in.Line, LineSide: in.LineSide}
 	}
-	comment, err := a.store.CreateComment(owner, name, kind, number, me, body, inline)
+	// 为评论生成稳定的 Message-ID：通知邮件复用同一值，便于邮件客户端线程化，
+	// 也让邮件回复可携带 In-Reply-To 指回该评论。
+	messageID := notify.MessageID(notify.MailReplyDomain(), owner, name, kind, number)
+	comment, err := a.store.CreateCommentMeta(owner, name, kind, number, me, body, inline, messageID, "")
 	if err != nil {
 		internalError(w, err)
 		return
 	}
 	// 通知关注者（issue/PR 作者与 watcher），不通知评论者本人；评论摘要截断到 200 字符
-	if it, err := a.store.GetIssue(owner, name, number); err == nil {
+	title := ""
+	if kind == "issue" {
+		if it, e := a.store.GetIssue(owner, name, number); e == nil {
+			title = it.Title
+		}
+	} else if pr, e := a.store.GetPull(owner, name, number); e == nil {
+		title = pr.Title
+	}
+	if title != "" {
 		summary := []rune(body)
 		if len(summary) > 200 {
 			summary = summary[:200]
 		}
-		a.notify(owner, name, kind, "commented", me, number, it.Title, string(summary))
+		a.notifyMessage(owner, name, kind, "commented", me, number, title, string(summary), messageID)
 	}
 	writeJSON(w, http.StatusCreated, comment)
 }

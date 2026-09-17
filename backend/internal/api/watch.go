@@ -94,6 +94,12 @@ func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 // （issues/pulls/comment，由 main 注入的 publisher 写入 dataDir/webhooks-spool-api）。
 // 通知写入失败不影响主操作（best-effort，仅记日志）。
 func (a *API) notify(owner, repo, kind, action, actor string, number int64, title, comment string) {
+	a.notifyMessage(owner, repo, kind, action, actor, number, title, comment, "")
+}
+
+// notifyMessage 与 notify 相同，但可指定通知邮件的 Message-ID（评论事件用，
+// 保证邮件与库中评论共享同一 Message-ID，支持邮件线程与入站去重）。
+func (a *API) notifyMessage(owner, repo, kind, action, actor string, number int64, title, comment, messageID string) {
 	users := a.store.NotifyRecipients(owner, repo, actor)
 	if err := a.store.AddNotifications(users, kind, action, owner, repo, number, title, actor); err != nil {
 		logx.Infof("notify %s/%s: %v", owner, repo, err)
@@ -110,6 +116,7 @@ func (a *API) notify(owner, repo, kind, action, actor string, number int64, titl
 		Number:    number,
 		Title:     title,
 		Actor:     actor,
+		MessageID: messageID,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	if kind == "pull" {

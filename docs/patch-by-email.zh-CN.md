@@ -17,6 +17,21 @@ git format-patch -1 --stdout | \
 覆盖）。PR 标题取第一封补丁的 `Subject:`（可用 `?title=` 覆盖），正文列出该系列
 每封补丁的主题。
 
+## 通过邮件提交
+
+同一流程也可通过邮件，因此 `git send-email` 无需 PAT：
+
+```
+git send-email --to="patches+acme+web@mail.example.com" *.patch
+```
+
+- 地址格式为 `patches+<owner>+<repo>@<GITDASH_MAIL_REPLY_DOMAIN>`。
+- 主题必须包含 `[PATCH`（`git format-patch` 默认如此）。
+- 发件人（`From`）按邮箱匹配用户；该用户必须**邮箱已验证**且对仓库有
+  **写权限**。未知发件人返回 `400 unknown_sender`，无权限 `404`，未验证 `403`。
+- 使用的正是 [reply by email](./email-replies.zh-CN.md) 的共享密钥端点
+  `POST /api/mail/inbound`；MTA 适配层应把原始 mbox 作为 `text` 转发。
+
 ## API
 
 | | |

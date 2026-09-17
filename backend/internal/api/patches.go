@@ -1,15 +1,20 @@
 package api
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/store"
 )
 
 // maxPatchBytes 单次提交补丁的最大体积（20 MiB）。
 const maxPatchBytes = 20 << 20
+
+// errEmptyPatch 表示补丁系列为空。
+var errEmptyPatch = errors.New("patch series is empty")
 
 // patchSubjects 从 mbox 文本中提取每封补丁的 Subject 行（去掉 [PATCH ...] 前缀）。
 func patchSubjects(data string) []string {
@@ -69,29 +74,43 @@ func (a *API) receivePatches(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxPatchBytes))
+	if err != nil {
+		writeCode(w, http.StatusBadRequest, "patch_too_large", "patch series too large")
+		return
+	}
 	target := strings.TrimSpace(strings.TrimPrefix(r.URL.Query().Get("target"), "refs/heads/"))
+	title := strings.TrimSpace(r.URL.Query().Get("title"))
+	pr, err := a.createPatchPR(owner, name, userFrom(r), target, title, data)
+	if err != nil {
+		if errors.Is(err, errEmptyPatch) {
+			writeCode(w, http.StatusBadRequest, "empty_patch", err.Error())
+			return
+		}
+		writeCode(w, http.StatusBadRequest, "patch_failed", err.Error())
+		return
+	}
+	a.notify(owner, name, "pull", "opened", userFrom(r), pr.Number, pr.Title, "")
+	writeJSON(w, http.StatusCreated, pr)
+}
+
+// createPatchPR 把一个 mbox 补丁系列应用到 target 分支的新分支并开 PR。
+// receivePatches 与入站邮件（Subject: [PATCH]）共用。target 为空时取仓库默认分支。
+func (a *API) createPatchPR(owner, name, author, target, title string, data []byte) (store.PullRequest, error) {
 	if target == "" {
 		info, err := a.store.GetRepo(owner, name)
 		if err != nil {
-			writeNotFound(w, "repo")
-			return
+			return store.PullRequest{}, err
 		}
 		target = info.DefaultBranch
 		if target == "" {
 			target = "main"
 		}
 	}
-	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxPatchBytes))
-	if err != nil {
-		writeCode(w, http.StatusBadRequest, "patch_too_large", "patch series too large")
-		return
-	}
 	if len(strings.TrimSpace(string(data))) == 0 {
-		writeCode(w, http.StatusBadRequest, "empty_patch", "patch series is empty")
-		return
+		return store.PullRequest{}, errEmptyPatch
 	}
 	subjects := patchSubjects(string(data))
-	title := strings.TrimSpace(r.URL.Query().Get("title"))
 	if title == "" && len(subjects) > 0 {
 		title = subjects[0]
 	}
@@ -100,13 +119,11 @@ func (a *API) receivePatches(w http.ResponseWriter, r *http.Request) {
 	}
 	branch, sha, err := gitsvc.ApplyPatchSeries(owner, name, target, data)
 	if err != nil {
-		writeCode(w, http.StatusBadRequest, "patch_failed", err.Error())
-		return
+		return store.PullRequest{}, err
 	}
 	baseSHA, err := gitsvc.RevSHA(owner, name, "refs/heads/"+target)
 	if err != nil {
-		writeCode(w, http.StatusBadRequest, "branch_not_found", "target branch not found: "+target)
-		return
+		return store.PullRequest{}, err
 	}
 	body := ""
 	if len(subjects) > 0 {
@@ -115,11 +132,5 @@ func (a *API) receivePatches(w http.ResponseWriter, r *http.Request) {
 			body += "- " + s + "\n"
 		}
 	}
-	pr, err := a.store.CreatePull(owner, name, userFrom(r), title, body, branch, target, baseSHA, sha, false)
-	if err != nil {
-		internalError(w, err)
-		return
-	}
-	a.notify(owner, name, "pull", "opened", userFrom(r), pr.Number, pr.Title, "")
-	writeJSON(w, http.StatusCreated, pr)
+	return a.store.CreatePull(owner, name, author, title, body, branch, target, baseSHA, sha, false)
 }

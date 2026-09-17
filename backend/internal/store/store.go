@@ -156,6 +156,11 @@ type Comment struct {
 
 	// SuggestionAppliedSHA 非空表示该评论内的 suggestion 已被应用（对应提交 SHA）。
 	SuggestionAppliedSHA string `json:"suggestion_applied_sha,omitempty"`
+
+	// MessageID 本条评论发出的通知邮件 Message-ID（邮件线程 / 入站去重）。
+	MessageID string `json:"message_id,omitempty"`
+	// InReplyTo 若本条评论来自邮件回复，记录所回复通知的 Message-ID。
+	InReplyTo string `json:"in_reply_to,omitempty"`
 }
 
 // Collab 仓库协作者（read=可克隆/浏览，write=可 push）

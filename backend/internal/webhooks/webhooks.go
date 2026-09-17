@@ -44,6 +44,8 @@ type Event struct {
 	Title   string `json:"title,omitempty"`
 	Actor   string `json:"actor,omitempty"`
 	Comment string `json:"comment,omitempty"` // 评论内容摘要（截断）
+	// MessageID 本条评论通知邮件的 Message-ID（存在时邮件直接复用，保证与库中评论一致）。
+	MessageID string `json:"message_id,omitempty"`
 }
 
 // EventTypes 出站 webhook 可订阅的事件类型（供 API / 前端展示）。

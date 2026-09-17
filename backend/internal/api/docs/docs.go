@@ -13998,6 +13998,16 @@ const docTemplate = `{
                 "from": {
                     "type": "string"
                 },
+                "in_reply_to": {
+                    "type": "string"
+                },
+                "message_id": {
+                    "description": "以下为可选的邮件线程/幂等字段（MTA 适配层尽量回传）。",
+                    "type": "string"
+                },
+                "references": {
+                    "type": "string"
+                },
                 "subject": {
                     "type": "string"
                 },
@@ -14784,10 +14794,18 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "in_reply_to": {
+                    "description": "InReplyTo 若本条评论来自邮件回复，记录所回复通知的 Message-ID。",
+                    "type": "string"
+                },
                 "line": {
                     "type": "integer"
                 },
                 "line_side": {
+                    "type": "string"
+                },
+                "message_id": {
+                    "description": "MessageID 本条评论发出的通知邮件 Message-ID（邮件线程 / 入站去重）。",
                     "type": "string"
                 },
                 "number": {

@@ -1,6 +1,9 @@
 package store
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // InlineRef PR 行内评论的定位信息（nil 表示普通评论）。
 type InlineRef struct {
@@ -25,6 +28,12 @@ func commentToDTO(r commentRow) Comment {
 // CreateComment 在 issue/PR（kind: "issue"|"pull"）下新增一条评论；
 // inline 非 nil 时存为行内评论（仅对 PR 有意义，由调用方校验）。
 func (s *Store) CreateComment(owner, repo, kind string, number int64, author, body string, inline *InlineRef) (Comment, error) {
+	return s.CreateCommentMeta(owner, repo, kind, number, author, body, inline, "", "")
+}
+
+// CreateCommentMeta 与 CreateComment 相同，但可携带邮件线程信息：
+// messageID 为本条评论发出的通知 Message-ID；inReplyTo 为其所回复的通知 Message-ID。
+func (s *Store) CreateCommentMeta(owner, repo, kind string, number int64, author, body string, inline *InlineRef, messageID, inReplyTo string) (Comment, error) {
 	if kind != "issue" && kind != "pull" {
 		return Comment{}, errors.New("invalid kind")
 	}
@@ -35,6 +44,7 @@ func (s *Store) CreateComment(owner, repo, kind string, number int64, author, bo
 		Owner: owner, Repo: repo, Kind: kind, Number: number,
 		Author: author, Body: body,
 		CreatedAt: now(), UpdatedAt: now(),
+		MessageID: strings.TrimSpace(messageID), InReplyTo: strings.TrimSpace(inReplyTo),
 	}
 	if inline != nil {
 		fp := inline.FilePath
@@ -47,6 +57,20 @@ func (s *Store) CreateComment(owner, repo, kind string, number int64, author, bo
 		return Comment{}, err
 	}
 	return commentToDTO(r), nil
+}
+
+// CommentByMessageID 按 Message-ID 查评论（入站邮件幂等：同一封邮件重复投递不重复落库）。
+// 未找到返回 (Comment{}, false)。
+func (s *Store) CommentByMessageID(messageID string) (Comment, bool) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return Comment{}, false
+	}
+	var r commentRow
+	if err := s.db.Where("message_id = ?", messageID).First(&r).Error; err != nil {
+		return Comment{}, false
+	}
+	return commentToDTO(r), true
 }
 
 // ListComments 按 ID 升序列出评论（最早的在前）；limit<=0 表示不限制。

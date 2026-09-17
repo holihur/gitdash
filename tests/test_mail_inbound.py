@@ -56,10 +56,12 @@ def mail_env(user_factory):
         pass
 
 
-def _inbound(anon, to, text="reply body", *, secret=INBOUND_SECRET, expect=201):
+def _inbound(anon, to, text="reply body", *, secret=INBOUND_SECRET, expect=201, **extra):
+    payload = {"to": to, "from": "user@example.com", "subject": "Re: [x]", "text": text}
+    payload.update(extra)
     return anon.post(
         f"/mail/inbound?secret={secret}",
-        json={"to": to, "from": "user@example.com", "subject": "Re: [x]", "text": text},
+        json=payload,
         expect=expect,
     )
 
@@ -154,6 +156,44 @@ def test_header_secret_accepted(mail_env, anon):
         timeout=15,
     )
     assert resp.status_code == 201, resp.text
+
+
+def test_reply_message_id_idempotent_and_threaded(mail_env, anon):
+    owner, repo, client = mail_env
+    to = reply_to(owner, repo, "issue", 1, owner)
+    extra = {
+        "message_id": "<reply-1@example.com>",
+        "in_reply_to": "<notify-0@example.com>",
+    }
+    first = _inbound(anon, to, "first delivery", **extra).json()
+    assert first["message_id"] == "<reply-1@example.com>"
+    assert first["in_reply_to"] == "<notify-0@example.com>"
+
+    # 同一封邮件重复投递（MTA 重试/回放）不应重复落库
+    again = _inbound(anon, to, "first delivery", expect=200, **extra).json()
+    assert again["id"] == first["id"]
+    comments = client.get(f"/users/{owner}/repos/{repo}/issues/1/comments", expect=200).json()
+    assert len(comments) == 1
+
+
+def test_reply_references_fallback(mail_env, anon):
+    owner, repo, _ = mail_env
+    to = reply_to(owner, repo, "issue", 1, owner)
+    r = _inbound(
+        anon, to, "via references",
+        message_id="<reply-2@example.com>",
+        references="<a@x> <b@x> <orig@x>",
+    ).json()
+    assert r["in_reply_to"] == "<orig@x>"
+
+
+def test_web_comment_has_message_id(mail_env):
+    owner, repo, client = mail_env
+    c = client.post(
+        f"/users/{owner}/repos/{repo}/issues/1/comments",
+        json={"body": "from web"}, expect=201,
+    ).json()
+    assert c["message_id"]
 
 
 def test_bad_to_address_rejected(mail_env, anon):

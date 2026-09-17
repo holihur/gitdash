@@ -145,6 +145,10 @@ type commentRow struct {
 	LineSide string `gorm:"not null;default:'';size:8"`
 	// suggestion 应用后记录提交 SHA（非空表示已应用，禁止重复应用）
 	SuggestionAppliedSHA string `gorm:"not null;default:'';size:64"`
+	// MessageID 本条评论发出的通知邮件 Message-ID（用于邮件线程与入站去重）。
+	MessageID string `gorm:"not null;default:'';size:512;index:idx_comments_message_id"`
+	// InReplyTo 若本条评论来自邮件回复，记录其所回复通知的 Message-ID。
+	InReplyTo string `gorm:"not null;default:'';size:512"`
 }
 
 func (commentRow) TableName() string { return "issue_comments" }

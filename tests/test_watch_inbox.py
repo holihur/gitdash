@@ -153,6 +153,16 @@ def test_inbox_pull_notifications(watch_env):
     assert alice.get("/inbox", expect=200).json() == []
 
 
+def test_inbox_pull_comment_notification(watch_env):
+    an, bn, alice, bob, repo = watch_env
+    bob.put(_p(an, repo, "/watch"), expect=200)
+    _open_pr(alice, an, repo, 1, "feat-c")
+    alice.post(_p(an, repo, "/pulls/1/comments"), json={"body": "looks good"}, expect=201)
+    items = bob.get("/inbox", expect=200).json()
+    assert items[0]["action"] == "commented"
+    assert items[0]["kind"] == "pull" and items[0]["number"] == 1
+
+
 def test_inbox_requires_auth(anon, watch_env):
     an, _, _, _, repo = watch_env
     anon.get("/inbox", expect=401)

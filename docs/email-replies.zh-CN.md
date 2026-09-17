@@ -30,6 +30,26 @@ gitdash 可以把对通知邮件的回复转成对应 issue / PR 上的评论。
 3. gitdash 验签、清洗正文（去掉 `>` 引用、`-- ` 签名、`On ... wrote:` 引导行），
    以 token 绑定用户的身份创建评论，并照常触发收件箱 / webhook 通知。
 
+## 线程化与幂等
+
+每条评论在创建时都会分配一个 `Message-ID`，该评论的通知邮件复用同一值，
+因此回复邮件在任何邮件客户端都会归入原通知线程。MTA 适配层应回传回复邮件
+自身的 `Message-ID` 及其 `In-Reply-To` / `References`：
+
+```json
+{"to": "reply+<payload>.<sig>@mail.example.com",
+ "from": "alice@example.com",
+ "subject": "Re: [acme/web#42] Fix the thing",
+ "text": "Looks good to me!",
+ "message_id": "<reply-123@mail.example.com>",
+ "in_reply_to": "<gitdash.issue.acme.web.42.9f1c@mail.example.com>",
+ "references": "<gitdash...@mail.example.com>"}
+```
+
+gitdash 会把两者存到评论上（`message_id` / `in_reply_to`，评论 API 可见），
+并以 `message_id` 作为幂等键：同一封邮件重复投递会返回已有评论（`200`）
+而不重复落库。`in_reply_to` 缺失时取 `references` 的最后一个。
+
 ## token 格式
 
 - `payload = base64url(owner|repo|kind|number|username|exp)`，无填充。

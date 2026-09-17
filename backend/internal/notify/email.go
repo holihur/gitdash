@@ -159,7 +159,10 @@ func EmailHandler(st *store.Store, sender *Sender) func(webhooks.Event) {
 				// 回复 token 绑定收件人身份：谁收到邮件，谁就能以此身份回复评论。
 				tok := SignReplyToken(sender.mailSecret, ev.Owner, ev.Repo, ev.Kind, ev.Number, t.Username)
 				h.ReplyTo = ReplyAddress(sender.replyDomain, tok)
-				h.MessageID = MessageID(sender.replyDomain, ev.Owner, ev.Repo, ev.Kind, ev.Number)
+				h.MessageID = ev.MessageID
+				if h.MessageID == "" {
+					h.MessageID = MessageID(sender.replyDomain, ev.Owner, ev.Repo, ev.Kind, ev.Number)
+				}
 			}
 			if err := sender.SendWithHeaders(t.Email, subject, body, h); err != nil {
 				logx.Infof("notify: email to %s: %v", t.Username, err)
