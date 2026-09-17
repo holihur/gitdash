@@ -546,9 +546,13 @@ func (a *API) createProjectCard(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "column_required", "column_id is required")
 		return
 	}
-	if in.IssueNumber == 0 && strings.TrimSpace(in.Note) == "" {
-		writeCode(w, http.StatusBadRequest, "card_content_required", "issue_number or note is required")
+	if in.IssueNumber == 0 && strings.TrimSpace(in.Title) == "" && strings.TrimSpace(in.Note) == "" {
+		writeCode(w, http.StatusBadRequest, "card_content_required", "issue_number, title or note is required")
 		return
+	}
+	title := strings.TrimSpace(in.Title)
+	if title == "" {
+		title = strings.TrimSpace(in.Note)
 	}
 	startDate := strings.TrimSpace(in.StartDate)
 	dueDate := strings.TrimSpace(in.DueDate)
@@ -560,7 +564,7 @@ func (a *API) createProjectCard(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_date_range", "due_date must be on or after start_date")
 		return
 	}
-	c, err := a.store.CreateProjectCard(owner, name, pid, in.ColumnID, in.SwimlaneID, in.IssueNumber, strings.TrimSpace(in.Note), startDate, dueDate)
+	c, err := a.store.CreateProjectCard(owner, name, pid, in.ColumnID, in.SwimlaneID, in.IssueNumber, title, in.Body, startDate, dueDate)
 	if errors.Is(err, store.ErrNotFound) {
 		writeCode(w, http.StatusBadRequest, "invalid_card_target", "column, swimlane or issue not found")
 		return
@@ -624,9 +628,16 @@ func (a *API) updateProjectCard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	up := store.ProjectCardUpdate{}
-	if in.Note != nil {
+	if in.Title != nil {
+		v := strings.TrimSpace(*in.Title)
+		up.Title = &v
+	} else if in.Note != nil {
 		v := strings.TrimSpace(*in.Note)
-		up.Note = &v
+		up.Title = &v
+	}
+	if in.Body != nil {
+		v := *in.Body
+		up.Body = &v
 	}
 	if in.StartDate != nil {
 		v := strings.TrimSpace(*in.StartDate)
@@ -644,7 +655,7 @@ func (a *API) updateProjectCard(w http.ResponseWriter, r *http.Request) {
 		}
 		up.DueDate = &v
 	}
-	if up.Note != nil || up.StartDate != nil || up.DueDate != nil {
+	if up.Title != nil || up.Body != nil || up.StartDate != nil || up.DueDate != nil {
 		if err := a.store.UpdateProjectCard(pid, cid, up); err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
@@ -766,7 +777,9 @@ type createProjectCardReq struct {
 	ColumnID    int64  `json:"column_id"`
 	SwimlaneID  int64  `json:"swimlane_id"`
 	IssueNumber int64  `json:"issue_number"`
-	Note        string `json:"note"`
+	Title       string `json:"title"`
+	Body        string `json:"body"`
+	Note        string `json:"note"` // 兼容：等价于 title
 	StartDate   string `json:"start_date"`
 	DueDate     string `json:"due_date"`
 }
@@ -775,7 +788,9 @@ type updateProjectCardReq struct {
 	ColumnID   *int64  `json:"column_id"`
 	SwimlaneID *int64  `json:"swimlane_id"`
 	Position   *int    `json:"position"`
-	Note       *string `json:"note"`
+	Title      *string `json:"title"`
+	Body       *string `json:"body"`
+	Note       *string `json:"note"` // 兼容：等价于 title
 	StartDate  *string `json:"start_date"`
 	DueDate    *string `json:"due_date"`
 }

@@ -19,8 +19,8 @@ func (a *API) attachStars(repos []store.Repo, me string) {
 	}
 	counts := a.store.StarCounts(pairs)
 	watchCounts := a.store.WatchCounts(pairs)
-	starredSet := a.store.StarredSet(me)
-	watchingSet := a.store.WatchingSet(me)
+	starredSet := a.store.StarredAmong(me, pairs)
+	watchingSet := a.store.WatchingAmong(me, pairs)
 	for i := range repos {
 		pair := [2]string{repos[i].Owner, repos[i].Name}
 		repos[i].Stars = counts[pair]

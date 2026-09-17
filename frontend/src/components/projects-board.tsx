@@ -8,9 +8,11 @@ import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ProjectCardDialog, ProjectGanttView, ProjectListView, type CardDraft } from "@/components/projects-views";
 import { AddCardCell, VirtualCardList } from "@/components/projects-board-parts";
+import { MarkdownView } from "@/components/markdown";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -40,8 +42,12 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
 
   const [newColumn, setNewColumn] = useState("");
   const [newLane, setNewLane] = useState("");
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [laneDialogOpen, setLaneDialogOpen] = useState(false);
   const [pendingDeleteColumn, setPendingDeleteColumn] = useState<number | null>(null);
   const [pendingDeleteLane, setPendingDeleteLane] = useState<number | null>(null);
+  // 新建卡片目标单元格（点击单元格内的“添加卡片”后打开对话框）
+  const [addTarget, setAddTarget] = useState<{ swimlaneId: number; columnId: number } | null>(null);
 
   // "+ 添加卡片" 行内输入改为独立子组件本地状态（AddCardCell），
   // 避免每敲一个字都重渲染整块看板。
@@ -135,14 +141,28 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     }
   };
 
-  const addCard = async (swimlaneId: number, columnId: number, raw: string) => {
-    const text = raw.trim();
-    if (!text) return;
-    const m = text.match(/^#(\d+)$/);
-    if (m) {
-      await act(() => api.createCard(owner, name, project.id, { column_id: columnId, swimlane_id: swimlaneId, issue_number: Number(m[1]) }), "projects.cardAdded");
-    } else {
-      await act(() => api.createCard(owner, name, project.id, { column_id: columnId, swimlane_id: swimlaneId, note: text }), "projects.cardAdded");
+  // 新建卡片：由对话框提交名称 + Markdown 详情（或关联 issue）。
+  const createCard = async (draft: CardDraft) => {
+    if (!addTarget) return;
+    if (!draft.issue_number && !draft.title.trim()) return;
+    setBusy(true);
+    try {
+      await api.createCard(owner, name, project.id, {
+        column_id: addTarget.columnId,
+        swimlane_id: addTarget.swimlaneId,
+        issue_number: draft.issue_number || undefined,
+        title: draft.title.trim() || undefined,
+        body: draft.body || undefined,
+        start_date: draft.start_date,
+        due_date: draft.due_date,
+      });
+      toast.success(t("projects.cardAdded"));
+      setAddTarget(null);
+      await load();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -154,7 +174,8 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     setBusy(true);
     try {
       await api.updateCard(owner, name, project.id, card.id, {
-        note: card.issue_number ? undefined : draft.note,
+        title: card.issue_number ? undefined : draft.title.trim(),
+        body: card.issue_number ? undefined : draft.body,
         start_date: draft.start_date,
         due_date: draft.due_date,
       });
@@ -166,6 +187,20 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     } finally {
       setBusy(false);
     }
+  };
+
+  const createColumn = async () => {
+    if (!newColumn.trim()) return;
+    await act(() => api.createColumn(owner, name, project.id, newColumn.trim()), "projects.columnAdded");
+    setNewColumn("");
+    setColumnDialogOpen(false);
+  };
+
+  const createSwimlane = async () => {
+    if (!newLane.trim()) return;
+    await act(() => api.createSwimlane(owner, name, project.id, newLane.trim()), "projects.swimlaneAdded");
+    setNewLane("");
+    setLaneDialogOpen(false);
   };
 
   const onDrop = (swimlaneId: number, columnId: number) => {
@@ -359,7 +394,14 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
                                   </p>
                                 </>
                               ) : (
-                                <p className="whitespace-pre-wrap break-words">{card.note}</p>
+                                <>
+                                  <p className="break-words font-medium">{card.title || card.note}</p>
+                                  {card.body && (
+                                    <div className="mt-1 max-h-24 overflow-hidden text-xs text-muted-foreground">
+                                      <MarkdownView text={card.body} className="text-xs" />
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
                             <Button
@@ -389,9 +431,8 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
                     )}
                     <div className="px-2 pb-2 pt-1">
                       <AddCardCell
-                        hint={t("projects.cardInputHint")}
                         label={t("projects.addCard")}
-                        onAdd={(text) => void addCard(lane.id, col.id, text)}
+                        onClick={() => setAddTarget({ swimlaneId: lane.id, columnId: col.id })}
                       />
                     </div>
                   </div>
@@ -406,40 +447,91 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
       </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border bg-muted/30 p-3">
-        <div className="grid gap-1">
-          <label className="text-xs text-muted-foreground">{t("projects.columnName")}</label>
-          <Input
-            className="h-8 w-40"
-            maxLength={50}
-            placeholder={t("projects.columnPlaceholder")}
-            value={newColumn}
-            onChange={(e) => setNewColumn(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && newColumn.trim() && (void act(() => api.createColumn(owner, name, project.id, newColumn.trim()), "projects.columnAdded").then(() => setNewColumn("")))}
-          />
+      {canWrite && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setNewColumn(""); setColumnDialogOpen(true); }}>
+            <SquarePlus className="h-4 w-4" />
+            {t("projects.addColumn")}
+          </Button>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setNewLane(""); setLaneDialogOpen(true); }}>
+            <SquarePlus className="h-4 w-4" />
+            {t("projects.addSwimlane")}
+          </Button>
         </div>
-        <Button size="sm" className="gap-1.5" disabled={busy || !newColumn.trim()} onClick={() => act(() => api.createColumn(owner, name, project.id, newColumn.trim()), "projects.columnAdded").then(() => setNewColumn(""))}>
-          <SquarePlus className="h-4 w-4" />
-          {t("projects.addColumn")}
-        </Button>
-        <div className="grid gap-1">
-          <label className="text-xs text-muted-foreground">{t("projects.swimlaneName")}</label>
-          <Input
-            className="h-8 w-40"
-            maxLength={50}
-            placeholder={t("projects.swimlanePlaceholder")}
-            value={newLane}
-            onChange={(e) => setNewLane(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && newLane.trim() && (void act(() => api.createSwimlane(owner, name, project.id, newLane.trim()), "projects.swimlaneAdded").then(() => setNewLane("")))}
-          />
-        </div>
-        <Button size="sm" className="gap-1.5" disabled={busy || !newLane.trim()} onClick={() => act(() => api.createSwimlane(owner, name, project.id, newLane.trim()), "projects.swimlaneAdded").then(() => setNewLane(""))}>
-          <SquarePlus className="h-4 w-4" />
-          {t("projects.addSwimlane")}
-        </Button>
-      </div>
+      )}
 
-      <ProjectCardDialog card={editCard} busy={busy} onClose={() => setEditCard(null)} onSave={(c, d) => void saveCard(c, d)} />
+      <Dialog open={columnDialogOpen} onOpenChange={setColumnDialogOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("projects.addColumn")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <label className="text-xs text-muted-foreground">{t("projects.columnName")}</label>
+            <Input
+              autoFocus
+              maxLength={50}
+              placeholder={t("projects.columnPlaceholder")}
+              value={newColumn}
+              onChange={(e) => setNewColumn(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void createColumn()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setColumnDialogOpen(false)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void createColumn()} disabled={busy || !newColumn.trim()}>
+              <SquarePlus className="h-4 w-4" />
+              {t("projects.addColumn")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={laneDialogOpen} onOpenChange={setLaneDialogOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("projects.addSwimlane")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <label className="text-xs text-muted-foreground">{t("projects.swimlaneName")}</label>
+            <Input
+              autoFocus
+              maxLength={50}
+              placeholder={t("projects.swimlanePlaceholder")}
+              value={newLane}
+              onChange={(e) => setNewLane(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void createSwimlane()}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setLaneDialogOpen(false)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void createSwimlane()} disabled={busy || !newLane.trim()}>
+              <SquarePlus className="h-4 w-4" />
+              {t("projects.addSwimlane")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ProjectCardDialog
+        open={editCard !== null}
+        mode="edit"
+        card={editCard}
+        busy={busy}
+        onClose={() => setEditCard(null)}
+        onSubmit={(d) => editCard && void saveCard(editCard, d)}
+      />
+
+      <ProjectCardDialog
+        open={addTarget !== null}
+        mode="create"
+        busy={busy}
+        onClose={() => setAddTarget(null)}
+        onSubmit={(d) => void createCard(d)}
+      />
 
       <ConfirmDialog
         open={pendingDeleteColumn !== null}

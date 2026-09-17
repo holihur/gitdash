@@ -65,16 +65,26 @@ func (a *API) unwatchRepo(w http.ResponseWriter, r *http.Request) {
 //	@Summary     列出我关注的仓库
 //	@Tags        watch
 //	@Produce     json
+//	@Param       limit  query int false "每页数量（默认 200，最大 500）"
+//	@Param       offset query int false "偏移量"
 //	@Success     200 {array} store.Repo
+//	@SuccessHeader X-Total-Count int "关注仓库总数"
 //	@Security    BearerAuth
 //	@Router      /watched [get]
 func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
-	repos, err := a.store.WatchedRepos(me)
+	limit, offset := pageParams(r)
+	repos, err := a.store.WatchedRepos(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountWatchedRepos(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)

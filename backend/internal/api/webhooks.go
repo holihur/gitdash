@@ -30,11 +30,18 @@ func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	hooks, err := a.store.ListWebhooks(owner, name)
+	limit, offset := pageParams(r)
+	hooks, err := a.store.ListWebhooksPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountWebhooks(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, hooks)
 }
 

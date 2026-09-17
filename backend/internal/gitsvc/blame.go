@@ -22,10 +22,15 @@ type BlameLine struct {
 }
 
 type Blame struct {
-	Path    string                 `json:"path"`
-	Commits map[string]BlameCommit `json:"commits"`
-	Lines   []BlameLine            `json:"lines"`
+	Path      string                 `json:"path"`
+	Commits   map[string]BlameCommit `json:"commits"`
+	Lines     []BlameLine            `json:"lines"`
+	Truncated bool                   `json:"truncated,omitempty"`
 }
+
+// maxBlameLines 是单次 blame 返回的最大行数，避免超大文件把海量逐行归属
+// 一次性解析并序列化。超出时返回前 maxBlameLines 行并置 Truncated=true。
+const maxBlameLines = 5000
 
 // Blame 基于 git blame --porcelain 返回文件的逐行归属。
 func BlameFile(owner, name, ref, file string) (*Blame, error) {
@@ -87,6 +92,10 @@ func BlameFile(owner, name, ref, file string) (*Blame, error) {
 		}
 		if strings.HasPrefix(lines[idx], "\t") {
 			b.Lines = append(b.Lines, BlameLine{Line: finalLine, Commit: sha, Content: strings.TrimPrefix(lines[idx], "\t")})
+			if len(b.Lines) >= maxBlameLines {
+				b.Truncated = true
+				break
+			}
 		}
 	}
 	return b, nil

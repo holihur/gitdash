@@ -79,10 +79,17 @@ func (a *API) setRepoTops(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /topics [get]
 func (a *API) listTopics(w http.ResponseWriter, r *http.Request) {
-	topics, err := a.store.AllTopics(100)
+	limit, offset := pageParams(r)
+	topics, err := a.store.AllTopics(limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountAllTopics()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, topics)
 }

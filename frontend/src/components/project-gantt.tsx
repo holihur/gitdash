@@ -187,9 +187,3 @@ export function UnscheduledList({
 
 // ---- 卡片编辑对话框（文本 + 日程）----
 
-export interface CardDraft {
-  note: string;
-  start_date: string;
-  due_date: string;
-}
-

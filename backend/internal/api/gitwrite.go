@@ -31,7 +31,10 @@ func (a *API) listTags(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tags)
+	total := len(tags)
+	limit, offset := pageParams(r)
+	setTotal(w, total)
+	writeJSON(w, http.StatusOK, pageSlice(tags, limit, offset))
 }
 
 // createRef 创建分支或标签。

@@ -197,11 +197,18 @@ func (a *API) listRunners(w http.ResponseWriter, r *http.Request) {
 	for _, o := range orgs {
 		scopes = append(scopes, "org:"+o)
 	}
-	runners, err := a.store.ListRunnersByScopes(scopes)
+	limit, offset := pageParams(r)
+	runners, err := a.store.ListRunnersByScopesPaged(scopes, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountRunnersByScopes(scopes)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	// 附上实时在线状态（Redis lastseen）
 	for i := range runners {
 		if a.runnerHub != nil && a.runnerHub.IsOnline(r.Context(), runners[i].Name) {

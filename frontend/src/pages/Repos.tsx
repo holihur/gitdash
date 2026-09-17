@@ -45,7 +45,9 @@ export default function Repos() {
   const setTab = (v: "repos" | "starred" | "watching") =>
     set({ tab: v === "repos" ? null : v, page: null }, { push: true });
   const [starred, setStarred] = useState<Repo[]>([]);
+  const [starredTotal, setStarredTotal] = useState(0);
   const [watched, setWatched] = useState<Repo[]>([]);
+  const [watchedTotal, setWatchedTotal] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<Repo | null>(null);
@@ -70,22 +72,26 @@ export default function Repos() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [mine, star, watch] = await Promise.all([
-        api.listRepos(pageSize, (page - 1) * pageSize),
-        api.listStarred(),
-        api.listWatched(),
-      ]);
-      setRepos(mine.items);
-      setRepoTotal(mine.total);
-      setStarred(star);
-      setWatched(watch);
+      if (tab === "repos") {
+        const mine = await api.listRepos(pageSize, (page - 1) * pageSize);
+        setRepos(mine.items);
+        setRepoTotal(mine.total);
+      } else if (tab === "starred") {
+        const r = await api.listStarred(pageSize, (page - 1) * pageSize);
+        setStarred(r.items);
+        setStarredTotal(r.total);
+      } else {
+        const r = await api.listWatched(pageSize, (page - 1) * pageSize);
+        setWatched(r.items);
+        setWatchedTotal(r.total);
+      }
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [tab, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -95,6 +101,7 @@ export default function Repos() {
 
   const show = tab === "repos" ? repos : tab === "starred" ? starred : watched;
   const isMine = tab === "repos";
+  const showTotal = tab === "repos" ? repoTotal : tab === "starred" ? starredTotal : watchedTotal;
 
   const onPageChange = (p: number) => setPage(p);
   const onPageSizeChange = (s: number) => {
@@ -350,12 +357,12 @@ export default function Repos() {
           </div>
         )}
 
-        {isMine && !loading && !error && repoTotal > 0 && (
+        {!loading && !error && showTotal > 0 && (
           <Pagination
             className="mt-4"
             page={page}
             pageSize={pageSize}
-            total={repoTotal}
+            total={showTotal}
             onPageChange={onPageChange}
             onPageSizeChange={onPageSizeChange}
           />

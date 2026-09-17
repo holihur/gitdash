@@ -1,8 +1,6 @@
 package store
 
 import (
-	"sort"
-
 	"gorm.io/gorm"
 )
 
@@ -69,6 +67,27 @@ func (s *Store) ListRepos(owner string) ([]Repo, error) {
 		repos = append(repos, toRepo(r))
 	}
 	return repos, nil
+}
+
+// ListReposPaged 某 owner（用户或组织）下的仓库，分页按 name 排序。
+func (s *Store) ListReposPaged(owner string, limit, offset int) ([]Repo, error) {
+	var rows []repoRow
+	q := s.db.Where("owner = ? AND banned = ?", owner, false).Order("name")
+	if err := paginate(q, limit, offset).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	repos := []Repo{}
+	for _, r := range rows {
+		repos = append(repos, toRepo(r))
+	}
+	return repos, nil
+}
+
+// CountRepos 某 owner 下未封禁仓库总数。
+func (s *Store) CountRepos(owner string) (int, error) {
+	var n int64
+	err := s.db.Model(&repoRow{}).Where("owner = ? AND banned = ?", owner, false).Count(&n).Error
+	return int(n), err
 }
 
 // ExploreRepos 分页列出公开仓库（供发现页使用）；limit<=0 表示不限制。
@@ -305,112 +324,91 @@ func (s *Store) CountExploreRepos() (int, error) {
 	return int(n), nil
 }
 
+// accessibleReposSubquery 是“用户可访问仓库 id + 权限等级”的 UNION 子查询。
+// 三段来源：自有仓库 / 所属组织仓库 / 协作者仓库；用 MAX(role_rank) 去重取最高权限。
+// banned 仓库与被封禁组织的仓库会被过滤，保证列表与计数口径完全一致。
+// role_rank：3=owner，2=write，1=read。
+const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
+	FROM (
+		SELECT repos.owner AS owner, repos.name AS name, 3 AS role_rank
+			FROM repos WHERE repos.owner = ?
+		UNION ALL
+		SELECT repos.owner AS owner, repos.name AS name,
+			CASE WHEN m.role = 'owner' THEN 3 ELSE 2 END AS role_rank
+			FROM repos JOIN org_members m ON repos.owner = m.org WHERE m.username = ?
+		UNION ALL
+		SELECT repo_collabs.owner AS owner, repo_collabs.repo AS name,
+			CASE WHEN repo_collabs.permission = 'write' THEN 2 ELSE 1 END AS role_rank
+			FROM repo_collabs WHERE repo_collabs.username = ?
+	) src
+	JOIN repos r ON r.owner = src.owner AND r.name = src.name
+	WHERE r.banned = ? AND NOT EXISTS (SELECT 1 FROM orgs o WHERE o.name = r.owner AND o.banned = ?)
+	GROUP BY r.id`
+func roleFromRank(rank int) string {
+	switch {
+	case rank >= 3:
+		return "owner"
+	case rank == 2:
+		return "write"
+	default:
+		return "read"
+	}
+}
+
 // AccessibleRepos 返回用户自己拥有的仓库 + 所在组织的仓库 + 作为协作者可访问的仓库（带 role）。
-// limit<=0 表示不限制（三段来源在内存合并后按 owner,name 排序，再分页切片）。
+// limit<=0 表示不限制；分页在数据库层完成，不再把全部仓库载入内存。
 func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, error) {
-	// 三段来源分别查询后在内存合并（与原 UNION ALL + CASE 语义一致），按 owner,name 排序
-	var owned, orgRows []repoRow
-	if err := s.db.Where("owner = ?", username).Find(&owned).Error; err != nil {
-		return nil, err
-	}
-	if err := s.db.Select("repos.*").Joins("JOIN org_members m ON repos.owner = m.org").
-		Where("m.username = ?", username).Find(&orgRows).Error; err != nil {
-		return nil, err
-	}
-	var collabRows []struct {
+	var rows []struct {
 		ID            int64
 		Owner         string
 		Name          string
 		Description   string
 		Private       bool
+		IsTemplate    bool
+		Banned        bool
 		DefaultBranch string
 		HasIssues     bool
 		CreatedAt     string
-		Perm          string `gorm:"column:permission"`
+		RoleRank      int
 	}
-	if err := s.db.Table("repo_collabs").Select(`repos.id AS id, repos.owner AS owner, repos.name AS name,
-			repos.description AS description, repos.private AS private, repos.default_branch AS default_branch,
-			repos.has_issues AS has_issues, repos.created_at AS created_at,
-			repo_collabs.permission AS permission`).
-		Joins("JOIN repos ON repos.owner = repo_collabs.owner AND repos.name = repo_collabs.repo").
-		Where("repo_collabs.username = ?", username).Scan(&collabRows).Error; err != nil {
-		return nil, err
-	}
-	// 组织成员对应的角色：owner → owner，其余 → write
-	orgRole := map[string]string{}
-	var members []orgMemberRow
-	if err := s.db.Where("username = ?", username).Find(&members).Error; err != nil {
-		return nil, err
-	}
-	for _, m := range members {
-		if m.Role == "owner" {
-			orgRole[m.Org] = "owner"
-		} else if _, ok := orgRole[m.Org]; !ok {
-			orgRole[m.Org] = "write"
-		}
-	}
-	repos := []Repo{}
-	for _, r := range owned {
-		dto := toRepo(r)
-		dto.Role = "owner"
-		repos = append(repos, dto)
-	}
-	for _, r := range orgRows {
-		dto := toRepo(r)
-		dto.Role = orgRole[r.Owner]
-		repos = append(repos, dto)
-	}
-	for _, r := range collabRows {
-		dto := toRepo(repoRow{ID: r.ID, Owner: r.Owner, Name: r.Name, Description: r.Description, Private: r.Private, DefaultBranch: r.DefaultBranch, HasIssues: r.HasIssues, CreatedAt: r.CreatedAt})
-		dto.Role = r.Perm
-		repos = append(repos, dto)
-	}
-	// 封禁仓库（或其所在组织被封禁）不展示。
-	visible := repos[:0]
-	for _, r := range repos {
-		if s.IsRepoBanned(r.Owner, r.Name) {
-			continue
-		}
-		visible = append(visible, r)
-	}
-	repos = visible
-	// 按 owner, name 排序（稳定排序保持各来源内部相对顺序）
-	sort.SliceStable(repos, func(i, j int) bool {
-		if repos[i].Owner != repos[j].Owner {
-			return repos[i].Owner < repos[j].Owner
-		}
-		return repos[i].Name < repos[j].Name
-	})
+	sql := `SELECT r.id, r.owner, r.name, r.description, r.private, r.is_template, r.banned,
+			r.default_branch, r.has_issues, r.created_at, t.role_rank
+		FROM (` + accessibleReposSubquery + `) t
+		JOIN repos r ON r.id = t.id
+		ORDER BY r.owner, r.name`
+	args := []any{username, username, username, false, true}
 	if limit > 0 {
 		if offset < 0 {
 			offset = 0
 		}
-		if offset >= len(repos) {
-			return []Repo{}, nil
-		}
-		repos = repos[offset:]
-		if limit < len(repos) {
-			repos = repos[:limit]
-		}
+		sql += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	if err := s.db.Raw(sql, args...).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	repos := make([]Repo, 0, len(rows))
+	for _, r := range rows {
+		dto := toRepo(repoRow{
+			ID: r.ID, Owner: r.Owner, Name: r.Name, Description: r.Description,
+			Private: r.Private, IsTemplate: r.IsTemplate, Banned: r.Banned,
+			DefaultBranch: r.DefaultBranch, HasIssues: r.HasIssues, CreatedAt: r.CreatedAt,
+		})
+		dto.Role = roleFromRank(r.RoleRank)
+		repos = append(repos, dto)
 	}
 	return repos, nil
 }
 
-// CountAccessibleRepos 可访问仓库总数（三段来源计数之和，与列表口径一致）。
+// CountAccessibleRepos 可访问仓库总数（与 AccessibleRepos 使用同一子查询，口径完全一致）。
 func (s *Store) CountAccessibleRepos(username string) (int, error) {
-	var ownedN, orgN, collabN int64
-	if err := s.db.Model(&repoRow{}).Where("owner = ?", username).Count(&ownedN).Error; err != nil {
+	var n int64
+	row := s.db.Raw(`SELECT COUNT(*) FROM (`+accessibleReposSubquery+`) t`,
+		username, username, username, false, true).Row()
+	if err := row.Scan(&n); err != nil {
 		return 0, err
 	}
-	if err := s.db.Model(&repoRow{}).Joins("JOIN org_members m ON repos.owner = m.org").
-		Where("m.username = ?", username).Count(&orgN).Error; err != nil {
-		return 0, err
-	}
-	if err := s.db.Table("repo_collabs").Joins("JOIN repos ON repos.owner = repo_collabs.owner AND repos.name = repo_collabs.repo").
-		Where("repo_collabs.username = ?", username).Count(&collabN).Error; err != nil {
-		return 0, err
-	}
-	return int(ownedN + orgN + collabN), nil
+	return int(n), nil
 }
 
 // ListAccessibleTemplateRepos 返回当前用户可访问的、标记为模版的仓库。

@@ -34,15 +34,16 @@ func (s *Store) OrgFollowerCount(org string) (int64, error) {
 	return n, err
 }
 
-// ListOrgFollowers 关注 org 的用户列表（最新关注在前）。
-func (s *Store) ListOrgFollowers(org string) ([]UserSummary, error) {
+// ListOrgFollowers 关注 org 的用户列表（最新关注在前，分页）。
+func (s *Store) ListOrgFollowers(org string, limit, offset int) ([]UserSummary, error) {
 	var out []UserSummary
-	err := s.db.Table("users").
+	// f.follower 作为唯一 tiebreaker，保证 offset 分页稳定。
+	q := s.db.Table("users").
 		Select("users.username, users.created_at").
 		Joins("JOIN org_follows f ON f.follower = users.username").
 		Where("f.org = ?", org).
-		Order("f.created_at DESC").
-		Scan(&out).Error
+		Order("f.created_at DESC, f.follower")
+	err := paginate(q, limit, offset).Scan(&out).Error
 	if err != nil {
 		return nil, err
 	}

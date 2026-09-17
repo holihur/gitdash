@@ -23,11 +23,19 @@ import (
 //	@Failure     500 {object} map[string]string
 //	@Router      /keys [get]
 func (a *API) listKeys(w http.ResponseWriter, r *http.Request) {
-	keys, err := a.store.ListKeys(userFrom(r))
+	me := userFrom(r)
+	limit, offset := pageParams(r)
+	keys, err := a.store.ListKeysPaged(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountKeys(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, keys)
 }
 

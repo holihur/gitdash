@@ -3,7 +3,8 @@ import type { Notification, Repo } from "./types";
 
 export const inboxApi = {
   // watch & inbox
-  listWatched: () => req<Repo[]>("/watched"),
+  listWatched: (limit?: number, offset?: number) =>
+    reqPage<Repo[]>(`/watched${pageQuery(limit, offset)}`),
   watch: (owner: string, name: string) =>
     req<{ watching: boolean; watchers: number }>(`/users/${owner}/repos/${name}/watch`, {
       method: "PUT",

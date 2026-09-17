@@ -55,7 +55,7 @@ export const projectsApi = {
     owner: string,
     name: string,
     id: number,
-    fields: { column_id: number; swimlane_id?: number; issue_number?: number; note?: string; start_date?: string; due_date?: string },
+    fields: { column_id: number; swimlane_id?: number; issue_number?: number; title?: string; body?: string; note?: string; start_date?: string; due_date?: string },
   ) =>
     req<ProjectCard>(`/users/${owner}/repos/${name}/projects/${id}/cards`, {
       method: "POST",
@@ -66,7 +66,7 @@ export const projectsApi = {
     name: string,
     id: number,
     cardId: number,
-    fields: { column_id?: number; swimlane_id?: number; position?: number; note?: string; start_date?: string; due_date?: string },
+    fields: { column_id?: number; swimlane_id?: number; position?: number; title?: string; body?: string; note?: string; start_date?: string; due_date?: string },
   ) =>
     req<ProjectCard>(`/users/${owner}/repos/${name}/projects/${id}/cards/${cardId}`, {
       method: "PATCH",

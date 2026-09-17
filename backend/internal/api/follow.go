@@ -142,7 +142,10 @@ func (a *API) unfollowUser(w http.ResponseWriter, r *http.Request) {
 //	@Tags        users
 //	@Produce     json
 //	@Param       username path string true "用户名"
+//	@Param       limit    query int   false "每页数量（默认 200，最大 500）"
+//	@Param       offset   query int   false "偏移量"
 //	@Success     200 {array} store.UserSummary
+//	@SuccessHeader X-Total-Count int "关注者总数"
 //	@Failure     404 {object} map[string]string
 //	@Failure     500 {object} map[string]string
 //	@Security    BearerAuth
@@ -157,11 +160,18 @@ func (a *API) listFollowers(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	users, err := a.store.ListFollowers(username)
+	limit, offset := pageParams(r)
+	users, err := a.store.ListFollowers(username, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountFollowers(username)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, users)
 }
 
@@ -171,7 +181,10 @@ func (a *API) listFollowers(w http.ResponseWriter, r *http.Request) {
 //	@Tags        users
 //	@Produce     json
 //	@Param       username path string true "用户名"
+//	@Param       limit    query int   false "每页数量（默认 200，最大 500）"
+//	@Param       offset   query int   false "偏移量"
 //	@Success     200 {array} store.UserSummary
+//	@SuccessHeader X-Total-Count int "关注总数"
 //	@Failure     404 {object} map[string]string
 //	@Failure     500 {object} map[string]string
 //	@Security    BearerAuth
@@ -186,10 +199,17 @@ func (a *API) listFollowing(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	users, err := a.store.ListFollowing(username)
+	limit, offset := pageParams(r)
+	users, err := a.store.ListFollowing(username, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountFollowing(username)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, users)
 }

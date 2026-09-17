@@ -23,11 +23,18 @@ func (a *API) listRepoEnvVars(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	vars, err := a.store.ListRepoEnvVars(owner, name)
+	limit, offset := pageParams(r)
+	vars, err := a.store.ListRepoEnvVarsPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountRepoEnvVars(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, vars)
 }
 

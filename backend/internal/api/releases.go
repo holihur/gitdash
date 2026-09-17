@@ -294,11 +294,18 @@ func (a *API) listAssets(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	assets, err := a.store.ListAssets(owner, name, rel.ID)
+	limit, offset := pageParams(r)
+	assets, err := a.store.ListAssetsPaged(owner, name, rel.ID, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountAssets(rel.ID)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, int(total))
 	writeJSON(w, http.StatusOK, assets)
 }
 

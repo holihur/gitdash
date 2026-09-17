@@ -23,11 +23,15 @@ func (s *Store) IsWatching(username, owner, repo string) bool {
 	return err == nil && n > 0
 }
 
-// WatchedRepos 我 watch 过的仓库（可能含已删除仓库的残留——join repos 过滤）。
-func (s *Store) WatchedRepos(username string) ([]Repo, error) {
+// WatchedRepos 我 watch 过的仓库（分页，按 watch 时间倒序；join repos 过滤已删除仓库）。
+func (s *Store) WatchedRepos(username string, limit, offset int) ([]Repo, error) {
 	var rows []repoRow
-	if err := s.db.Select("repos.*").Joins("JOIN repo_watches w ON repos.owner = w.owner AND repos.name = w.repo").
-		Where("w.username = ?", username).Order("w.created_at DESC").Find(&rows).Error; err != nil {
+	q := s.db.Select("repos.*").
+		Joins("JOIN repo_watches w ON repos.owner = w.owner AND repos.name = w.repo").
+		Where("w.username = ? AND repos.banned = ?", username, false).
+		// owner/repo 作为唯一次级排序键，保证 offset 分页稳定。
+		Order("w.created_at DESC, w.owner, w.repo")
+	if err := paginate(q, limit, offset).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := []Repo{}
@@ -35,6 +39,16 @@ func (s *Store) WatchedRepos(username string) ([]Repo, error) {
 		out = append(out, toRepo(r))
 	}
 	return out, nil
+}
+
+// CountWatchedRepos 我 watch 过的仓库总数（与 WatchedRepos 口径一致）。
+func (s *Store) CountWatchedRepos(username string) (int, error) {
+	var n int64
+	err := s.db.Model(&watchRow{}).
+		Joins("JOIN repos ON repos.owner = repo_watches.owner AND repos.name = repo_watches.repo").
+		Where("repo_watches.username = ? AND repos.banned = ?", username, false).
+		Count(&n).Error
+	return int(n), err
 }
 
 // WatchCounts 返回若干 (owner,repo) 的 watch 数（单次 GROUP BY 查询）。

@@ -270,7 +270,9 @@ type ProjectCard struct {
 	IssueNumber int64  `json:"issue_number"`
 	IssueTitle  string `json:"issue_title"`
 	IssueState  string `json:"issue_state"`
-	Note        string `json:"note"`
+	Title       string `json:"title"`
+	Body        string `json:"body"` // Markdown 详情
+	Note        string `json:"note"` // 兼容字段：与 title 同步
 	StartDate   string `json:"start_date"`
 	DueDate     string `json:"due_date"`
 	Position    int    `json:"position"`

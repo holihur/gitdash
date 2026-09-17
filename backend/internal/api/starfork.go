@@ -81,17 +81,27 @@ func (a *API) unstarRepo(w http.ResponseWriter, r *http.Request) {
 //	@Summary     列出收藏仓库
 //	@Tags        repos
 //	@Produce     json
+//	@Param       limit  query int false "每页数量（默认 200，最大 500）"
+//	@Param       offset query int false "偏移量"
 //	@Success     200 {array} store.Repo
+//	@SuccessHeader X-Total-Count int "收藏仓库总数"
 //	@Failure     500 {object} map[string]string
 //	@Security    BearerAuth
 //	@Router      /starred [get]
 func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
-	repos, err := a.store.StarredRepos(me)
+	limit, offset := pageParams(r)
+	repos, err := a.store.StarredRepos(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountStarredRepos(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)

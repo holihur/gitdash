@@ -30,7 +30,13 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
 		return
 	}
-	rows, err := a.store.QueryOrgRepos(org)
+	limit, offset := pageParams(r)
+	rows, err := a.store.ListReposPaged(org, limit, offset)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	total, err := a.store.CountRepos(org)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -45,7 +51,7 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 	out := append([]store.Repo{}, rows...)
 	a.attachStars(out, me)
 	a.attachTopics(out)
-	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out})
+	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out, "total": total})
 }
 
 // setRepoVisibility 设置仓库可见性。
@@ -277,11 +283,18 @@ func (a *API) setRepoDescription(w http.ResponseWriter, r *http.Request) {
 //	@Router      /templates [get]
 func (a *API) listTemplateRepos(w http.ResponseWriter, r *http.Request) {
 	me := userFrom(r)
-	repos, err := a.store.ListAccessibleTemplateRepos(me)
+	limit, offset := pageParams(r)
+	repos, err := a.store.ListAccessibleTemplateReposPaged(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountAccessibleTemplateRepos(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, repos)
@@ -341,11 +354,18 @@ func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	collabs, err := a.store.ListCollabs(owner, name)
+	limit, offset := pageParams(r)
+	collabs, err := a.store.ListCollabsPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountCollabs(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, collabs)
 }
 

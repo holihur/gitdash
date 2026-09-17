@@ -76,7 +76,8 @@ export const reposApi = {
 
 
   // star & fork
-  listStarred: () => req<Repo[]>("/starred"),
+  listStarred: (limit?: number, offset?: number) =>
+    reqPage<Repo[]>(`/starred${pageQuery(limit, offset)}`),
   star: (owner: string, name: string) =>
     req<{ starred: boolean; stars: number }>(`/users/${owner}/repos/${name}/star`, {
       method: "PUT",

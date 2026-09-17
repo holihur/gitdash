@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"gitdash/backend/internal/logx"
 	"gorm.io/gorm"
 )
 
@@ -90,14 +91,19 @@ func (s *Store) TopicsForRepos(pairs [][2]string) map[[2]string][]string {
 			owners = append(owners, p[0])
 		}
 	}
-	var rows []repoTopicRow
-	if err := s.db.Where("owner IN ?", owners).Order("topic").Find(&rows).Error; err != nil {
-		return out
-	}
-	for _, r := range rows {
-		key := [2]string{r.Owner, r.Repo}
-		if want[key] {
-			out[key] = append(out[key], r.Topic)
+	// 按 owner 分块，避免超出 SQLite/PostgreSQL 的绑定参数上限。
+	for _, part := range chunkStrings(owners, 0) {
+		var rows []repoTopicRow
+		if err := s.db.Where("owner IN ?", part).Order("topic").Find(&rows).Error; err != nil {
+			// 不静默吞错：topic 丢失会让仓库标签“凭空消失”。
+			logx.Error("TopicsForRepos: " + err.Error())
+			continue
+		}
+		for _, r := range rows {
+			key := [2]string{r.Owner, r.Repo}
+			if want[key] {
+				out[key] = append(out[key], r.Topic)
+			}
 		}
 	}
 	return out
@@ -155,9 +161,13 @@ type TopicCount struct {
 }
 
 // AllTopics 列出公开仓库使用过的 topic（按热度降序），供 Explore 筛选用。
-func (s *Store) AllTopics(limit int) ([]TopicCount, error) {
-	if limit <= 0 || limit > 200 {
+// limit<=0 表示使用默认 50；offset 为偏移。
+func (s *Store) AllTopics(limit, offset int) ([]TopicCount, error) {
+	if limit <= 0 || limit > 500 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	var rows []struct {
 		Topic string
@@ -169,7 +179,7 @@ func (s *Store) AllTopics(limit int) ([]TopicCount, error) {
 		Where("repos.private = ?", false).
 		Group("repo_topics.topic").
 		Order("cnt DESC, repo_topics.topic").
-		Limit(limit).
+		Limit(limit).Offset(offset).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err
@@ -179,4 +189,15 @@ func (s *Store) AllTopics(limit int) ([]TopicCount, error) {
 		out = append(out, TopicCount{Topic: r.Topic, Count: r.Cnt})
 	}
 	return out, nil
+}
+
+// CountAllTopics 公开仓库使用过的 topic 总数。
+func (s *Store) CountAllTopics() (int, error) {
+	var n int64
+	err := s.db.Table("repo_topics").
+		Joins("JOIN repos ON repos.owner = repo_topics.owner AND repos.name = repo_topics.repo").
+		Where("repos.private = ?", false).
+		Distinct("repo_topics.topic").
+		Count(&n).Error
+	return int(n), err
 }

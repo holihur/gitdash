@@ -49,14 +49,15 @@ func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 	return o, nil
 }
 
-func (s *Store) ListMyOrgs(username string) ([]Org, error) {
+// ListMyOrgs 我所属的组织（分页）；limit<=0 表示不限制。
+func (s *Store) ListMyOrgs(username string, limit, offset int) ([]Org, error) {
 	var rows []orgRow
-	err := s.db.Table("orgs").
+	q := s.db.Table("orgs").
 		Select("orgs.*").
 		Joins("JOIN org_members ON org_members.org = orgs.name").
 		Where("org_members.username = ? AND orgs.banned = ?", username, false).
-		Order("orgs.name").
-		Scan(&rows).Error
+		Order("orgs.name")
+	err := paginate(q, limit, offset).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +66,16 @@ func (s *Store) ListMyOrgs(username string) ([]Org, error) {
 		out = append(out, Org(r))
 	}
 	return out, nil
+}
+
+// CountMyOrgs 我所属的组织总数。
+func (s *Store) CountMyOrgs(username string) (int, error) {
+	var n int64
+	err := s.db.Table("org_members").
+		Joins("JOIN orgs ON orgs.name = org_members.org").
+		Where("org_members.username = ? AND orgs.banned = ?", username, false).
+		Count(&n).Error
+	return int(n), err
 }
 
 func (s *Store) OrgRole(org, username string) string {
@@ -95,6 +106,27 @@ func (s *Store) OrgMembers(org string) ([]OrgMember, error) {
 		out = append(out, OrgMember{Org: r.Org, Username: r.Username, Role: r.Role})
 	}
 	return out, nil
+}
+
+// ListOrgMembers 组织成员（分页，按用户名排序）。
+func (s *Store) ListOrgMembers(org string, limit, offset int) ([]OrgMember, error) {
+	var rows []orgMemberRow
+	err := paginate(s.db.Where("org = ?", org).Order("username"), limit, offset).Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	out := []OrgMember{}
+	for _, r := range rows {
+		out = append(out, OrgMember{Org: r.Org, Username: r.Username, Role: r.Role})
+	}
+	return out, nil
+}
+
+// CountOrgMembers 组织成员总数。
+func (s *Store) CountOrgMembers(org string) (int, error) {
+	var n int64
+	err := s.db.Model(&orgMemberRow{}).Where("org = ?", org).Count(&n).Error
+	return int(n), err
 }
 
 func (s *Store) AddOrgMember(org, username, role string) error {

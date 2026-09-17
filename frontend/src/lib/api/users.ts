@@ -1,4 +1,4 @@
-import { req } from "./core";
+import { pageQuery, req, reqPage } from "./core";
 import type { FollowState, UserProfile, UserSummary } from "./types";
 
 export const usersApi = {
@@ -8,8 +8,12 @@ export const usersApi = {
     req<FollowState>(`/users/${encodeURIComponent(username)}/follow`, { method: "POST" }),
   unfollowUser: (username: string) =>
     req<FollowState>(`/users/${encodeURIComponent(username)}/follow`, { method: "DELETE" }),
-  listFollowers: (username: string) =>
-    req<UserSummary[]>(`/users/${encodeURIComponent(username)}/followers`),
-  listFollowing: (username: string) =>
-    req<UserSummary[]>(`/users/${encodeURIComponent(username)}/following`),
+  listFollowers: (username: string, limit?: number, offset?: number) =>
+    reqPage<UserSummary[]>(
+      `/users/${encodeURIComponent(username)}/followers${pageQuery(limit, offset)}`,
+    ),
+  listFollowing: (username: string, limit?: number, offset?: number) =>
+    reqPage<UserSummary[]>(
+      `/users/${encodeURIComponent(username)}/following${pageQuery(limit, offset)}`,
+    ),
 };

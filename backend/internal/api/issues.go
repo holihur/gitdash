@@ -388,11 +388,18 @@ func (a *API) listLabels(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ls, err := a.store.ListLabels(owner, name)
+	limit, offset := pageParams(r)
+	ls, err := a.store.ListLabelsPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountLabels(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, ls)
 }
 
@@ -571,11 +578,18 @@ func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ms, err := a.store.ListMilestones(owner, name)
+	limit, offset := pageParams(r)
+	ms, err := a.store.ListMilestonesPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountMilestones(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, ms)
 }
 

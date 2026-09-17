@@ -5616,6 +5616,20 @@ const docTemplate = `{
                     "repos"
                 ],
                 "summary": "列出收藏仓库",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -8863,7 +8877,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "可选 ref/sha/inputs",
+                        "description": "可选 ref/sha/file/inputs",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -9025,7 +9039,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "可选 ref/sha/inputs",
+                        "description": "可选 ref/sha/file/delay/inputs",
                         "name": "body",
                         "in": "body",
                         "schema": {
@@ -12419,6 +12433,18 @@ const docTemplate = `{
                         "name": "username",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12473,6 +12499,18 @@ const docTemplate = `{
                         "name": "username",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12520,6 +12558,20 @@ const docTemplate = `{
                     "watch"
                 ],
                 "summary": "列出我关注的仓库",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "每页数量（默认 200，最大 500）",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -12901,6 +12953,9 @@ const docTemplate = `{
         "api.createProjectCardReq": {
             "type": "object",
             "properties": {
+                "body": {
+                    "type": "string"
+                },
                 "column_id": {
                     "type": "integer"
                 },
@@ -12911,6 +12966,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "note": {
+                    "description": "兼容：等价于 title",
                     "type": "string"
                 },
                 "start_date": {
@@ -12918,6 +12974,9 @@ const docTemplate = `{
                 },
                 "swimlane_id": {
                     "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -13467,6 +13526,9 @@ const docTemplate = `{
         "api.updateProjectCardReq": {
             "type": "object",
             "properties": {
+                "body": {
+                    "type": "string"
+                },
                 "column_id": {
                     "type": "integer"
                 },
@@ -13474,6 +13536,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "note": {
+                    "description": "兼容：等价于 title",
                     "type": "string"
                 },
                 "position": {
@@ -13484,6 +13547,9 @@ const docTemplate = `{
                 },
                 "swimlane_id": {
                     "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -13591,6 +13657,9 @@ const docTemplate = `{
                 },
                 "path": {
                     "type": "string"
+                },
+                "truncated": {
+                    "type": "boolean"
                 }
             }
         },
@@ -14557,6 +14626,10 @@ const docTemplate = `{
         "store.ProjectCard": {
             "type": "object",
             "properties": {
+                "body": {
+                    "description": "Markdown 详情",
+                    "type": "string"
+                },
                 "column_id": {
                     "type": "integer"
                 },
@@ -14579,6 +14652,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "note": {
+                    "description": "兼容字段：与 title 同步",
                     "type": "string"
                 },
                 "position": {
@@ -14593,6 +14667,9 @@ const docTemplate = `{
                 "swimlane_id": {
                     "description": "0 = 未分组泳道",
                     "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },

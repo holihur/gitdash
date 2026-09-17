@@ -108,7 +108,7 @@ func TestOrgBanPropagatesToRepos(t *testing.T) {
 		t.Fatal("org-banned repo should not be readable")
 	}
 	// 成员列表中隐藏
-	orgs, err := s.ListMyOrgs("alice")
+	orgs, err := s.ListMyOrgs("alice", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

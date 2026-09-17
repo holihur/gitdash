@@ -92,7 +92,7 @@ func TestRepoTopicsAndExploreFilter(t *testing.T) {
 	}
 
 	// 所有标签仅统计公开仓库
-	all, err := s.AllTopics(0)
+	all, err := s.AllTopics(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

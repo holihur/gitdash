@@ -38,15 +38,16 @@ func (s *Store) FollowCounts(username string) (followers, following int64, err e
 	return followers, following, nil
 }
 
-// ListFollowers 关注 username 的用户列表（最新关注在前）。
-func (s *Store) ListFollowers(username string) ([]UserSummary, error) {
+// ListFollowers 关注 username 的用户列表（最新关注在前，分页）。
+func (s *Store) ListFollowers(username string, limit, offset int) ([]UserSummary, error) {
 	var out []UserSummary
-	err := s.db.Table("users").
+	// f.follower 作为唯一 tiebreaker，保证 offset 分页稳定。
+	q := s.db.Table("users").
 		Select("users.username, users.created_at").
 		Joins("JOIN user_follows f ON f.follower = users.username").
 		Where("f.followee = ?", username).
-		Order("f.created_at DESC").
-		Scan(&out).Error
+		Order("f.created_at DESC, f.follower")
+	err := paginate(q, limit, offset).Scan(&out).Error
 	if err != nil {
 		return nil, err
 	}
@@ -56,15 +57,22 @@ func (s *Store) ListFollowers(username string) ([]UserSummary, error) {
 	return out, nil
 }
 
-// ListFollowing username 关注的用户列表（最新关注在前）。
-func (s *Store) ListFollowing(username string) ([]UserSummary, error) {
+// CountFollowers 关注 username 的用户总数。
+func (s *Store) CountFollowers(username string) (int, error) {
+	var n int64
+	err := s.db.Table("user_follows").Where("followee = ?", username).Count(&n).Error
+	return int(n), err
+}
+
+// ListFollowing username 关注的用户列表（最新关注在前，分页）。
+func (s *Store) ListFollowing(username string, limit, offset int) ([]UserSummary, error) {
 	var out []UserSummary
-	err := s.db.Table("users").
+	q := s.db.Table("users").
 		Select("users.username, users.created_at").
 		Joins("JOIN user_follows f ON f.followee = users.username").
 		Where("f.follower = ?", username).
-		Order("f.created_at DESC").
-		Scan(&out).Error
+		Order("f.created_at DESC, f.followee")
+	err := paginate(q, limit, offset).Scan(&out).Error
 	if err != nil {
 		return nil, err
 	}
@@ -72,4 +80,11 @@ func (s *Store) ListFollowing(username string) ([]UserSummary, error) {
 		out = []UserSummary{}
 	}
 	return out, nil
+}
+
+// CountFollowing username 关注的用户总数。
+func (s *Store) CountFollowing(username string) (int, error) {
+	var n int64
+	err := s.db.Table("user_follows").Where("follower = ?", username).Count(&n).Error
+	return int(n), err
 }

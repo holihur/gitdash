@@ -240,6 +240,8 @@ func (s *Store) ListProjectCards(projectID int64) ([]ProjectCard, error) {
 		ColumnID   int64
 		SwimlaneID int64
 		IssueNum   int64
+		Title      string
+		Body       string
 		Note       string
 		StartDate  string
 		DueDate    string
@@ -248,7 +250,7 @@ func (s *Store) ListProjectCards(projectID int64) ([]ProjectCard, error) {
 		IssueTitle string
 		IssueState string
 	}
-	err := s.db.Raw(`SELECT c.id, c.project_id, c.column_id, c.swimlane_id, c.issue_num, c.note, c.position, c.created_at,
+	err := s.db.Raw(`SELECT c.id, c.project_id, c.column_id, c.swimlane_id, c.issue_num, c.title, c.body, c.note, c.position, c.created_at,
 		c.start_date, c.due_date,
 		COALESCE(i.title, '') AS issue_title, COALESCE(i.state, '') AS issue_state
 		FROM project_cards c LEFT JOIN issues i ON i.owner = (SELECT owner FROM projects WHERE id = c.project_id)
@@ -261,15 +263,16 @@ func (s *Store) ListProjectCards(projectID int64) ([]ProjectCard, error) {
 	for _, r := range rows {
 		out = append(out, ProjectCard{ID: r.ID, ProjectID: r.ProjectID, ColumnID: r.ColumnID,
 			SwimlaneID: r.SwimlaneID, IssueNumber: r.IssueNum, IssueTitle: r.IssueTitle,
-			IssueState: r.IssueState, Note: r.Note, StartDate: r.StartDate, DueDate: r.DueDate,
+			IssueState: r.IssueState, Title: r.Title, Body: r.Body, Note: r.Note,
+			StartDate: r.StartDate, DueDate: r.DueDate,
 			Position: r.Position, CreatedAt: r.CreatedAt})
 	}
 	return out, nil
 }
 
 // CreateProjectCard 创建卡片；issueNum > 0 时校验 issue 存在，column/swimlane 必须属于本项目。
-// startDate / dueDate 可为空（YYYY-MM-DD）。
-func (s *Store) CreateProjectCard(owner, repo string, projectID, columnID, swimlaneID, issueNum int64, note, startDate, dueDate string) (ProjectCard, error) {
+// title 为卡片名称，body 为 Markdown 详情；startDate / dueDate 可为空（YYYY-MM-DD）。
+func (s *Store) CreateProjectCard(owner, repo string, projectID, columnID, swimlaneID, issueNum int64, title, body, startDate, dueDate string) (ProjectCard, error) {
 	if _, err := s.GetProject(owner, repo, projectID); err != nil {
 		return ProjectCard{}, err
 	}
@@ -303,12 +306,12 @@ func (s *Store) CreateProjectCard(owner, repo string, projectID, columnID, swiml
 	_ = s.db.Model(&projectCardRow{}).Where("project_id = ? AND column_id = ? AND swimlane_id = ?", projectID, columnID, swimlaneID).
 		Select("COALESCE(MAX(position), -1)").Scan(&max).Error
 	r := projectCardRow{ProjectID: projectID, ColumnID: columnID, SwimlaneID: swimlaneID,
-		IssueNum: issueNum, Note: note, StartDate: startDate, DueDate: dueDate, Position: max + 1, CreatedAt: now()}
+		IssueNum: issueNum, Title: title, Note: title, Body: body, StartDate: startDate, DueDate: dueDate, Position: max + 1, CreatedAt: now()}
 	if err := s.db.Create(&r).Error; err != nil {
 		return ProjectCard{}, err
 	}
 	c := ProjectCard{ID: r.ID, ProjectID: r.ProjectID, ColumnID: r.ColumnID, SwimlaneID: r.SwimlaneID,
-		IssueNumber: r.IssueNum, Note: r.Note, StartDate: r.StartDate, DueDate: r.DueDate,
+		IssueNumber: r.IssueNum, Title: r.Title, Body: r.Body, Note: r.Note, StartDate: r.StartDate, DueDate: r.DueDate,
 		Position: r.Position, CreatedAt: r.CreatedAt}
 	if issueNum > 0 {
 		var ir issueRow
@@ -350,7 +353,10 @@ func (s *Store) MoveProjectCard(projectID, cardID, columnID, swimlaneID int64, p
 }
 
 // ProjectCardUpdate 是卡片的部分更新（nil 字段不修改）。
+// Title 更新时同步 Note（向后兼容）。
 type ProjectCardUpdate struct {
+	Title     *string
+	Body      *string
 	Note      *string
 	StartDate *string
 	DueDate   *string
@@ -359,8 +365,15 @@ type ProjectCardUpdate struct {
 // UpdateProjectCard 更新卡片文本与日程（仅非 nil 字段生效）。
 func (s *Store) UpdateProjectCard(projectID, cardID int64, up ProjectCardUpdate) error {
 	updates := map[string]any{}
-	if up.Note != nil {
+	if up.Title != nil {
+		updates["title"] = *up.Title
+		updates["note"] = *up.Title
+	} else if up.Note != nil {
+		updates["title"] = *up.Note
 		updates["note"] = *up.Note
+	}
+	if up.Body != nil {
+		updates["body"] = *up.Body
 	}
 	if up.StartDate != nil {
 		updates["start_date"] = *up.StartDate

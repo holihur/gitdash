@@ -57,6 +57,22 @@ func pageParams(r *http.Request) (limit, offset int) {
 	return limit, offset
 }
 
+// pageSlice 对内存中的切片做分页（用于 git 分支/标签等无法在 SQL 层分页的列表）。
+// limit<=0 表示不限制条数。
+func pageSlice[T any](s []T, limit, offset int) []T {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(s) {
+		return []T{}
+	}
+	s = s[offset:]
+	if limit > 0 && limit < len(s) {
+		s = s[:limit]
+	}
+	return s
+}
+
 // setTotal 写入 X-Total-Count 响应头（列表分页的总数）。
 func setTotal(w http.ResponseWriter, n int) {
 	w.Header().Set("X-Total-Count", strconv.Itoa(n))

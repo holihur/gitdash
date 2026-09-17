@@ -63,7 +63,7 @@ export const BAR_COLORS = [
 
 export function cardLabel(card: ProjectCard): string {
   if (card.issue_number) return card.issue_title || `#${card.issue_number}`;
-  return card.note || "";
+  return card.title || card.note || "";
 }
 
 // ---- 列表视图 ----

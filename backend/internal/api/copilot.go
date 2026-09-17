@@ -174,11 +174,19 @@ func composeIssuePrompt(issue store.Issue, extra string) string {
 //	@Success     200 {array} store.ByokKey
 //	@Router      /me/byok [get]
 func (a *API) listByok(w http.ResponseWriter, r *http.Request) {
-	keys, err := a.store.ListByokKeys(userFrom(r))
+	me := userFrom(r)
+	limit, offset := pageParams(r)
+	keys, err := a.store.ListByokKeysPaged(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountByokKeys(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, keys)
 }
 
@@ -298,11 +306,18 @@ func (a *API) listCopilots(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	sessions, err := a.store.ListCopilotSessions(owner, name)
+	limit, offset := pageParams(r)
+	sessions, err := a.store.ListCopilotSessionsPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountCopilotSessions(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, sessions)
 }
 

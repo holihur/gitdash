@@ -26,11 +26,18 @@ func (a *API) listTokens(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	pats, err := a.store.ListPATs(uid)
+	limit, offset := pageParams(r)
+	pats, err := a.store.ListPATsPaged(uid, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountPATs(uid)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, pats)
 }
 

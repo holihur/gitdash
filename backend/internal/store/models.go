@@ -214,7 +214,11 @@ type projectCardRow struct {
 	ColumnID   int64  `gorm:"not null;index"`
 	SwimlaneID int64  `gorm:"not null;default:0"`
 	IssueNum   int64  `gorm:"not null;default:0"` // >0 = 关联 issue；0 = 纯文本卡片
-	Note       string `gorm:"not null;default:''"`
+	// Title 卡片名称；Note 为旧字段，保留用于向后兼容（与 Title 同步）。
+	Title string `gorm:"not null;default:''"`
+	Note  string `gorm:"not null;default:''"`
+	// Body 卡片详情（Markdown 文本）。
+	Body string `gorm:"not null;default:''"`
 	// StartDate / DueDate 为甘特图用的日程（YYYY-MM-DD，空 = 未排期）。
 	StartDate string `gorm:"not null;default:'';size:10"`
 	DueDate   string `gorm:"not null;default:'';size:10"`

@@ -69,7 +69,7 @@ export function ProjectListView({ columns, swimlanes, cards, canWrite, busy, onE
                         )}
                       </>
                     ) : (
-                      <span className="whitespace-pre-wrap break-words">{card.note}</span>
+                      <span className="break-words">{card.title || card.note}</span>
                     )}
                   </div>
                 </td>

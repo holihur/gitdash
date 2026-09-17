@@ -1,5 +1,10 @@
 package store
 
+import (
+	"gitdash/backend/internal/logx"
+	"gorm.io/gorm"
+)
+
 // Notification 用户通知（公开 DTO，字段与 JSON 形状保持不变）。
 type Notification struct {
 	ID        int64  `json:"id"`
@@ -24,21 +29,35 @@ func (s *Store) AddNotification(username, kind, action, owner, repo string, numb
 	return s.db.Create(&row).Error
 }
 
-// AddNotifications 批量写入通知（一次 Create 多行，避免逐人写入）。
+// AddNotifications 批量写入通知（按批 Create，避免单条 INSERT 绑定参数超限）。
+// 全部批次在一个事务中执行，避免部分成功造成通知错乱。
 func (s *Store) AddNotifications(usernames []string, kind, action, owner, repo string, number int64, title, actor string) error {
 	if len(usernames) == 0 {
 		return nil
 	}
-	ts := now()
-	rows := make([]notificationRow, 0, len(usernames))
-	for _, u := range usernames {
-		rows = append(rows, notificationRow{
-			Username: u, Kind: kind, Action: action,
-			Owner: owner, Repo: repo, Number: number, Title: title, Actor: actor,
-			Read: false, CreatedAt: ts,
-		})
-	}
-	return s.db.Create(&rows).Error
+	// 每行占多个绑定参数，按 100 行/批控制总参数数量。
+	const batch = 100
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		for start := 0; start < len(usernames); start += batch {
+			end := start + batch
+			if end > len(usernames) {
+				end = len(usernames)
+			}
+			ts := now()
+			rows := make([]notificationRow, 0, end-start)
+			for _, u := range usernames[start:end] {
+				rows = append(rows, notificationRow{
+					Username: u, Kind: kind, Action: action,
+					Owner: owner, Repo: repo, Number: number, Title: title, Actor: actor,
+					Read: false, CreatedAt: ts,
+				})
+			}
+			if err := tx.Create(&rows).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // ListNotifications 分页返回某用户收件箱（最新在前）；limit<=0 表示不限制。
@@ -148,19 +167,22 @@ func (s *Store) NotifyRecipients(owner, repo, actor string) []string {
 	return users
 }
 
-// EmailTargets 返回已开启邮件通知且邮箱非空的用户。
+// EmailTargets 返回已开启邮件通知且邮箱非空的用户（按 username 分块查询）。
 func (s *Store) EmailTargets(usernames []string) []EmailTarget {
 	if len(usernames) == 0 {
 		return nil
 	}
-	var rows []userRow
-	if err := s.db.Where("username IN ? AND email <> '' AND notify_email = ?", usernames, true).
-		Find(&rows).Error; err != nil {
-		return nil
-	}
-	out := make([]EmailTarget, 0, len(rows))
-	for _, r := range rows {
-		out = append(out, EmailTarget{Username: r.Username, Email: r.Email})
+	out := make([]EmailTarget, 0, len(usernames))
+	for _, part := range chunkStrings(usernames, 0) {
+		var rows []userRow
+		if err := s.db.Where("username IN ? AND email <> '' AND notify_email = ?", part, true).
+			Find(&rows).Error; err != nil {
+			logx.Error("EmailTargets: " + err.Error())
+			continue
+		}
+		for _, r := range rows {
+			out = append(out, EmailTarget{Username: r.Username, Email: r.Email})
+		}
 	}
 	return out
 }

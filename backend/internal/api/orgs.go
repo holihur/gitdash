@@ -55,16 +55,24 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /orgs [get]
 func (a *API) listOrgs(w http.ResponseWriter, r *http.Request) {
-	orgs, err := a.store.ListMyOrgs(userFrom(r))
+	me := userFrom(r)
+	limit, offset := pageParams(r)
+	orgs, err := a.store.ListMyOrgs(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountMyOrgs(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	out := []map[string]any{}
 	for _, o := range orgs {
 		out = append(out, map[string]any{
 			"name": o.Name, "display": o.Display, "created_at": o.CreatedAt,
-			"role": a.store.OrgRole(o.Name, userFrom(r)),
+			"role": a.store.OrgRole(o.Name, me),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -134,11 +142,18 @@ func (a *API) listOrgMembers(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
 		return
 	}
-	members, err := a.store.OrgMembers(org)
+	limit, offset := pageParams(r)
+	members, err := a.store.ListOrgMembers(org, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountOrgMembers(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, members)
 }
 
@@ -378,10 +393,17 @@ func (a *API) listOrgFollowers(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
 		return
 	}
-	users, err := a.store.ListOrgFollowers(org)
+	limit, offset := pageParams(r)
+	users, err := a.store.ListOrgFollowers(org, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.OrgFollowerCount(org)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, int(total))
 	writeJSON(w, http.StatusOK, users)
 }

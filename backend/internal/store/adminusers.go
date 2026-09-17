@@ -114,11 +114,14 @@ func (s *Store) DeleteUserAccount(username string) error {
 			return err
 		}
 		if len(appIDs) > 0 {
-			if err := tx.Where("app_id IN ?", appIDs).Delete(&oauthGrantRow{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("oauth_app_id IN ?", appIDs).Delete(&patRow{}).Error; err != nil {
-				return err
+			// 分块删除，避免 app 数量过多时超出绑定参数上限。
+			for _, part := range chunkInt64s(appIDs, 0) {
+				if err := tx.Where("app_id IN ?", part).Delete(&oauthGrantRow{}).Error; err != nil {
+					return err
+				}
+				if err := tx.Where("oauth_app_id IN ?", part).Delete(&patRow{}).Error; err != nil {
+					return err
+				}
 			}
 		}
 		if err := tx.Where("user_id = ?", u.ID).Delete(&oauthGrantRow{}).Error; err != nil {

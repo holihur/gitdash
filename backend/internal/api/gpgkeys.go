@@ -10,11 +10,19 @@ import (
 )
 
 func (a *API) listGPGKeys(w http.ResponseWriter, r *http.Request) {
-	keys, err := a.store.ListGPGKeys(userFrom(r))
+	me := userFrom(r)
+	limit, offset := pageParams(r)
+	keys, err := a.store.ListGPGKeysPaged(me, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountGPGKeys(me)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, keys)
 }
 

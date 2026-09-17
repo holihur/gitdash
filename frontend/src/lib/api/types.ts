@@ -305,6 +305,11 @@ export interface ProjectCard {
   issue_number: number | null;
   issue_title: string | null;
   issue_state: string | null;
+  /** 卡片名称 */
+  title: string | null;
+  /** 卡片详情（Markdown） */
+  body: string | null;
+  /** 兼容字段：与 title 同步 */
   note: string | null;
   /** 甘特图日程（YYYY-MM-DD，空串 = 未排期） */
   start_date: string;

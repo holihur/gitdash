@@ -13,6 +13,7 @@ import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { cn, formatSize } from "@/lib/utils";
 import { IncomingWebhookCard } from "./settings/IncomingWebhookCard";
+import { OutgoingWebhooksCard } from "./settings/OutgoingWebhooksCard";
 import { BranchProtectionsCard } from "./settings/BranchProtectionsCard";
 import { RepoEnvVarsCard } from "./settings/RepoEnvVarsCard";
 import { PipelineCard } from "./settings/PipelineCard";
@@ -313,6 +314,7 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
         </Card>
       )}
       {repo?.role === "owner" && <IncomingWebhookCard owner={owner} name={name} />}
+      {repo?.role === "owner" && <OutgoingWebhooksCard owner={owner} name={name} />}
       {repo?.role === "owner" && <PipelineCard owner={owner} name={name} />}
       {repo?.role === "owner" && <RepoEnvVarsCard owner={owner} name={name} />}
       <Card>

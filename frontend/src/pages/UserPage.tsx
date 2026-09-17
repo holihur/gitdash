@@ -8,10 +8,13 @@ import { apiErrorMsg } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import Pagination from "@/components/ui/pagination";
 import { Avatar } from "@/components/avatar";
 import { cn, formatDate } from "@/lib/utils";
 
 type View = "repos" | "followers" | "following";
+
+const PEOPLE_PAGE_SIZE = 20;
 
 export default function UserPage() {
   const { username = "" } = useParams();
@@ -22,6 +25,8 @@ export default function UserPage() {
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<View>("repos");
   const [people, setPeople] = useState<UserSummary[] | null>(null);
+  const [peopleTotal, setPeopleTotal] = useState(0);
+  const [peoplePage, setPeoplePage] = useState(1);
 
   const load = useCallback(async () => {
     setError("");
@@ -37,7 +42,7 @@ export default function UserPage() {
     load();
   }, [load]);
 
-  // 切换 followers/following 时按需加载列表
+  // 切换 followers/following 时按需加载列表（分页）
   useEffect(() => {
     if (view === "repos") {
       setPeople(null);
@@ -45,14 +50,23 @@ export default function UserPage() {
     }
     let alive = true;
     setPeople(null);
-    const req = view === "followers" ? api.listFollowers(username) : api.listFollowing(username);
-    req
-      .then((u) => alive && setPeople(u))
+    const fetcher = view === "followers" ? api.listFollowers : api.listFollowing;
+    fetcher(username, PEOPLE_PAGE_SIZE, (peoplePage - 1) * PEOPLE_PAGE_SIZE)
+      .then((r) => {
+        if (!alive) return;
+        setPeople(r.items);
+        setPeopleTotal(r.total);
+      })
       .catch((e) => alive && toast.error(apiErrorMsg(to, e)));
     return () => {
       alive = false;
     };
-  }, [view, username, to]);
+  }, [view, username, to, peoplePage]);
+
+  const switchView = (next: View) => {
+    setView(next);
+    setPeoplePage(1);
+  };
 
   const toggleFollow = async () => {
     if (!profile) return;
@@ -140,7 +154,7 @@ export default function UserPage() {
           <button
             key={tab.key}
             type="button"
-            onClick={() => setView(tab.key)}
+            onClick={() => switchView(tab.key)}
             className={cn(
               "-mb-px border-b-2 px-3 py-2 text-sm",
               view === tab.key
@@ -175,19 +189,28 @@ export default function UserPage() {
           {t(view === "followers" ? "user.noFollowers" : "user.noFollowing")}
         </p>
       ) : (
-        <div className="divide-y divide-border rounded-lg border">
-          {people.map((u) => (
-            <Link
-              key={u.username}
-              to={`/users/${u.username}`}
-              className="flex items-center gap-3 px-3 py-2 hover:bg-muted"
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                {u.username.slice(0, 1).toUpperCase()}
-              </span>
-              <span className="min-w-0 truncate text-sm font-medium">{u.username}</span>
-            </Link>
-          ))}
+        <div className="space-y-4">
+          <div className="divide-y divide-border rounded-lg border">
+            {people.map((u) => (
+              <Link
+                key={u.username}
+                to={`/users/${u.username}`}
+                className="flex items-center gap-3 px-3 py-2 hover:bg-muted"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                  {u.username.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0 truncate text-sm font-medium">{u.username}</span>
+              </Link>
+            ))}
+          </div>
+          <Pagination
+            page={peoplePage}
+            pageSize={PEOPLE_PAGE_SIZE}
+            total={peopleTotal}
+            onPageChange={setPeoplePage}
+            onPageSizeChange={() => {}}
+          />
         </div>
       )}
     </div>

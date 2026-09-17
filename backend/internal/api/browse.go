@@ -31,7 +31,10 @@ func (a *API) branches(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, bs)
+	total := len(bs)
+	limit, offset := pageParams(r)
+	setTotal(w, total)
+	writeJSON(w, http.StatusOK, pageSlice(bs, limit, offset))
 }
 
 // tree 列出目录内容。

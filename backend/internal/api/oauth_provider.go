@@ -48,11 +48,18 @@ func (a *API) listOAuthApps(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	apps, err := a.store.ListOAuthApps(uid)
+	limit, offset := pageParams(r)
+	apps, err := a.store.ListOAuthAppsPaged(uid, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountOAuthApps(uid)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, apps)
 }
 
@@ -139,11 +146,18 @@ func (a *API) listOAuthAuthorizations(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	auths, err := a.store.ListOAuthAuthorizations(uid)
+	limit, offset := pageParams(r)
+	auths, err := a.store.ListOAuthAuthorizationsPaged(uid, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountOAuthAuthorizations(uid)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	writeJSON(w, http.StatusOK, auths)
 }
 
