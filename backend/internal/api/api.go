@@ -438,6 +438,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls", a.auth(a.createPull))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}", a.auth(a.getPull))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/diff", a.auth(a.pullDiff))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/codeowners", a.auth(a.pullCodeowners))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/merge", a.auth(a.mergePull))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/state", a.auth(a.setPullState))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/draft", a.auth(a.setPullDraft))

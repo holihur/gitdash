@@ -348,6 +348,7 @@ export interface BranchProtection {
   branch: string;
   min_approvals: number;
   require_ci: boolean;
+  require_codeowners: boolean;
   block_deletion: boolean;
   block_force_push: boolean;
 }
@@ -359,6 +360,20 @@ export interface MergeGate {
   /** 分支保护要求 CI 通过时附带 */
   ci_required?: boolean;
   ci_status?: string;
+  /** 分支保护要求 CODEOWNERS 批准时附带 */
+  codeowners_required?: boolean;
+  codeowners?: string[];
+  codeowners_approved?: string[];
+  codeowners_missing?: string[];
+}
+
+/** PR 的 CODEOWNERS 状态 */
+export interface CodeownersStatus {
+  files: { path: string; owners: string[] }[];
+  owners: string[];
+  approved: string[];
+  missing: string[];
+  satisfied: boolean;
 }
 
 export interface PullReview {

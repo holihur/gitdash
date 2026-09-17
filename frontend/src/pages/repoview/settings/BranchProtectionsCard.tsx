@@ -15,6 +15,7 @@ export function BranchProtectionsCard({ owner, name }: { owner: string; name: st
   const [branch, setBranch] = useState("");
   const [minApprovals, setMinApprovals] = useState("0");
   const [requireCI, setRequireCI] = useState(false);
+  const [requireCodeowners, setRequireCodeowners] = useState(false);
   const [blockDeletion, setBlockDeletion] = useState(true);
   const [blockForcePush, setBlockForcePush] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,7 @@ export function BranchProtectionsCard({ owner, name }: { owner: string; name: st
       await api.setBranchProtection(owner, name, branch.trim(), {
         min_approvals: n,
         require_ci: requireCI,
+        require_codeowners: requireCodeowners,
         block_deletion: blockDeletion,
         block_force_push: blockForcePush,
       });
@@ -75,6 +77,7 @@ export function BranchProtectionsCard({ owner, name }: { owner: string; name: st
     const parts: string[] = [];
     if (p.min_approvals > 0) parts.push(t("repo.bpMinApprovals", { count: p.min_approvals }));
     if (p.require_ci) parts.push(t("repo.bpRequireCI"));
+    if (p.require_codeowners) parts.push(t("repo.bpRequireCodeowners"));
     if (p.block_deletion) parts.push(t("repo.bpBlockDeletion"));
     if (p.block_force_push) parts.push(t("repo.bpBlockForcePush"));
     return parts.join(" · ") || t("repo.bpNoRules");
@@ -123,6 +126,14 @@ export function BranchProtectionsCard({ owner, name }: { owner: string; name: st
               onChange={(e) => setRequireCI(e.target.checked)}
             />
             {t("repo.bpRequireCI")}
+          </label>
+          <label className="flex items-center gap-1.5 pb-2 text-sm">
+            <input
+              type="checkbox"
+              checked={requireCodeowners}
+              onChange={(e) => setRequireCodeowners(e.target.checked)}
+            />
+            {t("repo.bpRequireCodeowners")}
           </label>
           <label className="flex items-center gap-1.5 pb-2 text-sm">
             <input

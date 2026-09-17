@@ -230,6 +230,19 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusConflict, "pull_is_draft", "draft pull requests cannot be merged; mark it ready for review first")
 		return
 	}
+	// 合并门禁：CODEOWNERS 所有者批准（变更文件中声明的 owner 需逐个批准）。
+	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && prot.RequireCodeowners {
+		_, _, _, missing, coErr := a.codeownersStatus(owner, name, pr)
+		if coErr != nil {
+			internalError(w, coErr)
+			return
+		}
+		if len(missing) > 0 {
+			writeCode(w, http.StatusConflict, "codeowners_required",
+				fmt.Sprintf("merge blocked: code owner approval required from %s", strings.Join(missing, ", ")))
+			return
+		}
+	}
 	// 合并门禁：目标分支保护规则要求的最少 approve 数。
 	// 有效 approve = reviewer 最新状态为 approve、reviewer 非 PR 作者、针对当前 head（head 前进后过期失效）。
 	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && (prot.MinApprovals > 0 || prot.Branch != "") {

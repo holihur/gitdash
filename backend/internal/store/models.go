@@ -211,11 +211,11 @@ type projectSwimlaneRow struct {
 func (projectSwimlaneRow) TableName() string { return "project_swimlanes" }
 
 type projectCardRow struct {
-	ID         int64  `gorm:"primaryKey;autoIncrement"`
-	ProjectID  int64  `gorm:"not null;index"`
-	ColumnID   int64  `gorm:"not null;index"`
-	SwimlaneID int64  `gorm:"not null;default:0"`
-	IssueNum   int64  `gorm:"not null;default:0"` // >0 = 关联 issue；0 = 纯文本卡片
+	ID         int64 `gorm:"primaryKey;autoIncrement"`
+	ProjectID  int64 `gorm:"not null;index"`
+	ColumnID   int64 `gorm:"not null;index"`
+	SwimlaneID int64 `gorm:"not null;default:0"`
+	IssueNum   int64 `gorm:"not null;default:0"` // >0 = 关联 issue；0 = 纯文本卡片
 	// Title 卡片名称；Note 为旧字段，保留用于向后兼容（与 Title 同步）。
 	Title string `gorm:"not null;default:''"`
 	Note  string `gorm:"not null;default:''"`
@@ -456,14 +456,15 @@ func (pullReviewRow) TableName() string { return "pull_reviews" }
 
 // branchProtectionRow 分支保护规则（per 分支；SSH push / 删除 / 合并门禁共用）。
 type branchProtectionRow struct {
-	Owner          string `gorm:"primaryKey;size:255;column:owner"`
-	Repo           string `gorm:"primaryKey;size:255;column:repo"`
-	Branch         string `gorm:"primaryKey;size:255;column:branch"`
-	MinApprovals   int    `gorm:"not null;default:0;column:min_approvals"`  // 合并门禁：需要的最少 approve 数
-	RequireCI      bool   `gorm:"not null;default:false;column:require_ci"` // 合并门禁：要求 head 的 CI 通过
-	BlockDeletion  bool   `gorm:"not null;default:true;column:block_deletion"`
-	BlockForcePush bool   `gorm:"not null;default:true;column:block_force_push"`
-	CreatedAt      string `gorm:"not null"`
+	Owner             string `gorm:"primaryKey;size:255;column:owner"`
+	Repo              string `gorm:"primaryKey;size:255;column:repo"`
+	Branch            string `gorm:"primaryKey;size:255;column:branch"`
+	MinApprovals      int    `gorm:"not null;default:0;column:min_approvals"`          // 合并门禁：需要的最少 approve 数
+	RequireCI         bool   `gorm:"not null;default:false;column:require_ci"`         // 合并门禁：要求 head 的 CI 通过
+	RequireCodeowners bool   `gorm:"not null;default:false;column:require_codeowners"` // 合并门禁：要求 CODEOWNERS 所有者批准
+	BlockDeletion     bool   `gorm:"not null;default:true;column:block_deletion"`
+	BlockForcePush    bool   `gorm:"not null;default:true;column:block_force_push"`
+	CreatedAt         string `gorm:"not null"`
 }
 
 func (branchProtectionRow) TableName() string { return "branch_protections" }

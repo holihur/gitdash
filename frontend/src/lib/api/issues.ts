@@ -1,5 +1,5 @@
 import { req, reqPage } from "./core";
-import type { BranchProtection, Issue, IssueComment, Label, MergeGate, Milestone, PullDiff, PullRequest, PullReview, PullState, ReviewState } from "./types";
+import type { BranchProtection, CodeownersStatus, Issue, IssueComment, Label, MergeGate, Milestone, PullDiff, PullRequest, PullReview, PullState, ReviewState } from "./types";
 
 export const issuesApi = {
   // issues
@@ -125,7 +125,13 @@ export const issuesApi = {
     owner: string,
     name: string,
     branch: string,
-    rule: { min_approvals: number; require_ci: boolean; block_deletion: boolean; block_force_push: boolean },
+    rule: {
+      min_approvals: number;
+      require_ci: boolean;
+      require_codeowners: boolean;
+      block_deletion: boolean;
+      block_force_push: boolean;
+    },
   ) =>
     req<BranchProtection>(
       `/users/${owner}/repos/${name}/branch-protections/${encodeURIComponent(branch)}`,
@@ -135,6 +141,10 @@ export const issuesApi = {
     req<null>(`/users/${owner}/repos/${name}/branch-protections/${encodeURIComponent(branch)}`, {
       method: "DELETE",
     }),
+
+  // PR CODEOWNERS 状态
+  pullCodeowners: (owner: string, name: string, number: number) =>
+    req<CodeownersStatus>(`/users/${owner}/repos/${name}/pulls/${number}/codeowners`),
 
 
   // pull requests

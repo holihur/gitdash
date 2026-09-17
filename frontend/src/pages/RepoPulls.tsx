@@ -11,7 +11,7 @@ import { api, type PullRequest } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import CommentSection from "@/components/comment-section";
 import PullReviewSection from "@/components/pull-review";
-import { MergeGateBadge, PullDiffView } from "./repoview/pull-diff";
+import { CodeownersBadge, MergeGateBadge, PullDiffView } from "./repoview/pull-diff";
 import { apiErrorMsg } from "@/lib/errors";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -379,6 +379,7 @@ export default function RepoPulls({
                             number={pr.number}
                             refreshKey={busy.has(pr.id) ? 1 : 0}
                           />
+                          <CodeownersBadge owner={owner} name={name} number={pr.number} />
                           <Button size="sm" variant="outline" disabled={busyId || pr.conflicted || pr.draft}
                             onClick={() => act(pr, () => api.mergePull(owner, name, pr.number, "squash"), "pulls.squashMerged")}>
                             {t("pulls.squashMerge")}

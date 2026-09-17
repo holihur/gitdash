@@ -10,14 +10,15 @@ import (
 
 // BranchProtection 分支保护规则。
 type BranchProtection struct {
-	Owner          string `json:"owner"`
-	Repo           string `json:"repo"`
-	Branch         string `json:"branch"`
-	MinApprovals   int    `json:"min_approvals"`    // 合并门禁：需要的最少 approve 数（0 = 不设门禁）
-	RequireCI      bool   `json:"require_ci"`       // 合并门禁：要求 head 的 CI 通过
-	BlockDeletion  bool   `json:"block_deletion"`   // 禁止删除该分支
-	BlockForcePush bool   `json:"block_force_push"` // 禁止非快进（force push）
-	CreatedAt      string `json:"created_at"`
+	Owner             string `json:"owner"`
+	Repo              string `json:"repo"`
+	Branch            string `json:"branch"`
+	MinApprovals      int    `json:"min_approvals"`      // 合并门禁：需要的最少 approve 数（0 = 不设门禁）
+	RequireCI         bool   `json:"require_ci"`         // 合并门禁：要求 head 的 CI 通过
+	RequireCodeowners bool   `json:"require_codeowners"` // 合并门禁：要求变更文件的 CODEOWNERS 所有者批准
+	BlockDeletion     bool   `json:"block_deletion"`     // 禁止删除该分支
+	BlockForcePush    bool   `json:"block_force_push"`   // 禁止非快进（force push）
+	CreatedAt         string `json:"created_at"`
 }
 
 // SetBranchProtection 创建或更新分支保护。
@@ -33,16 +34,17 @@ func (s *Store) SetBranchProtection(bp *BranchProtection) error {
 	}
 	row := branchProtectionRow{
 		Owner: bp.Owner, Repo: bp.Repo, Branch: bp.Branch,
-		MinApprovals: bp.MinApprovals, RequireCI: bp.RequireCI, BlockDeletion: bp.BlockDeletion,
-		BlockForcePush: bp.BlockForcePush, CreatedAt: now(),
+		MinApprovals: bp.MinApprovals, RequireCI: bp.RequireCI, RequireCodeowners: bp.RequireCodeowners,
+		BlockDeletion: bp.BlockDeletion, BlockForcePush: bp.BlockForcePush, CreatedAt: now(),
 	}
 	// upsert：SQLite/PG 通用写法（先删后插在事务里）会有唯一键间隙，用 gorm clause OnConflict
 	res := s.db.Where("owner = ? AND repo = ? AND branch = ?", bp.Owner, bp.Repo, bp.Branch).
 		Assign(map[string]any{
-			"min_approvals":    row.MinApprovals,
-			"require_ci":       row.RequireCI,
-			"block_deletion":   row.BlockDeletion,
-			"block_force_push": row.BlockForcePush,
+			"min_approvals":      row.MinApprovals,
+			"require_ci":         row.RequireCI,
+			"require_codeowners": row.RequireCodeowners,
+			"block_deletion":     row.BlockDeletion,
+			"block_force_push":   row.BlockForcePush,
 		}).FirstOrCreate(&row)
 	return res.Error
 }

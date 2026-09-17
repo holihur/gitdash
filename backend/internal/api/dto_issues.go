@@ -119,8 +119,9 @@ type createReviewReq struct {
 //
 //nolint:unused // 仅供 swagger @Param 注解引用
 type setBranchProtectionReq struct {
-	MinApprovals   int  `json:"min_approvals"`
-	RequireCI      bool `json:"require_ci"`
-	BlockDeletion  bool `json:"block_deletion"`
-	BlockForcePush bool `json:"block_force_push"`
+	MinApprovals      int  `json:"min_approvals"`
+	RequireCI         bool `json:"require_ci"`
+	RequireCodeowners bool `json:"require_codeowners"`
+	BlockDeletion     bool `json:"block_deletion"`
+	BlockForcePush    bool `json:"block_force_push"`
 }

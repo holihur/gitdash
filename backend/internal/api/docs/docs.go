@@ -10399,6 +10399,53 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/pulls/{number}/codeowners": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pulls"
+                ],
+                "summary": "获取 PR 的 CODEOWNERS 状态",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "PR 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "files、owners、approved、missing、satisfied",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/pulls/{number}/comments": {
             "get": {
                 "produces": [
@@ -13724,6 +13771,9 @@ const docTemplate = `{
                 },
                 "require_ci": {
                     "type": "boolean"
+                },
+                "require_codeowners": {
+                    "type": "boolean"
                 }
             }
         },
@@ -14305,6 +14355,10 @@ const docTemplate = `{
                 },
                 "require_ci": {
                     "description": "合并门禁：要求 head 的 CI 通过",
+                    "type": "boolean"
+                },
+                "require_codeowners": {
+                    "description": "合并门禁：要求变更文件的 CODEOWNERS 所有者批准",
                     "type": "boolean"
                 }
             }

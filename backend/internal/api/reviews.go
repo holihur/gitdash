@@ -112,7 +112,7 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{"reviews": reviews, "summary": summary}
 	// 合并门禁信息：目标分支保护规则要求的 approve 数 vs 有效 approve 数
 	// （reviewer 非 PR 作者，且其最新 approve 针对当前 head —— head 前进后过期失效）
-	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && (prot.MinApprovals > 0 || prot.RequireCI) {
+	if prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch); pErr == nil && (prot.MinApprovals > 0 || prot.RequireCI || prot.RequireCodeowners) {
 		head := pr.HeadSHA
 		if pr.State == "open" {
 			if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
@@ -149,6 +149,18 @@ func (a *API) listReviews(w http.ResponseWriter, r *http.Request) {
 			gate["ci_status"] = status
 			if !ciPassed {
 				gate["mergeable"] = false
+			}
+		}
+		// CODEOWNERS：要求变更文件的所有者逐个批准。
+		if prot.RequireCodeowners {
+			if _, required, approved, missing, coErr := a.codeownersStatus(owner, name, pr); coErr == nil {
+				gate["codeowners_required"] = true
+				gate["codeowners"] = required
+				gate["codeowners_approved"] = approved
+				gate["codeowners_missing"] = missing
+				if len(missing) > 0 {
+					gate["mergeable"] = false
+				}
 			}
 		}
 		resp["gate"] = gate
