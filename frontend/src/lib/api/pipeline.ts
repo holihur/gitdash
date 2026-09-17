@@ -1,5 +1,5 @@
 import { req } from "./core";
-import type { PipelineGraph, PipelineRun, RepoEnvVar, RepoSecret, Runner } from "./types";
+import type { ArtifactFile, PipelineGraph, PipelineRun, RepoEnvVar, RepoSecret, Runner } from "./types";
 
 export const pipelineApi = {
   // pipeline（CI）
@@ -43,6 +43,12 @@ export const pipelineApi = {
     req<{ cancelled: boolean }>(`/users/${owner}/repos/${name}/pipeline/runs/${id}/cancel`, {
       method: "POST",
     }),
+
+  // 运行产物：列表 + 下载 URL（同源 Cookie 鉴权，供 <a download> 使用）
+  listRunArtifacts: (owner: string, name: string, id: number) =>
+    req<ArtifactFile[]>(`/users/${owner}/repos/${name}/pipeline/runs/${id}/artifacts`),
+  runArtifactsUrl: (owner: string, name: string, id: number) =>
+    `/api/users/${owner}/repos/${name}/pipeline/runs/${id}/artifacts/download`,
 
   // 仓库级流水线环境变量（仅 owner）
   listRepoEnvVars: (owner: string, name: string) =>

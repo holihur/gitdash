@@ -20,12 +20,6 @@ interface Props {
   role?: "owner" | "read" | "write";
 }
 
-interface Props {
-  owner: string;
-  name: string;
-  role?: "owner" | "read" | "write";
-}
-
 export default function RepoPipeline({ owner, name, role }: Props) {
   const { t, to, lang } = useI18n();
   const locale = dateLocale(lang);
@@ -287,6 +281,8 @@ export default function RepoPipeline({ owner, name, role }: Props) {
       )}
 
       <PipelineRunsCard
+        owner={owner}
+        name={name}
         runs={runs}
         expanded={expanded}
         runDetail={runDetail}

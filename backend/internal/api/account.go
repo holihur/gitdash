@@ -30,6 +30,9 @@ func (a *API) purgeUserRepoFiles(username string) {
 		if err := pipeline.DeleteLogs(username, rp.Name); err != nil {
 			logx.Infof("delete pipeline logs %s/%s: %v", username, rp.Name, err)
 		}
+		if err := pipeline.DeleteArtifacts(username, rp.Name); err != nil {
+			logx.Infof("delete pipeline artifacts %s/%s: %v", username, rp.Name, err)
+		}
 	}
 }
 

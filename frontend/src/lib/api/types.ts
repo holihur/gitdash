@@ -493,8 +493,16 @@ export interface PipelineRun {
   created_at: string;
   finished_at: string | null;
   runner_name?: string;
+  /** 该运行是否存有可下载的归档产物 */
+  has_artifacts?: boolean;
   /** 仅详情返回 */
   log?: string;
+}
+
+/** 运行产物中的一个文件条目 */
+export interface ArtifactFile {
+  path: string;
+  size: number;
 }
 
 export interface Runner {

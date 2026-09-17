@@ -20,6 +20,9 @@ env:
 #   key: deps
 #   paths:
 #     - vendor
+# artifacts:          # 可选：运行成功后归档（网页可下载）
+#   paths:
+#     - dist
 steps:
   - name: build
     run: echo build
@@ -37,6 +40,7 @@ const DSL_FIELDS: [string, string][] = [
   ["env", "dslEnv"],
   ["secrets", "dslSecrets"],
   ["cache", "dslCache"],
+  ["artifacts", "dslArtifacts"],
   ["volumes", "dslVolumes"],
   ["runs-on", "dslRunsOn"],
   ["steps", "dslSteps"],

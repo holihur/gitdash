@@ -19,6 +19,9 @@
 //	  key: deps
 //	  paths:
 //	    - vendor
+//	artifacts:              # 可选：运行成功后归档（网页可下载）
+//	  paths:
+//	    - dist
 //	steps:                  # 必填：1..20 个步骤单元（并行子步骤各自计数），顺序执行，任一失败即终止
 //	  - name: build
 //	    run: go build ./...
@@ -65,8 +68,8 @@ const (
 	MaxSchedules = 5
 	// MaxSecrets 单条流水线可引用的 secret 名称上限。
 	MaxSecrets = 50
-	// MaxCachePaths 单条流水线可缓存/归档的路径数上限。
-	MaxCachePaths = 10
+	// MaxWorkspacePaths 单条流水线可缓存/归档的路径数上限。
+	MaxWorkspacePaths = 10
 )
 
 // DefaultStepTimeout 单步默认超时，可被 GITDASH_PIPELINE_DEFAULT_TIMEOUT 覆盖
@@ -96,6 +99,8 @@ type Config struct {
 	// CacheKey 缓存桶名（默认 default）；CachePaths 为相对工作区、需在运行间保留的路径。
 	CacheKey   string
 	CachePaths []string
+	// ArtifactPaths 运行成功后需归档（可在网页下载）的工作区相对路径。
+	ArtifactPaths []string
 	Volumes    []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
 	RunsOn     []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
 	Steps      []Step
@@ -270,6 +275,15 @@ func Parse(data []byte) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "artifacts":
+			if val != "" {
+				return nil, fmt.Errorf("line %d: artifacts takes a block (paths)", i+1)
+			}
+			var err error
+			i, err = readArtifacts(lines, i+1, cfg)
+			if err != nil {
+				return nil, err
+			}
 		case "secrets":
 			var err error
 			i, err = readInlineOrBlockList(lines, i, val, func(item string, lineNo int) error {
@@ -368,7 +382,7 @@ func Parse(data []byte) (*Config, error) {
 				return nil, err
 			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, cache, volumes, runs-on, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, cache, artifacts, volumes, runs-on, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -405,8 +419,11 @@ func (c *Config) validate() error {
 	if len(c.Secrets) > MaxSecrets {
 		return fmt.Errorf("too many secrets (max %d)", MaxSecrets)
 	}
-	if len(c.CachePaths) > MaxCachePaths {
-		return fmt.Errorf("too many cache paths (max %d)", MaxCachePaths)
+	if len(c.CachePaths) > MaxWorkspacePaths {
+		return fmt.Errorf("too many cache paths (max %d)", MaxWorkspacePaths)
+	}
+	if len(c.ArtifactPaths) > MaxWorkspacePaths {
+		return fmt.Errorf("too many artifact paths (max %d)", MaxWorkspacePaths)
 	}
 	if len(c.CachePaths) == 0 && c.CacheKey != "" {
 		return fmt.Errorf("cache key requires cache paths")
@@ -605,7 +622,7 @@ func readCache(lines []string, start int, cfg *Config) (int, error) {
 			}
 			var rerr error
 			i, rerr = readNestedList(lines, i+1, 4, func(item string, lineNo int) error {
-				if err := validateCachePath(item); err != nil {
+				if err := validateWorkspacePath(item); err != nil {
 					return fmt.Errorf("line %d: %w", lineNo, err)
 				}
 				cfg.CachePaths = append(cfg.CachePaths, item)
@@ -620,6 +637,50 @@ func readCache(lines []string, start int, cfg *Config) (int, error) {
 	}
 	if len(cfg.CachePaths) == 0 {
 		return i, fmt.Errorf("line %d: cache block requires a non-empty paths list", start)
+	}
+	return i, nil
+}
+
+// readArtifacts 解析 artifacts 块：paths（相对工作区的缩进列表）。
+func readArtifacts(lines []string, start int, cfg *Config) (int, error) {
+	i := start
+	for i < len(lines) {
+		line := lines[i]
+		if blankOrComment(line) {
+			i++
+			continue
+		}
+		ind := indentOf(line)
+		if ind < 2 {
+			break
+		}
+		if ind != 2 {
+			return i, fmt.Errorf("line %d: unexpected indentation in artifacts block", i+1)
+		}
+		key, val, err := splitKeyValue(line, i+1)
+		if err != nil {
+			return i, err
+		}
+		if key != "paths" {
+			return i, fmt.Errorf("line %d: unknown artifacts key %q (allowed: paths)", i+1, key)
+		}
+		if val != "" {
+			return i, fmt.Errorf("line %d: artifacts paths takes an indented list", i+1)
+		}
+		var rerr error
+		i, rerr = readNestedList(lines, i+1, 4, func(item string, lineNo int) error {
+			if err := validateWorkspacePath(item); err != nil {
+				return fmt.Errorf("line %d: %w", lineNo, err)
+			}
+			cfg.ArtifactPaths = append(cfg.ArtifactPaths, item)
+			return nil
+		})
+		if rerr != nil {
+			return i, rerr
+		}
+	}
+	if len(cfg.ArtifactPaths) == 0 {
+		return i, fmt.Errorf("line %d: artifacts block requires a non-empty paths list", start)
 	}
 	return i, nil
 }
@@ -657,8 +718,8 @@ func readNestedList(lines []string, i, listInd int, add func(item string, lineNo
 	return i, nil
 }
 
-// validateCachePath 校验缓存路径：必须位于工作区内的相对路径。
-func validateCachePath(p string) error {
+// validateWorkspacePath 校验缓存/归档路径：必须位于工作区内的相对路径。
+func validateWorkspacePath(p string) error {
 	if p == "" {
 		return fmt.Errorf("cache path cannot be empty")
 	}

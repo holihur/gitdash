@@ -74,8 +74,9 @@ func RunInWorkspace(ctx context.Context, job RunJob, cfg *Config, dir string, lo
 			progress(done)
 		}
 	}
-	// 全部步骤成功后保存缓存
+	// 全部步骤成功后保存缓存并归档产物
 	cacheSave(cfg, job, dir, logSink)
+	collectArtifacts(cfg, job, dir, logSink)
 	return nil
 }
 

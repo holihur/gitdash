@@ -194,10 +194,14 @@ func Init(dataDir string) error {
 	}
 	logsDir = filepath.Join(dataDir, "pipelines")
 	cacheDir = filepath.Join(dataDir, "cache")
+	artifactsDir = filepath.Join(dataDir, "artifacts")
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {
 		return err
 	}
-	return os.MkdirAll(cacheDir, 0o755)
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return err
+	}
+	return os.MkdirAll(artifactsDir, 0o755)
 }
 
 // LogPath 运行日志落盘位置：data/pipelines/{owner}/{repo}/run-{id}.log。
@@ -211,6 +215,17 @@ func DeleteLogs(owner, repo string) error {
 		return nil
 	}
 	return os.RemoveAll(filepath.Join(logsDir, owner, repo))
+}
+
+// artifactsDir 运行产物归档根目录（server 由 Init 设置；runner 不留存）。
+var artifactsDir string
+
+// DeleteArtifacts 删除仓库全部运行产物（删仓库时调用）。
+func DeleteArtifacts(owner, repo string) error {
+	if artifactsDir == "" {
+		return nil
+	}
+	return os.RemoveAll(filepath.Join(artifactsDir, owner, repo))
 }
 
 // ReadLog 读取运行日志（超长截断）。

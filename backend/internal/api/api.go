@@ -499,6 +499,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/dispatch", a.auth(a.dispatchPipelineRun))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs/{id}", a.auth(a.getPipelineRun))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/runs/{id}/cancel", a.auth(a.cancelPipelineRun))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs/{id}/artifacts", a.auth(a.listRunArtifacts))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs/{id}/artifacts/download", a.auth(a.downloadRunArtifacts))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/env", a.auth(a.listRepoEnvVars))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/env", a.auth(a.setRepoEnvVar))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/env/{key}", a.auth(a.deleteRepoEnvVar))

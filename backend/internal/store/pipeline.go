@@ -37,6 +37,8 @@ type PipelineRun struct {
 	RunnerName string            `json:"runner_name,omitempty"`
 	CreatedAt  string            `json:"created_at"`
 	FinishedAt *string           `json:"finished_at"`
+	// HasArtifacts 该运行是否存有可下载的归档产物（由 API 层检查磁盘填充）。
+	HasArtifacts bool `json:"has_artifacts,omitempty"`
 	// Log 由 API 层按需从磁盘读取填充
 	Log string `json:"log,omitempty"`
 }

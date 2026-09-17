@@ -36,6 +36,9 @@ func (a *API) listPipelineRuns(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	for i := range runs {
+		runs[i].HasArtifacts = pipeline.HasArtifacts(owner, name, runs[i].ID)
+	}
 	writeJSON(w, http.StatusOK, runs)
 }
 
@@ -68,6 +71,7 @@ func (a *API) getPipelineRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run.Log, _ = pipeline.ReadLog(owner, name, id)
+	run.HasArtifacts = pipeline.HasArtifacts(owner, name, id)
 	writeJSON(w, http.StatusOK, run)
 }
 

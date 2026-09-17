@@ -1,6 +1,6 @@
 import { Fragment } from "react";
-import { Loader2, Terminal } from "lucide-react";
-import type { PipelineRun } from "@/lib/api";
+import { Loader2, Package, Terminal } from "lucide-react";
+import { api, type PipelineRun } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,8 @@ import { useI18n } from "@/lib/i18n";
 import { StatusBadge } from "@/components/pipeline-shared";
 
 interface Props {
+  owner: string;
+  name: string;
   runs: PipelineRun[];
   expanded: number | null;
   runDetail: PipelineRun | null;
@@ -23,6 +25,8 @@ interface Props {
 
 /** 运行列表：表格 + 展开后的日志面板与取消/重跑/刷新操作。 */
 export default function PipelineRunsCard({
+  owner,
+  name,
   runs,
   expanded,
   runDetail,
@@ -116,6 +120,16 @@ export default function PipelineRunsCard({
                                     )}
                                   </span>
                                   <div className="flex items-center gap-2">
+                                    {runDetail.has_artifacts && (
+                                      <a
+                                        className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                                        href={api.runArtifactsUrl(owner, name, r.id)}
+                                        download
+                                      >
+                                        <Package className="h-3 w-3" />
+                                        {t("pipeline.artifacts")}
+                                      </a>
+                                    )}
                                     {canWrite && finished(runDetail.status) && (
                                       <Button
                                         size="sm"
