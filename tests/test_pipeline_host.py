@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 from conftest import first_run
+import io
 import os
 import socket
 import subprocess
+import tarfile
 import time
 import uuid
 from pathlib import Path
@@ -50,6 +52,14 @@ def _commit(c, owner, repo, path, content, action="create"):
         },
         expect=201,
     )
+
+
+def _get_bytes(c, path):
+    """带鉴权地获取原始响应体（用于 tar.gz 等二进制下载）。"""
+    headers = {"Authorization": f"Bearer {c.token}"} if c.token else {}
+    r = requests.get(f"{c.base}/api{path}", headers=headers, timeout=15)
+    assert r.status_code == 200, f"GET {path} -> {r.status_code}: {r.text}"
+    return r.content
 
 
 def _wait_terminal(c, owner, repo, run_id, timeout=60):
@@ -244,6 +254,94 @@ def test_host_repo_env_dsl_override(host_repo):
     run = _wait_terminal(c, username, repo, run["id"])
     assert run["status"] == "success", run
     assert "G=dsl-level" in run.get("log", ""), run.get("log")
+
+
+def test_host_secret_injection_masked(host_repo):
+    """白名单 secret 注入 host 步骤环境，且在运行日志中打码。"""
+    username, repo, c = host_repo
+    c.put(
+        f"/users/{username}/repos/{repo}/secrets",
+        json={"name": "MY_SECRET", "value": "sup3r-secret-value"},
+        expect=200,
+    )
+    c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
+    _commit(
+        c,
+        username,
+        repo,
+        ".gitdash.yml",
+        "secrets:\n  - MY_SECRET\nsteps:\n  - name: show\n    run: echo value=$MY_SECRET\n",
+    )
+
+    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = _wait_terminal(c, username, repo, run["id"])
+    assert run["status"] == "success", run
+    log = run.get("log", "")
+    assert "value=***" in log, log
+    assert "sup3r-secret-value" not in log, "secret must not leak into logs"
+
+
+def test_host_cache_reuse(host_repo):
+    """cache 在两次运行间恢复：第二次运行能看到第一次写入的文件。"""
+    username, repo, c = host_repo
+    c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
+
+    _commit(
+        c,
+        username,
+        repo,
+        ".gitdash.yml",
+        "cache:\n  key: demo\n  paths:\n    - .cache\n"
+        "steps:\n  - name: work\n    run: |\n      mkdir -p .cache\n      echo cached-value > .cache/data.txt\n",
+    )
+    run1 = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run1 = _wait_terminal(c, username, repo, run1["id"])
+    assert run1["status"] == "success", run1
+    assert "cache: saved" in run1.get("log", ""), run1.get("log")
+
+    # 第二次：新工作区，缓存应被恢复
+    _commit(
+        c,
+        username,
+        repo,
+        ".gitdash.yml",
+        "cache:\n  key: demo\n  paths:\n    - .cache\n"
+        "steps:\n  - name: check\n    run: cat .cache/data.txt\n",
+    )
+    run2 = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run2 = _wait_terminal(c, username, repo, run2["id"])
+    assert run2["status"] == "success", run2
+    assert "cache: restored" in run2.get("log", ""), run2.get("log")
+    assert "cached-value" in run2.get("log", ""), run2.get("log")
+
+
+def test_host_artifacts_download(host_repo):
+    """运行成功后产物可列出并打包下载。"""
+    username, repo, c = host_repo
+    c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
+    _commit(
+        c,
+        username,
+        repo,
+        ".gitdash.yml",
+        "artifacts:\n  paths:\n    - out\n"
+        "steps:\n  - name: build\n    run: mkdir -p out && echo hello-artifact > out/hello.txt\n",
+    )
+
+    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = _wait_terminal(c, username, repo, run["id"])
+    assert run["status"] == "success", run
+    assert run.get("has_artifacts") is True, run
+
+    base = f"/users/{username}/repos/{repo}/pipeline/runs/{run['id']}"
+    files = c.get(f"{base}/artifacts", expect=200)
+    assert [f["path"] for f in files] == ["out/hello.txt"]
+
+    raw = _get_bytes(c, f"{base}/artifacts/download")
+    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tf:
+        assert "out/hello.txt" in tf.getnames()
+        content = tf.extractfile("out/hello.txt").read().decode()
+    assert content.strip() == "hello-artifact"
 
 
 def test_host_disabled_rejects_no_image(base_url, user_factory):
