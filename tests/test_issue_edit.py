@@ -66,6 +66,15 @@ def test_issue_delete(repo_factory):
     assert client.get(f"/repos/{repo}/issues/{n}/comments", expect=200).json() == []
 
 
+def test_issue_delete_owner_qualified_route(repo_factory):
+    """owner 限定删除路由（与简写路由同一 handler，但路径解析不同）。"""
+    repo, client = repo_factory()
+    me = client.get("/me", expect=200).json()["username"]
+    n = _mk_issue(client, repo)["number"]
+    assert client.delete(f"/users/{me}/repos/{repo}/issues/{n}").status_code == 204
+    assert client.delete(f"/repos/{repo}/issues/{n}").status_code == 404
+
+
 def test_issue_edit_delete_permissions(repo_factory, user_factory):
     repo, client = repo_factory()
     n = _mk_issue(client, repo)["number"]

@@ -606,3 +606,110 @@ def test_pypi_simple_data_attributes(base_url, pkg_user):
     proj = requests.get(f"{base_url}/api/packages/pypi/{username}/simple/{pkg}/", headers=h, timeout=10)
     assert 'data-requires-python="&gt;=3.9"' in proj.text
     assert f'data-hashes="sha256={hashlib.sha256(wheel).hexdigest()}"' in proj.text
+
+
+# ---- 路由变体与 Composer v2 元数据 ----
+# 说明：注册表为兼容不同客户端同时提供带/不带末尾斜杠的路由；此外 Composer v2
+# 的 p2 元数据此前完全没有黑盒覆盖。这些变体最容易出现「一个能用一个不能用」的 bug。
+
+
+def test_pypi_no_trailing_slash_variants(base_url, pkg_user):
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"ns_{uuid.uuid4().hex[:8]}"
+
+    # 上传走无末尾斜杠路由
+    r = requests.post(
+        f"{base_url}/api/packages/pypi/{username}",
+        data={"name": pkg, "version": "1.0.0"},
+        files={"content": (f"{pkg}-1.0.0-py3-none-any.whl", b"wheel-bytes")},
+        headers=h, timeout=10,
+    )
+    assert r.status_code == 200, r.text
+
+    index = requests.get(f"{base_url}/api/packages/pypi/{username}/simple", headers=h, timeout=10)
+    assert index.status_code == 200 and pkg in index.text
+    proj = requests.get(f"{base_url}/api/packages/pypi/{username}/simple/{pkg}", headers=h, timeout=10)
+    assert proj.status_code == 200 and f"{pkg}-1.0.0-py3-none-any.whl" in proj.text
+
+
+def test_packages_list_all_types(base_url, pkg_user):
+    """GET /packages/{owner}（不带 type）应返回该 owner 的全部包。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"all-{uuid.uuid4().hex[:8]}"
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"length": 3, "data": base64.b64encode(b"abc").decode()}},
+    }
+    requests.put(f"{base_url}/api/packages/npm/{username}/{pkg}", json=body, headers=h, timeout=10)
+
+    listed = requests.get(f"{base_url}/api/packages/{username}", headers=h, timeout=10)
+    assert listed.status_code == 200
+    assert any(p["name"] == pkg for p in listed.json())
+
+
+def test_composer_p2_metadata_shape(base_url, pkg_user):
+    """Composer v2 p2 元数据必须是 {packages: {<vendor/name>: {<version>: {...}}}}。
+
+    参考 composer 仓库 v2 协议（metadata-url -> /p2/%package%.json）。若返回
+    嵌套数组，composer 2 客户端无法解析。
+    """
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    vendor = username
+    name = f"p2lib{uuid.uuid4().hex[:6]}"
+    requests.put(
+        f"{base_url}/api/packages/composer/{username}/{vendor}/{name}?version=1.0.0",
+        data=b"composer-zip", headers=h, timeout=10,
+    )
+    r = requests.get(f"{base_url}/api/packages/composer/{username}/p2/{vendor}/{name}", headers=h, timeout=10)
+    assert r.status_code == 200, r.text
+    doc = r.json()
+    assert doc.get("minified") == "composer/2.0"
+    packages = doc["packages"]
+    assert isinstance(packages, dict), f"composer v2 packages must be an object, got {type(packages)}: {packages!r}"
+    full = f"{vendor}/{name}"
+    assert full in packages, packages
+    assert "1.0.0" in packages[full], packages[full]
+
+
+def test_composer_p2_not_found(base_url, pkg_user):
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    r = requests.get(
+        f"{base_url}/api/packages/composer/{username}/p2/{username}/ghost-{uuid.uuid4().hex[:6]}",
+        headers=h, timeout=10,
+    )
+    assert r.status_code == 404
+
+
+def test_maven_head_probe(base_url, pkg_user):
+    """maven 显式注册了 HEAD 路由（镜像探测用）。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    group = f"com/example/{username}"
+    art = "headlib"
+    url = f"{base_url}/api/packages/maven/{username}/{group}/{art}/1.0.0/{art}-1.0.0.pom"
+    requests.put(url, data=b"<project/>", headers=h, timeout=10)
+    head = requests.head(url, headers=h, timeout=10)
+    assert head.status_code == 200
+    assert head.headers.get("Content-Length") == str(len(b"<project/>"))
+
+
+def test_generic_package_delete(base_url, pkg_user):
+    """通用 DELETE /packages/{type}/{owner}/{name...}（无专用删除路由的类型）。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"gd_{uuid.uuid4().hex[:8]}"
+    requests.post(
+        f"{base_url}/api/packages/pypi/{username}/",
+        data={"name": pkg, "version": "1.0.0"},
+        files={"content": (f"{pkg}-1.0.0-py3-none-any.whl", b"wheel-bytes")},
+        headers=h, timeout=10,
+    )
+    d = requests.delete(f"{base_url}/api/packages/pypi/{username}/{pkg}", headers=h, timeout=10)
+    assert d.status_code == 204, d.text
+    after = requests.get(f"{base_url}/api/packages/{username}/pypi", headers=h, timeout=10).json()
+    assert not any(p["name"] == pkg for p in after)
