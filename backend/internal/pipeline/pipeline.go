@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -210,9 +209,7 @@ func Init(dataDir string) error {
 		return err
 	}
 	// 远程 runner 回传的产物归档落盘（避免 runner 包反向依赖 pipeline）。
-	runner.ArtifactsSink = func(owner, repo string, runID int64, r io.Reader) error {
-		return ExtractArtifactArchive(owner, repo, runID, r)
-	}
+	runner.ArtifactsSink = ExtractArtifactArchive
 	return os.MkdirAll(artifactsDir, 0o755)
 }
 

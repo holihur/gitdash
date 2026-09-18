@@ -136,9 +136,11 @@ type codeSearchHit struct {
 func (a *API) codeSearchCandidates(me, repoQual string, max int) ([]store.Repo, bool, error) {
 	if repoQual != "" {
 		if owner, name, ok := strings.Cut(repoQual, "/"); ok && owner != "" && name != "" {
-			rp, err := a.store.GetRepo(owner, name)
-			if err != nil || rp.Banned || a.store.IsOrgBanned(owner) ||
-				(rp.Private && !a.store.CanRead(owner, name, me)) {
+			rp, _ := a.store.GetRepo(owner, name)
+			if rp.ID == 0 {
+				return []store.Repo{}, false, nil // 不存在（或不可见）→ 无候选，不算错误
+			}
+			if rp.Banned || a.store.IsOrgBanned(owner) || (rp.Private && !a.store.CanRead(owner, name, me)) {
 				return []store.Repo{}, false, nil
 			}
 			return []store.Repo{rp}, false, nil

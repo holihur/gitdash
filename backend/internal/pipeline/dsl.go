@@ -101,9 +101,9 @@ type Config struct {
 	CachePaths []string
 	// ArtifactPaths 运行成功后需归档（可在网页下载）的工作区相对路径。
 	ArtifactPaths []string
-	Volumes    []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
-	RunsOn     []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
-	Steps      []Step
+	Volumes       []string // 额外挂载卷（host:container），仅允许 GITDASH_PIPELINE_VOLUMES_DIR 下的路径
+	RunsOn        []string // 可选：目标 runner 标签；非空时派发给远程 agent，否则本地 docker
+	Steps         []Step
 	// On 可选：自动触发事件白名单。省略时仅 push 生效（手动触发始终允许）。
 	On []string
 	// Schedule 可选：cron（5 字段：分 时 日 月 周）表达式列表，需 On 包含 schedule。

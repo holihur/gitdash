@@ -143,18 +143,3 @@ func parseGrepLine(ln, prefix string) (SearchHit, bool) {
 	}
 	return SearchHit{Path: path, Line: line, Text: text}, true
 }
-
-// parseGrepOut 保留给测试使用的整段解析入口。
-func parseGrepOut(out, ref string, max int) []SearchHit {
-	prefix := ref + ":"
-	hits := []SearchHit{}
-	for _, ln := range strings.Split(out, "\n") {
-		if hit, ok := parseGrepLine(ln, prefix); ok {
-			hits = append(hits, hit)
-			if len(hits) >= max {
-				break
-			}
-		}
-	}
-	return hits
-}
