@@ -27,7 +27,7 @@ test.describe("@happy 探索 / 可见性", () => {
     ).toBeVisible();
 
     // 全局搜索命中
-    const search = page.getByPlaceholder("Search repositories, issues, users…");
+    const search = page.getByPlaceholder("Search repositories, issues, users, code…");
     await search.fill(repoName);
     await expect(page.getByText(`${username}/${repoName}`).first()).toBeVisible();
   });

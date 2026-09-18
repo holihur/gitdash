@@ -17,11 +17,18 @@ test.describe("@happy 仓库管理", () => {
       template: "readme",
     });
 
-    // 卡片出现：名称链接 + 描述 + clone 命令
+    // 卡片出现：名称链接 + 描述
     await expect(page.getByRole("link", { name: repoName, exact: true })).toBeVisible();
     await expect(page.getByText(desc)).toBeVisible();
+
+    // clone 命令位于仓库页头部的 SSH 下拉中（不是列表卡片）
+    await page.getByRole("link", { name: repoName, exact: true }).click();
+    await expect(page.getByRole("heading", { name: `${username}/${repoName}` })).toBeVisible();
+    await page.getByRole("button", { name: /SSH/ }).click();
     await expect(page.getByText("git clone ssh://")).toBeVisible();
-    await expect(page.locator("code", { hasText: `${username}/${repoName}` })).toBeVisible();
+    await expect(
+      page.getByText(`git clone ssh://git@`, { exact: false }).first(),
+    ).toContainText(`${username}/${repoName}.git`);
   });
 
   test("同名仓库被拒绝（错误提示）", async ({ page }) => {
