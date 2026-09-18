@@ -76,27 +76,33 @@ export default function RepoHeader({
           </p>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-nowrap items-center gap-2">
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          className="shrink-0 gap-1.5"
           disabled={watchBusy}
           onClick={onToggleWatch}
           title={t("social.watchTitle")}
         >
           <Eye className={cn("h-4 w-4", repo?.watching && "fill-current text-blue-500")} />
-          {repo?.watching ? t("social.watchingBtn") : t("social.watch")}
+          <span className="hidden sm:inline">{repo?.watching ? t("social.watchingBtn") : t("social.watch")}</span>
           <span className="text-muted-foreground">{repo?.watchers ?? 0}</span>
         </Button>
-        <Button variant="outline" size="sm" className="gap-1.5" disabled={starBusy} onClick={onToggleStar}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          disabled={starBusy}
+          onClick={onToggleStar}
+        >
           <Star className={cn("h-4 w-4", repo?.starred && "fill-current text-yellow-500")} />
-          {repo?.starred ? t("social.starredBtn") : t("social.star")}
+          <span className="hidden sm:inline">{repo?.starred ? t("social.starredBtn") : t("social.star")}</span>
           <span className="text-muted-foreground">{repo?.stars ?? 0}</span>
         </Button>
         {typeof repo?.size === "number" && (
           <span
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground"
             title={t("common.size")}
           >
             <HardDrive className="h-4 w-4" />
@@ -104,17 +110,17 @@ export default function RepoHeader({
           </span>
         )}
         {!isOwner && (
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={onFork}>
+          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={onFork}>
             <GitFork className="h-4 w-4" />
-            {t("social.fork")}
+            <span className="hidden sm:inline">{t("social.fork")}</span>
           </Button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full gap-2 font-mono text-xs sm:w-auto">
+            <Button variant="outline" size="sm" className="shrink-0 gap-2 font-mono text-xs">
               <GitBranch className="h-3.5 w-3.5" />
               SSH
-              <MoreVertical className="ml-auto h-3.5 w-3.5 sm:ml-0" />
+              <MoreVertical className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
