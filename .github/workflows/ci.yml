@@ -152,6 +152,11 @@ jobs:
       - name: Build CLI (gitdash-cli)
         run: cd backend && go build -o /tmp/gitdash-cli ./cmd/gitdash-cli
 
+      # redis-backed tests (runner marketplace / reverse mode / pipeline queue)
+      # skip without a redis-server binary, which would leave endpoints uncovered.
+      - name: Install redis-server (for redis-backed black-box tests)
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+
       - name: Prepare coverage dir
         run: mkdir -p /tmp/gocover-api
 
@@ -165,10 +170,6 @@ jobs:
           GOCOVERDIR: /tmp/gocover-api
           GITDASH_ROUTE_COVERAGE_FILE: /tmp/route-coverage-api.txt
 
-      # 端点覆盖率门禁：每个 API 路由（/api、/login、/v2、/metrics）至少命中一次。
-      - name: Enforce black-box API endpoint coverage (100%)
-        run: python3 scripts/route-coverage.py /tmp/route-coverage-api.txt --min 100
-
       # email MFA happy path：单独实例 + pytest 进程内的本地 SMTP sink（见 test_email_mfa.py）
       - name: Run email MFA black-box tests (SMTP sink)
         working-directory: tests
@@ -179,6 +180,11 @@ jobs:
           GITDASH_SMTP_PORT: 8925
           GOCOVERDIR: /tmp/gocover-api
           GITDASH_ROUTE_COVERAGE_FILE: /tmp/route-coverage-api.txt
+
+      # 端点覆盖率门禁：每个 API 路由（/api、/login、/v2、/metrics）至少命中一次。
+      # 放在所有 API 测试步骤之后，确保覆盖文件已包含全部会话。
+      - name: Enforce black-box API endpoint coverage (100%)
+        run: python3 scripts/route-coverage.py /tmp/route-coverage-api.txt --min 100
 
       - name: Report black-box (API) coverage
         working-directory: backend

@@ -11,6 +11,8 @@
 | 黑盒 API 端点覆盖率 | pytest 设 `GITDASH_ROUTE_COVERAGE_FILE` + `scripts/route-coverage.py` | **306/306（100%）** | 100% |
 | UI（Playwright）端点覆盖率 | `scripts/ui-api-coverage.py`（前端调用的端点 × 路由命中） | 101/192（52.6%） | UI 可达面的 100% |
 
+> 注意：CI 的 API 端点覆盖率门禁需要 `redis-server`（否则 redis 相关用例跳过，端点漏覆盖）。
+
 端点指标是**路由命中**覆盖：每个注册到 `http.ServeMux` 的 pattern 至少被请求
 命中一次。`internal/api/routecov.go` 包装 mux，记录清单（`route<TAB>pattern`）
 与每个 pattern 的首次命中（`hit<TAB>pattern`）。

@@ -12,6 +12,8 @@
 | Black-box API endpoint coverage | pytest with `GITDASH_ROUTE_COVERAGE_FILE` + `scripts/route-coverage.py` | **306/306 (100%)** | 100% |
 | UI (Playwright) endpoint coverage | `scripts/ui-api-coverage.py` (frontend-called endpoints × route hits) | 101/192 (52.6%) | 100% of the UI-reachable surface |
 
+> Note: the CI API endpoint-coverage gate needs a `redis-server` binary; otherwise redis-backed cases skip and some endpoints stay uncovered.
+
 The endpoint metrics are *route-hit* coverage: every registered `http.ServeMux`
 pattern that receives at least one request. `internal/api/routecov.go` wraps the
 mux to record the inventory (`route<TAB>pattern`) and the first hit of each
