@@ -6,11 +6,15 @@ coverage:
   status:
     project:
       default:
-        target: auto
+        # 分阶段目标：最终 80%。达标前 informational（不阻断），
+        # 作为进度信号；Go 单测覆盖率按阶段爬坡（见 docs/coverage.md）。
+        target: 80%
         threshold: 1%
+        informational: true
     patch:
       default:
-        target: 60%
+        # 新代码整体提升门槛，避免低覆盖代码入库。
+        target: 80%
         threshold: 0%
 
 comment:
