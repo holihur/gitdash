@@ -467,6 +467,11 @@ jobs:
         env:
           GITDASH_BIN: /tmp/gitdash-server-ui
           GOCOVERDIR: /tmp/gocover-ui
+          GITDASH_ROUTE_COVERAGE_FILE: /tmp/route-coverage-ui.txt
+
+      # UI 可达 API 面覆盖率（前端源码静态提取 + 页面操作命中）；分阶段推进，暂不阻断。
+      - name: Report UI-reachable API coverage
+        run: python3 scripts/ui-api-coverage.py --src frontend/src --coverage /tmp/route-coverage-ui.txt || true
 
       - name: Report black-box (UI) coverage
         working-directory: backend

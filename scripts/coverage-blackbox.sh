@@ -44,8 +44,8 @@ rm -f "$ROUTE_UI"
 (cd "$ROOT/tests/ui" && npm install >/dev/null 2>&1)
 (cd "$ROOT/tests/ui" && GOCOVERDIR="$COV_DIR" GITDASH_ROUTE_COVERAGE_FILE="$ROUTE_UI" GITDASH_BIN="$BIN" npx playwright test)
 
-# 4b) UI 端点覆盖率（页面操作驱动的 API 调用）；暂仅报告，阶段推进后再收紧门禁
-python3 "$ROOT/scripts/route-coverage.py" "$ROUTE_UI" --min 0 || true
+# 4b) UI 可达 API 面覆盖率（从前端源码静态提取，页面操作驱动）；暂仅报告
+python3 "$ROOT/scripts/ui-api-coverage.py" --src "$ROOT/frontend/src" --coverage "$ROUTE_UI" --min 0 || true
 
 # 5) 汇总
 (cd "$ROOT/backend" && go tool covdata percent -i="$COV_DIR" | tail -1)

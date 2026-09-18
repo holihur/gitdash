@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Go unit coverage | `go test ./... -covermode=atomic -coverprofile=…` (Codecov `unittests`) | ~30% | 80% |
 | Black-box API endpoint coverage | pytest with `GITDASH_ROUTE_COVERAGE_FILE` + `scripts/route-coverage.py` | **306/306 (100%)** | 100% |
-| UI (Playwright) endpoint coverage | same recorder, driven by page actions | 67/306 (21.9%) | see "Scope" below |
+| UI (Playwright) endpoint coverage | `scripts/ui-api-coverage.py` (frontend-called endpoints × route hits) | 62/192 (32.3%) | 100% of the UI-reachable surface |
 
 The endpoint metrics are *route-hit* coverage: every registered `http.ServeMux`
 pattern that receives at least one request. `internal/api/routecov.go` wraps the
@@ -20,10 +20,13 @@ pattern (`hit<TAB>pattern`).
 ## Scope of "UI endpoint coverage 100%"
 
 Not all 306 routes have a web UI entry point (package registries, Docker `/v2/`,
-SSH, OAuth callbacks, the admin panel, git protocol endpoints, …). "100% via UI"
-is therefore defined against the **UI-reachable API surface**, not the full
-inventory. Define that subset explicitly before gating, then drive it to 100%
-with real page flows (not synthetic probes).
+SSH, OAuth callbacks, the admin panel, git protocol endpoints, …). The surface is
+therefore defined **from the frontend source**: `scripts/ui-api-coverage.py`
+statically extracts every endpoint the UI can call (192 today) and matches it
+structurally against the recorded route hits, so literal segments match route
+wildcards. The 100% target is against that UI-reachable set, not the full
+inventory. The same run flags UI-called paths that match **no** registered route
+(frontend/backend mismatches).
 
 ## How to measure locally
 
@@ -45,7 +48,7 @@ cp -r frontend/dist/. backend/internal/webui/dist/ && touch backend/internal/web
 (cd backend && go build -cover -o /tmp/gitdash-server-ui .)
 cd tests/ui && GITDASH_BIN=/tmp/gitdash-server-ui \
   GITDASH_ROUTE_COVERAGE_FILE=/tmp/routes-ui.txt npx playwright test
-python3 scripts/route-coverage.py /tmp/routes-ui.txt
+python3 scripts/ui-api-coverage.py --src frontend/src --coverage /tmp/routes-ui.txt --list-missing
 ```
 
 Or all of it at once: `bash scripts/coverage-blackbox.sh`.
@@ -55,8 +58,10 @@ Or all of it at once: `bash scripts/coverage-blackbox.sh`.
 1. **Stage 1 — instrumentation + API endpoint coverage (done).**
    Route inventory/recorder, checker script, CI gate at 100% for black-box API
    tests; probe untested endpoints and fix what they expose.
-2. **Stage 2 — UI endpoint coverage.** Define the UI-reachable API subset, report
-   it in CI (non-blocking), then add page flows until that subset is 100%.
+2. **Stage 2 — UI endpoint coverage (in progress).** The UI-reachable surface is
+extracted from the frontend (192 endpoints); Playwright covers 62 (32.3%) today.
+Add page flows in batches (repo settings, projects, pipeline, pulls, copilot,
+deletes) until the surface is 100%; CI reports it non-blocking meanwhile.
 3. **Stage 3 — Go unit coverage ramp.** Raise unit coverage package by package
    (gitsvc, store, api first), adding regression tests for every defect found.
 4. **Stage 4 — ratchet.** Make the Codecov project status blocking at 80%, and
