@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-func MergeNonFF(owner, name, target, source, message, committer, method string) (string, error) {
-	path := RepoPath(owner, name)
+func mergeNonFF(owner, name, target, source, message, committer, method string) (string, error) {
+	path := repoPath(owner, name)
 	tmp, err := os.MkdirTemp("", "gitdash-merge-*")
 	if err != nil {
 		return "", err
@@ -50,8 +50,8 @@ func MergeNonFF(owner, name, target, source, message, committer, method string) 
 
 // MergeRebase 把 source 的提交逐个变基到 target 之上（rebase and merge），
 // 线性历史；成功后目标分支快进到变基结果并返回新的 tip SHA。冲突时返回错误。
-func MergeRebase(owner, name, target, source, committer string) (string, error) {
-	path := RepoPath(owner, name)
+func mergeRebase(owner, name, target, source, committer string) (string, error) {
+	path := repoPath(owner, name)
 	tmp, err := os.MkdirTemp("", "gitdash-rebase-*")
 	if err != nil {
 		return "", err

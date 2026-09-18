@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-func RevSHA(owner, name, rev string) (string, error) {
+func revSHA(owner, name, rev string) (string, error) {
 	if !ValidName(owner) || !ValidName(name) || rev == "" || strings.Contains(rev, "..") {
 		return "", fmt.Errorf("invalid rev %q", rev)
 	}
-	out, err := gitOut(RepoPath(owner, name), "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	out, err := gitOut(repoPath(owner, name), "rev-parse", "--verify", "--quiet", rev+"^{commit}")
 	if err != nil {
 		return "", err
 	}
@@ -18,22 +18,22 @@ func RevSHA(owner, name, rev string) (string, error) {
 }
 
 // CanFastForward 判断 target 是否可 fast-forward 到 source（target 是 source 的祖先）。
-func CanFastForward(owner, name, target, source string) bool {
-	_, err := gitOut(RepoPath(owner, name), "merge-base", "--is-ancestor", "refs/heads/"+target, "refs/heads/"+source)
+func canFastForward(owner, name, target, source string) bool {
+	_, err := gitOut(repoPath(owner, name), "merge-base", "--is-ancestor", "refs/heads/"+target, "refs/heads/"+source)
 	return err == nil
 }
 
 // MergeCheck PR 可合并性预检：mergeable（可合并）与 conflicted（分支分叉且合并冲突）。
-func MergeCheck(owner, name, target, source string) (mergeable, conflicted bool) {
-	if CanFastForward(owner, name, target, source) {
+func mergeCheck(owner, name, target, source string) (mergeable, conflicted bool) {
+	if canFastForward(owner, name, target, source) {
 		return true, false
 	}
 	// merge-tree 干跑（不落盘）：--write-tree 退出码 0 = 干净合并，1 = 冲突
-	base, err := gitOut(RepoPath(owner, name), "merge-base", "refs/heads/"+target, "refs/heads/"+source)
+	base, err := gitOut(repoPath(owner, name), "merge-base", "refs/heads/"+target, "refs/heads/"+source)
 	if err != nil {
 		return false, false
 	}
-	_, merr := gitOut(RepoPath(owner, name), "merge-tree", "--write-tree",
+	_, merr := gitOut(repoPath(owner, name), "merge-tree", "--write-tree",
 		strings.TrimSpace(base), "refs/heads/"+source)
 	if merr == nil {
 		return true, false
@@ -42,15 +42,15 @@ func MergeCheck(owner, name, target, source string) (mergeable, conflicted bool)
 }
 
 // MergeFastForward 把 target 分支快进到 source 分支，返回新的 target SHA。
-func MergeFastForward(owner, name, target, source string) (string, error) {
-	sha, err := RevSHA(owner, name, "refs/heads/"+source)
+func mergeFastForward(owner, name, target, source string) (string, error) {
+	sha, err := revSHA(owner, name, "refs/heads/"+source)
 	if err != nil {
 		return "", fmt.Errorf("source branch %q missing", source)
 	}
-	if !CanFastForward(owner, name, target, source) {
+	if !canFastForward(owner, name, target, source) {
 		return "", fmt.Errorf("cannot fast-forward %q to %q (diverged)", target, source)
 	}
-	if _, err := gitOut(RepoPath(owner, name), "update-ref", "refs/heads/"+target, sha); err != nil {
+	if _, err := gitOut(repoPath(owner, name), "update-ref", "refs/heads/"+target, sha); err != nil {
 		return "", err
 	}
 	return sha, nil
@@ -64,12 +64,12 @@ type DiffFile struct {
 }
 
 // DiffStats base..head 变更文件统计。
-func DiffStats(owner, name, base, head string) ([]DiffFile, error) {
-	numstat, err := gitOut(RepoPath(owner, name), "diff", "--numstat", base, head)
+func diffStats(owner, name, base, head string) ([]DiffFile, error) {
+	numstat, err := gitOut(repoPath(owner, name), "diff", "--numstat", base, head)
 	if err != nil {
 		return nil, err
 	}
-	statuses, err := gitOut(RepoPath(owner, name), "diff", "--name-status", base, head)
+	statuses, err := gitOut(repoPath(owner, name), "diff", "--name-status", base, head)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +107,8 @@ func DiffStats(owner, name, base, head string) ([]DiffFile, error) {
 }
 
 // DiffPatch 返回 base..head 的统一 diff 文本（截断防滥用）。
-func DiffPatch(owner, name, base, head string) (string, error) {
-	out, err := gitOut(RepoPath(owner, name), "diff", "-U3", base, head)
+func diffPatch(owner, name, base, head string) (string, error) {
+	out, err := gitOut(repoPath(owner, name), "diff", "-U3", base, head)
 	if err != nil {
 		return "", err
 	}

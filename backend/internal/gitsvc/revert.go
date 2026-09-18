@@ -11,7 +11,7 @@ var hexSHARe = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 
 // RevertCommit 在 branch 上创建一个撤销 sha 变更的新提交（git revert），返回新提交 SHA。
 // sha 为 merge 提交时按第一父提交撤销（-m 1）。冲突时报错并放弃，不影响远端分支。
-func RevertCommit(owner, name, branch, sha, message, committer string) (string, error) {
+func revertCommit(owner, name, branch, sha, message, committer string) (string, error) {
 	if !ValidName(owner) || !ValidName(name) {
 		return "", fmt.Errorf("invalid repo")
 	}
@@ -22,7 +22,7 @@ func RevertCommit(owner, name, branch, sha, message, committer string) (string, 
 	if !hexSHARe.MatchString(sha) {
 		return "", fmt.Errorf("invalid commit %q", sha)
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	tmp, err := os.MkdirTemp("", "gitdash-revert-*")
 	if err != nil {
 		return "", err

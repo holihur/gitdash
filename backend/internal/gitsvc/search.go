@@ -41,7 +41,7 @@ func Search(owner, name, query, ref string, max int) ([]SearchHit, error) {
 
 // SearchWith 与 Search 相同，但支持 pathspec / 单词匹配，并可通过 ctx 取消
 // （用于全局搜索的总超时）。ctx 取消时子进程会被杀掉。
-func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts) ([]SearchHit, error) {
+func searchWith(ctx context.Context, owner, name, query string, opts SearchOpts) ([]SearchHit, error) {
 	if !ValidName(owner) || !ValidName(name) {
 		return nil, fmt.Errorf("invalid repo %s/%s", owner, name)
 	}
@@ -58,7 +58,7 @@ func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts)
 	ref := opts.Ref
 	if ref == "" {
 		// 任何错误（含空仓库）都视为无可搜索内容
-		head, _ := HeadBranch(owner, name)
+		head, _ := headBranch(owner, name)
 		if head == "" {
 			return []SearchHit{}, nil
 		}
@@ -67,7 +67,7 @@ func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts)
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
-	args := []string{"-C", RepoPath(owner, name), "grep", "-n", "-I", "--fixed-strings"}
+	args := []string{"-C", repoPath(owner, name), "grep", "-n", "-I", "--fixed-strings"}
 	if opts.Word {
 		args = append(args, "-w")
 	}
@@ -117,7 +117,7 @@ func SearchWith(ctx context.Context, owner, name, query string, opts SearchOpts)
 		if errors.As(err, &ee) && ee.ExitCode() == 1 {
 			return []SearchHit{}, nil // git grep 无命中
 		}
-		return nil, gitErr(RepoPath(owner, name), cmd.Args, stderr.String(), err)
+		return nil, gitErr(repoPath(owner, name), cmd.Args, stderr.String(), err)
 	}
 	return hits, nil
 }

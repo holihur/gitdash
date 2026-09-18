@@ -25,8 +25,8 @@ steps:
 
 // InitTemplate 把刚创建的 bare 仓库初始化为默认模版：
 // main 分支 + 以仓库名生成的 README.md + 示例流水线 .gitdash.yml。
-func InitTemplate(owner, name string) error {
-	bare, err := filepath.Abs(RepoPath(owner, name))
+func initTemplate(owner, name string) error {
+	bare, err := filepath.Abs(repoPath(owner, name))
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ type FileChange struct {
 
 // WriteCommit 在目标分支上应用一组文件操作并提交（bare 仓库在临时工作区完成）。
 // branch 不存在（空仓库）时会以该分支名创建首个提交。返回提交 SHA。
-func WriteCommit(owner, name, branch, message, author string, changes []FileChange) (string, error) {
+func writeCommit(owner, name, branch, message, author string, changes []FileChange) (string, error) {
 	if !ValidName(owner) || !ValidName(name) {
 		return "", fmt.Errorf("invalid repo")
 	}
@@ -99,7 +99,7 @@ func WriteCommit(owner, name, branch, message, author string, changes []FileChan
 	if len(changes) == 0 {
 		return "", fmt.Errorf("no changes to commit")
 	}
-	bare, err := filepath.Abs(RepoPath(owner, name))
+	bare, err := filepath.Abs(repoPath(owner, name))
 	if err != nil {
 		return "", err
 	}

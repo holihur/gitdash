@@ -33,7 +33,7 @@ type Blame struct {
 const maxBlameLines = 5000
 
 // Blame 基于 git blame --porcelain 返回文件的逐行归属。
-func BlameFile(owner, name, ref, file string) (*Blame, error) {
+func blameFile(owner, name, ref, file string) (*Blame, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
@@ -41,7 +41,7 @@ func BlameFile(owner, name, ref, file string) (*Blame, error) {
 	if err != nil || file == "" {
 		return nil, fmt.Errorf("invalid file path")
 	}
-	out, err := gitOut(RepoPath(owner, name), "blame", "--porcelain", ref, "--", file)
+	out, err := gitOut(repoPath(owner, name), "blame", "--porcelain", ref, "--", file)
 	if err != nil {
 		return nil, fmt.Errorf("blame failed: %w", err)
 	}

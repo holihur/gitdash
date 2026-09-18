@@ -21,11 +21,11 @@ type Entry struct {
 	LastCommit  string `json:"last_commit,omitempty"`
 }
 
-func Tree(owner, name, ref, dir string) ([]Entry, error) {
+func tree(owner, name, ref, dir string) ([]Entry, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	treeish := ref
 	if dir != "" {
 		t, err := gitOut(path, "cat-file", "-t", ref+":"+dir)
@@ -138,11 +138,11 @@ const MaxBlobSize = 512 * 1024
 
 // ListDir 返回 ref 下目录 dir 的直接子项名称（不含逐项提交信息，轻量）。
 // dir 为空时列出仓库根目录；目录不存在返回错误。
-func ListDir(owner, name, ref, dir string) ([]string, error) {
+func listDir(owner, name, ref, dir string) ([]string, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	treeish := ref
 	if dir != "" {
 		t, err := gitOut(path, "cat-file", "-t", ref+":"+dir)
@@ -176,7 +176,7 @@ type Blob struct {
 	LatestCommit *Commit `json:"latest_commit,omitempty"`
 }
 
-func ReadBlob(owner, name, ref, file string) (*Blob, error) {
+func readBlob(owner, name, ref, file string) (*Blob, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
@@ -184,7 +184,7 @@ func ReadBlob(owner, name, ref, file string) (*Blob, error) {
 	if err != nil || file == "" {
 		return nil, fmt.Errorf("invalid file path")
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	obj := ref + ":" + file
 
 	sizeOut, err := gitOut(path, "cat-file", "-s", obj)

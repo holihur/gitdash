@@ -13,20 +13,20 @@ type Branch struct {
 	IsHead bool   `json:"is_head"`
 }
 
-func HeadBranch(owner, name string) (string, error) {
-	out, err := gitOut(RepoPath(owner, name), "symbolic-ref", "--short", "HEAD")
+func headBranch(owner, name string) (string, error) {
+	out, err := gitOut(repoPath(owner, name), "symbolic-ref", "--short", "HEAD")
 	return strings.TrimSpace(out), err
 }
 
-func Branches(owner, name string) ([]Branch, error) {
+func branches(owner, name string) ([]Branch, error) {
 	if v, ok := refCacheGet("b", owner, name); ok {
 		return v.([]Branch), nil
 	}
-	out, err := gitOut(RepoPath(owner, name), "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	out, err := gitOut(repoPath(owner, name), "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
 		return nil, err
 	}
-	head, _ := HeadBranch(owner, name)
+	head, _ := headBranch(owner, name)
 	branches := []Branch{}
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if line == "" {
@@ -68,7 +68,7 @@ func refCacheSet(kind, owner, name string, v any) {
 }
 
 // InvalidateRefs 失效某仓库（或全部，owner 为空时）的分支/标签缓存；push 后调用。
-func InvalidateRefs(owner, name string) {
+func invalidateRefs(owner, name string) {
 	refCacheMu.Lock()
 	defer refCacheMu.Unlock()
 	if owner == "" {
@@ -89,11 +89,11 @@ type Tag struct {
 }
 
 // Tags 列出标签（附注标签取被指提交）。
-func Tags(owner, name string) ([]Tag, error) {
+func tags(owner, name string) ([]Tag, error) {
 	if v, ok := refCacheGet("t", owner, name); ok {
 		return v.([]Tag), nil
 	}
-	out, err := gitOut(RepoPath(owner, name),
+	out, err := gitOut(repoPath(owner, name),
 		"for-each-ref", "--format=%(refname:short)%1f%(objectname)%1f%(*objectname)%1f%(*subject)",
 		"refs/tags")
 	if err != nil {
@@ -123,8 +123,8 @@ func Tags(owner, name string) ([]Tag, error) {
 }
 
 // CreateRef 创建分支或标签（lightweight），from 可为任意可解析 rev。
-func CreateRef(owner, name, kind, refName, from string) (string, error) {
-	defer InvalidateRefs(owner, name)
+func createRef(owner, name, kind, refName, from string) (string, error) {
+	defer invalidateRefs(owner, name)
 	full := "refs/heads/" + refName
 	if kind == "tag" {
 		full = "refs/tags/" + refName
@@ -132,11 +132,11 @@ func CreateRef(owner, name, kind, refName, from string) (string, error) {
 	if err := checkRefFormat(full); err != nil {
 		return "", err
 	}
-	sha, err := RevSHA(owner, name, from)
+	sha, err := revSHA(owner, name, from)
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve %q to a commit", from)
 	}
-	repo := RepoPath(owner, name)
+	repo := repoPath(owner, name)
 	if _, err := gitOut(repo, "rev-parse", "-q", "--verify", full); err == nil {
 		return "", ErrRefExists
 	}
@@ -147,8 +147,8 @@ func CreateRef(owner, name, kind, refName, from string) (string, error) {
 }
 
 // DeleteRef 删除分支或标签；默认分支(HEAD)不可删除。
-func DeleteRef(owner, name, kind, refName string) error {
-	defer InvalidateRefs(owner, name)
+func deleteRef(owner, name, kind, refName string) error {
+	defer invalidateRefs(owner, name)
 	full := "refs/heads/" + refName
 	if kind == "tag" {
 		full = "refs/tags/" + refName
@@ -158,12 +158,12 @@ func DeleteRef(owner, name, kind, refName string) error {
 	if err := checkRefFormat(full); err != nil {
 		return err
 	}
-	repo := RepoPath(owner, name)
+	repo := repoPath(owner, name)
 	if _, err := gitOut(repo, "rev-parse", "-q", "--verify", full); err != nil {
 		return ErrRefNotFound
 	}
 	if kind == "branch" {
-		if head, err := HeadBranch(owner, name); err == nil && head == refName {
+		if head, err := headBranch(owner, name); err == nil && head == refName {
 			return ErrHeadBranch
 		}
 	}
@@ -178,21 +178,21 @@ var (
 )
 
 // SetHeadBranch 把仓库的默认分支（HEAD）切换到已存在的分支。
-func SetHeadBranch(owner, name, branch string) error {
+func setHeadBranch(owner, name, branch string) error {
 	if !ValidName(owner) || !ValidName(name) {
 		return fmt.Errorf("invalid repo")
 	}
 	if !ValidRef(branch) {
 		return fmt.Errorf("invalid branch %q", branch)
 	}
-	repo := RepoPath(owner, name)
+	repo := repoPath(owner, name)
 	if _, err := gitOut(repo, "rev-parse", "-q", "--verify", "refs/heads/"+branch); err != nil {
 		return ErrRefNotFound
 	}
 	if _, err := gitOut(repo, "symbolic-ref", "HEAD", "refs/heads/"+branch); err != nil {
 		return err
 	}
-	InvalidateRefs(owner, name)
+	invalidateRefs(owner, name)
 	return nil
 }
 

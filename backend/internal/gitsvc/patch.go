@@ -13,7 +13,7 @@ import (
 // 返回新分支名与末端提交 SHA。
 //
 // patchData 可以是多封 patch 拼接的 mbox；git am 会依次提交。
-func ApplyPatchSeries(owner, name, base string, patchData []byte) (branch, sha string, err error) {
+func applyPatchSeries(owner, name, base string, patchData []byte) (branch, sha string, err error) {
 	if !ValidName(owner) || !ValidName(name) {
 		return "", "", fmt.Errorf("invalid repo")
 	}
@@ -27,7 +27,7 @@ func ApplyPatchSeries(owner, name, base string, patchData []byte) (branch, sha s
 	if len(strings.TrimSpace(string(patchData))) == 0 {
 		return "", "", fmt.Errorf("empty patch series")
 	}
-	bare, err := filepath.Abs(RepoPath(owner, name))
+	bare, err := filepath.Abs(repoPath(owner, name))
 	if err != nil {
 		return "", "", err
 	}

@@ -17,7 +17,7 @@ var (
 	refRe    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]*$`)
 )
 
-func Init(dataDir string) error {
+func initDirs(dataDir string) error {
 	reposDir = filepath.Join(dataDir, "repos")
 	spoolDir = filepath.Join(dataDir, "webhook-events")
 	if err := os.MkdirAll(reposDir, 0o755); err != nil {
@@ -25,11 +25,6 @@ func Init(dataDir string) error {
 	}
 	return os.MkdirAll(spoolDir, 0o755)
 }
-
-func ReposDir() string { return reposDir }
-
-// SpoolDir push 事件 spool 目录（post-receive hook 写入，webhook 调度器消费）
-func SpoolDir() string { return spoolDir }
 
 func ValidName(name string) bool {
 	return nameRe.MatchString(name)
@@ -53,19 +48,19 @@ func CleanPath(p string) (string, error) {
 	return p, nil
 }
 
-func RepoPath(owner, name string) string {
+func repoPath(owner, name string) string {
 	return filepath.Join(reposDir, owner, name+".git")
 }
 
-func Exists(owner, name string) bool {
-	fi, err := os.Stat(RepoPath(owner, name))
+func repoExists(owner, name string) bool {
+	fi, err := os.Stat(repoPath(owner, name))
 	return err == nil && fi.IsDir()
 }
 
 // IsEmptyRepo 报告仓库是否尚无任何提交（没有任何分支或标签引用）。
 // 空仓库没有可检出的默认分支，浏览接口应据此返回空结果而非原始 git 报错。
-func IsEmptyRepo(owner, name string) bool {
-	out, err := gitOut(RepoPath(owner, name), "for-each-ref", "--count=1")
+func isEmptyRepo(owner, name string) bool {
+	out, err := gitOut(repoPath(owner, name), "for-each-ref", "--count=1")
 	return err == nil && strings.TrimSpace(out) == ""
 }
 
@@ -82,9 +77,6 @@ func gitOut(dir string, args ...string) (string, error) {
 	}
 	return stdout.String(), nil
 }
-
-// GitOut 是 gitOut 的导出包装（供 pipeline 等内部包复用）。
-func GitOut(dir string, args ...string) (string, error) { return gitOut(dir, args...) }
 
 // gitErr 构造不含服务器绝对路径的对外错误信息（完整细节记入服务端日志），
 // 避免数据目录结构通过 5xx 响应泄漏给客户端。

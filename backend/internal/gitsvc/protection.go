@@ -52,7 +52,7 @@ func CheckBranchProtection(dbPath, owner, repo string, refs []PushRef) error {
 				continue
 			}
 			// old 不是 new 的祖先 = 非快进
-			if _, err := gitOut(RepoPath(owner, repo), "merge-base", "--is-ancestor", p.Old, p.New); err != nil {
+			if _, err := gitOut(repoPath(owner, repo), "merge-base", "--is-ancestor", p.Old, p.New); err != nil {
 				return fmt.Errorf("branch %q is protected: force push is not allowed", branch)
 			}
 		}

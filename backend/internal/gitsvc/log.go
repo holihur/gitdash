@@ -9,20 +9,20 @@ import (
 	"strings"
 )
 
-func RawCommit(owner, name, sha string) ([]byte, error) {
-	path := RepoPath(owner, name)
+func rawCommit(owner, name, sha string) ([]byte, error) {
+	path := repoPath(owner, name)
 	cmd := exec.Command("git", "-C", path, "cat-file", "commit", sha)
 	return cmd.Output()
 }
 
 // RawCommits 用单次 `git cat-file --batch` 进程读取多个 commit 对象。
 // 返回 map[sha]raw；读取失败的 sha 不出现在结果中。
-func RawCommits(owner, name string, shas []string) map[string][]byte {
+func rawCommits(owner, name string, shas []string) map[string][]byte {
 	out := map[string][]byte{}
 	if len(shas) == 0 {
 		return out
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	cmd := exec.Command("git", "-C", path, "cat-file", "--batch")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -73,14 +73,14 @@ type Commit struct {
 	Message string `json:"message"`
 }
 
-func Commits(owner, name, ref string, limit int) ([]Commit, error) {
+func commits(owner, name, ref string, limit int) ([]Commit, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
-	out, err := gitOut(RepoPath(owner, name),
+	out, err := gitOut(repoPath(owner, name),
 		"log", "--max-count="+strconv.Itoa(limit), "--date=iso-strict",
 		"--pretty=format:%H%x1f%an%x1f%ad%x1f%s%x1e", ref)
 	if err != nil {
@@ -103,7 +103,7 @@ func Commits(owner, name, ref string, limit int) ([]Commit, error) {
 
 // LastCommit 返回 ref 上最近一次改动 path（文件或目录；空 = 仓库根）的提交。
 // 空仓库（无提交）返回 (nil, nil)。
-func LastCommit(owner, name, ref, path string) (*Commit, error) {
+func lastCommit(owner, name, ref, path string) (*Commit, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
@@ -111,7 +111,7 @@ func LastCommit(owner, name, ref, path string) (*Commit, error) {
 	if path != "" {
 		args = append(args, "--", path)
 	}
-	out, err := gitOut(RepoPath(owner, name), args...)
+	out, err := gitOut(repoPath(owner, name), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,18 +127,18 @@ func LastCommit(owner, name, ref, path string) (*Commit, error) {
 }
 
 // CommitDiff 返回某提交相对第一父提交（根提交相对空树）的变更。
-func CommitDiff(owner, name, sha string) ([]DiffFile, string, error) {
-	path := RepoPath(owner, name)
+func commitDiff(owner, name, sha string) ([]DiffFile, string, error) {
+	path := repoPath(owner, name)
 	parent := ""
 	if out, err := gitOut(path, "rev-parse", "--verify", "--quiet", sha+"^1"); err == nil {
 		parent = strings.TrimSpace(out)
 	}
 	if parent != "" {
-		files, err := DiffStats(owner, name, parent, sha)
+		files, err := diffStats(owner, name, parent, sha)
 		if err != nil {
 			return nil, "", err
 		}
-		patch, err := DiffPatch(owner, name, parent, sha)
+		patch, err := diffPatch(owner, name, parent, sha)
 		return files, patch, err
 	}
 	// 根提交：相对空树

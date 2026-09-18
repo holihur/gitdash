@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-func CreateBare(owner, name string) error {
+func createBare(owner, name string) error {
 	if !ValidName(owner) || !ValidName(name) {
 		return fmt.Errorf("invalid repo %s/%s", owner, name)
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ done | @BIN@ pre-receive "@OWNER@" "@REPO@"
 }
 
 // EnsureHooks 遍历所有仓库重装 hooks（启动时调用，让存量仓库获得 pre-receive 分支保护）。
-func EnsureHooks() error {
+func ensureHooks() error {
 	entries, err := os.ReadDir(reposDir)
 	if err != nil {
 		return err
@@ -102,21 +102,21 @@ func EnsureHooks() error {
 	return nil
 }
 
-func Delete(owner, name string) error {
-	InvalidateRefs(owner, name)
-	return os.RemoveAll(RepoPath(owner, name))
+func deleteRepo(owner, name string) error {
+	invalidateRefs(owner, name)
+	return os.RemoveAll(repoPath(owner, name))
 }
 
 // ForkRepo 把源仓库（bare）镜像复制到目标路径，用于 fork：保留全部分支/标签。
-func ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
+func forkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 	if !ValidName(sourceOwner) || !ValidName(sourceName) || !ValidName(targetOwner) || !ValidName(targetName) {
 		return fmt.Errorf("invalid fork repo")
 	}
-	src := RepoPath(sourceOwner, sourceName)
+	src := repoPath(sourceOwner, sourceName)
 	if fi, err := os.Stat(src); err != nil || !fi.IsDir() {
 		return fmt.Errorf("source repo %s/%s not on disk", sourceOwner, sourceName)
 	}
-	dst := RepoPath(targetOwner, targetName)
+	dst := repoPath(targetOwner, targetName)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -130,11 +130,11 @@ func ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 
 // ImportRepo 从远程 URL 镜像导入仓库到目标路径（保留全部分支/标签）。
 // privateKey 非空时用于 SSH 认证（专用导入 key，如 GitHub/GitLab 的只读 deploy key）。
-func ImportRepo(url, targetOwner, targetName, privateKey string) error {
+func importRepo(url, targetOwner, targetName, privateKey string) error {
 	if !ValidName(targetOwner) || !ValidName(targetName) {
 		return fmt.Errorf("invalid target repo")
 	}
-	dst := RepoPath(targetOwner, targetName)
+	dst := repoPath(targetOwner, targetName)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -154,11 +154,11 @@ func ImportRepo(url, targetOwner, targetName, privateKey string) error {
 }
 
 // PushMirror 把仓库的全部 refs 推送到远程镜像目标（同步到 GitHub/GitLab 等）。
-func PushMirror(owner, name, url, privateKey string) error {
+func pushMirror(owner, name, url, privateKey string) error {
 	if !ValidName(owner) || !ValidName(name) {
 		return fmt.Errorf("invalid repo")
 	}
-	path := RepoPath(owner, name)
+	path := repoPath(owner, name)
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {
 		return fmt.Errorf("repo %s/%s not on disk", owner, name)
 	}
@@ -236,8 +236,8 @@ func writeTempImportKey(privateKey string) (string, error) {
 }
 
 // RepoSize 返回仓库磁盘占用（字节）：松散对象大小 + pack 大小（不含 refs/config 等零头）。
-func RepoSize(owner, name string) (int64, error) {
-	out, err := gitOut(RepoPath(owner, name), "count-objects", "-v")
+func repoSize(owner, name string) (int64, error) {
+	out, err := gitOut(repoPath(owner, name), "count-objects", "-v")
 	if err != nil {
 		return 0, err
 	}
