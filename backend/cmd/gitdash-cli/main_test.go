@@ -61,6 +61,13 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"number": 1, "title": "Bug", "state": "open", "author": "alice"},
 			})
+		case "/api/users/alice/repos/demo/issues/1":
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 		case "/api/users/alice/repos/demo/pulls":
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"number": 2, "title": "Fix", "state": "open", "source_branch": "f", "target_branch": "main"},
@@ -80,6 +87,31 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"id": 3, "status": "idle", "issue_number": 7, "branch": "copilot/session-3"},
 			})
+		case "/api/users/alice/repos/demo":
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+		case "/api/users/alice/repos/demo/projects":
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id": 6, "owner": "alice", "repo": "demo", "name": "Roadmap", "card_count": 0,
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": 6, "owner": "alice", "repo": "demo", "name": "Roadmap", "description": "roadmap", "card_count": 2},
+			})
+		case "/api/users/alice/repos/demo/projects/6":
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
@@ -94,12 +126,17 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 	cases := [][]string{
 		{"me"},
 		{"repo", "list"},
+		{"repo", "delete", "alice/demo", "--yes"},
 		{"issue", "list", "alice/demo"},
+		{"issue", "delete", "alice/demo", "1"},
 		{"copilot", "list", "alice/demo"},
 		{"copilot", "create", "alice/demo", "--issue", "7"},
 		{"copilot", "fix", "alice/demo", "7", "--detach"},
 		{"issue", "fix", "alice/demo", "7", "--detach"},
 		{"pr", "list", "alice/demo"},
+		{"project", "list", "alice/demo"},
+		{"project", "create", "alice/demo", "--name", "Roadmap"},
+		{"project", "delete", "alice/demo", "6"},
 		{"--host", srv.URL, "--token", "x", "me"},
 		{"version"},
 	}
@@ -112,14 +149,20 @@ func TestRunCommandsAgainstMockServer(t *testing.T) {
 	// 参数校验错误
 	for _, c := range [][]string{
 		{"issue", "create", "alice/demo"},              // 缺 --title
+		{"issue", "delete", "alice/demo"},              // 缺 issue-number
+		{"issue", "delete", "alice/demo", "0"},         // 非法 issue-number
 		{"pr", "create", "alice/demo", "--title", "x"}, // 缺 --head/--base
-		{"repo"},                              // 缺子命令
-		{"copilot"},                           // 缺子命令
-		{"copilot", "run", "alice/demo", "0"}, // 非法会话 id
-		{"copilot", "fix", "alice/demo"},      // 缺 issue 编号
+		{"repo"},                                              // 缺子命令
+		{"copilot"},                                           // 缺子命令
+		{"project"},                                           // 缺子命令
+		{"project", "create", "alice/demo"},                   // 缺 --name
+		{"project", "delete", "alice/demo"},                   // 缺 project-id
+		{"project", "delete", "alice/demo", "0"},              // 非法 project-id
+		{"copilot", "run", "alice/demo", "0"},                 // 非法会话 id
+		{"copilot", "fix", "alice/demo"},                      // 缺 issue 编号
 		{"copilot", "create", "alice/demo", "--byok", "nope"}, // 未知 byok
-		{"unknowncmd"},           // 未知命令
-		{"issue", "list", "bad"}, // owner/repo 格式错
+		{"unknowncmd"},                                        // 未知命令
+		{"issue", "list", "bad"},                              // owner/repo 格式错
 	} {
 		if err := run(c); err == nil {
 			t.Fatalf("run(%v) expected error", c)
@@ -267,5 +310,120 @@ func TestRunCopilotTurnStreamsToDone(t *testing.T) {
 	}
 	if !detailHit {
 		t.Fatal("expected the session detail to be refetched after done")
+	}
+}
+
+// TestCommandHelpCoverage 校验帮助规格表自身完整，且顶层 usage 覆盖每个命令。
+func TestCommandHelpCoverage(t *testing.T) {
+	if len(helpSpecs) == 0 {
+		t.Fatal("helpSpecs is empty")
+	}
+	for i := range helpSpecs {
+		c := &helpSpecs[i]
+		if c.name == "" || c.desc == "" {
+			t.Fatalf("command %q missing name/desc", c.name)
+		}
+		if findHelpCmd(c.name) == nil {
+			t.Fatalf("findHelpCmd(%q) = nil", c.name)
+		}
+		if !strings.Contains(topUsage, c.name) {
+			t.Fatalf("top-level usage does not mention command %q", c.name)
+		}
+		if len(c.subs) == 0 {
+			t.Fatalf("command %q has no subcommands", c.name)
+		}
+		for _, s := range c.subs {
+			if s.name == "" || s.usage == "" || s.desc == "" {
+				t.Fatalf("command %q subcommand %q incomplete", c.name, s.name)
+			}
+			if !strings.HasPrefix(s.usage, s.name) {
+				t.Fatalf("%s %s: usage %q must start with %q", c.name, s.name, s.usage, s.name)
+			}
+			if findHelpSub(c, s.name) == nil {
+				t.Fatalf("findHelpSub(%s, %s) = nil", c.name, s.name)
+			}
+		}
+	}
+}
+
+// TestHelpForEveryCommand 验证每个命令/子命令/别名的 --help 都可用，且无需登录。
+func TestHelpForEveryCommand(t *testing.T) {
+	t.Setenv("GITDASH_CONFIG_DIR", t.TempDir())
+	t.Setenv("GITDASH_HOST", "")
+	t.Setenv("GITDASH_TOKEN", "")
+	for i := range helpSpecs {
+		c := &helpSpecs[i]
+		for _, args := range [][]string{
+			{c.name, "--help"},
+			{c.name, "-h"},
+			{c.name, "help"},
+		} {
+			if err := run(args); err != nil {
+				t.Fatalf("run(%v) = %v", args, err)
+			}
+		}
+		for _, s := range c.subs {
+			for _, args := range [][]string{
+				{c.name, s.name, "--help"},
+				{c.name, s.name, "owner/repo", "--help"}, // 位置参数在 flag 之前
+			} {
+				if err := run(args); err != nil {
+					t.Fatalf("run(%v) = %v", args, err)
+				}
+			}
+		}
+		for alias := range c.aliases {
+			if err := run([]string{c.name, alias, "--help"}); err != nil {
+				t.Fatalf("run(%s %s --help) = %v", c.name, alias, err)
+			}
+		}
+	}
+}
+
+// TestConfirm 验证删除确认：非交互拒绝，交互按 y/yes 判定。
+func TestConfirm(t *testing.T) {
+	if _, err := confirm(strings.NewReader("y\n"), false, "x"); err == nil {
+		t.Fatal("non-interactive confirm should error (require --yes)")
+	}
+	for _, tc := range []struct {
+		in   string
+		want bool
+	}{{"y\n", true}, {"YES\n", true}, {"no\n", false}, {"\n", false}} {
+		got, err := confirm(strings.NewReader(tc.in), true, "x")
+		if err != nil || got != tc.want {
+			t.Fatalf("confirm(%q) = %v, %v; want %v", tc.in, got, err, tc.want)
+		}
+	}
+}
+
+// TestRepoDeleteRequiresArg 缺 owner/repo 时直接报错（不进入交互确认）。
+func TestRepoDeleteRequiresArg(t *testing.T) {
+	t.Setenv("GITDASH_CONFIG_DIR", t.TempDir())
+	t.Setenv("GITDASH_HOST", "http://x")
+	t.Setenv("GITDASH_TOKEN", "t")
+	if err := run([]string{"repo", "delete"}); err == nil {
+		t.Fatal("repo delete without owner/repo should error")
+	}
+}
+
+// TestHelpUnknownSubcommand 验证未知子命令的 --help 回退到命令总览而非报错。
+func TestHelpUnknownSubcommand(t *testing.T) {
+	t.Setenv("GITDASH_CONFIG_DIR", t.TempDir())
+	t.Setenv("GITDASH_HOST", "")
+	t.Setenv("GITDASH_TOKEN", "")
+	if err := run([]string{"repo", "nope", "--help"}); err != nil {
+		t.Fatalf("run(repo nope --help) = %v", err)
+	}
+}
+
+// TestMissingSubcommandErrors 保持既有约定：缺子命令仍返回错误（而非静默成功）。
+func TestMissingSubcommandErrors(t *testing.T) {
+	t.Setenv("GITDASH_CONFIG_DIR", t.TempDir())
+	t.Setenv("GITDASH_HOST", "")
+	t.Setenv("GITDASH_TOKEN", "")
+	for _, cmd := range []string{"repo", "project", "issue", "pr", "copilot"} {
+		if err := run([]string{cmd}); err == nil {
+			t.Fatalf("run(%s) expected error for missing subcommand", cmd)
+		}
 	}
 }

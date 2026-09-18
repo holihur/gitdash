@@ -1,6 +1,6 @@
 ---
 name: gitdash-cli
-description: Use the `gitdash-cli` command to operate a self-hosted gitdash instance — list or create repositories, file/list issues, and open/list pull requests. Use when the user mentions gitdash, gitdash-cli, or asks to manage gitdash repos, issues, or pull requests.
+description: Use the `gitdash-cli` command to operate a self-hosted gitdash instance — list or create repositories, file/list issues, open/list pull requests, and manage kanban projects. Use when the user mentions gitdash, gitdash-cli, or asks to manage gitdash repos, issues, pull requests, or projects.
 ---
 
 # gitdash-cli
@@ -17,6 +17,7 @@ Trigger when the user asks to:
 - list or create repositories on a gitdash instance
 - file, list, or look up issues
 - open, list, or inspect pull requests
+- create, list, or delete kanban projects (boards) in a repository
 - check which account is authenticated against gitdash
 
 ## Authentication
@@ -60,10 +61,15 @@ export GITDASH_TOKEN=<personal-access-token>
 | `gitdash-cli me` | Show the authenticated user |
 | `gitdash-cli repo list` | List your repositories |
 | `gitdash-cli repo create [--private=false] [--description D] <name>` | Create a repository |
+| `gitdash-cli repo delete <owner/repo> [--yes]` | Delete a repository (permanent; prompts unless `--yes`) |
 | `gitdash-cli issue list <owner/repo>` | List issues |
 | `gitdash-cli issue create <owner/repo> --title T [--body B]` | Create an issue |
+| `gitdash-cli issue delete <owner/repo> <n>` | Delete an issue |
 | `gitdash-cli pr list <owner/repo>` | List pull requests |
 | `gitdash-cli pr create <owner/repo> --title T --head H --base B [--body B]` | Open a pull request |
+| `gitdash-cli project list <owner/repo>` | List kanban projects in a repository |
+| `gitdash-cli project create <owner/repo> --name N [--description D]` | Create a kanban project |
+| `gitdash-cli project delete <owner/repo> <project-id>` | Delete a project and its columns/swimlanes/cards |
 | `gitdash-cli copilot list <owner/repo>` | List AI copilot sessions |
 | `gitdash-cli copilot create <owner/repo> [--byok NAME] [--issue N] [--prompt P]` | Create a copilot session |
 | `gitdash-cli copilot run <owner/repo> <session-id> [--text M]` | Drive a session and stream the agent's work |
@@ -98,6 +104,16 @@ gitdash-cli pr create alice/my-service \
 
 # list open pull requests
 gitdash-cli pr list alice/my-service
+
+# create a kanban project (defaults to columns To Do / In Progress / Done)
+gitdash-cli project create alice/my-service --name "Roadmap"
+gitdash-cli project list alice/my-service
+```
+
+Every command and subcommand also supports `--help` (works without being logged in):
+
+```bash
+gitdash-cli project create --help
 ```
 
 ## AI copilot (issue → PR)

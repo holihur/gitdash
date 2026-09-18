@@ -501,8 +501,10 @@ flags and the `GITDASH_HOST` / `GITDASH_TOKEN` environment variables override th
 | `gitdash-cli me` | Show the authenticated user |
 | `gitdash-cli repo list` | List your repositories |
 | `gitdash-cli repo create [--private=false] [--description D] <name>` | Create a repository |
+| `gitdash-cli repo delete <owner/repo> [--yes]` | Delete a repository (permanent; prompts unless `--yes`) |
 | `gitdash-cli issue list <owner/repo>` | List issues |
 | `gitdash-cli issue create <owner/repo> --title T [--body B]` | Create an issue |
+| `gitdash-cli issue delete <owner/repo> <n>` | Delete an issue |
 | `gitdash-cli issue fix <owner/repo> <n> [--byok NAME] [--detach]` | Alias of `copilot fix` |
 | `gitdash-cli copilot list <owner/repo>` | List AI copilot sessions |
 | `gitdash-cli copilot create <owner/repo> [--byok NAME] [--issue N] [--prompt P]` | Create a copilot session |
@@ -510,8 +512,14 @@ flags and the `GITDASH_HOST` / `GITDASH_TOKEN` environment variables override th
 | `gitdash-cli copilot fix <owner/repo> <n> [--byok NAME] [--instructions P] [--detach]` | Have the agent fix an issue; auto-opens a PR |
 | `gitdash-cli pr list <owner/repo>` | List pull requests |
 | `gitdash-cli pr create <owner/repo> --title T --head H --base B [--body B]` | Open a pull request |
+| `gitdash-cli project list <owner/repo>` | List kanban projects in a repository |
+| `gitdash-cli project create <owner/repo> --name N [--description D]` | Create a kanban project |
+| `gitdash-cli project delete <owner/repo> <project-id>` | Delete a project and its columns/swimlanes/cards |
 | `gitdash-cli skill show` | Print the embedded Agent Skill |
 | `gitdash-cli skill install` | Install the Agent Skill for Claude Code / opencode / pi |
+
+Run `gitdash-cli <command> --help` (or `gitdash-cli <command> <subcommand> --help`) for
+usage; help works without being logged in.
 
 The copilot commands are the headless equivalent of the web UI's **Fix with Copilot**
 flow: `copilot fix` creates a session linked to an issue, runs the agent against a

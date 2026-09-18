@@ -458,10 +458,17 @@ gitdash-cli me
 # 常用命令
 gitdash-cli repo list
 gitdash-cli repo create --private demo
+gitdash-cli repo delete alice/demo --yes   # 删除仓库（不加 --yes 会交互确认）
 gitdash-cli issue list alice/demo
 gitdash-cli issue create alice/demo --title "Bug" --body "..."
+gitdash-cli issue delete alice/demo 1
 gitdash-cli pr list alice/demo
 gitdash-cli pr create alice/demo --title "Fix" --head feature --base main
+
+# 看板项目（默认列 To Do / In Progress / Done）
+gitdash-cli project create alice/demo --name "Roadmap"
+gitdash-cli project list alice/demo
+gitdash-cli project delete alice/demo 6
 
 # AI copilot：让 agent 修 issue 并自动开 PR（等价于网页端「用 Copilot 修复」）
 gitdash-cli copilot fix alice/demo 14                  # 修 issue #14，收尾自动开 PR
@@ -473,6 +480,13 @@ gitdash-cli copilot run alice/demo 3 --text "顺便更新 changelog"
 `copilot fix` 会创建一个关联 issue 的会话，驱动 agent 在仓库检出中工作，推送后由 gitdash 自动开出一个正文 `Closes #N` 的 PR；多个 BYOK 密钥时用 `--byok <名称|id>` 指定。
 
 凭据存于 `~/.config/gitdash/config.json`（0600）；`--host`/`--token` 与 `GITDASH_HOST`/`GITDASH_TOKEN` 可覆盖；`--json` 输出原始 JSON。
+
+任意命令或子命令都支持 `--help`（无需登录即可查看）：
+
+```bash
+gitdash-cli project create --help          # 子命令用法
+gitdash-cli repo --help                     # 命令总览
+```
 
 ### Agent Skill（供 Claude Code / opencode / pi 使用）
 

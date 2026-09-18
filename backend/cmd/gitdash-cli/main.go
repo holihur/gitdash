@@ -11,6 +11,9 @@
 //	gitdash-cli me
 //	gitdash-cli repo list
 //	gitdash-cli repo create --private demo
+//	gitdash-cli repo delete alice/demo --yes
+//	gitdash-cli project list alice/demo
+//	gitdash-cli project create alice/demo --name "Roadmap"
 //	gitdash-cli issue list alice/demo
 //	gitdash-cli issue create alice/demo --title "Bug" --body "..."
 //	gitdash-cli pr list alice/demo
@@ -80,6 +83,8 @@ func run(argv []string) error {
 		return cmdMe(cl, jsonOut)
 	case "repo":
 		return cmdRepo(args[1:], host, token, jsonOut)
+	case "project":
+		return cmdProject(args[1:], host, token, jsonOut)
 	case "issue":
 		return cmdIssue(args[1:], host, token, jsonOut)
 	case "copilot":
@@ -99,8 +104,7 @@ func run(argv []string) error {
 	}
 }
 
-func usage() {
-	fmt.Print(`gitdash-cli — gitdash command-line client
+const topUsage = `gitdash-cli — gitdash command-line client
 
 Usage:
   gitdash-cli <command> [flags]
@@ -112,9 +116,14 @@ Commands:
   repo list             List your repositories
   repo create [flags] <name>
   repo gc <owner/repo>  Run git gc and reclaim disk space
+  repo delete <owner/repo> [--yes]
+  project list <owner/repo>
+  project create <owner/repo> --name <name> [--description <text>]
+  project delete <owner/repo> <project-id>
   issue list <owner/repo>
   issue create <owner/repo> --title <t> [--body <b>]
   issue fix <owner/repo> <issue-number> [--byok <name|id>] [--instructions <text>] [--detach]
+  issue delete <owner/repo> <issue-number>
   copilot list <owner/repo>
   copilot create <owner/repo> [--byok <name|id>] [--issue <n>] [--prompt <text>]
   copilot run <owner/repo> <session-id> --text <message>
@@ -129,7 +138,12 @@ Global flags (anywhere):
   --host <url>          gitdash base URL (overrides config; env GITDASH_HOST)
   --token <token>       API token (overrides config; env GITDASH_TOKEN)
   --json                Print raw JSON output
-`)
+
+Run 'gitdash-cli <command> --help' for command-specific help.
+`
+
+func usage() {
+	fmt.Print(topUsage)
 }
 
 // ---- global flags ----
@@ -494,7 +508,15 @@ func cmdMe(cl *client, jsonOut bool) error {
 
 func cmdRepo(args []string, host, token string, jsonOut bool) error {
 	if len(args) == 0 {
-		return errors.New("usage: gitdash-cli repo <list|create|gc>")
+		return errors.New("usage: gitdash-cli repo <list|create|gc|delete>")
+	}
+	if helpArg(args[0]) {
+		printCommandHelp("repo", "")
+		return nil
+	}
+	if wantsHelp(args[1:]) {
+		printCommandHelp("repo", args[0])
+		return nil
 	}
 	cl, err := resolveClient(host, token)
 	if err != nil {
@@ -571,14 +593,144 @@ func cmdRepo(args []string, host, token string, jsonOut bool) error {
 		}
 		fmt.Printf("GC %s/%s: %d -> %d bytes (freed %d)\n", owner, repo, out.BeforeBytes, out.AfterBytes, out.FreedBytes)
 		return nil
+	case "delete", "rm":
+		owner, repo, rest, err := needRepoThenFlags(args[1:])
+		if err != nil {
+			return err
+		}
+		fs := flag.NewFlagSet("repo delete", flag.ContinueOnError)
+		yes := fs.Bool("yes", false, "skip the confirmation prompt")
+		fs.BoolVar(yes, "y", false, "alias of --yes")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if !*yes {
+			ok, err := confirm(os.Stdin, term.IsTerminal(int(os.Stdin.Fd())),
+				fmt.Sprintf("Delete %s/%s? This cannot be undone.", owner, repo))
+			if err != nil {
+				return err
+			}
+			if !ok {
+				fmt.Println("Aborted.")
+				return nil
+			}
+		}
+		if err := cl.do(http.MethodDelete, fmt.Sprintf("/users/%s/repos/%s", owner, repo), nil, "", nil); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted repository %s/%s\n", owner, repo)
+		return nil
 	default:
 		return fmt.Errorf("unknown repo subcommand %q", args[0])
 	}
 }
 
+func cmdProject(args []string, host, token string, jsonOut bool) error {
+	if len(args) == 0 {
+		return errors.New("usage: gitdash-cli project <list|create|delete> <owner/repo>")
+	}
+	if helpArg(args[0]) {
+		printCommandHelp("project", "")
+		return nil
+	}
+	if wantsHelp(args[1:]) {
+		printCommandHelp("project", args[0])
+		return nil
+	}
+	cl, err := resolveClient(host, token)
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "list", "ls":
+		owner, repo, err := needRepo(args[1:])
+		if err != nil {
+			return err
+		}
+		var projects []struct {
+			ID          int64  `json:"id"`
+			Owner       string `json:"owner"`
+			Repo        string `json:"repo"`
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			CardCount   int    `json:"card_count"`
+			CreatedAt   string `json:"created_at"`
+		}
+		if err := cl.get(fmt.Sprintf("/users/%s/repos/%s/projects", owner, repo), &projects); err != nil {
+			return err
+		}
+		if jsonOut {
+			printJSON(projects)
+			return nil
+		}
+		if len(projects) == 0 {
+			fmt.Println("No projects.")
+			return nil
+		}
+		for _, p := range projects {
+			fmt.Printf("#%-4d %-30s cards:%-3d %s\n", p.ID, p.Name, p.CardCount, p.Description)
+		}
+		return nil
+	case "create":
+		owner, repo, rest, err := needRepoThenFlags(args[1:])
+		if err != nil {
+			return err
+		}
+		fs := flag.NewFlagSet("project create", flag.ContinueOnError)
+		name := fs.String("name", "", "project name")
+		description := fs.String("description", "", "project description")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if strings.TrimSpace(*name) == "" {
+			return errors.New("usage: gitdash-cli project create <owner/repo> --name <name> [--description <text>]")
+		}
+		var out map[string]any
+		if err := cl.postJSON(fmt.Sprintf("/users/%s/repos/%s/projects", owner, repo), map[string]any{
+			"name":        *name,
+			"description": *description,
+		}, &out); err != nil {
+			return err
+		}
+		if jsonOut {
+			printJSON(out)
+			return nil
+		}
+		fmt.Printf("Created project #%v %q in %s/%s\n", out["id"], out["name"], owner, repo)
+		return nil
+	case "delete", "rm":
+		owner, repo, err := needRepo(args[1:])
+		if err != nil {
+			return err
+		}
+		if len(args) < 3 {
+			return errors.New("usage: gitdash-cli project delete <owner/repo> <project-id>")
+		}
+		id, err := strconv.ParseInt(args[2], 10, 64)
+		if err != nil || id < 1 {
+			return errors.New("invalid project id")
+		}
+		if err := cl.do(http.MethodDelete, fmt.Sprintf("/users/%s/repos/%s/projects/%d", owner, repo, id), nil, "", nil); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted project #%d from %s/%s\n", id, owner, repo)
+		return nil
+	default:
+		return fmt.Errorf("unknown project subcommand %q", args[0])
+	}
+}
+
 func cmdIssue(args []string, host, token string, jsonOut bool) error {
 	if len(args) == 0 {
-		return errors.New("usage: gitdash-cli issue <list|create> <owner/repo>")
+		return errors.New("usage: gitdash-cli issue <list|create|fix|delete> <owner/repo>")
+	}
+	if helpArg(args[0]) {
+		printCommandHelp("issue", "")
+		return nil
+	}
+	if wantsHelp(args[1:]) {
+		printCommandHelp("issue", args[0])
+		return nil
 	}
 	cl, err := resolveClient(host, token)
 	if err != nil {
@@ -638,6 +790,23 @@ func cmdIssue(args []string, host, token string, jsonOut bool) error {
 		return nil
 	case "fix":
 		return cmdCopilotFix(cl, args[1:], jsonOut)
+	case "delete", "rm":
+		owner, repo, err := needRepo(args[1:])
+		if err != nil {
+			return err
+		}
+		if len(args) < 3 {
+			return errors.New("usage: gitdash-cli issue delete <owner/repo> <issue-number>")
+		}
+		number, err := strconv.ParseInt(strings.TrimSpace(args[2]), 10, 64)
+		if err != nil || number < 1 {
+			return errors.New("invalid issue number")
+		}
+		if err := cl.do(http.MethodDelete, fmt.Sprintf("/users/%s/repos/%s/issues/%d", owner, repo, number), nil, "", nil); err != nil {
+			return err
+		}
+		fmt.Printf("Deleted issue #%d from %s/%s\n", number, owner, repo)
+		return nil
 	default:
 		return fmt.Errorf("unknown issue subcommand %q", args[0])
 	}
@@ -646,6 +815,14 @@ func cmdIssue(args []string, host, token string, jsonOut bool) error {
 // ---- skill（Agent Skills：Claude Code / opencode / pi 共用 SKILL.md 约定）----
 
 func cmdSkill(args []string) error {
+	if len(args) > 0 && helpArg(args[0]) {
+		printCommandHelp("skill", "")
+		return nil
+	}
+	if len(args) > 0 && wantsHelp(args[1:]) {
+		printCommandHelp("skill", args[0])
+		return nil
+	}
 	if len(args) == 0 {
 		args = []string{"show"}
 	}
@@ -715,6 +892,14 @@ func installSkill(target string, project bool, dir string) error {
 func cmdPr(args []string, host, token string, jsonOut bool) error {
 	if len(args) == 0 {
 		return errors.New("usage: gitdash-cli pr <list|create> <owner/repo>")
+	}
+	if helpArg(args[0]) {
+		printCommandHelp("pr", "")
+		return nil
+	}
+	if wantsHelp(args[1:]) {
+		printCommandHelp("pr", args[0])
+		return nil
 	}
 	cl, err := resolveClient(host, token)
 	if err != nil {
@@ -802,6 +987,14 @@ type copilotSession struct {
 func cmdCopilot(args []string, host, token string, jsonOut bool) error {
 	if len(args) == 0 {
 		return errors.New("usage: gitdash-cli copilot <list|create|run|fix> <owner/repo>")
+	}
+	if helpArg(args[0]) {
+		printCommandHelp("copilot", "")
+		return nil
+	}
+	if wantsHelp(args[1:]) {
+		printCommandHelp("copilot", args[0])
+		return nil
 	}
 	cl, err := resolveClient(host, token)
 	if err != nil {
@@ -1098,6 +1291,239 @@ func firstLine(s string, max int) string {
 		s = s[:max] + "…"
 	}
 	return s
+}
+
+// ---- help ----
+
+// helpArg 判断单个参数是否为帮助请求。
+func helpArg(s string) bool {
+	return s == "help" || s == "-h" || s == "--help"
+}
+
+// wantsHelp 判断子命令参数是否请求帮助：-h/--help 出现在任意位置，或首个 token 为 help。
+func wantsHelp(args []string) bool {
+	for i, a := range args {
+		if a == "-h" || a == "--help" || (i == 0 && a == "help") {
+			return true
+		}
+	}
+	return false
+}
+
+// helpFlag 描述一个 flag：name 含前缀与占位符（如 "--private"、"--body <text>"）。
+type helpFlag struct {
+	name string
+	desc string
+}
+
+// helpSub 描述一个子命令的用法、一行说明与 flag。
+type helpSub struct {
+	name  string
+	usage string // "gitdash-cli <cmd> " 之后的用法片段
+	desc  string
+	flags []helpFlag
+}
+
+// helpCmd 描述一个命令组；aliases 为别名到规范子命令名的映射。
+type helpCmd struct {
+	name    string
+	desc    string
+	aliases map[string]string
+	subs    []helpSub
+}
+
+// helpSpecs 是命令/子命令帮助的唯一事实来源，供帮助输出与测试校验共用。
+var helpSpecs = []helpCmd{
+	{
+		name:    "repo",
+		desc:    "manage repositories",
+		aliases: map[string]string{"ls": "list", "rm": "delete"},
+		subs: []helpSub{
+			{name: "list", usage: "list", desc: "List repositories you own or can access."},
+			{name: "create", usage: "create [flags] <name>", desc: "Create a repository.", flags: []helpFlag{
+				{name: "--private", desc: "make the repository private (default true)"},
+				{name: "--description <text>", desc: "repository description"},
+			}},
+			{name: "gc", usage: "gc <owner/repo>", desc: "Run git gc on the repository and reclaim disk space."},
+			{name: "delete", usage: "delete <owner/repo> [flags]", desc: "Delete a repository (permanent).", flags: []helpFlag{
+				{name: "--yes, -y", desc: "skip the confirmation prompt"},
+			}},
+		},
+	},
+	{
+		name:    "project",
+		desc:    "manage kanban projects",
+		aliases: map[string]string{"ls": "list", "rm": "delete"},
+		subs: []helpSub{
+			{name: "list", usage: "list <owner/repo>", desc: "List kanban projects in a repository."},
+			{name: "create", usage: "create <owner/repo> --name <name> [--description <text>]",
+				desc: "Create a kanban project (initialized with the columns To Do / In Progress / Done)."},
+			{name: "delete", usage: "delete <owner/repo> <project-id>",
+				desc: "Delete a project and all its columns, swimlanes and cards."},
+		},
+	},
+	{
+		name:    "issue",
+		desc:    "manage issues",
+		aliases: map[string]string{"ls": "list"},
+		subs: []helpSub{
+			{name: "list", usage: "list <owner/repo>", desc: "List issues in a repository."},
+			{name: "create", usage: "create <owner/repo> --title <t> [--body <b>]", desc: "Create an issue.", flags: []helpFlag{
+				{name: "--title <text>", desc: "issue title (required)"},
+				{name: "--body <text>", desc: "issue body"},
+			}},
+			{name: "fix", usage: "fix <owner/repo> <issue-number> [flags]", desc: "Have the copilot agent fix an issue.", flags: []helpFlag{
+				{name: "--byok <name|id>", desc: "BYOK key name or id (default: the only configured key)"},
+				{name: "--instructions <text>", desc: "extra instructions for the agent"},
+				{name: "--detach", desc: "create the session but do not run the agent"},
+			}},
+			{name: "delete", usage: "delete <owner/repo> <issue-number>", desc: "Delete an issue."},
+		},
+	},
+	{
+		name:    "pr",
+		desc:    "manage pull requests",
+		aliases: map[string]string{"ls": "list"},
+		subs: []helpSub{
+			{name: "list", usage: "list <owner/repo>", desc: "List pull requests in a repository."},
+			{name: "create", usage: "create <owner/repo> --title <t> --head <branch> --base <branch> [--body <b>]",
+				desc: "Create a pull request.", flags: []helpFlag{
+					{name: "--title <text>", desc: "pull request title (required)"},
+					{name: "--head <branch>", desc: "source branch (required)"},
+					{name: "--base <branch>", desc: "target branch (required)"},
+					{name: "--body <text>", desc: "pull request body"},
+				}},
+		},
+	},
+	{
+		name:    "copilot",
+		desc:    "manage copilot agent sessions",
+		aliases: map[string]string{"ls": "list"},
+		subs: []helpSub{
+			{name: "list", usage: "list <owner/repo>", desc: "List copilot sessions in a repository."},
+			{name: "create", usage: "create <owner/repo> [flags]", desc: "Create a copilot session.", flags: []helpFlag{
+				{name: "--byok <name|id>", desc: "BYOK key name or id (default: the only configured key)"},
+				{name: "--issue <n>", desc: "link an issue by number"},
+				{name: "--prompt <text>", desc: "extra instructions for the agent"},
+			}},
+			{name: "run", usage: "run <owner/repo> <session-id> [flags]", desc: "Send a message to a session.", flags: []helpFlag{
+				{name: "--text <message>", desc: "message to send to the agent (default: the session prompt)"},
+				{name: "--timeout <dur>", desc: "max time to wait for the turn (default 30m)"},
+			}},
+			{name: "fix", usage: "fix <owner/repo> <issue-number> [flags]", desc: "Create a session to fix an issue.", flags: []helpFlag{
+				{name: "--byok <name|id>", desc: "BYOK key name or id (default: the only configured key)"},
+				{name: "--instructions <text>", desc: "extra instructions for the agent"},
+				{name: "--detach", desc: "create the session but do not run the agent"},
+				{name: "--timeout <dur>", desc: "max time to wait for the turn (default 30m)"},
+			}},
+		},
+	},
+	{
+		name:    "skill",
+		desc:    "manage the embedded Agent Skill",
+		aliases: map[string]string{"print": "show", "cat": "show"},
+		subs: []helpSub{
+			{name: "show", usage: "show", desc: "Print the embedded Agent Skill (SKILL.md)."},
+			{name: "install", usage: "install [flags]", desc: "Install the skill for Claude Code / opencode / pi.", flags: []helpFlag{
+				{name: "--target <name>", desc: "target harness: claude | agents | opencode | pi | all (default all)"},
+				{name: "--project", desc: "install into the current project (./.claude/skills, ./.agents/skills)"},
+				{name: "--dir <path>", desc: "custom parent skills directory (overrides --target/--project)"},
+			}},
+		},
+	},
+}
+
+// printCommandHelp 打印命令或子命令的帮助；sub 为空或未知时打印该命令总览。
+func printCommandHelp(cmd, sub string) {
+	c := findHelpCmd(cmd)
+	if c == nil {
+		usage()
+		return
+	}
+	if sub != "" {
+		if s := findHelpSub(c, sub); s != nil {
+			printSubHelp(c, s)
+			return
+		}
+	}
+	printCmdHelp(c)
+}
+
+// findHelpCmd 按名称查找命令帮助规格。
+func findHelpCmd(name string) *helpCmd {
+	for i := range helpSpecs {
+		if helpSpecs[i].name == name {
+			return &helpSpecs[i]
+		}
+	}
+	return nil
+}
+
+// confirm 在终端询问 yes/no。非交互环境（isTTY=false）拒绝并返回错误，
+// 需调用方改用 --yes（避免无 TTY 时卡死或误删）。
+func confirm(r io.Reader, isTTY bool, prompt string) (bool, error) {
+	if !isTTY {
+		return false, errors.New("refusing to delete without confirmation; pass --yes (or -y)")
+	}
+	fmt.Printf("%s [y/N] ", prompt)
+	line, err := bufio.NewReader(r).ReadString('\n')
+	if err != nil {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	}
+	return false, nil
+}
+
+// findHelpSub 在命令内查找子命令（先做别名归一化）。
+func findHelpSub(c *helpCmd, sub string) *helpSub {
+	if canon, ok := c.aliases[sub]; ok {
+		sub = canon
+	}
+	for i := range c.subs {
+		if c.subs[i].name == sub {
+			return &c.subs[i]
+		}
+	}
+	return nil
+}
+
+// printCmdHelp 打印命令总览。
+func printCmdHelp(c *helpCmd) {
+	names := make([]string, 0, len(c.subs))
+	w := 0
+	for _, s := range c.subs {
+		names = append(names, s.name)
+		if len(s.usage) > w {
+			w = len(s.usage)
+		}
+	}
+	fmt.Printf("gitdash-cli %s — %s\n\n", c.name, c.desc)
+	fmt.Printf("Usage: gitdash-cli %s <%s> [flags]\n\n", c.name, strings.Join(names, "|"))
+	for _, s := range c.subs {
+		fmt.Printf("  %-*s  %s\n", w, s.usage, s.desc)
+	}
+	fmt.Printf("\nRun 'gitdash-cli %s <subcommand> --help' for details.\n", c.name)
+}
+
+// printSubHelp 打印子命令用法。
+func printSubHelp(c *helpCmd, s *helpSub) {
+	fmt.Printf("Usage: gitdash-cli %s %s\n\n%s\n", c.name, s.usage, s.desc)
+	if len(s.flags) == 0 {
+		return
+	}
+	w := 0
+	for _, f := range s.flags {
+		if len(f.name) > w {
+			w = len(f.name)
+		}
+	}
+	fmt.Println("\nFlags:")
+	for _, f := range s.flags {
+		fmt.Printf("  %-*s  %s\n", w, f.name, f.desc)
+	}
 }
 
 // ---- helpers ----
