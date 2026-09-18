@@ -76,6 +76,12 @@ func (s *Store) DeleteAdminSession(token string) error {
 	return s.db.Where("token = ?", token).Delete(&adminSessionRow{}).Error
 }
 
+// DeleteAdminSessionsExcept 摧销管理员除 keepToken 外的全部会话（改密后调用）。
+func (s *Store) DeleteAdminSessionsExcept(adminID int64, keepToken string) error {
+	return s.db.Where("admin_id = ? AND token <> ?", adminID, keepToken).
+		Delete(&adminSessionRow{}).Error
+}
+
 func (s *Store) GetSetting(key string) string {
 	var row settingRow
 	if err := s.db.Where("\"key\" = ?", key).First(&row).Error; err != nil {

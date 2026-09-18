@@ -240,6 +240,14 @@ func (a *API) adminChangePassword(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	// 改密后摧销其它管理端会话，仅保留当前会话（与用户改密语义一致）。
+	token := ""
+	if c, err := r.Cookie(adminCookie); err == nil {
+		token = c.Value
+	}
+	if bt := bearerToken(r); bt != "" {
+		token = bt
+	}
+	_ = a.store.DeleteAdminSessionsExcept(id, token)
 	w.WriteHeader(http.StatusNoContent)
-	_ = id
 }
