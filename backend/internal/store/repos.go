@@ -189,6 +189,7 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			cond  string
 		}{
 			{&issueRow{}, "owner = ? AND repo = ?"},
+			{&repoCounterRow{}, "owner = ? AND repo = ?"},
 			{&repoLabelRow{}, "owner = ? AND repo = ?"},
 			{&milestoneRow{}, "owner = ? AND repo = ?"},
 			{&starRow{}, "owner = ? AND repo = ?"},

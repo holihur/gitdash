@@ -71,7 +71,7 @@ func (s *Store) DeleteUserAccount(username string) error {
 		}
 		// --- 按 owner 归属的全部仓库关联数据（补齐 DeleteRepo 未覆盖的表）---
 		ownerTables := []any{
-			&repoTopicRow{}, &issueRow{}, &commentRow{}, &repoLabelRow{}, &milestoneRow{},
+			&repoCounterRow{}, &repoTopicRow{}, &issueRow{}, &commentRow{}, &repoLabelRow{}, &milestoneRow{},
 			&projectRow{}, &collabRow{}, &webhookRow{}, &starRow{}, &watchRow{},
 			&notificationRow{}, &forkRow{}, &importRow{}, &mirrorRow{}, &pullRequestRow{},
 			&pullReviewRow{}, &branchProtectionRow{}, &pipelineCfgRow{}, &pipelineRunRow{},

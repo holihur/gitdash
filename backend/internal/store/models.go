@@ -53,6 +53,17 @@ type repoRow struct {
 
 func (repoRow) TableName() string { return "repos" }
 
+// repoCounterRow 是仓库级单调递增计数器（issue / PR 编号）。
+// 独立于业务表持久化：删除对应记录后编号不回退、不复用（与 GitHub 行为一致）。
+type repoCounterRow struct {
+	Owner string `gorm:"primaryKey;size:255"`
+	Repo  string `gorm:"primaryKey;size:255"`
+	Kind  string `gorm:"primaryKey;size:32"`
+	Value int64  `gorm:"not null;default:0"`
+}
+
+func (repoCounterRow) TableName() string { return "repo_counters" }
+
 // repoTopicRow 仓库话题/标签（一个仓库可挂多个 topic，用于 Explore 按标签搜索）。
 type repoTopicRow struct {
 	Owner string `gorm:"primaryKey;size:255"`

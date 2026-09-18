@@ -22,6 +22,7 @@ func TestPGSmoke(t *testing.T) {
 	// 幂等：清空相关表
 	for _, tbl := range []string{
 		"registry_manifests", "packages", "login_fails", "settings",
+		"repo_counters", "issues", "pull_requests",
 		"repo_stars", "repo_watches", "sessions", "repos", "org_members", "orgs", "users",
 	} {
 		if derr := s.DB().Exec("DELETE FROM " + tbl).Error; derr != nil {
@@ -48,6 +49,38 @@ func TestPGSmoke(t *testing.T) {
 	// 唯一冲突 → ErrExists
 	if _, err := s.CreateRepo("alice", "ci", "", false); !errors.Is(err, store.ErrExists) {
 		t.Fatalf("duplicate repo err = %v, want ErrExists", err)
+	}
+
+	// 仓库级编号计数器：INSERT ... ON CONFLICT ... RETURNING 在 PG 上原子自增，删空后不复用
+	var lastIssue int64
+	for i := int64(1); i <= 3; i++ {
+		it, err := s.CreateIssue("alice", "ci", "alice", "t", "b")
+		if err != nil {
+			t.Fatalf("create issue %d: %v", i, err)
+		}
+		if it.Number != i {
+			t.Fatalf("issue number = %d, want %d", it.Number, i)
+		}
+		lastIssue = it.Number
+	}
+	for n := int64(1); n <= lastIssue; n++ {
+		if err := s.DeleteIssue("alice", "ci", n); err != nil {
+			t.Fatalf("delete issue %d: %v", n, err)
+		}
+	}
+	it, err := s.CreateIssue("alice", "ci", "alice", "after", "b")
+	if err != nil {
+		t.Fatalf("create issue after delete: %v", err)
+	}
+	if it.Number != lastIssue+1 {
+		t.Fatalf("issue number reset on PG: got %d, want %d", it.Number, lastIssue+1)
+	}
+	pr, err := s.CreatePull("alice", "ci", "alice", "t", "b", "feat", "main", "", "", false)
+	if err != nil {
+		t.Fatalf("create pull: %v", err)
+	}
+	if pr.Number != 1 {
+		t.Fatalf("pr number = %d, want 1", pr.Number)
 	}
 
 	// 会话

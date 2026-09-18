@@ -28,38 +28,28 @@ func (s *Store) getPull(owner, repo string, number int64) (PullRequest, error) {
 }
 
 func (s *Store) CreatePull(owner, repo, author, title, body, source, target, baseSHA, headSHA string, draft bool) (PullRequest, error) {
-	var pr PullRequest
 	now := now()
-	var err error
-	// 号码在同一仓库内递增；并发冲突时重试（UNIQUE(owner, repo, number)）
-	for attempt := 0; attempt < 5; attempt++ {
-		var max int64
-		if e := s.db.Raw(`SELECT COALESCE(MAX(number), 0) + 1 FROM pull_requests WHERE owner = ? AND repo = ?`,
-			owner, repo).Scan(&max).Error; e != nil {
-			return pr, e
-		}
-		r := pullRequestRow{
-			Owner: owner, Repo: repo, Number: max,
-			Title: title, Body: body,
-			SourceBranch: source, TargetBranch: target,
-			BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Draft: draft, Author: author,
-			CreatedAt: now, UpdatedAt: now,
-		}
-		e := s.db.Create(&r).Error
-		if e == nil {
-			return PullRequest{
-				ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
-				Title: title, Body: body, SourceBranch: source, TargetBranch: target,
-				BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Draft: draft, Author: author,
-				CreatedAt: now, UpdatedAt: now,
-			}, nil
-		}
-		if !isUniqueErr(e) {
-			return pr, e
-		}
-		err = e
+	// 号码由仓库级持久计数器分配：同一仓库内单调递增，删除后不复用。
+	number, err := s.nextNumber(owner, repo, counterPR)
+	if err != nil {
+		return PullRequest{}, err
 	}
-	return pr, err
+	r := pullRequestRow{
+		Owner: owner, Repo: repo, Number: number,
+		Title: title, Body: body,
+		SourceBranch: source, TargetBranch: target,
+		BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Draft: draft, Author: author,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.db.Create(&r).Error; err != nil {
+		return PullRequest{}, err
+	}
+	return PullRequest{
+		ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
+		Title: title, Body: body, SourceBranch: source, TargetBranch: target,
+		BaseSHA: baseSHA, HeadSHA: headSHA, State: "open", Draft: draft, Author: author,
+		CreatedAt: now, UpdatedAt: now,
+	}, nil
 }
 
 // GetPullIssue 按仓库内序号取 issue（供 label/milestone 更新后回读）。

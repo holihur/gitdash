@@ -31,33 +31,23 @@ func (s *Store) getIssue(owner, repo string, number int64) (Issue, error) {
 }
 
 func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, error) {
-	var it Issue
-	var err error
 	now := now()
-	// 号码在同一仓库内递增；并发冲突时重试（UNIQUE(owner, repo, number)）
-	for attempt := 0; attempt < 5; attempt++ {
-		var max int64
-		if e := s.db.Raw(`SELECT COALESCE(MAX(number), 0) + 1 FROM issues WHERE owner = ? AND repo = ?`,
-			owner, repo).Scan(&max).Error; e != nil {
-			return it, e
-		}
-		r := issueRow{
-			Owner: owner, Repo: repo, Number: max,
-			Title: title, Body: body, State: "open", Author: author,
-			CreatedAt: now, UpdatedAt: now,
-		}
-		e := s.db.Create(&r).Error
-		if e == nil {
-			return Issue{ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
-				Title: title, Body: body, State: "open", Author: author,
-				CreatedAt: now, UpdatedAt: now}, nil
-		}
-		if !isUniqueErr(e) {
-			return it, e
-		}
-		err = e
+	// 号码由仓库级持久计数器分配：同一仓库内单调递增，删除后不复用。
+	number, err := s.nextNumber(owner, repo, counterIssue)
+	if err != nil {
+		return Issue{}, err
 	}
-	return it, err
+	r := issueRow{
+		Owner: owner, Repo: repo, Number: number,
+		Title: title, Body: body, State: "open", Author: author,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.db.Create(&r).Error; err != nil {
+		return Issue{}, err
+	}
+	return Issue{ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
+		Title: title, Body: body, State: "open", Author: author,
+		CreatedAt: now, UpdatedAt: now}, nil
 }
 
 // ListIssues 分页列出 issue；limit<=0 表示不限制。
