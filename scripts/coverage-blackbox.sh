@@ -26,15 +26,26 @@ touch "$ROOT/backend/internal/webui/dist/.gitkeep"
 rm -rf "$COV_DIR" "$OUT"
 mkdir -p "$COV_DIR"
 
-# 3) 跑黑盒 API 测试（conftest 自启的实例继承 GOCOVERDIR；
+ROUTE_API=/tmp/gitdash-route-coverage-api.txt
+ROUTE_UI=/tmp/gitdash-route-coverage-ui.txt
+
+# 3) 跑黑盒 API 测试（conftest 自启的实例继承 GOCOVERDIR 与路由覆盖文件；
 #    显式覆盖环境变量里的镜像（防 403），统一走阿里云源）
+rm -f "$ROUTE_API"
 (cd "$ROOT/tests" && \
   UV_DEFAULT_INDEX="https://mirrors.aliyun.com/pypi/simple/" UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple/" \
-  GOCOVERDIR="$COV_DIR" GITDASH_BIN="$BIN" uv run pytest -q)
+  GOCOVERDIR="$COV_DIR" GITDASH_ROUTE_COVERAGE_FILE="$ROUTE_API" GITDASH_BIN="$BIN" uv run pytest -q)
+
+# 3b) 端点覆盖率门禁：每个 API 路由至少被黑盒测试命中一次
+python3 "$ROOT/scripts/route-coverage.py" "$ROUTE_API" --min 100
 
 # 4) 跑黑盒 UI 测试（fixture 自启的实例继承 GOCOVERDIR；SIGTERM 优雅退出后落盘）
+rm -f "$ROUTE_UI"
 (cd "$ROOT/tests/ui" && npm install >/dev/null 2>&1)
-(cd "$ROOT/tests/ui" && GOCOVERDIR="$COV_DIR" GITDASH_BIN="$BIN" npx playwright test)
+(cd "$ROOT/tests/ui" && GOCOVERDIR="$COV_DIR" GITDASH_ROUTE_COVERAGE_FILE="$ROUTE_UI" GITDASH_BIN="$BIN" npx playwright test)
+
+# 4b) UI 端点覆盖率（页面操作驱动的 API 调用）；暂仅报告，阶段推进后再收紧门禁
+python3 "$ROOT/scripts/route-coverage.py" "$ROUTE_UI" --min 0 || true
 
 # 5) 汇总
 (cd "$ROOT/backend" && go tool covdata percent -i="$COV_DIR" | tail -1)

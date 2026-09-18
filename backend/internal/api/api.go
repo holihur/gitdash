@@ -111,6 +111,10 @@ type API struct {
 	gpgMu     sync.Mutex
 	gpgKeys   []gpgsig.Key
 	gpgKeysAt time.Time // GPG 公钥 TTL 缓存，避免 commits 页每请求全量加载
+
+	// routePatterns 是 Handler 注册的全部路由 pattern（RouteMux 记录），
+	// 供黑盒端点覆盖检查使用。
+	routePatterns []string
 }
 
 const gpgKeysCacheTTL = 30 * time.Second
@@ -215,7 +219,7 @@ func userFrom(r *http.Request) string {
 }
 
 func (a *API) Handler(staticDir string) http.Handler {
-	mux := http.NewServeMux()
+	mux := newRouteMux()
 
 	// auth providers (public) & github oauth
 	mux.HandleFunc("GET /api/auth/providers", a.providers)
@@ -641,7 +645,24 @@ func (a *API) Handler(staticDir string) http.Handler {
 		mux.HandleFunc("/", a.embeddedHandler())
 	}
 
-	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(mux)))))
+	a.routePatterns = mux.Routes()
+	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(routeCoverage(mux))))))
+}
+
+// routeCoverage optionally installs the black-box route-hit recorder. It is a
+// no-op (returns the mux unchanged) unless GITDASH_ROUTE_COVERAGE_FILE is set.
+func routeCoverage(mux *routeMux) http.Handler {
+	file := os.Getenv("GITDASH_ROUTE_COVERAGE_FILE")
+	if file == "" {
+		return mux
+	}
+	return newRouteRecorder(mux, file, mux.Routes())
+}
+
+// Routes returns the route patterns registered by Handler, de-duplicated and
+// sorted. Call Handler first; the list is populated during registration.
+func (a *API) Routes() []string {
+	return append([]string(nil), a.routePatterns...)
 }
 
 // csrfGuard 校验跨站请求：带 Origin 的非安全方法必须与本站同源（cookie 会话的 CSRF 防线）。

@@ -163,6 +163,11 @@ jobs:
           GITDASH_AGENT_BIN: /tmp/agent
           GITDASH_CLI_BIN: /tmp/gitdash-cli
           GOCOVERDIR: /tmp/gocover-api
+          GITDASH_ROUTE_COVERAGE_FILE: /tmp/route-coverage-api.txt
+
+      # 端点覆盖率门禁：每个 API 路由（/api、/login、/v2、/metrics）至少命中一次。
+      - name: Enforce black-box API endpoint coverage (100%)
+        run: python3 scripts/route-coverage.py /tmp/route-coverage-api.txt --min 100
 
       # email MFA happy path：单独实例 + pytest 进程内的本地 SMTP sink（见 test_email_mfa.py）
       - name: Run email MFA black-box tests (SMTP sink)
@@ -173,6 +178,7 @@ jobs:
           GITDASH_SMTP_HOST: 127.0.0.1
           GITDASH_SMTP_PORT: 8925
           GOCOVERDIR: /tmp/gocover-api
+          GITDASH_ROUTE_COVERAGE_FILE: /tmp/route-coverage-api.txt
 
       - name: Report black-box (API) coverage
         working-directory: backend
