@@ -68,6 +68,25 @@ func TestCleanPath(t *testing.T) {
 	}
 }
 
+func TestIsEmptyRepo(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "empty"); err != nil {
+		t.Fatal(err)
+	}
+	if !IsEmptyRepo("alice", "empty") {
+		t.Fatal("freshly created bare repo should be empty")
+	}
+	if err := InitTemplate("alice", "empty"); err != nil {
+		t.Fatal(err)
+	}
+	if IsEmptyRepo("alice", "empty") {
+		t.Fatal("repo with an initial commit should not be empty")
+	}
+}
+
 func TestForkRepoPreservesRefs(t *testing.T) {
 	dir := t.TempDir()
 	if err := Init(dir); err != nil {

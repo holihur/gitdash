@@ -139,11 +139,23 @@ func TestCodeBrowsing(t *testing.T) {
 		t.Fatalf("clamped commits = %+v", cs)
 	}
 
-	// 空仓库
+	// 空仓库：浏览接口应返回空结果，而不是泄漏原始 git 报错
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "empty"}, 201)
 	if bs := getJSON[[]Branch](t, alice, "/repos/empty/branches", 200); len(bs) != 0 {
 		t.Fatalf("empty repo branches = %+v", bs)
 	}
+	// ref 省略时回退到默认分支（main），空仓库仍返回空目录
+	if et := getJSON[map[string]any](t, alice, "/repos/empty/tree", 200); len(et["entries"].([]any)) != 0 {
+		t.Fatalf("empty repo tree = %v", et)
+	}
+	if et := getJSON[map[string]any](t, alice, "/repos/empty/tree?ref=main", 200); len(et["entries"].([]any)) != 0 {
+		t.Fatalf("empty repo tree(ref=main) = %v", et)
+	}
+	if cs := getJSON[[]Commit](t, alice, "/repos/empty/commits?ref=main", 200); len(cs) != 0 {
+		t.Fatalf("empty repo commits = %+v", cs)
+	}
+	alice.mustFail("GET", "/repos/empty/blob?ref=main&path=README.md", nil, 404)
+	alice.mustFail("GET", "/repos/empty/blame?ref=main&path=README.md", nil, 404)
 }
 
 func TestBrowsingOwnership(t *testing.T) {

@@ -5,7 +5,19 @@ import (
 	"gitdash/backend/internal/gpgsig"
 	"net/http"
 	"strconv"
+	"strings"
 )
+
+// browseRef 解析浏览用的 ref（分支/标签/commit）；为空时回退到仓库默认分支。
+func (a *API) browseRef(r *http.Request, owner, name string) string {
+	if ref := strings.TrimSpace(r.URL.Query().Get("ref")); ref != "" {
+		return ref
+	}
+	if repo, err := a.store.GetRepo(owner, name); err == nil && repo.DefaultBranch != "" {
+		return repo.DefaultBranch
+	}
+	return "main"
+}
 
 // ---- git browsing ----
 
@@ -56,10 +68,17 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ref := r.URL.Query().Get("ref")
+	ref := a.browseRef(r, owner, name)
 	dir, err := gitsvc.CleanPath(r.URL.Query().Get("path"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	// 空仓库（尚无提交）没有可列举的默认分支：返回空目录而非原始 git 报错。
+	if gitsvc.IsEmptyRepo(owner, name) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"path": dir, "entries": []gitsvc.Entry{}, "truncated": false, "empty": true,
+		})
 		return
 	}
 	entries, err := gitsvc.Tree(owner, name, ref, dir)
@@ -99,8 +118,12 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ref := r.URL.Query().Get("ref")
+	ref := a.browseRef(r, owner, name)
 	file := r.URL.Query().Get("path")
+	if gitsvc.IsEmptyRepo(owner, name) {
+		writeNotFound(w, "file")
+		return
+	}
 	b, err := gitsvc.ReadBlob(owner, name, ref, file)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
@@ -129,7 +152,12 @@ func (a *API) blame(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	b, err := gitsvc.BlameFile(owner, name, r.URL.Query().Get("ref"), r.URL.Query().Get("path"))
+	ref := a.browseRef(r, owner, name)
+	if gitsvc.IsEmptyRepo(owner, name) {
+		writeNotFound(w, "file")
+		return
+	}
+	b, err := gitsvc.BlameFile(owner, name, ref, r.URL.Query().Get("path"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -157,8 +185,13 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	ref := a.browseRef(r, owner, name)
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	cs, err := gitsvc.Commits(owner, name, r.URL.Query().Get("ref"), limit)
+	if gitsvc.IsEmptyRepo(owner, name) {
+		writeJSON(w, http.StatusOK, []commitResp{})
+		return
+	}
+	cs, err := gitsvc.Commits(owner, name, ref, limit)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

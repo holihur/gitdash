@@ -62,6 +62,13 @@ func Exists(owner, name string) bool {
 	return err == nil && fi.IsDir()
 }
 
+// IsEmptyRepo 报告仓库是否尚无任何提交（没有任何分支或标签引用）。
+// 空仓库没有可检出的默认分支，浏览接口应据此返回空结果而非原始 git 报错。
+func IsEmptyRepo(owner, name string) bool {
+	out, err := gitOut(RepoPath(owner, name), "for-each-ref", "--count=1")
+	return err == nil && strings.TrimSpace(out) == ""
+}
+
 func gitOut(dir string, args ...string) (string, error) {
 	if dir != "" {
 		args = append([]string{"-C", dir}, args...)

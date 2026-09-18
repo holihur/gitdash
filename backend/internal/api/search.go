@@ -34,7 +34,11 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	max, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	ref := r.URL.Query().Get("ref")
+	ref := a.browseRef(r, owner, name)
+	if gitsvc.IsEmptyRepo(owner, name) {
+		writeJSON(w, http.StatusOK, []gitsvc.SearchHit{})
+		return
+	}
 	hits, err := gitsvc.Search(owner, name, q, ref, max)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
