@@ -392,6 +392,21 @@ export interface SearchResult {
   text: string;
 }
 
+/** 全局代码搜索结果条目（跨仓库）。 */
+export interface CodeSearchHit {
+  owner: string;
+  repo: string;
+  path: string;
+  line: number;
+  text: string;
+}
+
+export interface CodeSearchResponse {
+  results: CodeSearchHit[];
+  truncated: boolean;
+  repos_searched: number;
+}
+
 export interface ReleaseAsset {
   filename: string;
   size: number;
