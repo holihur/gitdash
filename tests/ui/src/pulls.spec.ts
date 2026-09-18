@@ -8,6 +8,13 @@ import {
   toast,
 } from "./helpers/ui";
 
+async function waitToastsGone(page: import("@playwright/test").Page) {
+  for (let i = 0; i < 60; i++) {
+    if ((await page.locator("[data-sonner-toast]").count()) === 0) return;
+    await page.waitForTimeout(500);
+  }
+}
+
 // 对齐 tests/conftest.py：未配置实例来源（GITDASH_BIN / GITDASH_UI_URL）时整组 skip
 test.skip(
   !hasInstanceSource(),
@@ -57,5 +64,52 @@ test.describe("@happy Pull Request", () => {
     await dialog.locator("#pr-title").fill("same branch pr");
     // source 与 target 都是 main → 提交按钮禁用
     await expect(dialog.getByRole("button", { name: "New pull request" })).toBeDisabled();
+  });
+});
+
+test.describe("@happy Pull Request 详情", () => {
+  test("draft / auto-merge / close / reopen", async ({ page }) => {
+    await registerViaUi(page);
+    const repoName = await createRepoViaUi(page, { template: "readme" });
+    await page.getByRole("link", { name: repoName, exact: true }).click();
+
+    await createBranchViaUi(page, "feat-detail");
+    await addFileViaUi(page, {
+      branch: "feat-detail",
+      path: "detail.txt",
+      content: "detail",
+    });
+
+    await page.getByRole("tab", { name: "Pull Requests" }).click();
+    await page.getByRole("button", { name: "New pull request" }).first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.locator("#pr-title").fill("detail pr");
+    await dialog.locator("#pr-source").selectOption("feat-detail");
+    await dialog.locator("#pr-target").selectOption("main");
+    await dialog.getByRole("button", { name: "New pull request" }).click();
+    await expect(page.getByText("detail pr").first()).toBeVisible();
+
+    // 转草稿 / 标记可评审（POST /pulls/{}/draft）——断言按钮状态而非 toast
+    await waitToastsGone(page);
+    await page.getByRole("button", { name: "Convert to draft" }).click();
+    await expect(page.getByRole("button", { name: "Ready for review" })).toBeVisible();
+
+    await waitToastsGone(page);
+    await page.getByRole("button", { name: "Ready for review" }).click();
+    await expect(page.getByRole("button", { name: "Convert to draft" })).toBeVisible();
+
+    // 关闭 / 重新打开（POST /pulls/{}/state）
+    await waitToastsGone(page);
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Reopen" })).toBeVisible();
+
+    await waitToastsGone(page);
+    await page.getByRole("button", { name: "Reopen" }).click();
+    await expect(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
+
+    // 自动合并放最后：开启后若门禁满足会立即合并（POST /pulls/{}/auto-merge）
+    await waitToastsGone(page);
+    await page.getByRole("button", { name: "Auto-merge", exact: true }).click();
+    await expect(toast(page)).toContainText("Auto-merge enabled");
   });
 });
