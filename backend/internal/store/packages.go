@@ -275,7 +275,10 @@ func (s *Store) ListPackageVersions(owner, typ, name string) ([]Package, error) 
 // ListPackages 列出命名空间下某类型的包（按 name 去重，取最新一条展示）。
 func (s *Store) ListPackages(owner, typ string, limit, offset int) ([]Package, int, error) {
 	var total int64
-	q := s.db.Model(&packageRow{}).Where("owner = ? AND type = ?", owner, typ)
+	q := s.db.Model(&packageRow{}).Where("owner = ?", owner)
+	if typ != "" { // 空类型 = 列出全部类型（管理/概览视图）
+		q = q.Where("type = ?", typ)
+	}
 	if err := q.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
