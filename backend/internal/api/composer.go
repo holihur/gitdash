@@ -83,15 +83,20 @@ func (a *API) composerP2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base := baseURL(r)
-	entries := []map[string]any{}
+	vers := map[string]any{}
 	for _, p := range pkgs {
-		entries = append(entries, map[string]any{
+		vers[p.Version] = map[string]any{
 			"name":    full,
 			"version": p.Version,
 			"dist":    composerDist{Type: "zip", URL: fmt.Sprintf("%s/api/packages/composer/%s/download/%s/%s/%s", base, owner, full, p.Version, p.Filename)},
-		})
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"minified": "composer/2.0", "packages": []any{entries}})
+	// Composer v2 p2 元数据：packages 为对象，键为完整包名（vendor/name），
+	// 值为版本映射，与 packages.json 的单包结构一致。
+	writeJSON(w, http.StatusOK, map[string]any{
+		"minified": "composer/2.0",
+		"packages": map[string]any{full: vers},
+	})
 }
 
 func (a *API) composerDownload(w http.ResponseWriter, r *http.Request) {
