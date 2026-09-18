@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Go unit coverage | `go test ./... -covermode=atomic -coverprofile=…` (Codecov `unittests`) | ~30% | 80% |
 | Black-box API endpoint coverage | pytest with `GITDASH_ROUTE_COVERAGE_FILE` + `scripts/route-coverage.py` | **306/306 (100%)** | 100% |
-| UI (Playwright) endpoint coverage | `scripts/ui-api-coverage.py` (frontend-called endpoints × route hits) | 70/192 (36.5%) | 100% of the UI-reachable surface |
+| UI (Playwright) endpoint coverage | `scripts/ui-api-coverage.py` (frontend-called endpoints × route hits) | 78/192 (40.6%) | 100% of the UI-reachable surface |
 
 The endpoint metrics are *route-hit* coverage: every registered `http.ServeMux`
 pattern that receives at least one request. `internal/api/routecov.go` wraps the
@@ -59,7 +59,7 @@ Or all of it at once: `bash scripts/coverage-blackbox.sh`.
    Route inventory/recorder, checker script, CI gate at 100% for black-box API
    tests; probe untested endpoints and fix what they expose.
 2. **Stage 2 — UI endpoint coverage (in progress).** The UI-reachable surface is
-extracted from the frontend (192 endpoints); Playwright covers 70 (36.5%) today.
+extracted from the frontend (192 endpoints); Playwright covers 78 (40.6%) today.
 Add page flows in batches (repo settings, projects, pipeline, pulls, copilot,
 deletes) until the surface is 100%; CI reports it non-blocking meanwhile.
 3. **Stage 3 — Go unit coverage ramp.** Raise unit coverage package by package

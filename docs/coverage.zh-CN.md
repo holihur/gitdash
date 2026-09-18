@@ -9,7 +9,7 @@
 |---|---|---|---|
 | Go 单测覆盖率 | `go test ./... -covermode=atomic -coverprofile=…`（Codecov `unittests`） | ~30% | 80% |
 | 黑盒 API 端点覆盖率 | pytest 设 `GITDASH_ROUTE_COVERAGE_FILE` + `scripts/route-coverage.py` | **306/306（100%）** | 100% |
-| UI（Playwright）端点覆盖率 | `scripts/ui-api-coverage.py`（前端调用的端点 × 路由命中） | 70/192（36.5%） | UI 可达面的 100% |
+| UI（Playwright）端点覆盖率 | `scripts/ui-api-coverage.py`（前端调用的端点 × 路由命中） | 78/192（40.6%） | UI 可达面的 100% |
 
 端点指标是**路由命中**覆盖：每个注册到 `http.ServeMux` 的 pattern 至少被请求
 命中一次。`internal/api/routecov.go` 包装 mux，记录清单（`route<TAB>pattern`）
@@ -54,7 +54,7 @@ python3 scripts/ui-api-coverage.py --src frontend/src --coverage /tmp/routes-ui.
    路由清单/命中记录、检查脚本、CI 对黑盒 API 门禁 100%；探测未覆盖端点并修
    掉暴露的问题。
 2. **阶段 2 —— UI 端点覆盖（进行中）。** 从前端提取 UI 可达面（当前 192 个端
-   点），Playwright 已覆盖 70 个（36.5%）。按批次补页面流程（仓库设置、项目看
+   点），Playwright 已覆盖 78 个（40.6%）。按批次补页面流程（仓库设置、项目看
    板、流水线、PR、copilot、删除类），直到该面 100%；CI 暂以报告形式非阻断。
 3. **阶段 3 —— Go 单测爬坡。** 按包提升单测（先 gitsvc / store / api），为每
    个已发现缺陷补回归测试。
