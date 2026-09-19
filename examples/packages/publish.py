@@ -227,7 +227,7 @@ def cargo() -> None:
     ).encode() + b"\n"
     base = f"/api/packages/cargo/{USER}"
     cfg = json_body(f"{base}/config.json")
-    request("PUT", f"{base}/api/v1/crates/new", meta + crate, None, 201)
+    request("PUT", f"{base}/api/v1/crates/new", meta + crate, None, (200, 201))
     _, index = request("GET", f"{base}/index/{name[:2]}/{name[2:4]}/{name}", expect=200)
     assert json.loads(index.decode().splitlines()[0])["vers"] == "0.1.0"
     _, got = request("GET", f"{cfg['dl']}/{name}/0.1.0/{name}-0.1.0.crate", expect=200)

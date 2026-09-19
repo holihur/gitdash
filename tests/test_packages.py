@@ -160,7 +160,7 @@ def test_cargo_publish_index_download(base_url, pkg_user):
     crate_bytes = b"crate-tarball"
     meta = f'{{"name":"{crate}","vers":"0.1.0","deps":[],"cksum":"","features":{{}}}}\n'.encode()
     r = requests.put(f"{base}/api/v1/crates/new", data=meta + crate_bytes, headers=h, timeout=10)
-    assert r.status_code == 201
+    assert r.status_code == 200  # cargo requires 200, not 201
 
     idx = requests.get(f"{base}/index/{crate[:2]}/{crate[2:4]}/{crate}", headers=h, timeout=10)
     assert idx.status_code == 200
@@ -545,7 +545,7 @@ std = []
     cksum = __import__("hashlib").sha256(crate_bytes).hexdigest()
     meta = f'{{"name":"{crate}","vers":"0.1.0","deps":[],"cksum":"{cksum}","features":{{}}}}\n'.encode()
     r = requests.put(f"{base}/api/v1/crates/new", data=meta + crate_bytes, headers=h, timeout=10)
-    assert r.status_code == 201
+    assert r.status_code == 200  # cargo requires 200, not 201
 
     idx = requests.get(f"{base}/index/{crate[:2]}/{crate[2:4]}/{crate}", headers=h, timeout=10)
     entry = json.loads(idx.text.splitlines()[0])
@@ -934,3 +934,51 @@ def test_org_namespace_packages(base_url, user_factory):
     assert requests.put(
         f"{base_url}/api/packages/npm/{org}/{pkg2}", json=body2, headers=mh, timeout=10
     ).status_code == 201
+
+
+def test_cargo_real_client_protocol(base_url, pkg_user):
+    """真实 cargo 客户端：index/config.json + auth-required、长度前缀发布、下载 URL、200。"""
+    import struct
+
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+
+    # 稀疏索引根目录的 config.json，且需声明 auth-required（否则 cargo 不在索引请求带 token）
+    cfg = requests.get(
+        f"{base_url}/api/packages/cargo/{username}/index/config.json", headers=h, timeout=10
+    )
+    assert cfg.status_code == 200
+    assert cfg.json()["auth-required"] is True
+    assert "/dl" in cfg.json()["dl"] and cfg.json()["api"]
+
+    crate = f"realcrate{uuid.uuid4().hex[:6]}"
+    crate_bytes = _make_crate(crate, f'[package]\nname = "{crate}"\nversion = "0.1.0"\n')
+    meta = json.dumps({"name": crate, "vers": "0.1.0", "deps": [], "features": {}}).encode()
+    body = struct.pack("<I", len(meta)) + meta + struct.pack("<I", len(crate_bytes)) + crate_bytes
+    r = requests.put(
+        f"{base_url}/api/packages/cargo/{username}/api/v1/crates/new",
+        data=body, headers=h, timeout=10,
+    )
+    assert r.status_code == 200, r.text  # cargo 要求 200
+    assert "warnings" in r.json()
+
+    idx = requests.get(
+        f"{base_url}/api/packages/cargo/{username}/index/{crate[:2]}/{crate[2:4]}/{crate}",
+        headers=h, timeout=10,
+    )
+    entry = json.loads(idx.text.splitlines()[0])
+    assert entry["vers"] == "0.1.0"
+    assert entry["deps"] == []  # 不能是 null，否则 cargo 解析失败
+
+    # crates.io 风格下载 URL：{dl}/{crate}/{version}/download
+    dl = requests.get(
+        f"{base_url}/api/packages/cargo/{username}/dl/{crate}/0.1.0/download", headers=h, timeout=10
+    )
+    assert dl.status_code == 200 and dl.content == crate_bytes
+
+    # 裸 token（cargo login 保存的 PAT）应被识别
+    raw = requests.get(
+        f"{base_url}/api/packages/cargo/{username}/index/config.json",
+        headers={"Authorization": pat}, timeout=10,
+    )
+    assert raw.status_code == 200

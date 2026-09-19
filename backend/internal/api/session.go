@@ -133,11 +133,25 @@ func bearerToken(r *http.Request) string {
 	return ""
 }
 
-// resolveUser 解析请求身份：Bearer/cookie → 登录 session；否则尝试 PAT；
+// rawAuthToken 处理不用 "Bearer " 前缀、直接放裸 token 的客户端（如 cargo 的
+// cargo:token 凭据提供者），使其 PAT 能被识别。
+func rawAuthToken(r *http.Request) string {
+	h := strings.TrimSpace(r.Header.Get("Authorization"))
+	if h == "" || strings.HasPrefix(strings.ToLower(h), "bearer ") ||
+		strings.HasPrefix(strings.ToLower(h), "basic ") {
+		return ""
+	}
+	return h
+}
+
+// resolveUser 解析请求身份：Bearer/cookie/裸 token → 登录 session；否则尝试 PAT；
 // 再否则尝试 Basic（密码作为 PAT 或 session token，用户名须与 token 归属一致）。
 // 返回 (username, scopes, isPAT)；未认证返回 ("", nil, false)。
 func (a *API) resolveUser(r *http.Request) (string, []string, bool) {
 	tok := bearerToken(r)
+	if tok == "" {
+		tok = rawAuthToken(r)
+	}
 	if tok == "" {
 		if c, err := r.Cookie(sessionCookie); err == nil {
 			tok = c.Value

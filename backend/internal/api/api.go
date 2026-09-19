@@ -583,7 +583,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/packages/go/{owner}/{rest...}", a.auth(a.goRoute))
 
 	// cargo
+	// 稀疏索引要求 config.json 位于 index 根（cargo 请求 <index>/config.json）。
 	mux.HandleFunc("GET /api/packages/cargo/{owner}/config.json", a.auth(a.cargoConfig))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/index/config.json", a.auth(a.cargoConfig))
 	mux.HandleFunc("PUT /api/packages/cargo/{owner}/api/v1/crates/new", a.auth(a.cargoPublish))
 	mux.HandleFunc("DELETE /api/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank", a.auth(a.cargoYank))
 	mux.HandleFunc("PUT /api/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank", a.auth(a.cargoYank))

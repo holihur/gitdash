@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,9 +31,11 @@ import (
 func (a *API) cargoConfig(w http.ResponseWriter, r *http.Request) {
 	owner := r.PathValue("owner")
 	base := baseURL(r)
-	writeJSON(w, http.StatusOK, map[string]string{
-		"dl":  base + "/api/packages/cargo/" + owner + "/dl",
-		"api": base + "/api/packages/cargo/" + owner,
+	// auth-required：提示 cargo 在稀疏索引请求上携带 token（否则默认不发送）。
+	writeJSON(w, http.StatusOK, map[string]any{
+		"dl":            base + "/api/packages/cargo/" + owner + "/dl",
+		"api":           base + "/api/packages/cargo/" + owner,
+		"auth-required": true,
 	})
 }
 
@@ -41,18 +44,44 @@ func (a *API) cargoConfig(w http.ResponseWriter, r *http.Request) {
 //	@Summary     cargo 发布
 //	@Tags        packages
 //	@Param       owner path string true "用户或组织"
-//	@Success     201
+//	@Success     200
 //	@Router      /packages/cargo/{owner}/api/v1/crates/new [put]
+//
+// splitCargoPublish 拆分 cargo publish 请求体，返回元数据 JSON 与 .crate 内容。
+func splitCargoPublish(body []byte) (meta, content []byte, ok bool) {
+	// 真实 cargo：u32 LE 元数据长度，JSON，u32 LE crate 长度，crate。
+	if len(body) >= 12 {
+		n := int(binary.LittleEndian.Uint32(body[:4]))
+		if n > 0 && 4+n <= len(body) && json.Valid(body[4:4+n]) {
+			rest := body[4+n:]
+			if len(rest) >= 4 {
+				m := int(binary.LittleEndian.Uint32(rest[:4]))
+				if 4+m <= len(rest) {
+					return body[4 : 4+n], rest[4 : 4+m], true
+				}
+			}
+			return body[4 : 4+n], rest, true
+		}
+	}
+	// 兼容旧格式：第一行 JSON + crate。
+	if idx := bytes.IndexByte(body, '\n'); idx > 0 && json.Valid(body[:idx]) {
+		return body[:idx], body[idx+1:], true
+	}
+	return nil, nil, false
+}
+
 func (a *API) cargoPublish(w http.ResponseWriter, r *http.Request) {
 	owner := r.PathValue("owner")
 	body, ok := limitBody(w, r)
 	if !ok {
 		return
 	}
-	// cargo publish：第一行 JSON 元数据，随后是 .crate tarball
-	idx := bytes.IndexByte(body, '\n')
-	if idx < 0 {
-		writeCode(w, http.StatusBadRequest, "invalid_cargo_payload", "missing metadata line")
+	// cargo publish 支持两种格式：
+	//   1) 真实 cargo：4 字节 LE 元数据长度 + JSON + 4 字节 LE crate 长度 + crate
+	//   2) 行输出 JSON + crate（旧客户端 / 测试）
+	metaJSON, content, ok := splitCargoPublish(body)
+	if !ok {
+		writeCode(w, http.StatusBadRequest, "invalid_cargo_payload", "missing metadata")
 		return
 	}
 	var meta struct {
@@ -60,11 +89,10 @@ func (a *API) cargoPublish(w http.ResponseWriter, r *http.Request) {
 		Vers     string `json:"vers"`
 		Checksum string `json:"cksum"`
 	}
-	if err := json.Unmarshal(body[:idx], &meta); err != nil || meta.Name == "" || meta.Vers == "" {
+	if err := json.Unmarshal(metaJSON, &meta); err != nil || meta.Name == "" || meta.Vers == "" {
 		writeCode(w, http.StatusBadRequest, "invalid_cargo_payload", "bad metadata JSON")
 		return
 	}
-	content := body[idx+1:]
 	if meta.Checksum != "" {
 		sum := sha256.Sum256(content)
 		if hex.EncodeToString(sum[:]) != meta.Checksum {
@@ -90,7 +118,14 @@ func (a *API) cargoPublish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = a.store.AddPackageAudit(owner, "cargo", meta.Name, meta.Vers, "publish", user)
-	writeJSON(w, http.StatusCreated, p)
+	// cargo 要求发布响应为 200（而非 201），否则报 “failed to get a 200 OK response”。
+	writeJSON(w, http.StatusOK, map[string]any{
+		"warnings": map[string]any{
+			"invalid_categories": []string{},
+			"invalid_badges":     []string{},
+			"other":              []string{},
+		},
+	})
 }
 
 // cargoIndexMeta 解析 .crate（gzip tar）内的 Cargo.toml，产出稀疏索引所需
@@ -119,6 +154,9 @@ func cargoIndexMeta(crate []byte) (depsJSON, featuresJSON string) {
 		}
 	}
 	_ = prefix
+	if deps == nil {
+		deps = []cargoDep{}
+	}
 	db, _ := json.Marshal(deps)
 	fb, _ := json.Marshal(features)
 	return string(db), string(fb)
@@ -273,7 +311,7 @@ func (a *API) cargoIndex(w http.ResponseWriter, r *http.Request) {
 				Deps     json.RawMessage     `json:"deps"`
 				Features map[string][]string `json:"features"`
 			}
-			if json.Unmarshal([]byte(p.Meta), &m) == nil && len(m.Deps) > 0 {
+			if json.Unmarshal([]byte(p.Meta), &m) == nil && len(m.Deps) > 0 && string(m.Deps) != "null" {
 				deps = string(m.Deps)
 			}
 			if m.Features != nil {
@@ -329,6 +367,20 @@ func (a *API) cargoDownload(w http.ResponseWriter, r *http.Request) {
 	crate := r.PathValue("crate")
 	version := r.PathValue("version")
 	filename := r.PathValue("filename")
+	if !a.canReadPackage(owner, "cargo", crate, pkgUser(r)) {
+		pkgForbidden(w)
+		return
+	}
+	// crates.io 风格的下载 URL 是 {dl}/{crate}/{version}/download。
+	if filename == "download" {
+		versions, _ := a.store.ListPackageVersions(owner, "cargo", crate)
+		for _, v := range versions {
+			if v.Version == version {
+				filename = v.Filename
+				break
+			}
+		}
+	}
 	p, content, err := a.store.GetPackageFile(owner, "cargo", crate, version, filename)
 	if err != nil {
 		writeCode(w, http.StatusNotFound, "not_found", "not found")
