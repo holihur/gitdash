@@ -1,9 +1,16 @@
 import type { Ref } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { History, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { Blame, Blob } from "@/lib/api";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarkdownView } from "@/components/markdown";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
@@ -48,38 +55,51 @@ export default function BlobView({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="break-all font-mono text-sm">{blob.path}</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{formatSize(blob.size)}</Badge>
+        <div className="flex items-start gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <CardTitle className="break-all font-mono text-sm">{blob.path}</CardTitle>
+            <Badge variant="secondary" className="shrink-0">{formatSize(blob.size)}</Badge>
             {blob.encoding !== "utf-8" && (
-              <Badge variant="destructive">
+              <Badge variant="destructive" className="shrink-0">
                 {blob.encoding === "binary" ? t("repo.binaryFile") : t("repo.fileTooLarge")}
               </Badge>
             )}
-            {blob.encoding === "utf-8" && (
-              <Button size="sm" variant={blameParam ? "default" : "outline"} onClick={onToggleBlame}>
-                {t("repo.blame")}
-              </Button>
-            )}
-            {blob.encoding === "utf-8" && !isMarkdown(blob.path) && (
-              <>
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={onEdit}>
-                  <Pencil className="h-3.5 w-3.5" />
-                  {t("fops.editFile")}
-                </Button>
+          </div>
+          {blob.encoding === "utf-8" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-destructive hover:text-destructive"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  aria-label={t("common.moreActions")}
+                  title={t("common.moreActions")}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuCheckboxItem
+                  checked={blameParam}
+                  onCheckedChange={() => onToggleBlame()}
+                >
+                  <History className="h-4 w-4" />
+                  {t("repo.blame")}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuItem onClick={onEdit}>
+                  <Pencil className="h-4 w-4" />
+                  {t("fops.editFile")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
                   onClick={onDelete}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" />
                   {t("fops.deleteFile")}
-                </Button>
-              </>
-            )}
-          </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </CardHeader>
       <CardContent>
