@@ -203,6 +203,7 @@ go run .
 | `GITDASH_ACME_DOMAINS` | 空 | 逗号分隔域名；设置后用 ACME 自动申请证书（另见 `GITDASH_ACME_EMAIL`） |
 | `GITDASH_PIPELINE_VOLUMES_DIR` | 空（禁止） | CI 允许挂载的宿主目录；未设置则禁止流水线挂载宿主卷 |
 | `GITDASH_SSH_KNOWN_HOSTS` | 空（accept-new） | `known_hosts` 文件路径；设置后导入/镜像的 SSH 使用 `StrictHostKeyChecking=yes`（固定 host key，防首次连接 MITM） |
+| `GITDASH_OAUTH_TOKEN_TTL` | `2160h`（90 天） | OAuth / 设备流 access token 有效期；`0` 表示永不过期（不建议） |
 
 > 用 deb/rpm 安装时，服务通过 `EnvironmentFile=-/etc/gitdash/gitdash.env` 读取上述可选变量（包安装脚本会生成带注释的示例文件，权限 0600）。把 `GITDASH_ADMIN_PASSWORD` 等写进去后执行 `sudo systemctl restart gitdash` 即生效。
 

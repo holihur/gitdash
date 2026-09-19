@@ -43,9 +43,10 @@ func (s *Store) GetByEmail(email string) (UserAuth, error) {
 
 const SessionTTL = 7 * 24 * time.Hour
 
+// CreateSession 存储会话 token 的 sha256（不落库明文，安全评审 §3.3）。
 func (s *Store) CreateSession(token string, userID int64) error {
 	row := sessionRow{
-		Token:     token,
+		Token:     patHash(token),
 		UserID:    userID,
 		CreatedAt: now(),
 		ExpiresAt: time.Now().Add(SessionTTL).UTC().Format(time.RFC3339),
@@ -53,15 +54,17 @@ func (s *Store) CreateSession(token string, userID int64) error {
 	return s.db.Create(&row).Error
 }
 
+// GetSession 按 token 的 sha256 查找；兼容旧版明文行并在命中后升级为哈希存储。
 func (s *Store) GetSession(token string) (string, error) {
-	var username string
-	err := s.db.Table("sessions").
-		Select("users.username").
-		Joins("JOIN users ON users.id = sessions.user_id").
-		Where("sessions.token = ? AND sessions.expires_at > ?", token, now()).
-		Scan(&username).Error
+	hash := patHash(token)
+	username, err := s.sessionUser(hash)
 	if err != nil {
 		return "", err
+	}
+	if username == "" && hash != token {
+		if username, _ = s.sessionUser(token); username != "" {
+			_ = s.db.Model(&sessionRow{}).Where("token = ?", token).Update("token", hash).Error
+		}
 	}
 	if username == "" {
 		return "", ErrNotFound
@@ -69,15 +72,31 @@ func (s *Store) GetSession(token string) (string, error) {
 	return username, nil
 }
 
+// sessionUser 按已存储的 token（哈希或旧明文）取用户名；无有效行返回空串。
+func (s *Store) sessionUser(stored string) (string, error) {
+	var username string
+	err := s.db.Table("sessions").
+		Select("users.username").
+		Joins("JOIN users ON users.id = sessions.user_id").
+		Where("sessions.token = ? AND sessions.expires_at > ?", stored, now()).
+		Scan(&username).Error
+	if err != nil {
+		return "", err
+	}
+	return username, nil
+}
+
 func (s *Store) DeleteSession(token string) error {
-	return s.db.Where("token = ?", token).Delete(&sessionRow{}).Error
+	return s.db.Where("token IN ?", []string{patHash(token), token}).Delete(&sessionRow{}).Error
 }
 
 // DeleteSessionsExcept 撤销用户除 keepToken 外的全部会话（改密/安全操作后调用）。
+// 同时兼容哈希存储与旧明文行。
 func (s *Store) DeleteSessionsExcept(username, keepToken string) error {
-	return s.db.Where("user_id = (?) AND token <> ?",
+	keep := []string{patHash(keepToken), keepToken}
+	return s.db.Where("user_id = (?) AND token NOT IN ?",
 		s.db.Model(&userRow{}).Select("id").Where("username = ?", username),
-		keepToken).Delete(&sessionRow{}).Error
+		keep).Delete(&sessionRow{}).Error
 }
 
 // SetUserEmail 更新个人资料邮箱（空串表示清除；不改变验证状态，仅供旧调用）。

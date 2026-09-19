@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/netip"
+	"os"
 	"strings"
 	"time"
 )
@@ -134,8 +135,23 @@ func (s *Store) CreatePAT(userID int64, name, scopes, cidrs, expiresAt string) (
 }
 
 // CreateOAuthPAT 为 OAuth 2.0 授权签发 access token（复用 PAT 表，oauthAppID 关联应用）。
+// 默认 90 天后过期（可用 GITDASH_OAUTH_TOKEN_TTL 覆盖，如 "720h"；"0" = 永不过期）。
 func (s *Store) CreateOAuthPAT(userID, oauthAppID int64, name, scopes string) (string, PAT, error) {
-	return s.createPAT(userID, oauthAppID, name, scopes, "", "", true)
+	exp := ""
+	if ttl := oauthTokenTTL(); ttl > 0 {
+		exp = time.Now().Add(ttl).UTC().Format(time.RFC3339)
+	}
+	return s.createPAT(userID, oauthAppID, name, scopes, "", exp, true)
+}
+
+// oauthTokenTTL 返回 OAuth/device-flow access token 的有效期；非法值回退 90 天。
+func oauthTokenTTL() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("GITDASH_OAUTH_TOKEN_TTL")); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return 90 * 24 * time.Hour
 }
 
 func (s *Store) createPAT(userID, oauthAppID int64, name, scopes, cidrs, expiresAt string, checkQuota bool) (string, PAT, error) {
