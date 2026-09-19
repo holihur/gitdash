@@ -202,6 +202,7 @@ Environment variables (all optional):
 | `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | empty | Built-in HTTPS certificate/key paths |
 | `GITDASH_ACME_DOMAINS` | empty | Comma-separated domains; obtain certificates automatically via ACME (see `GITDASH_ACME_EMAIL`) |
 | `GITDASH_PIPELINE_VOLUMES_DIR` | empty (denied) | Host directory CI may mount; unset denies all host volume mounts |
+| `GITDASH_SSH_KNOWN_HOSTS` | empty (accept-new) | Path to a `known_hosts` file; when set, import/push-mirror SSH uses `StrictHostKeyChecking=yes` (pins host keys, blocks first-connect MITM) |
 
 > With deb/rpm packages the service reads these optional variables from `EnvironmentFile=-/etc/gitdash/gitdash.env` (the package post-install script creates a commented sample, mode 0600). Add `GITDASH_ADMIN_PASSWORD` etc. there, then `sudo systemctl restart gitdash`.
 

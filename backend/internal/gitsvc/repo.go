@@ -188,9 +188,9 @@ func pushMirror(owner, name, url, privateKey string) error {
 }
 
 // sshEnv 构造 git 通过 SSH 访问远端所需的环境变量。
-// 仅对 SSH 远端（git@host:path 或 ssh://）注入：首次连接公网仓库（如 github.com）
-// 时自动接受 host key，避免因 known_hosts 缺失卡在
-// "Are you sure you want to continue connecting?" 交互确认（issue #8）。
+// 仅对 SSH 远端（git@host:path 或 ssh://）注入：默认 accept-new（首次连接自动
+// 接受 host key，避免公网导入卡交互）。设置 GITDASH_SSH_KNOWN_HOSTS 指向
+// known_hosts 文件后改为 StrictHostKeyChecking=yes，杜绝首次导入 MITM。
 // https:// 与 git:// 远端无需该环境变量，保持原样以免干扰。
 // privateKey 非空时额外写入临时 key 文件（0600）并加 -i/-o IdentitiesOnly。
 // 返回的 cleanup 用于清理临时 key 文件（无 key 时为 nil）。
@@ -199,7 +199,7 @@ func sshEnv(url, privateKey string) ([]string, func(), error) {
 	if !hasKey && !isSSHURL(url) {
 		return nil, nil, nil
 	}
-	cmd := "ssh -o StrictHostKeyChecking=accept-new"
+	cmd := sshBaseOptions()
 	if !hasKey {
 		return []string{"GIT_SSH_COMMAND=" + cmd}, nil, nil
 	}
@@ -209,6 +209,16 @@ func sshEnv(url, privateKey string) ([]string, func(), error) {
 	}
 	cmd += " -i '" + strings.ReplaceAll(keyPath, "'", "'\\''") + "' -o IdentitiesOnly=yes"
 	return []string{"GIT_SSH_COMMAND=" + cmd}, func() { _ = os.Remove(keyPath) }, nil
+}
+
+// sshBaseOptions 返回 git 远端 SSH 的 -o 选项。设置 GITDASH_SSH_KNOWN_HOSTS
+// 时启用严格 host key 校验（防首次导入 MITM）；未设置时退化为 accept-new
+// （首次连接自动接受，避免公网导入卡交互）。
+func sshBaseOptions() string {
+	if kh := strings.TrimSpace(os.Getenv("GITDASH_SSH_KNOWN_HOSTS")); kh != "" {
+		return "ssh -o StrictHostKeyChecking=yes -o UserKnownHostsFile='" + strings.ReplaceAll(kh, "'", "'\\''") + "'"
+	}
+	return "ssh -o StrictHostKeyChecking=accept-new"
 }
 
 // isSSHURL 判断远端地址是否走 SSH：ssh:// 前缀，或 scp 风格 user@host:path。

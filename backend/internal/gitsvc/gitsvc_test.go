@@ -389,3 +389,29 @@ func TestRevertMergeCommit(t *testing.T) {
 		t.Fatalf("main.txt should remain: %v", err)
 	}
 }
+
+// TestSSHEnvKnownHostsPinning 覆盖安全评审 §2.7：配置 GITDASH_SSH_KNOWN_HOSTS 后
+// 使用 StrictHostKeyChecking=yes 固定 host key，否则默认 accept-new。
+func TestSSHEnvKnownHostsPinning(t *testing.T) {
+	t.Setenv("GITDASH_SSH_KNOWN_HOSTS", "/etc/gitdash/known_hosts")
+	env, cleanup, err := sshEnv("git@github.com:owner/repo.git", "")
+	if err != nil || cleanup != nil || len(env) != 1 {
+		t.Fatalf("env = %v cleanup=%v err=%v", env, cleanup != nil, err)
+	}
+	cmd := strings.TrimPrefix(env[0], "GIT_SSH_COMMAND=")
+	if !strings.Contains(cmd, "StrictHostKeyChecking=yes") {
+		t.Fatalf("command %q missing strict checking", cmd)
+	}
+	if !strings.Contains(cmd, "UserKnownHostsFile='/etc/gitdash/known_hosts'") {
+		t.Fatalf("command %q missing known_hosts path", cmd)
+	}
+	if strings.Contains(cmd, "accept-new") {
+		t.Fatalf("command %q should not accept-new when pinned", cmd)
+	}
+
+	t.Setenv("GITDASH_SSH_KNOWN_HOSTS", "")
+	env, _, _ = sshEnv("git@github.com:owner/repo.git", "")
+	if cmd := strings.TrimPrefix(env[0], "GIT_SSH_COMMAND="); !strings.Contains(cmd, "accept-new") {
+		t.Fatalf("default command %q should use accept-new", cmd)
+	}
+}
