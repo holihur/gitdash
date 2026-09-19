@@ -1,0 +1,5 @@
+# Consumer example: install a package from the gitdash pypi registry.
+# The index URL embeds Basic credentials (<user>:<PAT>).
+--index-url http://<user>:<PAT>@<host>/api/packages/pypi/<owner>/simple
+--trusted-host <host>
+hello-py

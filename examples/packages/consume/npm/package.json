@@ -1,0 +1,9 @@
+{
+  "name": "consume-npm",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Consumer example: install a package from the gitdash npm registry",
+  "dependencies": {
+    "hello": "^1.0.0"
+  }
+}

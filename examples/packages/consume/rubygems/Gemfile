@@ -1,0 +1,5 @@
+# Consumer example: install a gem from the gitdash rubygems registry.
+# The source URL embeds Basic credentials (<user>:<PAT>).
+source "http://<user>:<PAT>@<host>/api/packages/rubygems/<owner>/"
+
+gem "hello"

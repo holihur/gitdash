@@ -1,0 +1,8 @@
+[package]
+name = "consume-cargo"
+version = "0.1.0"
+edition = "2021"
+
+# Depend on a crate from the gitdash registry (see .cargo/config.toml).
+[dependencies]
+hello-lib = { version = "0.1", registry = "gitdash" }

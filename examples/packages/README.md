@@ -1,8 +1,13 @@
 # Package registry examples
 
-Runnable examples for the gitdash [private package registry](../../docs/packages.md):
-one minimal project per ecosystem plus a stdlib-only script that publishes each
-one to a live instance and verifies the download.
+Runnable examples for the gitdash [private package registry](../../docs/packages.md),
+in two halves:
+
+- **[publish/](.)** (this directory) — one minimal project per ecosystem plus a
+  stdlib-only `publish.py` that publishes each to a live instance.
+- **[consume/](consume/)** — matching projects that *install* the private
+  packages (`.npmrc` / `pip.conf` / `.cargo/config.toml` / ...) plus a
+  stdlib-only `consume.py` read-side verifier.
 
 ## Quick start (no extra toolchains)
 
@@ -62,6 +67,9 @@ cargo uses `cargo login --registry gitdash`, pip/uv embed the credentials in the
 index URL. Full, copy-pasteable commands and `.npmrc` / `Cargo.toml` /
 `settings.xml` snippets live in [`docs/packages.md`](../../docs/packages.md).
 
+The read side (installing these packages from a project) is covered by the
+consumer projects in [`consume/`](consume/).
+
 ## Layout
 
 ```
@@ -74,5 +82,6 @@ packages/
 ├── go/hello/                  # go.mod + hello.go
 ├── rubygems/hello/            # hello.gemspec + lib/hello.rb
 ├── maven/hello/               # pom.xml + src/main/java/com/example/Hello.java
-└── docker/                    # Dockerfile + hello.sh
+├── docker/                    # Dockerfile + hello.sh
+└── consume/                   # consumer projects + consume.py (read side)
 ```

@@ -1,0 +1,15 @@
+{
+  "name": "example/consume-composer",
+  "description": "Consumer example: require a package from the gitdash composer registry",
+  "type": "project",
+  "license": "MIT",
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "http://<user>:<PAT>@<host>/api/packages/composer/<owner>"
+    }
+  ],
+  "require": {
+    "example/hello-lib": "^1.0"
+  }
+}

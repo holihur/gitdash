@@ -1,0 +1,3 @@
+# Point cargo at the gitdash sparse index. Replace <host> and <owner>.
+[registries.gitdash]
+index = "sparse+http://<host>/api/packages/cargo/<owner>/index/"
