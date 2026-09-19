@@ -151,6 +151,21 @@ func rawAuthToken(r *http.Request) string {
 	return h
 }
 
+// requestSessionToken 提取请求携带的凭据（Bearer / 裸 token / 会话 cookie），
+// 供「保留当前会话、撤销其它会话」使用（如改密）。
+func requestSessionToken(r *http.Request) string {
+	if t := bearerToken(r); t != "" {
+		return t
+	}
+	if t := rawAuthToken(r); t != "" {
+		return t
+	}
+	if c, err := r.Cookie(sessionCookie); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
 // resolveUser 解析请求身份：Bearer/cookie/裸 token → 登录 session；否则尝试 PAT；
 // 再否则尝试 Basic（密码作为 PAT 或 session token，用户名须与 token 归属一致）。
 // 返回 (username, scopes, isPAT)；未认证返回 ("", nil, false)。

@@ -270,6 +270,10 @@ func (a *API) packageFiles(w http.ResponseWriter, r *http.Request) {
 			ct = "application/octet-stream"
 		}
 		w.Header().Set("Content-Type", ct)
+		// 包内容不可信：HTML 以 sandbox 策略同源返回，阻止脚本/表单/跳转（安全评审 §3.5）。
+		if ct == "text/html" {
+			w.Header().Set("Content-Security-Policy", "sandbox")
+		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", path.Base(entry)))
 		_, _ = w.Write(content)
 		return
@@ -297,6 +301,9 @@ func (a *API) packageFiles(w http.ResponseWriter, r *http.Request) {
 		ct = "application/octet-stream"
 	}
 	w.Header().Set("Content-Type", ct)
+	if ct == "text/html" {
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("%s; filename=%q", disposition, path.Base(filename)))
 	_, _ = w.Write(content)
 }

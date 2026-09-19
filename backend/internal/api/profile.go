@@ -53,10 +53,8 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	// 改密后撤销其它会话，仅保留当前会话
-	if tok := bearerToken(r); tok != "" {
-		_ = a.store.DeleteSessionsExcept(ua.Username, tok)
-	}
+	// 改密后撤销其它会话（含 cookie 会话；无 token 时全部撤销），仅保留当前会话。
+	_ = a.store.DeleteSessionsExcept(ua.Username, requestSessionToken(r))
 	w.WriteHeader(http.StatusNoContent)
 }
 

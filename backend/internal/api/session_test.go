@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -45,5 +46,24 @@ func TestRegistrationDisabled(t *testing.T) {
 	t.Setenv("GITDASH_DISABLE_REGISTRATION", "0")
 	if registrationDisabled() {
 		t.Fatal("registrationDisabled() = true for \"0\"")
+	}
+}
+
+// TestRequestSessionToken 覆盖安全评审 §3.3：改密撤销会话时必须能从 cookie
+// （不仅 Bearer）识别当前会话。
+func TestRequestSessionToken(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/me/password", nil)
+	req.Header.Set("Authorization", "Bearer from-header")
+	if got := requestSessionToken(req); got != "from-header" {
+		t.Fatalf("bearer token = %q", got)
+	}
+	req.Header.Del("Authorization")
+	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: "from-cookie"})
+	if got := requestSessionToken(req); got != "from-cookie" {
+		t.Fatalf("cookie token = %q", got)
+	}
+	req2 := httptest.NewRequest("POST", "/api/me/password", nil)
+	if got := requestSessionToken(req2); got != "" {
+		t.Fatalf("no-credential token = %q", got)
 	}
 }

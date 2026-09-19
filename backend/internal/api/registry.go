@@ -140,7 +140,7 @@ func (a *API) registryHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("{}"))
 	case "catalog":
-		a.registryCatalog(w)
+		a.registryCatalog(w, user)
 	case "tags":
 		a.registryTags(w, name, user)
 	case "manifest":
@@ -154,13 +154,25 @@ func (a *API) registryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *API) registryCatalog(w http.ResponseWriter) {
+// registryCatalog 只返回调用者可访问的命名空间（本人或所在组织），避免任意
+// 登录用户枚举全实例的私有镜像名（安全评审 §3.2）。
+func (a *API) registryCatalog(w http.ResponseWriter, user string) {
 	repos, err := a.store.ListRegistryCatalog()
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"repositories": repos})
+	out := make([]string, 0, len(repos))
+	for _, r := range repos {
+		ns, _, ok := strings.Cut(r, "/")
+		if !ok {
+			continue
+		}
+		if a.registryAllowed(ns, user) {
+			out = append(out, r)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"repositories": out})
 }
 
 func (a *API) registryTags(w http.ResponseWriter, name, user string) {
