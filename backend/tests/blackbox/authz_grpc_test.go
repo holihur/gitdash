@@ -170,11 +170,6 @@ func readFile(path string) string {
 
 // ---- HTTP API 辅助（黑盒：只发请求）----
 
-func apiDo(t *testing.T, base, method, path, token string, body any) (int, map[string]any) {
-	t.Helper()
-	return apiDoClient(t, http.DefaultClient, base, method, path, token, body)
-}
-
 func apiDoClient(t *testing.T, client *http.Client, base, method, path, token string, body any) (int, map[string]any) {
 	t.Helper()
 	var rd io.Reader
