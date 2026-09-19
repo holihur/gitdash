@@ -121,9 +121,13 @@ func (a *API) mavenGet(w http.ResponseWriter, r *http.Request) {
 	// .sha1 / .md5 校验文件：对底层文件生成
 	if strings.HasSuffix(filename, ".sha1") || strings.HasSuffix(filename, ".md5") {
 		base := strings.TrimSuffix(filename, path.Ext(filename))
-		content, ok := a.mavenLookup(owner, append(append([]string{}, segments[:len(segments)-1]...), base))
+		name, content, ok := a.mavenLookup(owner, append(append([]string{}, segments[:len(segments)-1]...), base))
 		if !ok {
 			writeCode(w, http.StatusNotFound, "not_found", "not found")
+			return
+		}
+		if !a.canReadPackage(owner, "maven", name, pkgUser(r)) {
+			pkgForbidden(w)
 			return
 		}
 		var out string
@@ -139,16 +143,20 @@ func (a *API) mavenGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, ok := a.mavenLookup(owner, segments)
+	name, content, ok := a.mavenLookup(owner, segments)
 	if !ok && len(segments) >= 3 {
 		// SNAPSHOT 目录兜底：请求非时间戳文件名时解析为最新时间戳制品
 		if p, c, resolved := a.mavenSnapshotResolve(owner, segments); resolved {
-			content, ok = c, true
+			name, content, ok = p.Name, c, true
 			w.Header().Set("X-Checksum-Sha256", p.Checksum)
 		}
 	}
 	if !ok {
 		writeCode(w, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	if !a.canReadPackage(owner, "maven", name, pkgUser(r)) {
+		pkgForbidden(w)
 		return
 	}
 	ct := "application/octet-stream"
@@ -163,37 +171,38 @@ func (a *API) mavenGet(w http.ResponseWriter, r *http.Request) {
 }
 
 // mavenLookup 按路径段查找 maven 制品；未命中时自动生成 maven-metadata.xml。
-func (a *API) mavenLookup(owner string, segments []string) ([]byte, bool) {
+func (a *API) mavenLookup(owner string, segments []string) (string, []byte, bool) {
 	filename := segments[len(segments)-1]
 	var content []byte
 	var err error
+	name := ""
 	if len(segments) >= 3 {
-		name := strings.Join(segments[:len(segments)-2], "/")
+		name = strings.Join(segments[:len(segments)-2], "/")
 		_, content, err = a.store.GetPackageFile(owner, "maven", name, segments[len(segments)-2], filename)
 	} else {
 		err = store.ErrNotFound
 	}
 	if err != nil {
-		name := strings.Join(segments[:len(segments)-1], "/")
+		name = strings.Join(segments[:len(segments)-1], "/")
 		_, content, err = a.store.GetPackageFile(owner, "maven", name, "_", filename)
 		if err != nil {
 			if filename == "maven-metadata.xml" {
 				if len(segments) >= 3 {
 					// 版本级 metadata：SNAPSHOT 目录未显式上传时自动生成
 					if xml, ok := a.mavenSnapshotMetadata(owner, segments); ok {
-						return []byte(xml), true
+						return strings.Join(segments[:len(segments)-2], "/"), []byte(xml), true
 					}
 				}
 				if len(segments) >= 2 {
 					if xml, ok := a.mavenAutoMetadata(owner, segments); ok {
-						return []byte(xml), true
+						return strings.Join(segments[:len(segments)-1], "/"), []byte(xml), true
 					}
 				}
 			}
-			return nil, false
+			return "", nil, false
 		}
 	}
-	return content, true
+	return name, content, true
 }
 
 // mavenAutoMetadata 自动生成 artifact 级 maven-metadata.xml（版本列表来自已上传制品）。

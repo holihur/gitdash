@@ -6,7 +6,7 @@ gitdash 内置私有包仓库，覆盖 **npm (node)**、**composer (PHP)**、**p
 
 - 命名空间：`/api/packages/{type}/{owner}/...`，`owner` 为**用户或组织**
 - 鉴权：包管理器客户端统一走 **Basic 认证** —— 用户名 + **个人访问令牌**（PAT，`repo` scope）作为密码。在「设置 → Keys → PAT」创建
-- 读：本实例任意已认证用户；若包在发布时通过 `X-Gitdash-Repo` 头关联了仓库，则跟随该仓库可见性
+- 可见性：**默认私有**。每个包可在 Packages 页设为 `private`（命名空间成员 / 协作者）、`public`（任意登录用户）或 `anonymous`（任何人，无需登录）——`PATCH /api/packages/{type}/{owner}/{name}`，体为 `{"visibility":"..."}`。若包在发布时通过 `X-Gitdash-Repo` 头关联了仓库，私仓可见性生效（取更严格的一档）
 - 发布 / 删除 / yank：命名空间 owner 本人或组织 **owner** 角色成员
 - 存储：文件内容按内容寻址落盘（`data/packages-blobs`），元数据 / 下载计数 / 审计日志存 DB
 - 单文件上限：64 MB（Docker layer 直接流式落盘，不设此限）

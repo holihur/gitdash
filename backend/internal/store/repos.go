@@ -9,12 +9,21 @@ func toRepo(r repoRow) Repo {
 	if def == "" {
 		def = "main"
 	}
+	vis := r.Visibility
+	if vis == "" {
+		if r.Private {
+			vis = "private"
+		} else {
+			vis = "public"
+		}
+	}
 	return Repo{
 		ID:            r.ID,
 		Owner:         r.Owner,
 		Name:          r.Name,
 		Description:   r.Description,
-		Private:       r.Private,
+		Private:       vis == "private",
+		Visibility:    vis,
 		IsTemplate:    r.IsTemplate,
 		Banned:        r.Banned,
 		DefaultBranch: def,
@@ -35,12 +44,17 @@ func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo,
 		private = false
 	}
 	row := repoRow{Owner: owner, Name: name, Description: description, Private: private, IsTemplate: isTemplate, DefaultBranch: "main", HasIssues: true, CreatedAt: now()}
+	vis := "private"
+	if !private {
+		vis = "public"
+	}
 	// 用 map 插入绕过 GORM 对 default 字段零值的改写（private=false 必须显式落库）
 	if err := s.db.Table("repos").Create(map[string]any{
 		"owner":          row.Owner,
 		"name":           row.Name,
 		"description":    row.Description,
 		"private":        private,
+		"visibility":     vis,
 		"is_template":    isTemplate,
 		"default_branch": row.DefaultBranch,
 		"has_issues":     row.HasIssues,
@@ -110,8 +124,17 @@ func (s *Store) ExploreRepos(limit, offset int) ([]Repo, error) {
 
 // SetRepoPrivate 切换可见性（仅 owner 调用）。
 func (s *Store) SetRepoPrivate(owner, name string, private bool) error {
+	vis := "public"
+	if private {
+		vis = "private"
+	}
+	return s.SetRepoVisibility(owner, name, vis)
+}
+
+// SetRepoVisibility 设置仓库可见性：private | public | anonymous（仅 owner 调用）。
+func (s *Store) SetRepoVisibility(owner, name, visibility string) error {
 	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
-		Update("private", private)
+		Updates(map[string]any{"visibility": visibility, "private": visibility == "private"})
 	if res.Error != nil {
 		return res.Error
 	}

@@ -207,18 +207,37 @@ export default function Packages() {
     }
   };
 
-  // 切换单个包的公开 / 私有
-  const togglePrivate = async (p: PackageEntry) => {
-    const next = !p.private;
+  // 切换单个包的可见性：private / public / anonymous
+  const setVisibility = async (p: PackageEntry, visibility: string) => {
     try {
-      await api.setPackageVisibility(p.type, p.owner, p.name, next);
-      toast.success(t(next ? "packages.madePrivate" : "packages.madePublic"));
-      setPkgs((prev) => prev.map((x) => (x.type === p.type && x.name === p.name ? { ...x, private: next } : x)));
+      await api.setPackageVisibility(p.type, p.owner, p.name, visibility);
+      toast.success(t("packages.visibilityUpdated"));
+      setPkgs((prev) =>
+        prev.map((x) =>
+          x.type === p.type && x.name === p.name
+            ? { ...x, visibility, private: visibility === "private" }
+            : x,
+        ),
+      );
       setTick((n) => n + 1);
     } catch (e) {
       toast.error(apiErrorMsg(t, e));
     }
   };
+
+  const visibilitySelect = (p: PackageEntry) => (
+    <select
+      value={p.visibility || (p.private ? "private" : "public")}
+      onChange={(e) => void setVisibility(p, e.target.value)}
+      title={t("packages.visibility")}
+      aria-label={t("packages.visibility")}
+      className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <option value="private">{t("packages.visPrivate")}</option>
+      <option value="public">{t("packages.visPublic")}</option>
+      <option value="anonymous">{t("packages.visAnonymous")}</option>
+    </select>
+  );
 
   const namespaceSelect = orgs.length > 0 && (
     <div className="flex items-center gap-2">
@@ -399,10 +418,16 @@ export default function Packages() {
                     <Link to={packageDetailPath(p.type, p.owner, p.name)} className="hover:underline">
                       {p.name}
                     </Link>
-                    {p.private && (
+                    {(!p.visibility || p.visibility === "private") && (
                       <Badge variant="secondary" className="ml-2 gap-1 align-middle">
                         <Lock className="h-3 w-3" />
-                        {t("packages.private")}
+                        {t("packages.visPrivate")}
+                      </Badge>
+                    )}
+                    {p.visibility === "anonymous" && (
+                      <Badge variant="outline" className="ml-2 gap-1 align-middle">
+                        <Unlock className="h-3 w-3" />
+                        {t("packages.visAnonymous")}
                       </Badge>
                     )}
                   </TableCell>
@@ -412,18 +437,7 @@ export default function Packages() {
                   <TableCell className="text-sm">{formatDate(p.created_at, locale)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
-                      {canManage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title={t(p.private ? "packages.makePublic" : "packages.makePrivate")}
-                          aria-label={t(p.private ? "packages.makePublic" : "packages.makePrivate")}
-                          onClick={() => void togglePrivate(p)}
-                        >
-                          {p.private ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                        </Button>
-                      )}
+                      {canManage && visibilitySelect(p)}
                       <Button
                         variant="ghost"
                         size="icon"

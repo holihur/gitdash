@@ -37,7 +37,8 @@ def basic(username: str, pat: str) -> dict:
 def test_packages_require_auth(base_url, pkg_user):
     username, _, _ = pkg_user
     r = requests.get(f"{base_url}/api/packages/npm/{username}/some-pkg", timeout=10)
-    assert r.status_code == 401
+    # 未认证：私有包拒绝（403），路由不再是硬 401（匿名档可读）
+    assert r.status_code in (401, 403, 404)
 
 
 def test_publish_forbidden_for_other_user(base_url, pkg_user, user_factory):
@@ -781,8 +782,8 @@ def test_package_files_browse_archive_and_preview(base_url, pkg_user, anon):
         f"{base_url}/api/packages/npm/{username}/{pkg}", json=body, headers=h, timeout=10
     ).status_code == 201
 
-    # 未认证：401
-    assert requests.get(f"{base_url}/api/package-files/npm/{username}/{pkg}", timeout=10).status_code == 401
+    # 未认证：默认私有 -> 拒绝
+    assert requests.get(f"{base_url}/api/package-files/npm/{username}/{pkg}", timeout=10).status_code in (401, 403, 404)
 
     files = requests.get(f"{base_url}/api/package-files/npm/{username}/{pkg}", headers=h, timeout=10)
     assert files.status_code == 200
@@ -984,14 +985,17 @@ def test_cargo_real_client_protocol(base_url, pkg_user):
     assert raw.status_code == 200
 
 
-def test_package_visibility_public_private(base_url, pkg_user, user_factory):
-    """单个包可设为私有：非成员禁止读取 / 下载，且从列表隐藏；可再设回公开。"""
+def test_package_visibility_levels(base_url, pkg_user, user_factory):
+    """可见性三档：默认 private；public=登录可读；anonymous=匿名可读。
+
+    覆盖 npm 元数据/下载与列表隐藏，以及越权修改。
+    """
     owner, pat, _ = pkg_user
     oh = basic(owner, pat)
     other, opat, _ = user_factory("pv")
     xh = basic(other, opat)
 
-    pkg = f"vis-{uuid.uuid4().hex[:8]}"
+    pkg = f"vis{uuid.uuid4().hex[:8]}"
     tarball = b"tarball-bytes"
     body = {
         "name": pkg,
@@ -1000,28 +1004,109 @@ def test_package_visibility_public_private(base_url, pkg_user, user_factory):
     }
     url = f"{base_url}/api/packages/npm/{owner}/{pkg}"
     assert requests.put(url, json=body, headers=oh, timeout=10).status_code == 201
-
-    # 默认公开：其他已认证用户可读
-    assert requests.get(url, headers=xh, timeout=10).status_code == 200
-
-    # 只有可发布者能改可见性
-    assert requests.patch(url, json={"private": True}, headers=xh, timeout=10).status_code == 403
-    r = requests.patch(url, json={"private": True}, headers=oh, timeout=10)
-    assert r.status_code == 200 and r.json()["private"] is True
-
-    # owner 仍可读；其他用户 403（元数据 + 下载）
     meta = requests.get(url, headers=oh, timeout=10).json()
-    assert requests.get(url, headers=xh, timeout=10).status_code == 403
     tar_url = meta["versions"]["1.0.0"]["dist"]["tarball"]
+    listing = f"{base_url}/api/packages/{owner}"
+
+    ok = lambda h: requests.get(url, headers=h, timeout=10).status_code == 200
+    ok_anon = lambda: requests.get(url, timeout=10).status_code == 200
+
+    # 默认 private：owner 可读，其他登录用户 / 匿名都不可读
+    assert ok(oh)
+    assert not ok(xh)
+    assert not ok_anon()
     assert requests.get(tar_url, headers=xh, timeout=10).status_code == 403
+    assert requests.get(tar_url, timeout=10).status_code == 403
+    assert not any(p["name"] == pkg for p in requests.get(listing, headers=xh, timeout=10).json())
+    assert not any(p["name"] == pkg for p in requests.get(listing, timeout=10).json())
 
-    # 列表中对外部用户隐藏
-    listed = requests.get(f"{base_url}/api/packages/{owner}", headers=xh, timeout=10).json()
-    assert not any(p["name"] == pkg for p in listed)
-    # owner 自己能列出来
-    own = requests.get(f"{base_url}/api/packages/{owner}", headers=oh, timeout=10).json()
-    assert any(p["name"] == pkg and p["private"] for p in own)
+    # 只有可发布者能改；非法值拒绝
+    assert requests.patch(url, json={"visibility": "public"}, headers=xh, timeout=10).status_code == 403
+    assert requests.patch(url, json={"visibility": "bogus"}, headers=oh, timeout=10).status_code == 400
+    r = requests.patch(url, json={"visibility": "public"}, headers=oh, timeout=10)
+    assert r.status_code == 200 and r.json()["visibility"] == "public"
 
-    # 设回公开
-    assert requests.patch(url, json={"private": False}, headers=oh, timeout=10).status_code == 200
-    assert requests.get(url, headers=xh, timeout=10).status_code == 200
+    # public：登录用户可读，匿名仍不可读
+    assert ok(oh) and ok(xh)
+    assert not ok_anon()
+    assert requests.get(tar_url, headers=xh, timeout=10).status_code == 200
+    assert requests.get(tar_url, timeout=10).status_code == 403
+    assert any(p["name"] == pkg for p in requests.get(listing, headers=xh, timeout=10).json())
+
+    # anonymous：匿名可读
+    assert requests.patch(url, json={"visibility": "anonymous"}, headers=oh, timeout=10).status_code == 200
+    assert ok_anon()
+    assert requests.get(tar_url, timeout=10).status_code == 200
+
+    # 回到 private
+    assert requests.patch(url, json={"visibility": "private"}, headers=oh, timeout=10).status_code == 200
+    assert not ok_anon()
+    assert not ok(xh)
+
+
+def test_pypi_simple_index_filters_by_visibility(base_url, pkg_user, user_factory):
+    """pypi simple 索引 / 下载同样遵守可见性。"""
+    owner, pat, _ = pkg_user
+    oh = basic(owner, pat)
+    other, opat, _ = user_factory("py")
+    xh = basic(other, opat)
+
+    pkg = f"pvis_{uuid.uuid4().hex[:8]}"
+    requests.post(
+        f"{base_url}/api/packages/pypi/{owner}/",
+        data={"name": pkg, "version": "1.0.0"},
+        files={"content": (f"{pkg}-1.0.0-py3-none-any.whl", b"w")},
+        headers=oh, timeout=10,
+    )
+    index = f"{base_url}/api/packages/pypi/{owner}/simple/"
+    dl = f"{base_url}/api/packages/pypi/{owner}/download/{pkg}/1.0.0/{pkg}-1.0.0-py3-none-any.whl"
+
+    # 默认私有
+    assert pkg not in requests.get(index, headers=xh, timeout=10).text
+    assert pkg not in requests.get(index, timeout=10).text
+    assert requests.get(dl, headers=xh, timeout=10).status_code == 403
+    assert requests.get(dl, timeout=10).status_code == 403
+
+    # 改为匿名可读
+    assert requests.patch(
+        f"{base_url}/api/packages/pypi/{owner}/{pkg}",
+        json={"visibility": "anonymous"}, headers=oh, timeout=10,
+    ).status_code == 200
+    assert pkg in requests.get(index, timeout=10).text
+    assert requests.get(dl, timeout=10).status_code == 200
+
+
+def test_go_and_maven_visibility(base_url, pkg_user, user_factory):
+    """go proxy 与 maven 读取路径同样遵守可见性（默认私有 -> 匿名可读）。"""
+    owner, pat, _ = pkg_user
+    oh = basic(owner, pat)
+    other, opat, _ = user_factory("gm")
+    xh = basic(other, opat)
+
+    name = f"vis{uuid.uuid4().hex[:6]}"
+    module = f"example.com/{owner}/{name}"
+    z = _zip_bytes({f"{name}@v1.0.0/go.mod": f"module {module}\n".encode()})
+    go_base = f"{base_url}/api/packages/go/{owner}/{module}"
+    assert requests.put(f"{go_base}/@v/v1.0.0.zip", data=z, headers=oh, timeout=10).status_code == 201
+    assert requests.get(f"{go_base}/@v/list", headers=xh, timeout=10).status_code == 403
+    assert requests.get(f"{go_base}/@v/list", timeout=10).status_code == 403
+    assert requests.get(f"{go_base}/@v/v1.0.0.zip", timeout=10).status_code == 403
+    assert requests.patch(
+        f"{base_url}/api/packages/go/{owner}/{module}",
+        json={"visibility": "anonymous"}, headers=oh, timeout=10,
+    ).status_code == 200
+    assert requests.get(f"{go_base}/@v/list", timeout=10).status_code == 200
+    assert requests.get(f"{go_base}/@v/v1.0.0.zip", timeout=10).status_code == 200
+
+    grp = f"com/example/{name}"
+    art = "mvnvis"
+    pom_url = f"{base_url}/api/packages/maven/{owner}/{grp}/{art}/1.0.0/{art}-1.0.0.pom"
+    assert requests.put(pom_url, data=b"<project/>", headers=oh, timeout=10).status_code == 201
+    assert requests.get(pom_url, headers=xh, timeout=10).status_code == 403
+    assert requests.get(pom_url, timeout=10).status_code == 403
+    assert requests.patch(
+        f"{base_url}/api/packages/maven/{owner}/{grp}/{art}",
+        json={"visibility": "anonymous"}, headers=oh, timeout=10,
+    ).status_code == 200
+    assert requests.get(pom_url, timeout=10).status_code == 200
+    assert requests.get(f"{base_url}/api/packages/maven/{owner}/{grp}/{art}/maven-metadata.xml", timeout=10).status_code == 200

@@ -22,6 +22,7 @@ export interface PackageEntry {
   downloads: number;
   yanked: boolean;
   private: boolean;
+  visibility: string; // private | public | anonymous
   uploader: string;
   created_at: string;
 }
@@ -75,6 +76,7 @@ export interface Repo {
   description: string;
   created_at: string;
   private?: boolean;
+  visibility?: string; // private | public | anonymous
   is_template?: boolean;
   /** 仓库默认分支（git HEAD） */
   default_branch?: string;

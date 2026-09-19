@@ -42,6 +42,7 @@ type repoRow struct {
 	Name        string `gorm:"not null;uniqueIndex:uq_repo;size:255"`
 	Description string `gorm:"not null;default:''"`
 	Private     bool   `gorm:"not null;default:true"`
+	Visibility  string `gorm:"not null;default:'private';size:16"`
 	IsTemplate  bool   `gorm:"not null;default:false"`
 	Banned      bool   `gorm:"not null;default:false"`
 	// DefaultBranch 仓库默认分支（git HEAD 指向）；空值按 main 处理。

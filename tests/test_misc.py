@@ -63,7 +63,7 @@ def test_code_search(user_factory, anon, client_factory):
     c.post("/repos", json={"name": f"empty-{_uuid()}"}, expect=201)
     c.get("/search", expect=400)
     c.get(_r(an, repo) + "/search", params={"q": "x", "ref": "ghost"}, expect=400)
-    anon.get(_r(an, repo) + "/search", params={"q": "x"}, expect=401)
+    anon.get(_r(an, repo) + "/search", params={"q": "x"}, expect=404)  # 默认私有仓库对匿名 404
 
 
 # ---- instance / templates / providers ----

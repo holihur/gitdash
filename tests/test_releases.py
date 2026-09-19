@@ -134,7 +134,7 @@ def test_release_permissions(rel_env, user_factory, client_factory):
 
     # 未认证 401
     anon = client_factory()
-    anon.get(_r(an, repo) + "/releases", expect=401)
+    anon.get(_r(an, repo) + "/releases", expect=404)  # 默认私有仓库对匿名 404
 
     # 私有仓库对陌生人整体 404
     bn, _, bob = user_factory()

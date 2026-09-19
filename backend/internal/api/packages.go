@@ -49,24 +49,35 @@ func (a *API) pkgLinkedRepo(owner, typ, name string) string {
 	return ""
 }
 
-// canReadPackage 读权限：默认任意已认证用户；若包被设为私有（显式 private），或
-// 关联了私有仓库，则要求 owner / 组织成员 / 仓库协作者的读权限。
+// canReadPackage 读权限（三档）：
+//   - anonymous：任何人（含未登录）可读
+//   - public：任意已登录用户可读
+//   - private：仅 owner / 组织成员 / 关联仓库协作者
+//
+// 关联了私有仓库时取更严格的一档（仓库可见性优先）。
 func (a *API) canReadPackage(owner, typ, name, username string) bool {
-	private := a.store.IsPackagePrivate(owner, typ, name)
+	vis := a.store.PackageVisibility(owner, typ, name)
 	repo := a.pkgLinkedRepo(owner, typ, name)
-
-	// 公开且未关联私有仓库：任意已认证用户可读
-	if !private {
-		if repo == "" {
-			return true
-		}
-		r, err := a.store.GetRepo(owner, repo)
-		if err != nil || !r.Private {
-			return true
+	repoPrivate := false
+	if repo != "" {
+		if r, err := a.store.GetRepo(owner, repo); err == nil && r.Private {
+			repoPrivate = true
 		}
 	}
 
-	// 私有包 / 私有仓库：owner、组织成员或仓库协作者
+	// 匿名可读：未被私有仓库收严时生效
+	if vis == "anonymous" && !repoPrivate {
+		return true
+	}
+	if username == "" {
+		return false
+	}
+	// 登录可见：未被私有仓库收严时生效
+	if vis == "public" && !repoPrivate {
+		return true
+	}
+
+	// private（或关联私有仓库）：owner / 组织成员 / 仓库协作者
 	if username == owner || a.store.OrgRole(owner, username) != "" {
 		return true
 	}
@@ -286,19 +297,19 @@ func (a *API) setPackageVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Private bool `json:"private"`
+		Visibility string `json:"visibility"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if err := a.store.SetPackagePrivate(owner, typ, name, in.Private); err != nil {
+	if in.Visibility != "private" && in.Visibility != "public" && in.Visibility != "anonymous" {
+		writeCode(w, http.StatusBadRequest, "invalid_visibility", "visibility must be private, public or anonymous")
+		return
+	}
+	if err := a.store.SetPackageVisibility(owner, typ, name, in.Visibility); err != nil {
 		writeCode(w, http.StatusNotFound, "not_found", "not found")
 		return
 	}
-	action := "public"
-	if in.Private {
-		action = "private"
-	}
-	_ = a.store.AddPackageAudit(owner, typ, name, "", action, user)
-	writeJSON(w, http.StatusOK, map[string]any{"private": in.Private})
+	_ = a.store.AddPackageAudit(owner, typ, name, "", in.Visibility, user)
+	writeJSON(w, http.StatusOK, map[string]any{"visibility": in.Visibility, "private": in.Visibility == "private"})
 }

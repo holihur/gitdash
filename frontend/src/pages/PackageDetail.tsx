@@ -75,7 +75,7 @@ export default function PackageDetail() {
   }, [type, owner, name, to]);
 
   const latest = files?.[0] ?? null;
-  const isPrivate = latest?.private ?? false;
+  const visibility = latest?.visibility ?? "private";
 
   useEffect(() => {
     api
@@ -91,13 +91,14 @@ export default function PackageDetail() {
       .catch(() => undefined);
   }, [owner]);
 
-  const toggleVisibility = async () => {
+  const setVisibility = async (next: string) => {
     if (!latest) return;
-    const next = !isPrivate;
     try {
       await api.setPackageVisibility(type, owner, name, next);
-      toast.success(t(next ? "packages.madePrivate" : "packages.madePublic"));
-      setFiles((prev) => prev?.map((f) => ({ ...f, private: next })) ?? prev);
+      toast.success(t("packages.visibilityUpdated"));
+      setFiles((prev) =>
+        prev?.map((f) => ({ ...f, visibility: next, private: next === "private" })) ?? prev,
+      );
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     }
@@ -192,14 +193,28 @@ export default function PackageDetail() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{type}</Badge>
             <h1 className="break-all font-mono text-xl font-bold">{name}</h1>
-            <Badge variant={isPrivate ? "secondary" : "outline"} className="gap-1">
-              {isPrivate ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-              {t(isPrivate ? "packages.private" : "packages.public")}
+            <Badge variant={visibility === "private" ? "secondary" : "outline"} className="gap-1">
+              {visibility === "private" ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+              {t(
+                visibility === "private"
+                  ? "packages.visPrivate"
+                  : visibility === "anonymous"
+                    ? "packages.visAnonymous"
+                    : "packages.visPublic",
+              )}
             </Badge>
             {canManage && latest && (
-              <Button size="sm" variant="outline" onClick={() => void toggleVisibility()}>
-                {t(isPrivate ? "packages.makePublic" : "packages.makePrivate")}
-              </Button>
+              <select
+                value={visibility}
+                onChange={(e) => void setVisibility(e.target.value)}
+                aria-label={t("packages.visibility")}
+                title={t("packages.visibility")}
+                className="h-8 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="private">{t("packages.visPrivate")}</option>
+                <option value="public">{t("packages.visPublic")}</option>
+                <option value="anonymous">{t("packages.visAnonymous")}</option>
+              </select>
             )}
           </div>
 

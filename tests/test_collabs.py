@@ -143,4 +143,4 @@ def test_collab_requires_auth(anon, collab_env):
     an, _, _, _, repo = collab_env
     anon.get(_p(an, repo, "/collabs"), expect=401)
     anon.post(_p(an, repo, "/collabs"), json={"username": "x"}, expect=401)
-    anon.get(_p(an, repo, "/issues"), expect=401)
+    anon.get(_p(an, repo, "/issues"), expect=404)  # 默认私有仓库对匿名 404

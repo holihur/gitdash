@@ -138,7 +138,7 @@ def test_issue_user_isolation(user_factory):
 
 def test_issue_requires_auth(anon, repo_factory):
     repo, _ = repo_factory()
-    anon.get(f"/repos/{repo}/issues", expect=401)
+    anon.get(f"/repos/{repo}/issues", expect=404)  # 默认私有仓库对匿名 404
     anon.post(f"/repos/{repo}/issues", json={"title": "x"}, expect=401)
     anon.patch(f"/repos/{repo}/issues/1", json={"state": "closed"}, expect=401)
 

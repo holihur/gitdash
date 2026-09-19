@@ -133,6 +133,10 @@ func (a *API) goGet(w http.ResponseWriter, r *http.Request) {
 	owner := r.PathValue("owner")
 	module := r.PathValue("module")
 	file := r.PathValue("file")
+	if !a.canReadPackage(owner, "go", module, pkgUser(r)) {
+		pkgForbidden(w)
+		return
+	}
 	switch file {
 	case "list":
 		pkgs, _ := a.store.ListPackageVersions(owner, "go", module)

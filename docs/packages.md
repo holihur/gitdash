@@ -6,7 +6,7 @@ Common rules:
 
 - Namespace: `/api/packages/{type}/{owner}/...` where `owner` is a **user or organization**
 - Auth: package manager clients use **Basic auth** — your username + a **personal access token** (PAT, `repo` scope) as the password. Create one under *Settings → Keys → PAT*
-- Read: any authenticated user of the instance; if a package is linked to a repo (via the `X-Gitdash-Repo` header on publish), the repo's visibility applies
+- Visibility: **private by default**. Each package can be set to `private` (namespace members / collaborators), `public` (any signed-in user) or `anonymous` (anyone, no login) from the Packages page — `PATCH /api/packages/{type}/{owner}/{name}` with `{"visibility":"..."}`. If a package is linked to a repo (via the `X-Gitdash-Repo` header on publish), a private repo's visibility applies (whichever is stricter)
 - Publish / delete / yank: the namespace owner or org members with the **owner** role
 - Storage: file contents are stored content-addressed on disk (`data/packages-blobs`), metadata / download counts / audit log in the DB
 - Size limit: 64 MB per file (Docker layers are streamed to disk, no such limit)

@@ -78,11 +78,23 @@ func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if in.Private == nil {
-		writeErr(w, http.StatusBadRequest, "missing field: private")
+	vis := in.Visibility
+	if vis == "" {
+		if in.Private == nil {
+			writeErr(w, http.StatusBadRequest, "missing field: visibility")
+			return
+		}
+		if *in.Private {
+			vis = "private"
+		} else {
+			vis = "public"
+		}
+	}
+	if vis != "private" && vis != "public" && vis != "anonymous" {
+		writeErr(w, http.StatusBadRequest, "visibility must be private, public or anonymous")
 		return
 	}
-	if err := a.store.SetRepoPrivate(owner, name, *in.Private); err != nil {
+	if err := a.store.SetRepoVisibility(owner, name, vis); err != nil {
 		internalError(w, err)
 		return
 	}

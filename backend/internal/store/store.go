@@ -59,6 +59,7 @@ type Repo struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Private     bool   `json:"private"`
+	Visibility  string `json:"visibility"` // private | public | anonymous（匿名只读）
 	IsTemplate  bool   `json:"is_template"`
 	Banned      bool   `json:"banned"`
 	// DefaultBranch 仓库默认分支（git HEAD）；旧数据为空时视为 main。

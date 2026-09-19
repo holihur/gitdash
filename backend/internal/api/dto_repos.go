@@ -58,7 +58,8 @@ type revertCommitReq struct {
 
 // setRepoVisibilityReq 设置仓库可见性请求体。
 type setRepoVisibilityReq struct {
-	Private *bool `json:"private"` // 是否私有（必填）
+	Private    *bool  `json:"private"`    // 兼容：是否私有
+	Visibility string `json:"visibility"` // private | public | anonymous
 }
 
 // setRepoTemplateReq 设置模版仓库请求体。

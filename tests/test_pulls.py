@@ -143,7 +143,7 @@ def test_pr_bad_paths_and_isolation(pr_env, user_factory, anon):
     _, _, bob = user_factory("bob")
     bob.get(_p(owner, repo), expect=404)
     bob.post(_p(owner, repo), json={"title": "x"}, expect=404)
-    anon.get(_p(owner, repo), expect=401)
+    anon.get(_p(owner, repo), expect=404)  # 默认私有仓库对匿名 404
     anon.post(_p(owner, repo), json={"title": "x"}, expect=401)
 
 

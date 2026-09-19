@@ -135,5 +135,5 @@ def test_projects_permissions(proj_env, user_factory, anon):
     other.delete(base + f"/projects/{p['id']}", expect=404)
 
     # 未登录 401
-    anon.get(base + "/projects", expect=401)
+    anon.get(base + "/projects", expect=404)  # 默认私有仓库对匿名 404
     anon.post(base + "/projects", json={"name": "x"}, expect=401)

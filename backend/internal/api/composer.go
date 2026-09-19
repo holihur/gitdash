@@ -105,6 +105,10 @@ func (a *API) composerDownload(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	version := r.PathValue("version")
 	filename := r.PathValue("filename")
+	if !a.canReadPackage(owner, "composer", vendor+"/"+name, pkgUser(r)) {
+		pkgForbidden(w)
+		return
+	}
 	p, content, err := a.store.GetPackageFile(owner, "composer", vendor+"/"+name, version, filename)
 	if err != nil {
 		writeCode(w, http.StatusNotFound, "not_found", "not found")

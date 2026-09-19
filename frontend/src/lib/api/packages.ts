@@ -54,11 +54,11 @@ export const packagesApi = {
       { method: "DELETE" },
     ),
   listPackageAudit: (owner: string) => req<PackageAuditEntry[]>(`/packages/${encodeURIComponent(owner)}/audit`),
-  /** 设置单个包（owner+type+name，全版本）的公开 / 私有。 */
-  setPackageVisibility: (type: string, owner: string, name: string, isPrivate: boolean) =>
-    req<{ private: boolean }>(
+  /** 设置单个包（owner+type+name，全版本）的可见性：private | public | anonymous。 */
+  setPackageVisibility: (type: string, owner: string, name: string, visibility: string) =>
+    req<{ visibility: string; private: boolean }>(
       `/packages/${encodeURIComponent(type)}/${encodeURIComponent(owner)}/${encPath(name)}`,
-      { method: "PATCH", body: JSON.stringify({ private: isPrivate }) },
+      { method: "PATCH", body: JSON.stringify({ visibility }) },
     ),
 
   // 包文件浏览（网页端）

@@ -18,41 +18,43 @@ import (
 
 // Package 包文件元数据（Content/BlobPath 仅内部使用）。
 type Package struct {
-	ID        int64  `json:"id"`
-	Owner     string `json:"owner"`
-	Repo      string `json:"repo"` // 可选：关联仓库（跟随其可见性），空 = 不关联
-	Type      string `json:"type"` // npm | composer | pypi | rubygems | go | cargo | maven
-	Name      string `json:"name"`
-	Version   string `json:"version"`
-	Filename  string `json:"filename"`
-	Size      int64  `json:"size"`
-	Checksum  string `json:"checksum"` // sha256 hex
-	Downloads int64  `json:"downloads"`
-	Yanked    bool   `json:"yanked"`
-	Private   bool   `json:"private"` // 单个包（owner+type+name）的可见性，true = 仅 owner/组织成员/协作者
-	Uploader  string `json:"uploader"`
-	Meta      string `json:"meta,omitempty"` // 生态相关扩展元数据（JSON/文本），如 cargo deps/features、pypi Requires-Python
-	CreatedAt string `json:"created_at"`
+	ID         int64  `json:"id"`
+	Owner      string `json:"owner"`
+	Repo       string `json:"repo"` // 可选：关联仓库（跟随其可见性），空 = 不关联
+	Type       string `json:"type"` // npm | composer | pypi | rubygems | go | cargo | maven
+	Name       string `json:"name"`
+	Version    string `json:"version"`
+	Filename   string `json:"filename"`
+	Size       int64  `json:"size"`
+	Checksum   string `json:"checksum"` // sha256 hex
+	Downloads  int64  `json:"downloads"`
+	Yanked     bool   `json:"yanked"`
+	Private    bool   `json:"private"`    // 兼容字段：visibility == "private"
+	Visibility string `json:"visibility"` // private | public | anonymous（匿名可读）
+	Uploader   string `json:"uploader"`
+	Meta       string `json:"meta,omitempty"` // 生态相关扩展元数据（JSON/文本），如 cargo deps/features、pypi Requires-Python
+	CreatedAt  string `json:"created_at"`
 }
 
 type packageRow struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement"`
-	Owner     string `gorm:"not null;uniqueIndex:uq_package;size:255"`
-	Repo      string `gorm:"not null;default:'';size:255"`
-	Type      string `gorm:"not null;uniqueIndex:uq_package;size:16"`
-	Name      string `gorm:"not null;uniqueIndex:uq_package;size:512"`
-	Version   string `gorm:"not null;uniqueIndex:uq_package;size:255"`
-	Filename  string `gorm:"not null;uniqueIndex:uq_package;size:512"`
-	Size      int64  `gorm:"not null;default:0"`
-	Checksum  string `gorm:"not null;default:'';size:64"`
-	Downloads int64  `gorm:"not null;default:0"`
-	Yanked    bool   `gorm:"not null;default:false"`
-	Private   bool   `gorm:"not null;default:false"`
-	Uploader  string `gorm:"not null;size:255"`
-	Meta      string `gorm:"not null;default:'';size:8192"`
-	BlobPath  string `gorm:"column:blob_path;not null;default:'';size:512"`
-	Content   []byte `gorm:"not null;default:''"`
-	CreatedAt string `gorm:"not null"`
+	ID         int64  `gorm:"primaryKey;autoIncrement"`
+	Owner      string `gorm:"not null;uniqueIndex:uq_package;size:255"`
+	Repo       string `gorm:"not null;default:'';size:255"`
+	Type       string `gorm:"not null;uniqueIndex:uq_package;size:16"`
+	Name       string `gorm:"not null;uniqueIndex:uq_package;size:512"`
+	Version    string `gorm:"not null;uniqueIndex:uq_package;size:255"`
+	Filename   string `gorm:"not null;uniqueIndex:uq_package;size:512"`
+	Size       int64  `gorm:"not null;default:0"`
+	Checksum   string `gorm:"not null;default:'';size:64"`
+	Downloads  int64  `gorm:"not null;default:0"`
+	Yanked     bool   `gorm:"not null;default:false"`
+	Private    bool   `gorm:"not null;default:false"` // legacy：v0.8.49 的布尔可见性
+	Visibility string `gorm:"not null;default:'private';size:16"`
+	Uploader   string `gorm:"not null;size:255"`
+	Meta       string `gorm:"not null;default:'';size:8192"`
+	BlobPath   string `gorm:"column:blob_path;not null;default:'';size:512"`
+	Content    []byte `gorm:"not null;default:''"`
+	CreatedAt  string `gorm:"not null"`
 }
 
 func (packageRow) TableName() string { return "packages" }
@@ -153,10 +155,19 @@ func readBlob(row packageRow) ([]byte, error) {
 }
 
 func packageFromRow(row packageRow) Package {
+	vis := row.Visibility
+	if vis == "" {
+		if row.Private {
+			vis = "private"
+		} else {
+			vis = "public"
+		}
+	}
 	return Package{
 		ID: row.ID, Owner: row.Owner, Repo: row.Repo, Type: row.Type, Name: row.Name,
 		Version: row.Version, Filename: row.Filename, Size: row.Size, Checksum: row.Checksum,
-		Downloads: row.Downloads, Yanked: row.Yanked, Private: row.Private, Uploader: row.Uploader, Meta: row.Meta, CreatedAt: row.CreatedAt,
+		Downloads: row.Downloads, Yanked: row.Yanked, Private: vis == "private", Visibility: vis,
+		Uploader: row.Uploader, Meta: row.Meta, CreatedAt: row.CreatedAt,
 	}
 }
 
@@ -167,11 +178,12 @@ func (s *Store) CreatePackage(p *Package, content []byte) error {
 	if err != nil {
 		return err
 	}
+	vis := s.PackageVisibility(p.Owner, p.Type, p.Name)
 	row := packageRow{
 		Owner: p.Owner, Repo: p.Repo, Type: p.Type, Name: p.Name, Version: p.Version,
 		Filename: p.Filename, Size: int64(len(content)), Checksum: sha, Uploader: p.Uploader,
-		Private: s.IsPackagePrivate(p.Owner, p.Type, p.Name),
-		Meta:    p.Meta, BlobPath: blobPath, Content: content, CreatedAt: now(),
+		Private: vis == "private", Visibility: vis,
+		Meta: p.Meta, BlobPath: blobPath, Content: content, CreatedAt: now(),
 	}
 	if blobPath != "" {
 		row.Content = []byte{} // 内容已落盘，DB 只存元数据
@@ -213,10 +225,11 @@ func (s *Store) CreatePackageFromFile(p *Package, tmpPath string) error {
 			return err
 		}
 	}
+	vis := s.PackageVisibility(p.Owner, p.Type, p.Name)
 	row := packageRow{
 		Owner: p.Owner, Repo: p.Repo, Type: p.Type, Name: p.Name, Version: p.Version,
 		Filename: p.Filename, Size: size, Checksum: sha, Uploader: p.Uploader, Meta: p.Meta,
-		Private:  s.IsPackagePrivate(p.Owner, p.Type, p.Name),
+		Private: vis == "private", Visibility: vis,
 		BlobPath: blobPath, CreatedAt: now(),
 	}
 	if err := s.db.Create(&row).Error; err != nil {
@@ -330,17 +343,37 @@ func (s *Store) ListAllPackageNames(owner, typ string) ([]string, error) {
 	return names, err
 }
 
-// IsPackagePrivate 返回该包（owner+type+name）是否被设为私有（任一行 private 即视为私有）。
-func (s *Store) IsPackagePrivate(owner, typ, name string) bool {
-	var n int64
-	s.db.Model(&packageRow{}).
-		Where("owner = ? AND type = ? AND name = ? AND private = ?", owner, typ, name, true).
-		Count(&n)
-	return n > 0
+// PackageVisibility 返回该包（owner+type+name）的有效可见性：
+// private | public | anonymous。多行不一致时取最严格（private > public > anonymous）。
+func (s *Store) PackageVisibility(owner, typ, name string) string {
+	var rows []packageRow
+	s.db.Select("private", "visibility").
+		Where("owner = ? AND type = ? AND name = ?", owner, typ, name).Find(&rows)
+	if len(rows) == 0 {
+		return "private"
+	}
+	vis := "anonymous"
+	for _, r := range rows {
+		v := r.Visibility
+		if v == "" {
+			if r.Private {
+				v = "private"
+			} else {
+				v = "public"
+			}
+		}
+		if v == "private" {
+			return "private"
+		}
+		if v == "public" {
+			vis = "public"
+		}
+	}
+	return vis
 }
 
-// SetPackagePrivate 设置整个包（全版本）的可见性；包不存在返回 ErrNotFound。
-func (s *Store) SetPackagePrivate(owner, typ, name string, private bool) error {
+// SetPackageVisibility 设置整个包（全版本）的可见性；包不存在返回 ErrNotFound。
+func (s *Store) SetPackageVisibility(owner, typ, name, visibility string) error {
 	var n int64
 	if err := s.db.Model(&packageRow{}).
 		Where("owner = ? AND type = ? AND name = ?", owner, typ, name).Count(&n).Error; err != nil {
@@ -351,7 +384,7 @@ func (s *Store) SetPackagePrivate(owner, typ, name string, private bool) error {
 	}
 	return s.db.Model(&packageRow{}).
 		Where("owner = ? AND type = ? AND name = ?", owner, typ, name).
-		Update("private", private).Error
+		Updates(map[string]any{"visibility": visibility, "private": visibility == "private"}).Error
 }
 
 // DeletePackage 删除整个包（全版本）。

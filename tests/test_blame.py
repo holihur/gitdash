@@ -99,7 +99,7 @@ def test_blame_bad_path_400(repo_env):
 
 
 def test_blame_requires_auth(client_factory):
-    client_factory().get(f"/users/anyone/repos/anything/blame", expect=401)
+    client_factory().get(f"/users/anyone/repos/anything/blame", expect=404)
 
 
 def test_blame_forbidden_for_stranger(user_factory, repo_env):

@@ -14372,8 +14372,12 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "private": {
-                    "description": "是否私有（必填）",
+                    "description": "兼容：是否私有",
                     "type": "boolean"
+                },
+                "visibility": {
+                    "description": "private | public | anonymous",
+                    "type": "string"
                 }
             }
         },
@@ -15492,7 +15496,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "private": {
-                    "description": "单个包（owner+type+name）的可见性，true = 仅 owner/组织成员/协作者",
+                    "description": "兼容字段：visibility == \"private\"",
                     "type": "boolean"
                 },
                 "repo": {
@@ -15510,6 +15514,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "version": {
+                    "type": "string"
+                },
+                "visibility": {
+                    "description": "private | public | anonymous（匿名可读）",
                     "type": "string"
                 },
                 "yanked": {
@@ -15924,6 +15932,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "visibility": {
+                    "description": "private | public | anonymous（匿名只读）",
+                    "type": "string"
                 },
                 "watchers": {
                     "type": "integer"

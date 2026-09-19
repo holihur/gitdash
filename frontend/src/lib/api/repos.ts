@@ -25,10 +25,10 @@ export const reposApi = {
         template_name: templateRepo?.name || undefined,
       }),
     }),
-  setRepoVisibility: (owner: string, name: string, private_: boolean) =>
+  setRepoVisibility: (owner: string, name: string, visibility: string) =>
     req<Repo>(`/users/${owner}/repos/${name}/visibility`, {
       method: "POST",
-      body: JSON.stringify({ private: private_ }),
+      body: JSON.stringify({ visibility }),
     }),
   setRepoTemplate: (owner: string, name: string, isTemplate: boolean) =>
     req<Repo>(`/users/${owner}/repos/${name}/template`, {

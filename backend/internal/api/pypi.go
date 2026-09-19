@@ -147,6 +147,9 @@ func (a *API) pypiSimpleIndex(w http.ResponseWriter, r *http.Request) {
 	var sb strings.Builder
 	sb.WriteString("<!DOCTYPE html><html><head><title>Simple index</title></head><body>\n")
 	for _, n := range names {
+		if !a.canReadPackage(owner, "pypi", n, pkgUser(r)) {
+			continue
+		}
 		fmt.Fprintf(&sb, "<a href=\"%s/api/packages/pypi/%s/simple/%s/\">%s</a><br/>\n",
 			base, owner, url.PathEscape(n), n)
 	}
@@ -196,6 +199,10 @@ func (a *API) pypiDownload(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	version := r.PathValue("version")
 	filename := r.PathValue("filename")
+	if !a.canReadPackage(owner, "pypi", name, pkgUser(r)) {
+		pkgForbidden(w)
+		return
+	}
 	p, content, err := a.store.GetPackageFile(owner, "pypi", name, version, filename)
 	if err != nil {
 		writeCode(w, http.StatusNotFound, "not_found", "not found")

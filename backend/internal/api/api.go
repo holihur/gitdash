@@ -309,24 +309,24 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// repos
 	mux.HandleFunc("GET /api/repos", a.auth(a.listRepos))
 	mux.HandleFunc("POST /api/repos", a.auth(a.createRepo))
-	mux.HandleFunc("GET /api/repos/{name}", a.auth(a.getRepo))
+	mux.HandleFunc("GET /api/repos/{name}", a.authOptional(a.getRepo))
 	mux.HandleFunc("DELETE /api/repos/{name}", a.auth(a.deleteRepo))
-	mux.HandleFunc("GET /api/repos/{name}/branches", a.auth(a.branches))
-	mux.HandleFunc("GET /api/repos/{name}/tree", a.auth(a.tree))
-	mux.HandleFunc("GET /api/repos/{name}/blob", a.auth(a.blob))
-	mux.HandleFunc("GET /api/repos/{name}/blame", a.auth(a.blame))
-	mux.HandleFunc("GET /api/repos/{name}/commits", a.auth(a.commits))
-	mux.HandleFunc("GET /api/repos/{name}/search", a.auth(a.search))
+	mux.HandleFunc("GET /api/repos/{name}/branches", a.authOptional(a.branches))
+	mux.HandleFunc("GET /api/repos/{name}/tree", a.authOptional(a.tree))
+	mux.HandleFunc("GET /api/repos/{name}/blob", a.authOptional(a.blob))
+	mux.HandleFunc("GET /api/repos/{name}/blame", a.authOptional(a.blame))
+	mux.HandleFunc("GET /api/repos/{name}/commits", a.authOptional(a.commits))
+	mux.HandleFunc("GET /api/repos/{name}/search", a.authOptional(a.search))
 	mux.HandleFunc("POST /api/repos/{name}/gc", a.auth(a.gcRepo))
 	// repos（owner 限定版：供协作者 / 跨用户访问，owner 显式声明）
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}", a.auth(a.getRepo))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}", a.authOptional(a.getRepo))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}", a.auth(a.deleteRepo))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branches", a.auth(a.branches))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tree", a.auth(a.tree))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.auth(a.blob))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blame", a.auth(a.blame))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.auth(a.commits))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/search", a.auth(a.search))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branches", a.authOptional(a.branches))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tree", a.authOptional(a.tree))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blob", a.authOptional(a.blob))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/blame", a.authOptional(a.blame))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits", a.authOptional(a.commits))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/search", a.authOptional(a.search))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/gc", a.auth(a.gcRepo))
 
 	// user page & follow
@@ -363,11 +363,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/mirror/sync", a.auth(a.syncMirror))
 
 	// issues
-	mux.HandleFunc("GET /api/repos/{name}/issues", a.auth(a.listIssues))
+	mux.HandleFunc("GET /api/repos/{name}/issues", a.authOptional(a.listIssues))
 	mux.HandleFunc("POST /api/repos/{name}/issues", a.auth(a.createIssue))
 	mux.HandleFunc("PATCH /api/repos/{name}/issues/{number}", a.auth(a.updateIssue))
 	mux.HandleFunc("DELETE /api/repos/{name}/issues/{number}", a.auth(a.deleteIssue))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues", a.auth(a.listIssues))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues", a.authOptional(a.listIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues", a.auth(a.createIssue))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.updateIssue))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.deleteIssue))
@@ -377,74 +377,74 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// comments（issue 与 PR 共用，kind 由路由闭包区分）
 	issueList, issueAdd := a.issueOrPullComments("issue")
 	pullList, pullAdd := a.issueOrPullComments("pull")
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues/{number}/comments", a.auth(issueList))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues/{number}/comments", a.authOptional(issueList))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/comments", a.auth(issueAdd))
-	mux.HandleFunc("GET /api/repos/{name}/issues/{number}/comments", a.auth(issueList))
+	mux.HandleFunc("GET /api/repos/{name}/issues/{number}/comments", a.authOptional(issueList))
 	mux.HandleFunc("POST /api/repos/{name}/issues/{number}/comments", a.auth(issueAdd))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullList))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.authOptional(pullList))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullAdd))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments/{id}/apply", a.auth(a.applySuggestion))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/comments/{id}", a.auth(a.deleteComment))
 
 	// issue labels & milestones
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/labels", a.auth(a.listLabels))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/labels", a.authOptional(a.listLabels))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/labels", a.auth(a.createLabel))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/labels/{id}", a.auth(a.updateLabel))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/labels/{id}", a.auth(a.deleteLabel))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/milestones", a.auth(a.listMilestones))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/milestones", a.authOptional(a.listMilestones))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/milestones", a.auth(a.createMilestone))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/milestones/{id}", a.auth(a.updateMilestone))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/milestones/{id}", a.auth(a.deleteMilestone))
 
 	// projects（看板 + 泳道）
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects", a.auth(a.listProjects))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects", a.authOptional(a.listProjects))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/projects", a.auth(a.createProject))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/projects/{id}", a.auth(a.updateProject))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/projects/{id}", a.auth(a.deleteProject))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/board", a.auth(a.getProjectBoard))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/columns", a.auth(a.listProjectColumns))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/board", a.authOptional(a.getProjectBoard))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/columns", a.authOptional(a.listProjectColumns))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/projects/{id}/columns", a.auth(a.createProjectColumn))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/projects/{id}/columns/{cid}", a.auth(a.updateProjectColumn))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/projects/{id}/columns/{cid}", a.auth(a.deleteProjectColumn))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/swimlanes", a.auth(a.listProjectSwimlanes))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/swimlanes", a.authOptional(a.listProjectSwimlanes))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/projects/{id}/swimlanes", a.auth(a.createProjectSwimlane))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/projects/{id}/swimlanes/{lid}", a.auth(a.updateProjectSwimlane))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/projects/{id}/swimlanes/{lid}", a.auth(a.deleteProjectSwimlane))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/cards", a.auth(a.listProjectCards))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/projects/{id}/cards", a.authOptional(a.listProjectCards))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/projects/{id}/cards", a.auth(a.createProjectCard))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}", a.auth(a.updateProjectCard))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}", a.auth(a.deleteProjectCard))
 
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.auth(a.commitDiff))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/compare", a.auth(a.compareRefs))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.authOptional(a.commitDiff))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/compare", a.authOptional(a.compareRefs))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits/{sha}/revert", a.auth(a.revertCommit))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits", a.auth(a.writeCommit))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tags", a.auth(a.listTags))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tags", a.authOptional(a.listTags))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/refs", a.auth(a.createRef))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/refs/{kind}/{refname}", a.auth(a.deleteRef))
 
 	// releases & assets
-	mux.HandleFunc("GET /api/repos/{name}/releases", a.auth(a.listReleases))
+	mux.HandleFunc("GET /api/repos/{name}/releases", a.authOptional(a.listReleases))
 	mux.HandleFunc("POST /api/repos/{name}/releases", a.auth(a.createRelease))
-	mux.HandleFunc("GET /api/repos/{name}/releases/{tag}", a.auth(a.getRelease))
+	mux.HandleFunc("GET /api/repos/{name}/releases/{tag}", a.authOptional(a.getRelease))
 	mux.HandleFunc("DELETE /api/repos/{name}/releases/{tag}", a.auth(a.deleteRelease))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases", a.auth(a.listReleases))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases", a.authOptional(a.listReleases))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/releases", a.auth(a.createRelease))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}", a.auth(a.getRelease))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}", a.authOptional(a.getRelease))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/releases/{tag}", a.auth(a.deleteRelease))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/releases/{tag}/assets", a.auth(a.uploadAsset))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}/assets", a.auth(a.listAssets))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}", a.auth(a.downloadAsset))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}/assets", a.authOptional(a.listAssets))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}", a.authOptional(a.downloadAsset))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/releases/{tag}/assets/{filename}", a.auth(a.deleteAsset))
 
 	// pull requests
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.auth(a.listPulls))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls", a.authOptional(a.listPulls))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls", a.auth(a.createPull))
 	// patch-by-email：接收 git format-patch/send-email 的 mbox，自动开 PR
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/patches", a.auth(a.receivePatches))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}", a.auth(a.getPull))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/diff", a.auth(a.pullDiff))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/codeowners", a.auth(a.pullCodeowners))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}", a.authOptional(a.getPull))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/diff", a.authOptional(a.pullDiff))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/codeowners", a.authOptional(a.pullCodeowners))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/merge", a.auth(a.mergePull))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/state", a.auth(a.setPullState))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/draft", a.auth(a.setPullDraft))
@@ -455,7 +455,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/branch-protections", a.auth(a.listBranchProtections))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/branch-protections/{branch}", a.auth(a.setBranchProtection))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/branch-protections/{branch}", a.auth(a.deleteBranchProtection))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.auth(a.listReviews))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.authOptional(a.listReviews))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/reviews", a.auth(a.createReview))
 
 	// collaborators
@@ -556,58 +556,58 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// packages（私有包注册表：npm / composer / pypi / rubygems / go / cargo / maven）
 	// 读：任意已认证用户（关联仓库时跟随其可见性）；写：owner 本人或组织 owner 角色成员
-	mux.HandleFunc("GET /api/packages/{owner}", a.auth(a.listPackagesUI))
-	mux.HandleFunc("GET /api/packages/{owner}/{type}", a.auth(a.listPackagesUI))
+	mux.HandleFunc("GET /api/packages/{owner}", a.authOptional(a.listPackagesUI))
+	mux.HandleFunc("GET /api/packages/{owner}/{type}", a.authOptional(a.listPackagesUI))
 	mux.HandleFunc("GET /api/packages/{owner}/audit", a.auth(a.listPackageAudit))
 	mux.HandleFunc("DELETE /api/packages/{type}/{owner}/{name...}", a.auth(a.deletePackageUI))
 	// 单个包的公开 / 私有
 	mux.HandleFunc("PATCH /api/packages/{type}/{owner}/{name...}", a.auth(a.setPackageVisibility))
 	// 网页端包文件浏览（列出制品 / 归档条目 / 预览 / 下载）
-	mux.HandleFunc("GET /api/package-files/{type}/{owner}/{name...}", a.auth(a.packageFiles))
+	mux.HandleFunc("GET /api/package-files/{type}/{owner}/{name...}", a.authOptional(a.packageFiles))
 
 	// npm
 	mux.HandleFunc("PUT /api/packages/npm/{owner}/{rest...}", a.auth(a.npmPublish))
 	mux.HandleFunc("DELETE /api/packages/npm/{owner}/{name...}", a.auth(a.npmDelete))
-	mux.HandleFunc("GET /api/packages/npm/{owner}/{rest...}", a.auth(a.npmGet))
+	mux.HandleFunc("GET /api/packages/npm/{owner}/{rest...}", a.authOptional(a.npmGet))
 
 	// pypi（twine）
 	mux.HandleFunc("POST /api/packages/pypi/{owner}", a.auth(a.pypiUpload))
 	mux.HandleFunc("POST /api/packages/pypi/{owner}/", a.auth(a.pypiUpload))
-	mux.HandleFunc("GET /api/packages/pypi/{owner}/pypi/{name}/json", a.auth(a.pypiJSON))
-	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple", a.auth(a.pypiSimpleIndex))
-	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/", a.auth(a.pypiSimpleIndex))
-	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/{name}", a.auth(a.pypiSimpleProject))
-	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/{name}/", a.auth(a.pypiSimpleProject))
-	mux.HandleFunc("GET /api/packages/pypi/{owner}/download/{name}/{version}/{filename}", a.auth(a.pypiDownload))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/pypi/{name}/json", a.authOptional(a.pypiJSON))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple", a.authOptional(a.pypiSimpleIndex))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/", a.authOptional(a.pypiSimpleIndex))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/{name}", a.authOptional(a.pypiSimpleProject))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/simple/{name}/", a.authOptional(a.pypiSimpleProject))
+	mux.HandleFunc("GET /api/packages/pypi/{owner}/download/{name}/{version}/{filename}", a.authOptional(a.pypiDownload))
 
 	// go (GOPROXY)
 	mux.HandleFunc("PUT /api/packages/go/{owner}/{rest...}", a.auth(a.goPut))
-	mux.HandleFunc("GET /api/packages/go/{owner}/{rest...}", a.auth(a.goRoute))
+	mux.HandleFunc("GET /api/packages/go/{owner}/{rest...}", a.authOptional(a.goRoute))
 
 	// cargo
 	// 稀疏索引要求 config.json 位于 index 根（cargo 请求 <index>/config.json）。
-	mux.HandleFunc("GET /api/packages/cargo/{owner}/config.json", a.auth(a.cargoConfig))
-	mux.HandleFunc("GET /api/packages/cargo/{owner}/index/config.json", a.auth(a.cargoConfig))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/config.json", a.authOptional(a.cargoConfig))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/index/config.json", a.authOptional(a.cargoConfig))
 	mux.HandleFunc("PUT /api/packages/cargo/{owner}/api/v1/crates/new", a.auth(a.cargoPublish))
 	mux.HandleFunc("DELETE /api/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank", a.auth(a.cargoYank))
 	mux.HandleFunc("PUT /api/packages/cargo/{owner}/api/v1/crates/{crate}/{version}/yank", a.auth(a.cargoYank))
-	mux.HandleFunc("GET /api/packages/cargo/{owner}/index/{rest...}", a.auth(a.cargoIndex))
-	mux.HandleFunc("GET /api/packages/cargo/{owner}/dl/{crate}/{version}/{filename}", a.auth(a.cargoDownload))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/index/{rest...}", a.authOptional(a.cargoIndex))
+	mux.HandleFunc("GET /api/packages/cargo/{owner}/dl/{crate}/{version}/{filename}", a.authOptional(a.cargoDownload))
 
 	// rubygems
 	mux.HandleFunc("POST /api/packages/rubygems/{owner}/api/v1/gems", a.auth(a.gemPush))
-	mux.HandleFunc("GET /api/packages/rubygems/{owner}/gems/{filename}", a.auth(a.gemDownload))
+	mux.HandleFunc("GET /api/packages/rubygems/{owner}/gems/{filename}", a.authOptional(a.gemDownload))
 
 	// composer
 	mux.HandleFunc("PUT /api/packages/composer/{owner}/{vendor}/{name}", a.auth(a.composerUpload))
-	mux.HandleFunc("GET /api/packages/composer/{owner}/packages.json", a.auth(a.composerPackagesJSON))
-	mux.HandleFunc("GET /api/packages/composer/{owner}/p2/{vendor}/{name}", a.auth(a.composerP2))
-	mux.HandleFunc("GET /api/packages/composer/{owner}/download/{vendor}/{name}/{version}/{filename}", a.auth(a.composerDownload))
+	mux.HandleFunc("GET /api/packages/composer/{owner}/packages.json", a.authOptional(a.composerPackagesJSON))
+	mux.HandleFunc("GET /api/packages/composer/{owner}/p2/{vendor}/{name}", a.authOptional(a.composerP2))
+	mux.HandleFunc("GET /api/packages/composer/{owner}/download/{vendor}/{name}/{version}/{filename}", a.authOptional(a.composerDownload))
 
 	// maven
 	mux.HandleFunc("PUT /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenUpload))
-	mux.HandleFunc("GET /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenGet))
-	mux.HandleFunc("HEAD /api/packages/maven/{owner}/{rest...}", a.auth(a.mavenGet))
+	mux.HandleFunc("GET /api/packages/maven/{owner}/{rest...}", a.authOptional(a.mavenGet))
+	mux.HandleFunc("HEAD /api/packages/maven/{owner}/{rest...}", a.authOptional(a.mavenGet))
 
 	// Docker / OCI 私有注册表（Distribution spec，统一在 /v2/ 下按路径分派）
 	mux.HandleFunc("/v2/", a.registryAuth(a.registryHandler))
@@ -759,6 +759,22 @@ func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 		ctx := context.WithValue(r.Context(), ctxUser{}, username)
 		if isPAT {
 			ctx = context.WithValue(ctx, ctxPatScopes{}, scopes)
+		}
+		next(w, r.WithContext(ctx))
+	}
+}
+
+// authOptional 与 auth 类似，但允许匿名：有凭据就注入用户/scope，没有也不报 401。
+// 供“匿名可读”的读接口使用，具体权限由 handler 内的 canRead* 判定。
+func (a *API) authOptional(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		username, scopes, isPAT := a.resolveUser(r)
+		ctx := r.Context()
+		if username != "" {
+			ctx = context.WithValue(ctx, ctxUser{}, username)
+			if isPAT {
+				ctx = context.WithValue(ctx, ctxPatScopes{}, scopes)
+			}
 		}
 		next(w, r.WithContext(ctx))
 	}
@@ -981,11 +997,30 @@ func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) 
 	if me == owner {
 		return owner, name, true
 	}
-	// 读路径跳过 CanWrite（其结果会被覆盖）；公开性已由 repo.Private 判定，
-	// 只对私有仓库走 CanRead（避免 CanWrite/CanRead 的重复 IsOrg/OrgRole 查询）。
-	can := !repo.Private || a.store.CanRead(owner, name, me)
+	vis := repo.Visibility
+	if vis == "" {
+		if repo.Private {
+			vis = "private"
+		} else {
+			vis = "public"
+		}
+	}
 	if write {
-		can = a.store.CanWrite(owner, name, me)
+		if !a.store.CanWrite(owner, name, me) {
+			writeNotFound(w, "repo")
+			return "", "", false
+		}
+		return owner, name, true
+	}
+	// 读：anonymous=任何人；public=任意登录用户；private=成员/协作者
+	var can bool
+	switch vis {
+	case "anonymous":
+		can = true
+	case "public":
+		can = me != ""
+	default:
+		can = me != "" && a.store.CanRead(owner, name, me)
 	}
 	if !can {
 		writeNotFound(w, "repo")
