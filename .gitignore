@@ -42,3 +42,4 @@ frontend/tsconfig.tsbuildinfo
 
 # 本地协调清单（不入库）
 help.md
+security.md
