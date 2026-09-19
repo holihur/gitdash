@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"net"
@@ -21,8 +22,7 @@ var rateLimitDisabled = os.Getenv("GITDASH_DISABLE_RATE_LIMIT") == "1"
 // registrationDisabled 是否关闭开放注册（GITDASH_DISABLE_REGISTRATION=1/true）。
 // 每次读取，便于测试通过 t.Setenv 覆盖，也允许运维运行时切换。
 func registrationDisabled() bool {
-	v := strings.TrimSpace(os.Getenv("GITDASH_DISABLE_REGISTRATION"))
-	return v == "1" || strings.EqualFold(v, "true")
+	return envx.Bool("GITDASH_DISABLE_REGISTRATION", false)
 }
 
 // 限速记录持久化在 store（login_fails 表）：重启与多实例共享同一窗口，

@@ -20,3 +20,16 @@ func Millis(key string, defMS int) time.Duration {
 	}
 	return time.Duration(n) * time.Millisecond
 }
+
+// Bool 读取布尔型环境变量：1/true/yes/on（大小写不敏感）为 true，
+// 0/false/no/off 为 false，空值或非法值返回 def。
+func Bool(key string, def bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
+}

@@ -19,7 +19,8 @@ func TestSessionTokenHashedAtRest(t *testing.T) {
 	}
 	uid, _ := s.UserID("alice")
 
-	token := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	// 测试用假 token（非真实凭据）；用低熵字符串避免误报密钥扫描。
+	token := "unit-test-session-token" //gitleaks:allow
 	if err := s.CreateSession(token, uid); err != nil {
 		t.Fatal(err)
 	}

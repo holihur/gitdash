@@ -169,30 +169,33 @@ func TestDockerRegistryBlobCrossNamespaceDenied(t *testing.T) {
 	digest := "sha256:" + hex.EncodeToString(sum[:])
 
 	// alice 上传 blob
-	resp := registryReq(t, "POST", env.BaseURL+"/v2/alice/demo/blobs/uploads/", "alice", atok, nil, "")
-	loc := resp.Header.Get("Location")
-	closeBody(t, resp)
-	resp = registryReq(t, "PATCH", env.BaseURL+loc, "alice", atok, bytes.NewReader(blob), "application/octet-stream")
-	closeBody(t, resp)
-	resp = registryReq(t, "PUT", env.BaseURL+loc+"?digest="+digest, "alice", atok, nil, "")
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("alice blob put = %d", resp.StatusCode)
+	start := registryReq(t, "POST", env.BaseURL+"/v2/alice/demo/blobs/uploads/", "alice", atok, nil, "")
+	loc := start.Header.Get("Location")
+	closeBody(t, start)
+	patch := registryReq(t, "PATCH", env.BaseURL+loc, "alice", atok, bytes.NewReader(blob), "application/octet-stream")
+	if patch.StatusCode != http.StatusAccepted {
+		t.Fatalf("alice blob patch = %d", patch.StatusCode)
 	}
-	closeBody(t, resp)
+	closeBody(t, patch)
+	put := registryReq(t, "PUT", env.BaseURL+loc+"?digest="+digest, "alice", atok, nil, "")
+	if put.StatusCode != http.StatusCreated {
+		t.Fatalf("alice blob put = %d", put.StatusCode)
+	}
+	closeBody(t, put)
 
 	// 本人可读
-	resp = registryReq(t, "GET", env.BaseURL+"/v2/alice/demo/blobs/"+digest, "alice", atok, nil, "")
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("alice blob get = %d", resp.StatusCode)
+	got := registryReq(t, "GET", env.BaseURL+"/v2/alice/demo/blobs/"+digest, "alice", atok, nil, "")
+	if got.StatusCode != http.StatusOK {
+		t.Fatalf("alice blob get = %d", got.StatusCode)
 	}
-	closeBody(t, resp)
+	closeBody(t, got)
 
 	// 攻击者用**自己的**命名空间路径 + alice 的 digest → 必须 404
 	for _, method := range []string{"GET", "HEAD"} {
-		resp = registryReq(t, method, env.BaseURL+"/v2/bobby/anything/blobs/"+digest, "bobby", btok, nil, "")
-		if resp.StatusCode != http.StatusNotFound {
-			t.Fatalf("cross-namespace %s blob = %d, want 404", method, resp.StatusCode)
+		r := registryReq(t, method, env.BaseURL+"/v2/bobby/anything/blobs/"+digest, "bobby", btok, nil, "")
+		if r.StatusCode != http.StatusNotFound {
+			t.Fatalf("cross-namespace %s blob = %d, want 404", method, r.StatusCode)
 		}
-		closeBody(t, resp)
+		closeBody(t, r)
 	}
 }

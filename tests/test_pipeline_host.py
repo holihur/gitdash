@@ -1,8 +1,10 @@
 """Pipeline host 执行（无 Docker）黑盒 API 测试 —— GITDASH_PIPELINE_EXEC=host 模式。
 
 与后端完全隔离：只通过 HTTP API 验证行为。
-- host 模式实例（专用模块夹具）：.gitdash.yml 省略 image 时直接在宿主 sh 执行；
+- host 模式实例（专用模块夹具）：注册关闭（可信实例）+ GITDASH_PIPELINE_EXEC=host；
+  .gitdash.yml 省略 image 时直接在宿主 sh 执行；测试用户由管理端创建；
 - 默认实例（会话级 base_url 夹具）：省略 image 的流水线应被拒绝（host 执行未开启）。
+- 安全门控：若注册仍开放，服务端会忽略 GITDASH_PIPELINE_EXEC=host（防止任意注册者 RCE）。
 """
 
 from __future__ import annotations
@@ -21,6 +23,9 @@ import pytest
 import requests
 
 GITDASH_BIN = os.environ.get("GITDASH_BIN", "").strip()
+
+HOST_ADMIN_USER = "host-admin"
+HOST_ADMIN_PASS = "host-admin-pass-123456"
 
 HOST_YAML = (
     "env:\n"
@@ -107,7 +112,10 @@ class _Mini:
 
 @pytest.fixture(scope="module")
 def host_env(tmp_path_factory):
-    """独立实例：GITDASH_PIPELINE_EXEC=host（开启 host 执行）。"""
+    """独立实例：关闭注册 + GITDASH_PIPELINE_EXEC=host。
+
+    安全门控要求注册关闭（实例可信）才允许 host 执行；因此测试用户经管理端创建。
+    """
     if not GITDASH_BIN:
         pytest.skip("host mode test needs GITDASH_BIN")
 
@@ -120,6 +128,9 @@ def host_env(tmp_path_factory):
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
         GITDASH_PIPELINE_EXEC="host",
+        GITDASH_DISABLE_REGISTRATION="1",
+        GITDASH_ADMIN_USER=HOST_ADMIN_USER,
+        GITDASH_ADMIN_PASSWORD=HOST_ADMIN_PASS,
     )
     log = open(tmpdir / "server.log", "wb")
     proc = subprocess.Popen([GITDASH_BIN, "serve"], env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -141,8 +152,20 @@ def host_env(tmp_path_factory):
         log.close()
         pytest.fail(f"host-mode server not ready; see {tmpdir / 'server.log'}")
 
+    # 注册已关闭：登录管理端，后续用管理端创建测试用户。
+    admin = requests.Session()
+    r = admin.post(
+        f"{base}/api/admin/login",
+        json={"username": HOST_ADMIN_USER, "password": HOST_ADMIN_PASS},
+        timeout=10,
+    )
+    if r.status_code != 200:
+        proc.kill()
+        log.close()
+        pytest.fail(f"host-mode admin login failed: {r.status_code} {r.text}")
+
     try:
-        yield base
+        yield base, admin
     finally:
         proc.terminate()
         try:
@@ -154,11 +177,19 @@ def host_env(tmp_path_factory):
 
 @pytest.fixture
 def host_repo(host_env):
+    base, admin = host_env
     username = f"ph-{_uuid()}"
-    token = _Mini(host_env).post(
-        "/auth/register", json={"username": username, "password": "test-pass-123456"}, expect=201
+    password = "test-pass-123456"
+    r = admin.post(
+        f"{base}/api/admin/users",
+        json={"username": username, "password": password},
+        timeout=10,
+    )
+    assert r.status_code == 201, f"admin create user -> {r.status_code}: {r.text}"
+    token = _Mini(base).post(
+        "/auth/login", json={"username": username, "password": password}, expect=200
     )["token"]
-    c = _Mini(host_env, token)
+    c = _Mini(base, token)
     repo = f"host-{_uuid()}"
     c.post("/repos", json={"name": repo, "template": "readme"}, expect=201)
     yield username, repo, c

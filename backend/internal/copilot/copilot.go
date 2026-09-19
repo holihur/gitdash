@@ -343,7 +343,7 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 	// 防止已保存/被篡改的 base_url 指向内网：会话启动前再做一次 SSRF 校验。
 	baseURL, err := ValidateBaseURL(provider, secret.BaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrByokMissing, err)
+		return nil, fmt.Errorf("%w: %w", ErrByokMissing, err)
 	}
 	authStyle := "both"
 	if spec, ok := Provider(provider); ok && spec.AuthStyle != "" {

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/queue"
@@ -190,11 +191,22 @@ func jobHandler(ctx context.Context, job queue.Job) error {
 	return nil
 }
 
+// RegistrationDisabled 是否关闭开放注册（GITDASH_DISABLE_REGISTRATION=1）。
+// 关闭注册意味着实例是私有的（仅管理员/受邀用户），是开启高危能力（如宿主机
+// 直接执行流水线）的前置条件。
+func RegistrationDisabled() bool { return envx.Bool("GITDASH_DISABLE_REGISTRATION", false) }
+
 // Init 创建流水线日志目录（main 启动时调用）。
 // 环境变量 GITDASH_PIPELINE_DEFAULT_TIMEOUT 可覆盖单步默认超时（如 "30s"，用于测试）。
 func Init(dataDir string) error {
 	if os.Getenv("GITDASH_PIPELINE_EXEC") == "host" {
-		hostAllowed = true
+		// 安全门控：host 模式（无容器沙箱）只有在注册关闭、实例可信时才能开启；
+		// 否则任何能注册并推送仓库的人都可以在服务端执行任意命令（RCE）。
+		if RegistrationDisabled() {
+			hostAllowed = true
+		} else {
+			logx.Warnf("pipeline: GITDASH_PIPELINE_EXEC=host ignored: open registration lets anyone run arbitrary host commands; set GITDASH_DISABLE_REGISTRATION=1 to enable host execution")
+		}
 	}
 	if d, err := time.ParseDuration(os.Getenv("GITDASH_PIPELINE_DEFAULT_TIMEOUT")); err == nil && d > 0 && d <= MaxStepTimeout {
 		DefaultStepTimeout = d

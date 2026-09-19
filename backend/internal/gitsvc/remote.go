@@ -1,6 +1,8 @@
 package gitsvc
 
 import (
+	"net"
+	"net/netip"
 	"net/url"
 	"strings"
 
@@ -35,7 +37,30 @@ func RemoteURLBlocked(raw string) bool {
 	if err != nil || u.Hostname() == "" {
 		return true
 	}
+	// git:// 无认证，API 只允许回环/私有（本地/内网 git daemon）。执行点沿用同一
+	// 策略：只接受回环/私有，公网 git:// 一律拒绝。
+	if u.Scheme == "git" {
+		return !hostLoopbackOrPrivate(u.Hostname())
+	}
 	return ssrf.HostBlocked(u.Hostname())
+}
+
+// hostLoopbackOrPrivate 判断主机是否解析到回环/私有地址（不受
+// GITDASH_SSRF_ALLOW_PRIVATE 影响，用于 git:// 的固定策略）。
+func hostLoopbackOrPrivate(host string) bool {
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if addr, ok := netip.AddrFromSlice(ip); ok {
+			addr = addr.Unmap()
+			if addr.IsLoopback() || addr.IsPrivate() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isLocalPath 判断无 scheme 的 git 目标是否是本地文件系统路径（而非 scp-like 远端）。
