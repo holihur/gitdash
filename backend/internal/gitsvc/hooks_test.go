@@ -33,7 +33,9 @@ func TestCreateBareInstallsHooks(t *testing.T) {
 	if !strings.HasPrefix(ps, "#!/bin/sh") {
 		t.Fatalf("post-receive missing shebang:\n%s", ps)
 	}
-	for _, want := range []string{`"event":"push"`, `"owner":"alice"`, `"repo":"demo"`, SpoolDir()} {
+	// 新实现把 `oldrev newrev refname` 交给 gitdash 二进制做 JSON 编码，
+	// 不再用 shell printf 拼接（防恶意 refname 注入）。
+	for _, want := range []string{`post-receive "alice" "demo"`, "while read oldrev newrev refname"} {
 		if !strings.Contains(ps, want) {
 			t.Fatalf("post-receive missing %q:\n%s", want, ps)
 		}

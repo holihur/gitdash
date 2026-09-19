@@ -34,17 +34,17 @@ func installPostReceiveHook(repoPath, owner, name string) error {
 	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
 		return err
 	}
+	// 只把 `oldrev newrev refname` 转交给 `gitdash post-receive` 子命令，
+	// 由 Go 侧生成 JSON（避免 shell 拼接被恶意 refname 注入）。
 	script := `#!/bin/sh
-# gitdash: record push events (consumed by the webhook dispatcher)
+# gitdash: record push events via the gitdash binary (safe JSON encoding)
 while read oldrev newrev refname; do
 	[ -z "$refname" ] && continue
-	f="@SPOOL@/@OWNER@__@REPO@-$$-$(date +%s%N).json"
-	printf '{"event":"push","owner":"@OWNER@","repo":"@REPO@","old":"%s","new":"%s","ref":"%s","user":"%s","created_at":"%s"}\n' \
-		"$oldrev" "$newrev" "$refname" "${GITDASH_USER:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$f"
-done
+	echo "$oldrev $newrev $refname"
+done | @BIN@ post-receive "@OWNER@" "@REPO@"
 `
 	script = strings.NewReplacer(
-		"@SPOOL@", spoolDir,
+		"@BIN@", selfBin(),
 		"@OWNER@", owner,
 		"@REPO@", name,
 	).Replace(script)
@@ -55,13 +55,18 @@ done
 	return installPreReceiveHook(hooksDir, owner, name)
 }
 
+// selfBin 返回当前可执行文件路径（供 hook 回调 `gitdash <subcommand>`）。
+func selfBin() string {
+	self, err := os.Executable()
+	if err != nil || self == "" {
+		return "gitdash" // 退化为 PATH 查找
+	}
+	return self
+}
+
 // installPreReceiveHook 安装 pre-receive hook：分支保护（禁删/禁强推）在 push 落盘前校验。
 // 校验逻辑在 gitdash 主程序（gitdash pre-receive 子命令）里查库执行；二进制缺失时放行，避免阻断 push。
 func installPreReceiveHook(hooksDir, owner, name string) error {
-	self, err := os.Executable()
-	if err != nil || self == "" {
-		self = "gitdash" // 退化为 PATH 查找
-	}
 	script := `#!/bin/sh
 # gitdash: branch protection (deletion / force-push) enforced before update
 while read oldrev newrev refname; do
@@ -70,7 +75,7 @@ while read oldrev newrev refname; do
 done | @BIN@ pre-receive "@OWNER@" "@REPO@"
 `
 	script = strings.NewReplacer(
-		"@BIN@", self,
+		"@BIN@", selfBin(),
 		"@OWNER@", owner,
 		"@REPO@", name,
 	).Replace(script)
@@ -134,6 +139,11 @@ func importRepo(url, targetOwner, targetName, privateKey string) error {
 	if !ValidName(targetOwner) || !ValidName(targetName) {
 		return fmt.Errorf("invalid target repo")
 	}
+	// 执行点复查：注册时校验过的域名可能已重绑定到内网（TOCTOU），
+	// 且 scp-like 地址曾完全绕过主机黑名单。
+	if RemoteURLBlocked(url) {
+		return fmt.Errorf("blocked host")
+	}
 	dst := repoPath(targetOwner, targetName)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
@@ -157,6 +167,10 @@ func importRepo(url, targetOwner, targetName, privateKey string) error {
 func pushMirror(owner, name, url, privateKey string) error {
 	if !ValidName(owner) || !ValidName(name) {
 		return fmt.Errorf("invalid repo")
+	}
+	// 执行点复查（同 importRepo，防 DNS 重绑定与 scp-like 绕过）。
+	if RemoteURLBlocked(url) {
+		return fmt.Errorf("blocked host")
 	}
 	path := repoPath(owner, name)
 	if fi, err := os.Stat(path); err != nil || !fi.IsDir() {

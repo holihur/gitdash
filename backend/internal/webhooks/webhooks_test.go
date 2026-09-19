@@ -129,7 +129,7 @@ func TestWebhookSignatureHeader(t *testing.T) {
 
 	_, _ = st.CreateWebhook("alice", "demo", srv.URL+"/h", "super-secret-key-123")
 	ev := `{"event":"push","owner":"alice","repo":"demo","ref":"refs/heads/main"}`
-	_ = os.WriteFile(filepath.Join(spool, "a.json"), []byte(ev), 0o644)
+	_ = os.WriteFile(filepath.Join(spool, "alice__demo-a.json"), []byte(ev), 0o644)
 	drain(spool, st, nil)
 	select {
 	case h := <-got:

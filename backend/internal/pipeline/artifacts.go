@@ -273,11 +273,11 @@ func collectArtifacts(cfg *Config, job RunJob, workdir string, logSink io.Writer
 	saved := 0
 	for _, p := range cfg.ArtifactPaths {
 		src := filepath.Join(workdir, filepath.FromSlash(p))
-		if _, err := os.Stat(src); err != nil {
+		if _, err := os.Lstat(src); err != nil {
 			continue
 		}
 		dst := filepath.Join(base, filepath.FromSlash(p))
-		if err := copyPath(src, dst); err != nil {
+		if err := copyPath(src, dst, base); err != nil {
 			_, _ = fmt.Fprintf(logSink, "!! artifacts: %s failed: %v\n", p, err)
 			_ = os.RemoveAll(base)
 			return

@@ -374,6 +374,27 @@ func preReceiveHook(owner, repo string) error {
 	return gitsvc.CheckBranchProtection(dbPath, owner, repo, refs)
 }
 
+// postReceiveHook 由 post-receive hook 以 `gitdash post-receive owner repo` 调用，
+// stdin 每行 `oldrev newrev refname`；用 encoding/json 安全写入 webhook spool。
+func postReceiveHook(owner, repo string) error {
+	dataDir := getenv("GITDASH_DATA", "./data")
+	if err := gitsvc.Init(dataDir); err != nil {
+		return err
+	}
+	user := os.Getenv("GITDASH_USER")
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		f := strings.Fields(scanner.Text())
+		if len(f) != 3 {
+			continue
+		}
+		if err := gitsvc.WritePushEvent(owner, repo, f[0], f[1], f[2], user); err != nil {
+			return err
+		}
+	}
+	return scanner.Err()
+}
+
 func main() {
 	switch {
 	case len(os.Args) < 2 || os.Args[1] == "serve":
@@ -385,6 +406,16 @@ func main() {
 			os.Exit(1)
 		}
 		if err := preReceiveHook(os.Args[2], os.Args[3]); err != nil {
+			fmt.Fprintln(os.Stderr, "gitdash:", err)
+			os.Exit(1)
+		}
+	case os.Args[1] == "post-receive":
+		// post-receive hook 子命令：安全写入 push 事件 spool（stdin: oldrev newrev refname）
+		if len(os.Args) < 4 {
+			fmt.Fprintln(os.Stderr, "post-receive: missing owner/repo args")
+			os.Exit(1)
+		}
+		if err := postReceiveHook(os.Args[2], os.Args[3]); err != nil {
 			fmt.Fprintln(os.Stderr, "gitdash:", err)
 			os.Exit(1)
 		}

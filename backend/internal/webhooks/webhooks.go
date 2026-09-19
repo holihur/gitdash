@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -176,6 +177,13 @@ func (d *Dispatcher) drain(spoolDir string, handlers []func(Event)) {
 		}
 		var ev Event
 		if err := json.Unmarshal(b, &ev); err != nil || ev.Owner == "" || ev.Repo == "" {
+			_ = os.Remove(f)
+			continue
+		}
+		// 防 spool 文件名与事件内容不符（跨仓库伪造 webhook/CI）：文件名必须以
+		// `owner__repo-` 开头（WriteSpool 与 post-receive hook 均按此命名）。
+		if !strings.HasPrefix(filepath.Base(f), ev.Owner+"__"+ev.Repo+"-") {
+			logx.Infof("webhook: drop event %s/%s with mismatched spool name %s", ev.Owner, ev.Repo, filepath.Base(f))
 			_ = os.Remove(f)
 			continue
 		}

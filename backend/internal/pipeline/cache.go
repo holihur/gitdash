@@ -46,11 +46,11 @@ func cacheRestore(cfg *Config, job RunJob, workdir string, logSink io.Writer) {
 	restored := 0
 	for _, p := range cfg.CachePaths {
 		src := filepath.Join(base, filepath.FromSlash(p))
-		if _, err := os.Stat(src); err != nil {
+		if _, err := os.Lstat(src); err != nil {
 			continue
 		}
 		dst := filepath.Join(workdir, filepath.FromSlash(p))
-		if err := copyPath(src, dst); err != nil {
+		if err := copyPath(src, dst, workdir); err != nil {
 			_, _ = fmt.Fprintf(logSink, "!! cache: restore %s failed: %v\n", p, err)
 			continue
 		}
@@ -74,11 +74,11 @@ func cacheSave(cfg *Config, job RunJob, workdir string, logSink io.Writer) {
 	saved := 0
 	for _, p := range cfg.CachePaths {
 		src := filepath.Join(workdir, filepath.FromSlash(p))
-		if _, err := os.Stat(src); err != nil {
+		if _, err := os.Lstat(src); err != nil {
 			continue
 		}
 		dst := filepath.Join(tmp, filepath.FromSlash(p))
-		if err := copyPath(src, dst); err != nil {
+		if err := copyPath(src, dst, tmp); err != nil {
 			_, _ = fmt.Fprintf(logSink, "!! cache: save %s failed: %v\n", p, err)
 			_ = os.RemoveAll(tmp)
 			return
@@ -104,11 +104,19 @@ func cacheSave(cfg *Config, job RunJob, workdir string, logSink io.Writer) {
 	_, _ = fmt.Fprintf(logSink, "cache: saved %d path(s) for key %q\n", saved, cfg.CacheKey)
 }
 
-// copyPath 递归复制文件或目录；跳过非常规文件（socket/fifo/device）。
-func copyPath(src, dst string) error {
-	info, err := os.Stat(src)
+// copyPath 递归复制文件或目录。
+//
+// 安全：来源侧用 Lstat 并跳过符号链接（绝不解引用）；目标侧用 O_NOFOLLOW 打开
+// 并对目标目录做 EvalSymlinks 包含性校验（withinRoot），防止恶意仓库在
+// cache.paths / artifacts.paths 上放 symlink，把宿主机任意路径读进缓存/构件
+// 或把缓存内容写穿到宿主机（如 ~/.ssh/authorized_keys）。root 为目标根目录。
+func copyPath(src, dst, root string) error {
+	info, err := os.Lstat(src)
 	if err != nil {
 		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil // 跳过符号链接
 	}
 	if info.IsDir() {
 		if err := os.MkdirAll(dst, info.Mode().Perm()|0o700); err != nil {
@@ -119,7 +127,7 @@ func copyPath(src, dst string) error {
 			return err
 		}
 		for _, e := range entries {
-			if err := copyPath(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+			if err := copyPath(filepath.Join(src, e.Name()), filepath.Join(dst, e.Name()), root); err != nil {
 				return err
 			}
 		}
@@ -131,16 +139,32 @@ func copyPath(src, dst string) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
-	return copyFile(src, dst, info.Mode().Perm())
+	return copyFile(src, dst, info.Mode().Perm(), root)
 }
 
-func copyFile(src, dst string, mode os.FileMode) error {
+// withinRoot 判断 path 解析后是否仍在 root 之内（拦截中间目录符号链接逃逸）。
+func withinRoot(path, root string) bool {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		realRoot = filepath.Clean(root)
+	}
+	realPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		realPath = filepath.Clean(path)
+	}
+	return realPath == realRoot || strings.HasPrefix(realPath, realRoot+string(os.PathSeparator))
+}
+
+func copyFile(src, dst string, mode os.FileMode, root string) error {
+	if !withinRoot(filepath.Dir(dst), root) {
+		return fmt.Errorf("refusing to write outside %s", root)
+	}
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode|0o600)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|oNoFollow, mode|0o600)
 	if err != nil {
 		return err
 	}

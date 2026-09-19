@@ -141,7 +141,10 @@ func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, use
 	for req := range requests {
 		switch req.Type {
 		case "env":
-			if name, value, ok := parseEnvPayload(req.Payload); ok {
+			// 只放行 git 协议协商/本地化所需的少量变量；其余（GIT_TRACE*、
+			// GIT_CONFIG_*、LD_* 等）一律丢弃，避免通过 SSH env 请求向 git 子进程
+			// 注入任意文件写入（GIT_TRACE）或改写配置（GIT_CONFIG_*）。
+			if name, value, ok := parseEnvPayload(req.Payload); ok && allowedSSHEnv(name) {
 				env = append(env, name+"="+value)
 			}
 			if req.WantReply {
@@ -323,6 +326,16 @@ func parseEnvPayload(payload []byte) (string, string, bool) {
 		return "", "", false
 	}
 	return name, string(payload[:v]), true
+}
+
+// allowedSSHEnv 仅放行 git 协议协商所需的 GIT_PROTOCOL（v2）与本地化变量，
+// 其余全部丢弃（尤其是 GIT_TRACE*/GIT_CONFIG_*/LD_*）。
+func allowedSSHEnv(name string) bool {
+	switch name {
+	case "GIT_PROTOCOL", "LANG":
+		return true
+	}
+	return strings.HasPrefix(name, "LC_")
 }
 
 // splitCommandLine parses something like: git-upload-pack 'alice/demo.git'

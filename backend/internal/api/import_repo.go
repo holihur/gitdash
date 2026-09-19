@@ -52,8 +52,12 @@ func validImportURL(raw string) (string, error) {
 		}
 		return raw, nil
 	default:
-		// scp-like: git@host:path（无 :// 前缀）
+		// scp-like: [user@]host:path（无 :// 前缀）。同样做 SSRF 主机校验，
+		// 否则 `git@127.0.0.1:...` 会绕过 importHostBlocked 让 worker 拨号内网。
 		if strings.Contains(raw, "@") && strings.Contains(raw, ":") {
+			if gitsvc.RemoteURLBlocked(raw) {
+				return "", fmt.Errorf("blocked host")
+			}
 			return raw, nil
 		}
 		return "", fmt.Errorf("unsupported url scheme")
