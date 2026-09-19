@@ -14,9 +14,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"time"
+
+	"gitdash/backend/internal/ssrf"
 )
 
 // ProviderSpec 是某个 BYOK 供应商的默认配置。
@@ -93,16 +98,80 @@ func EffectiveModel(provider, model string) string {
 // ErrProviderBaseURL 表示既没有显式 base_url，也没有预设默认值。
 var ErrProviderBaseURL = errors.New("base_url is required for this provider")
 
+// ErrProviderBaseURLBlocked 表示 base_url 指向被 SSRF 防护拦截的主机。
+var ErrProviderBaseURLBlocked = errors.New("base_url host is not allowed")
+
+// httpClient 使用 SSRF 防护拨号：解析后直接拨已校验的 IP，阻断对回环/私有/
+// 链路本地/云元数据地址的访问，并消除 DNS 重绑定（TOCTOU）窗口。
+// 运维可用 GITDASH_LLM_ALLOW_HOSTS（逗号分隔 host 或 host:port）显式为本地
+// LLM 网关开白名单（仅影响 BYOK/copilot，不影响 webhook/导入 SSRF 防护）。
+var httpClient = &http.Client{
+	Timeout: 20 * time.Second,
+	Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err == nil && llmHostAllowed(host, port) {
+				return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, addr)
+			}
+			return ssrf.DialContext(ctx, network, addr)
+		},
+		MaxIdleConns:        10,
+		IdleConnTimeout:     30 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	},
+}
+
+// llmHostAllowed 判断 host[:port] 是否命中 GITDASH_LLM_ALLOW_HOSTS。条目可为
+// `host`（任意端口）或 `host:port`（仅该端口）。每次读取，便于测试覆盖。
+func llmHostAllowed(host, port string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	for _, e := range strings.Split(os.Getenv("GITDASH_LLM_ALLOW_HOSTS"), ",") {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e == "" {
+			continue
+		}
+		if e == host || (port != "" && e == host+":"+port) {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateBaseURL 校验 LLM 端点：必须是 http(s) 且主机通过 SSRF 防护
+// （默认拒绝回环/私有/链路本地/云元数据；GITDASH_LLM_ALLOW_HOSTS 可放行指定
+// 主机，GITDASH_SSRF_ALLOW_PRIVATE=1 可全局放开自托管内网场景）。
+// 返回去掉尾部斜杠的端点。
+func ValidateBaseURL(provider, raw string) (string, error) {
+	base := EffectiveBaseURL(provider, raw)
+	if base == "" {
+		return "", ErrProviderBaseURL
+	}
+	u, err := url.Parse(base)
+	if err != nil || u.Hostname() == "" {
+		return "", fmt.Errorf("invalid base_url")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("base_url must be http(s)")
+	}
+	if !llmHostAllowed(u.Hostname(), u.Port()) && ssrf.HostBlocked(u.Hostname()) {
+		return "", ErrProviderBaseURLBlocked
+	}
+	return strings.TrimRight(base, "/"), nil
+}
+
 // TestConnection 向 Anthropic 兼容端点发一次最小请求，验证 provider / base_url /
 // model / api_key 可用。仅返回错误，成功即 nil。
 func TestConnection(ctx context.Context, provider, baseURL, apiKey, model string) error {
-	base := EffectiveBaseURL(provider, baseURL)
-	if base == "" {
-		return ErrProviderBaseURL
-	}
 	m := EffectiveModel(provider, model)
 	if strings.TrimSpace(m) == "" {
 		return errors.New("model is required")
+	}
+	base, err := ValidateBaseURL(provider, baseURL)
+	if err != nil {
+		return err
 	}
 	authStyle := "both"
 	if spec, ok := Provider(provider); ok && spec.AuthStyle != "" {
@@ -116,7 +185,7 @@ func TestConnection(ctx context.Context, provider, baseURL, apiKey, model string
 	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost,
-		strings.TrimRight(base, "/")+"/v1/messages", bytes.NewReader(body))
+		base+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -131,7 +200,7 @@ func TestConnection(ctx context.Context, provider, baseURL, apiKey, model string
 		req.Header.Set("x-api-key", apiKey)
 		req.Header.Set("authorization", "Bearer "+apiKey)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("connect %s: %w", base, err)
 	}

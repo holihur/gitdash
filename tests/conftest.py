@@ -112,6 +112,9 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
         GITDASH_ADMIN_USER="gitdash-admin",
         GITDASH_ADMIN_PASSWORD="admin-test-pass-123456",
+        # BYOK/copilot 的 mock LLM 跑在回环上：按主机放行（仅影响 LLM 路径，
+        # webhook/导入的 SSRF 防护仍按默认拦截内网）。
+        GITDASH_LLM_ALLOW_HOSTS="127.0.0.1",
         # 关闭“注册自动建同名仓库”，保持黑盒用例对仓库数量的确定性
         GITDASH_PROFILE_REPO="0",
         # 邮件回复（reply-by-email）：固定的签名与入站共享密钥，便于用例构造 token

@@ -175,6 +175,7 @@ Environment variables (all optional):
 | `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<name>/<name>` repo when an account or organization is first created (`0` disables) |
 | `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash / in PATH | Path to the agent runtime for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
 | `GITDASH_COPILOT_AGENT_URL` | empty | Use an already-running agent (`http://host:port`) instead of spawning one per session |
+| `GITDASH_LLM_ALLOW_HOSTS` | empty | Comma-separated `host` or `host:port` allowed to bypass the LLM SSRF guard (private gateway / local Ollama); scoped to BYOK/copilot only |
 | `GITDASH_LOG_LEVEL` | `info` | Log level: `debug` / `info` / `warn` / `error` |
 | `GITDASH_LOG_FORMAT` | `text` | Log format: `text` or `json` |
 | `GITDASH_LOG_FILE` | empty | Enable rotating file logging (path); empty logs to stderr only |
@@ -187,6 +188,7 @@ Environment variables (all optional):
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | empty | Enable OpenTelemetry trace export (OTLP/HTTP, e.g. `http://localhost:4318`) |
 | `GITDASH_ADMIN_PASSWORD` | empty (off) | Set to create an admin on **first boot** and enable the `/admin` panel |
 | `GITDASH_ADMIN_USER` | `admin` | Admin username (used with the above) |
+| `GITDASH_DISABLE_REGISTRATION` | off | Set to `1` to close public sign-up (invite the users you need instead) |
 | `GITDASH_SMTP_HOST` | empty (off) | SMTP host; enables email notifications / address verification |
 | `GITDASH_SMTP_PORT` | `587` | SMTP port |
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | empty | SMTP username / password |

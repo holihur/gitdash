@@ -175,6 +175,7 @@ go run .
 | `GITDASH_PROFILE_REPO` | `1` | 用户 / 组织首次创建时自动创建公开的 `<名称>/<名称>` 仓库（`0` 关闭） |
 | `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent` / PATH | copilot 会话使用的 agent 运行时路径（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
 | `GITDASH_COPILOT_AGENT_URL` | 空 | 使用已在运行的 agent（`http://host:port`），而不是每会话拉起一个 |
+| `GITDASH_LLM_ALLOW_HOSTS` | 空 | 逗号分隔的 `host` 或 `host:port` 白名单，放行 LLM 端点的 SSRF 拦截（私有网关 / 本地 Ollama）；仅作用于 BYOK/copilot |
 | `GITDASH_LOG_LEVEL` | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
 | `GITDASH_LOG_FORMAT` | `text` | 日志格式：`text` 或 `json` |
 | `GITDASH_LOG_FILE` | 空 | 启用滚动文件日志（路径）；空则仅输出 stderr |
@@ -187,6 +188,7 @@ go run .
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 空 | 启用 OpenTelemetry trace 导出（OTLP/HTTP，如 `http://localhost:4318`） |
 | `GITDASH_ADMIN_PASSWORD` | 空（关闭） | 设置后在**首次启动**创建管理员并启用 `/admin` 管理面板 |
 | `GITDASH_ADMIN_USER` | `admin` | 管理员用户名（配合上者） |
+| `GITDASH_DISABLE_REGISTRATION` | 关闭 | 设为 `1` 关闭公开注册（改为邀请所需用户） |
 | `GITDASH_SMTP_HOST` | 空（关闭） | SMTP 主机；设置后启用邮件通知/邮箱验证 |
 | `GITDASH_SMTP_PORT` | `587` | SMTP 端口 |
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | 空 | SMTP 账号 / 密码 |

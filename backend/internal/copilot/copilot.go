@@ -10,6 +10,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -107,9 +109,22 @@ type PullHook func(session store.CopilotSession, pr store.PullRequest)
 type proc struct {
 	cmd     *exec.Cmd
 	baseURL string
+	token   string // 访问 agent 的 bearer token（本地拉起时随机生成）
 	ws      string
 	branch  string
 	dead    chan struct{}
+}
+
+// newRequest 构造访问本地 agent 的请求，并带上访问令牌（防浏览器 CSRF/未授权 RCE）。
+func (p *proc) newRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	if p.token != "" {
+		req.Header.Set("Authorization", "Bearer "+p.token)
+	}
+	return req, nil
 }
 
 // NewManager 创建 Manager。
@@ -136,6 +151,15 @@ func (m *Manager) sessionLock(id int64) *sync.Mutex {
 }
 
 // ---- 运行时配置（可替换，不写死）----
+
+// newAgentToken 生成访问本地 agent 的随机 bearer token（32 字节 crypto/rand）。
+func newAgentToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
 
 // agentBinary 解析 agent 可执行文件：显式 env > 与 gitdash 同目录的 agent > PATH。
 func agentBinary() (string, error) {
@@ -285,17 +309,28 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 		return nil, err
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	// 进程级随机访问令牌：只经环境变量下发，浏览器无法读取，阻断 CSRF/本地未授权驱动 shell/fs。
+	agentToken, err := newAgentToken()
+	if err != nil {
+		return nil, err
+	}
 
 	cmd := exec.Command(bin, "-C", ws, "-api-addr", addr)
 	cmd.Dir = ws
 	provider := firstNonEmpty(secret.Provider, "anthropic")
+	// 防止已保存/被篡改的 base_url 指向内网：会话启动前再做一次 SSRF 校验。
+	baseURL, err := ValidateBaseURL(provider, secret.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrByokMissing, err)
+	}
 	authStyle := "both"
 	if spec, ok := Provider(provider); ok && spec.AuthStyle != "" {
 		authStyle = spec.AuthStyle
 	}
 	cmd.Env = append(os.Environ(),
+		"AGENT_API_TOKEN="+agentToken,
 		"LLM_API_KEY="+secret.APIKey,
-		"LLM_BASE_URL="+EffectiveBaseURL(provider, secret.BaseURL),
+		"LLM_BASE_URL="+baseURL,
 		"LLM_MODEL="+EffectiveModel(provider, secret.Model),
 		"LLM_PROVIDER="+provider,
 		"LLM_AUTH_STYLE="+authStyle,
@@ -306,7 +341,7 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 		return nil, fmt.Errorf("%w: start agent: %w", ErrAgentUnavailable, err)
 	}
 
-	p := &proc{cmd: cmd, baseURL: "http://" + addr, ws: ws, branch: branch, dead: make(chan struct{})}
+	p := &proc{cmd: cmd, baseURL: "http://" + addr, token: agentToken, ws: ws, branch: branch, dead: make(chan struct{})}
 	go func() {
 		_ = cmd.Wait()
 		close(p.dead)
@@ -317,7 +352,7 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 		m.mu.Unlock()
 	}()
 
-	if err := waitHealthy(ctx, p.baseURL, 20*time.Second); err != nil {
+	if err := waitHealthy(ctx, p.baseURL, agentToken, 20*time.Second); err != nil {
 		_ = cmd.Process.Kill()
 		return nil, fmt.Errorf("%w: %w: %s", ErrAgentUnavailable, err, strings.TrimSpace(stderr.String()))
 	}
@@ -381,7 +416,7 @@ func (m *Manager) Cancel(ctx context.Context, session store.CopilotSession) {
 		return
 	}
 	in, _ := json.Marshal(map[string]string{"session": sessionName(session.ID)})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/api/cancel", bytes.NewReader(in))
+	req, err := p.newRequest(ctx, http.MethodPost, p.baseURL+"/api/cancel", bytes.NewReader(in))
 	if err != nil {
 		return
 	}
@@ -410,7 +445,7 @@ func (m *Manager) RunTurn(ctx context.Context, session store.CopilotSession, tex
 	}
 
 	body, _ := json.Marshal(map[string]string{"session": sessionName(session.ID), "text": text})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/api/chat", bytes.NewReader(body))
+	req, err := p.newRequest(ctx, http.MethodPost, p.baseURL+"/api/chat", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -475,7 +510,7 @@ func (m *Manager) Messages(ctx context.Context, session store.CopilotSession) ([
 		return nil, err
 	}
 	url := p.baseURL + "/api/messages?session=" + sessionName(session.ID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := p.newRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +605,7 @@ func freePort() (int, error) {
 }
 
 // waitHealthy 轮询 /healthz 直到协议版本匹配或超时。
-func waitHealthy(ctx context.Context, baseURL string, timeout time.Duration) error {
+func waitHealthy(ctx context.Context, baseURL, token string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var last error
 	for time.Now().Before(deadline) {
@@ -580,6 +615,9 @@ func waitHealthy(ctx context.Context, baseURL string, timeout time.Duration) err
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/healthz", nil)
 		if err != nil {
 			return err
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err == nil {

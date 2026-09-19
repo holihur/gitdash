@@ -64,6 +64,7 @@ model / 密钥是否可用（`POST /api/me/byok/test`）。
 | --- | --- | --- |
 | `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent`，否则 PATH | agent 运行时二进制 |
 | `GITDASH_COPILOT_AGENT_URL` | 空 | 外部 agent 基地址（不再拉起进程） |
+| `GITDASH_LLM_ALLOW_HOSTS` | 空 | 逗号分隔的 `host` 或 `host:port` 白名单，放行 LLM 端点的 SSRF 拦截（如私有网关或本地 Ollama）。仅作用于 BYOK/copilot，不影响 webhook/导入的 SSRF 防护；`GITDASH_SSRF_ALLOW_PRIVATE=1` 可全局放开私有网段。 |
 
 注入每个 agent 进程：`LLM_API_KEY`、`LLM_BASE_URL`、`LLM_MODEL`、`LLM_PROVIDER`、
 `LLM_AUTH_STYLE`（均来自所选 BYOK 预设；`ollama` 无密钥时使用占位密钥）。

@@ -173,3 +173,39 @@ func TestMaybeOpenPullForIssue(t *testing.T) {
 		t.Fatalf("open pulls = %d, want 1", len(pulls))
 	}
 }
+
+// TestProcNewRequestBearer 覆盖安全评审 §1.1：gitdash 访问本地 agent 的每个请求
+// 都必须带上进程级 bearer token（agent 侧据此拒绝未授权的 shell/fs 调用）。
+func TestProcNewRequestBearer(t *testing.T) {
+	p := &proc{baseURL: "http://127.0.0.1:9", token: "tok-123"}
+	req, err := p.newRequest(context.Background(), "GET", p.baseURL+"/api/sessions", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer tok-123" {
+		t.Fatalf("Authorization = %q, want Bearer tok-123", got)
+	}
+	// 外部托管（无 token）时不设置 Authorization。
+	p2 := &proc{baseURL: "http://127.0.0.1:9"}
+	req2, err := p2.newRequest(context.Background(), "GET", p2.baseURL+"/api/sessions", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req2.Header.Get("Authorization") != "" {
+		t.Fatalf("unexpected Authorization: %q", req2.Header.Get("Authorization"))
+	}
+}
+
+func TestNewAgentToken(t *testing.T) {
+	a, err := newAgentToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := newAgentToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a) != 64 || a == b {
+		t.Fatalf("token = %q / %q, want 64-hex and unique", a, b)
+	}
+}

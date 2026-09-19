@@ -36,7 +36,9 @@ endpoint:
 | `ollama` | `http://127.0.0.1:11434` | no | local Ollama (needs its Anthropic-compatible `/v1/messages`); a placeholder key is stored when none is given |
 
 In **Profile → BYOK** the **Test connection** button sends one minimal request to verify
-provider / base_url / model / key (`POST /api/me/byok/test`).
+provider / base_url / model / key (`POST /api/me/byok/test`). Endpoints are SSRF-guarded:
+private/loopback/metadata addresses are rejected unless the host is in
+`GITDASH_LLM_ALLOW_HOSTS` or `GITDASH_SSRF_ALLOW_PRIVATE=1` is set.
 
 ## How it works
 
@@ -74,6 +76,7 @@ provider / base_url / model / key (`POST /api/me/byok/test`).
 | --- | --- | --- |
 | `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash, else `PATH` | Agent runtime binary |
 | `GITDASH_COPILOT_AGENT_URL` | empty | External agent base URL (skip spawning) |
+| `GITDASH_LLM_ALLOW_HOSTS` | empty | Comma-separated `host` or `host:port` allowed to bypass the LLM SSRF guard (e.g. a private gateway or local Ollama). Scoped to BYOK/copilot only; webhook/import SSRF protection is unaffected. `GITDASH_SSRF_ALLOW_PRIVATE=1` still allows all private addresses. |
 
 Injected into every agent process: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`,
 `LLM_PROVIDER`, `LLM_AUTH_STYLE` (all from the selected BYOK preset; `ollama` uses a
