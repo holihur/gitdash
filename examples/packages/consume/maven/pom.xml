@@ -9,11 +9,11 @@
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
-  <!-- Replace <host> and <owner>. Credentials live in settings.xml (id: gitdash). -->
+  <!-- Replace &lt;host&gt; and &lt;owner&gt;. Credentials live in settings.xml (id: gitdash). -->
   <repositories>
     <repository>
       <id>gitdash</id>
-      <url>http://<host>/api/packages/maven/<owner></url>
+      <url>http://&lt;host&gt;/api/packages/maven/&lt;owner&gt;</url>
     </repository>
   </repositories>
 

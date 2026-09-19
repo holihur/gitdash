@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Replace <user> and <PAT>. Used by pom.xml's <repository id="gitdash">. -->
+<!-- Replace &lt;user&gt; and &lt;PAT&gt;. Used by pom.xml's <repository id="gitdash">. -->
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
   <servers>
     <server>
       <id>gitdash</id>
-      <username><user></username>
-      <password><PAT></password>
+      <username>&lt;user&gt;</username>
+      <password>&lt;PAT&gt;</password>
     </server>
   </servers>
 </settings>
