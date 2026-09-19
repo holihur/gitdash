@@ -16,6 +16,7 @@ import Login from "@/pages/Login";
 // 页面按需加载：首屏只需 App 外壳 + 登录页，其余页面路由切换时才拉取
 const Repos = lazy(() => import("@/pages/Repos"));
 const RepoView = lazy(() => import("@/pages/RepoView"));
+const FileOpPage = lazy(() => import("@/pages/repoview/file-op-page"));
 const Inbox = lazy(() => import("@/pages/Inbox"));
 const Explore = lazy(() => import("@/pages/Explore"));
 const Keys = lazy(() => import("@/pages/Keys"));
@@ -250,6 +251,23 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             element={
               <Suspense fallback={<PageLoading />}>
                 <RepoView />
+              </Suspense>
+            }
+          />
+          {/* 文件新建 / 编辑整页（替代弹框）：/repo/:owner/:name/new|edit */}
+          <Route
+            path="/repo/:owner/:name/new"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <FileOpPage mode="new" />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/repo/:owner/:name/edit"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <FileOpPage mode="edit" />
               </Suspense>
             }
           />

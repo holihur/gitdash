@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FilePlus2, FolderPlus, FolderTree, List, Plus } from "lucide-react";
-import { toast } from "sonner";
-import { api, type Blame, type Blob, type Branch, type Commit, type Tag, type TreeEntry } from "@/lib/api";
+import { type Blame, type Blob, type Branch, type Commit, type Tag, type TreeEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,7 +10,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { apiErrorMsg } from "@/lib/errors";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import FileTree from "@/components/file-tree";
 import Outline from "@/components/outline";
@@ -45,7 +43,7 @@ export interface CodeTabProps {
   commands: string[];
   openRefs: () => void;
   openCreateDialog: (kind: "create-file" | "create-dir") => void;
-  openEditDialog: (filePath: string, content: string) => void;
+  openEditDialog: (filePath: string) => void;
   removeEntry: (targetPath: string, isDir: boolean) => void;
   copy: (text: string) => void;
 }
@@ -78,7 +76,7 @@ export default function CodeTab({
   removeEntry,
   copy,
 }: CodeTabProps) {
-  const { t, to } = useI18n();
+  const { t } = useI18n();
   // 窄屏下文件树 / 大纲以左右抽屉形式呈现
   const [treeOpen, setTreeOpen] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -98,14 +96,6 @@ export default function CodeTab({
 
   const openFile = (file: string) => {
     setParams({ file, line: null, blame: null });
-  };
-
-  // 目录列表「编辑」：先取文件内容，再打开编辑对话框
-  const editPath = (targetPath: string) => {
-    api
-      .blob(owner, name, refName, targetPath)
-      .then((b) => b.encoding === "utf-8" && openEditDialog(targetPath, b.content))
-      .catch((e) => toast.error(apiErrorMsg(to, e)));
   };
 
   // README / Markdown 文件里的仓库内引用：在代码浏览器内跳转，保持当前 ref。
@@ -313,7 +303,7 @@ export default function CodeTab({
         entries={entries}
         currentDir={currentDir}
         onOpenEntry={openEntry}
-        onEditPath={editPath}
+        onEditPath={openEditDialog}
         onRemoveEntry={removeEntry}
         readmeContent={readmeContent}
         readmeEntryName={readmeEntryName}

@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { api, cloneCommand } from "@/lib/api";
-import type { RepoTab } from "@/lib/repo-url";
+import { buildFileOpPath, type RepoTab } from "@/lib/repo-url";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { TabsListOverflow } from "@/components/ui/tabs-overflow";
@@ -11,7 +11,6 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { copyText } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
-import FileOpDialog, { type FileOp } from "@/components/file-op-dialog";
 import RefsDialog from "@/components/refs-dialog";
 import RepoHeader from "./repoview/repo-header";
 import ForkDialog from "./repoview/fork-dialog";
@@ -59,7 +58,6 @@ export default function RepoView() {
   // 不能用 me === owner 判断（组织仓库 owner 是组织名）。
   const isOwner = repo?.role === "owner";
 
-  const [fileOp, setFileOp] = useState<FileOp | null>(null);
   const [refsOpen, setRefsOpen] = useState(false);
   const [starBusy, setStarBusy] = useState(false);
   const [watchBusy, setWatchBusy] = useState(false);
@@ -126,18 +124,20 @@ export default function RepoView() {
     }
   };
 
-  const openCreateDialog = (kind: "create-file" | "create-dir") => {
-    const prefix = currentDir ? currentDir + "/" : "";
-    setFileOp({
-      kind,
-      path: kind === "create-dir" ? prefix : prefix + "",
-      content: "",
-      branch: ref || branches[0]?.name || "main",
-    });
+  // 新建 / 编辑改为独立整页路由，便于刷新、分享与浏览器回退。
+  const openCreatePage = (kind: "create-file" | "create-dir") => {
+    const params = new URLSearchParams();
+    params.set("kind", kind === "create-dir" ? "dir" : "file");
+    if (currentDir) params.set("dir", currentDir);
+    if (ref) params.set("ref", ref);
+    navigate(`${buildFileOpPath(owner, name, "new")}?${params.toString()}`);
   };
 
-  const openEditDialog = (filePath: string, content: string) => {
-    setFileOp({ kind: "edit", path: filePath, content, branch: ref });
+  const openEditPage = (filePath: string) => {
+    const params = new URLSearchParams();
+    params.set("path", filePath);
+    if (ref) params.set("ref", ref);
+    navigate(`${buildFileOpPath(owner, name, "edit")}?${params.toString()}`);
   };
 
   const removeEntry = (targetPath: string, isDir: boolean) => {
@@ -289,8 +289,8 @@ export default function RepoView() {
               setParams={setParams}
               commands={commands}
               openRefs={() => setRefsOpen(true)}
-              openCreateDialog={openCreateDialog}
-              openEditDialog={openEditDialog}
+              openCreateDialog={openCreatePage}
+              openEditDialog={openEditPage}
               removeEntry={removeEntry}
               copy={copy}
             />
@@ -348,17 +348,6 @@ export default function RepoView() {
         )}
       </Tabs>
 
-      {fileOp && (
-        <FileOpDialog
-          open
-          onOpenChange={(o) => !o && setFileOp(null)}
-          owner={owner}
-          repo={name}
-          branches={branches.map((b) => b.name)}
-          init={fileOp}
-          onSaved={afterCommit}
-        />
-      )}
       <RefsDialog
         open={refsOpen}
         onClose={() => setRefsOpen(false)}

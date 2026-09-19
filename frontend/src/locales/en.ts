@@ -870,6 +870,7 @@ export const en = {
     msgCreate: "Add {path}",
     msgUpdate: "Update {path}",
     msgCreateDir: "Create directory {path}",
+    notEditable: "This file can't be edited in the browser (binary or too large).",
   },
   admin: {
     title: "gitdash Admin",

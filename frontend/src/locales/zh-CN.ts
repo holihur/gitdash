@@ -868,6 +868,7 @@ export const zhCN: Messages = {
     msgCreate: "新增 {path}",
     msgUpdate: "更新 {path}",
     msgCreateDir: "创建目录 {path}",
+    notEditable: "该文件无法在浏览器中编辑（二进制或过大）。",
   },
   admin: {
     title: "gitdash Admin",

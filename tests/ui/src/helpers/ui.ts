@@ -127,19 +127,22 @@ export async function createBranchViaUi(page: Page, branch: string) {
   await page.keyboard.press("Escape");
 }
 
-/** 通过 code tab "New file" 对话框提交一个文件（网页端 commit） */
+/** 通过 code tab "New file" 整页提交一个文件（网页端 commit） */
 export async function addFileViaUi(
   page: Page,
   opts: { path: string; content: string; branch?: string },
 ) {
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("menuitem", { name: "New file" }).click();
-  const dialog = page.getByRole("dialog");
-  if (opts.branch) await dialog.locator("#fop-branch").selectOption(opts.branch);
-  await dialog.locator("#fop-path").fill(opts.path);
+  await page.waitForURL(/\/repo\/.+\/new/);
+  if (opts.branch) {
+    await page.locator(`#fop-branch option[value="${opts.branch}"]`).waitFor();
+    await page.locator("#fop-branch").selectOption(opts.branch);
+  }
+  await page.locator("#fop-path").fill(opts.path);
   // 内容是 CodeMirror 编辑器
-  await dialog.locator(".cm-content").click();
+  await page.locator(".cm-content").click();
   await page.keyboard.type(opts.content);
-  await dialog.getByRole("button", { name: "Commit changes" }).click();
+  await page.getByRole("button", { name: "Commit changes" }).click();
   await expect(toast(page)).toBeVisible();
 }

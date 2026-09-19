@@ -26,7 +26,7 @@ interface Props {
   blameParam: boolean;
   codeHostRef: Ref<HTMLDivElement>;
   onToggleBlame: () => void;
-  onEditBlob: (path: string, content: string) => void;
+  onEditBlob: (path: string) => void;
   onDeleteBlob: (path: string) => void;
   onOpenRepoLink: (target: RepoLinkTarget) => void;
   entries: TreeEntry[];
@@ -122,7 +122,7 @@ export function RepoCodeBody({
           blameParam={blameParam}
           codeHostRef={codeHostRef}
           onToggleBlame={onToggleBlame}
-          onEdit={() => onEditBlob(blob.path, blob.content)}
+          onEdit={() => onEditBlob(blob.path)}
           onDelete={() => onDeleteBlob(blob.path)}
           onOpenRepoLink={onOpenRepoLink}
         />
