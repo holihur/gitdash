@@ -21,6 +21,8 @@ type userRow struct {
 	EmailTokenExp string `gorm:"not null;default:''"`
 	// Banned 封禁标记：封禁用户禁止登录与一切 API/SSH 使用（系统专用 template 用户亦为封禁态）。
 	Banned bool `gorm:"not null;default:false"`
+	// Bio 个人简介（显示在用户主页）。
+	Bio string `gorm:"not null;default:'';size:500"`
 }
 
 func (userRow) TableName() string { return "users" }
@@ -262,6 +264,7 @@ type orgRow struct {
 	ID        int64  `gorm:"primaryKey;autoIncrement"`
 	Name      string `gorm:"not null;uniqueIndex;size:255"`
 	Display   string `gorm:"not null;default:''"`
+	Bio       string `gorm:"not null;default:'';size:500"`
 	CreatedAt string `gorm:"not null"`
 	Banned    bool   `gorm:"not null;default:false"`
 }

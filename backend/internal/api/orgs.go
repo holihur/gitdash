@@ -23,6 +23,7 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name    string `json:"name"`
 		Display string `json:"display"`
+		Bio     string `json:"bio"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -40,6 +41,10 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		internalError(w, err)
 		return
+	}
+	if bio := strings.TrimSpace(in.Bio); bio != "" {
+		_ = a.store.SetOrgInfo(o.Name, o.Display, bio)
+		o.Bio = bio
 	}
 	// 组织创建时初始化同名公开仓库（<org>/<org>），创建者自动订阅。
 	a.provisionSameNameRepo(o.Name, userFrom(r))
@@ -71,7 +76,7 @@ func (a *API) listOrgs(w http.ResponseWriter, r *http.Request) {
 	out := []map[string]any{}
 	for _, o := range orgs {
 		out = append(out, map[string]any{
-			"name": o.Name, "display": o.Display, "created_at": o.CreatedAt,
+			"name": o.Name, "display": o.Display, "bio": o.Bio, "created_at": o.CreatedAt,
 			"role": a.store.OrgRole(o.Name, me),
 		})
 	}
@@ -96,6 +101,51 @@ func (a *API) getOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"name": org, "role": role})
+}
+
+// updateOrg 修改组织信息（显示名 / 简介；仅 owner）。
+//
+//	@Summary     修改组织信息
+//	@Tags        orgs
+//	@Accept      json
+//	@Produce     json
+//	@Param       org  path string true "组织名"
+//	@Success     200 {object} store.Org
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /orgs/{org} [patch]
+func (a *API) updateOrg(w http.ResponseWriter, r *http.Request) {
+	org := r.PathValue("org")
+	if a.store.OrgRole(org, userFrom(r)) != "owner" {
+		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+		return
+	}
+	var in struct {
+		Display *string `json:"display"`
+		Bio     *string `json:"bio"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	o, err := a.store.GetOrg(org)
+	if err != nil {
+		writeCode(w, http.StatusNotFound, "org_not_found", "organization not found")
+		return
+	}
+	display, bio := o.Display, o.Bio
+	if in.Display != nil {
+		display = strings.TrimSpace(*in.Display)
+	}
+	if in.Bio != nil {
+		bio = strings.TrimSpace(*in.Bio)
+	}
+	if err := a.store.SetOrgInfo(org, display, bio); err != nil {
+		internalError(w, err)
+		return
+	}
+	o.Display, o.Bio = display, bio
+	writeJSON(w, http.StatusOK, o)
 }
 
 // deleteOrg 删除组织（仅 owner；组织内仍有仓库时返回 409）。
@@ -304,6 +354,7 @@ func (a *API) getOrgProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"name":         o.Name,
 		"display":      o.Display,
+		"bio":          o.Bio,
 		"created_at":   o.CreatedAt,
 		"role":         role,
 		"members":      members,

@@ -7,6 +7,7 @@ export interface User {
   mfa_enabled: boolean;
   email_verified?: boolean;
   avatar_url?: string;
+  bio?: string;
 }
 
 export interface PackageEntry {
@@ -124,6 +125,7 @@ export interface GPGKey {
 export interface Org {
   name: string;
   display: string;
+  bio?: string;
   created_at: string;
   role: string;
 }
@@ -131,6 +133,7 @@ export interface Org {
 export interface OrgProfile {
   name: string;
   display: string;
+  bio: string;
   created_at: string;
   /** 当前用户在该组织中的角色：""（非成员）/ member / owner */
   role: string;
@@ -679,6 +682,7 @@ export interface UserSummary {
 
 export interface UserProfile {
   username: string;
+  bio?: string;
   created_at: string;
   followers: number;
   following: number;

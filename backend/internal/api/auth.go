@@ -289,6 +289,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		"notify_email":   ua.NotifyEmail,
 		"email_verified": ua.EmailVerified,
 		"avatar_url":     a.avatarURL(ua.Username),
+		"bio":            ua.Bio,
 	})
 }
 
@@ -368,6 +369,12 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if in.Bio != nil {
+		if err := a.store.SetUserBio(me, strings.TrimSpace(*in.Bio)); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
 	ua, err := a.store.GetByUsername(me)
 	if err != nil {
 		internalError(w, err)
@@ -378,6 +385,7 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 		"email":          ua.Email,
 		"notify_email":   ua.NotifyEmail,
 		"email_verified": ua.EmailVerified,
+		"bio":            ua.Bio,
 	})
 }
 

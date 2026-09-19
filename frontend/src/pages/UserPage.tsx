@@ -104,6 +104,7 @@ export default function UserPage() {
         <Avatar username={profile.username} size={80} />
         <div className="min-w-0 flex-1 space-y-1">
           <h1 className="truncate text-2xl font-bold">{profile.username}</h1>
+          {profile.bio && <p className="whitespace-pre-wrap text-sm">{profile.bio}</p>}
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <CalendarDays className="h-3.5 w-3.5" />
             {t("user.memberSince", { date: formatDate(profile.created_at, locale) })}

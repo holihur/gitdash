@@ -22,6 +22,19 @@ func (s *Store) GetOrg(name string) (Org, error) {
 	return Org(row), nil
 }
 
+// SetOrgInfo 更新组织显示名与简介（仅 owner 调用）。
+func (s *Store) SetOrgInfo(name, display, bio string) error {
+	res := s.db.Model(&orgRow{}).Where("name = ?", name).
+		Updates(map[string]any{"display": display, "bio": bio})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 	if _, err := s.GetByUsername(name); err == nil {
 		return Org{}, ErrExists // 用户名占用

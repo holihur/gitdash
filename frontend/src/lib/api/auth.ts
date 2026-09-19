@@ -63,6 +63,12 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email }),
     }),
+  /** 更新个人简介（显示在用户主页）。 */
+  setBio: (bio: string) =>
+    req<{ username: string; bio: string }>("/me/profile", {
+      method: "POST",
+      body: JSON.stringify({ bio }),
+    }),
   mfaStatus: () => req<MFAStatus>("/me/mfa"),
   mfaEnroll: () => req<MFAEnroll>("/me/mfa/enroll", { method: "POST" }),
   mfaActivate: (code: string) =>

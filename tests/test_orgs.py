@@ -76,3 +76,26 @@ def test_org_lifecycle(user_factory, user):
 def test_org_requires_auth(anon):
     anon.post("/orgs", json={"name": "no-auth-org", "display": ""}, expect=401)
     anon.get("/orgs", expect=401)
+
+
+def test_org_update_info_and_bio(user_factory):
+    """组织简介：创建时可带 bio，owner 可改 display/bio，非 owner 不可，列表/主页返回。"""
+    _, _, c = user_factory("ob")
+    org = c.post(
+        "/orgs", json={"name": f"org-{_uuid()}", "display": "Old", "bio": "old bio"}, expect=201
+    ).json()
+    assert org["bio"] == "old bio"
+
+    prof = c.get(f"/orgs/{org['name']}/profile", expect=200).json()
+    assert prof["display"] == "Old" and prof["bio"] == "old bio"
+
+    r = c.patch(f"/orgs/{org['name']}", json={"display": "New", "bio": "new bio"}, expect=200).json()
+    assert r["display"] == "New" and r["bio"] == "new bio"
+
+    # 非 owner 不可改（对非成员返回 404 隐藏存在性）
+    _, _, c2 = user_factory("ox")
+    c2.patch(f"/orgs/{org['name']}", json={"display": "X"}, expect=404)
+
+    mine = c.get("/orgs", expect=200).json()
+    row = next(o for o in mine if o["name"] == org["name"])
+    assert row["bio"] == "new bio"

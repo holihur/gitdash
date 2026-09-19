@@ -33,7 +33,7 @@ def user(user_factory):
 def test_profile_me_fields(user):
     _, _, c = user
     me = c.get("/me", expect=200).json()
-    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "notify_email", "email_verified", "avatar_url"}
+    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "notify_email", "email_verified", "avatar_url", "bio"}
     assert me["mfa_enabled"] is False
     assert me["notify_email"] is False
     assert me["created_at"]
@@ -48,13 +48,13 @@ def test_profile_email(user_factory, client_factory):
     # 设置邮箱
     resp = c.post("/me/profile", json={"email": email}, expect=200).json()
     # SMTP 未配置（测试默认）→ 设置邮箱直接视为已验证
-    assert resp == {"username": username, "email": email, "notify_email": False, "email_verified": True}
+    assert resp == {"username": username, "email": email, "notify_email": False, "email_verified": True, "bio": ""}
     me = c.get("/me", expect=200).json()
     assert me["email"] == email and me["notify_email"] is False
 
     # notify_email 开关
     resp = c.post("/me/profile", json={"notify_email": True}, expect=200).json()
-    assert resp == {"username": username, "email": email, "notify_email": True, "email_verified": True}
+    assert resp == {"username": username, "email": email, "notify_email": True, "email_verified": True, "bio": ""}
 
     # 坏路径：非法格式（空 body 是合法的 no-op 更新）
     c.post("/me/profile", json={}, expect=200)
@@ -186,3 +186,11 @@ def test_mfa_verify_attempt_limit(user):
     # 第 5 次错误触发锁定并销毁挑战
     c.post("/auth/mfa-verify", json={"mfa_token": tok, "code": "000000"}, expect=429)
     c.post("/auth/mfa-verify", json={"mfa_token": tok, "code": _totp(secret)}, expect=401)
+
+
+def test_profile_bio(user_factory):
+    """个人简介：可更新，并在 /me 与用户主页返回。"""
+    username, _, c = user_factory("bio")
+    assert c.post("/me/profile", json={"bio": "  hello bio  "}, expect=200).json()["bio"] == "hello bio"
+    assert c.get("/me", expect=200).json()["bio"] == "hello bio"
+    assert c.get(f"/users/{username}", expect=200).json()["bio"] == "hello bio"

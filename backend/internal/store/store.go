@@ -27,6 +27,7 @@ type User struct {
 	Email     string `json:"email"`
 	CreatedAt string `json:"created_at"`
 	Banned    bool   `json:"banned"`
+	Bio       string `json:"bio"`
 }
 
 // UserSummary 用户公开摘要（用户页/关注列表使用，不含邮箱等私有字段）。
@@ -51,6 +52,8 @@ type UserAuth struct {
 	EmailTokenExp string
 	// Banned 封禁标记（禁止登录与使用）。
 	Banned bool
+	// Bio 个人简介。
+	Bio string
 }
 
 type Repo struct {
@@ -213,6 +216,7 @@ type Org struct {
 	ID        int64  `json:"id"`
 	Name      string `json:"name"`
 	Display   string `json:"display"`
+	Bio       string `json:"bio"`
 	CreatedAt string `json:"created_at"`
 	Banned    bool   `json:"banned"`
 }

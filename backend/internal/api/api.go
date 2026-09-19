@@ -475,6 +475,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/orgs", a.auth(a.createOrg))
 	mux.HandleFunc("GET /api/orgs", a.auth(a.listOrgs))
 	mux.HandleFunc("GET /api/orgs/{org}", a.auth(a.getOrg))
+	mux.HandleFunc("PATCH /api/orgs/{org}", a.auth(a.updateOrg))
 	mux.HandleFunc("GET /api/orgs/{org}/profile", a.auth(a.getOrgProfile))
 	mux.HandleFunc("POST /api/orgs/{org}/follow", a.auth(a.followOrg))
 	mux.HandleFunc("DELETE /api/orgs/{org}/follow", a.auth(a.unfollowOrg))

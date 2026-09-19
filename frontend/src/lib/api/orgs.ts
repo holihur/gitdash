@@ -6,6 +6,12 @@ export const orgsApi = {
   listOrgs: () => req<Org[]>("/orgs"),
   createOrg: (name: string, display: string) =>
     req<Org>("/orgs", { method: "POST", body: JSON.stringify({ name, display }) }),
+  /** 修改组织信息（仅 owner）：display / bio。 */
+  updateOrg: (org: string, patch: { display?: string; bio?: string }) =>
+    req<Org>(`/orgs/${encodeURIComponent(org)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   deleteOrg: (name: string) => req<null>(`/orgs/${name}`, { method: "DELETE" }),
   getOrgProfile: (org: string) => req<OrgProfile>(`/orgs/${org}/profile`),
   followOrg: (org: string) => req<OrgFollowState>(`/orgs/${org}/follow`, { method: "POST" }),

@@ -3299,6 +3299,58 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "orgs"
+                ],
+                "summary": "修改组织信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "组织名",
+                        "name": "org",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Org"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/orgs/{org}/follow": {
@@ -14455,6 +14507,10 @@ const docTemplate = `{
         "api.updateProfileReq": {
             "type": "object",
             "properties": {
+                "bio": {
+                    "description": "个人简介（可选）",
+                    "type": "string"
+                },
                 "email": {
                     "description": "邮箱；空串表示清除",
                     "type": "string"
@@ -15418,6 +15474,9 @@ const docTemplate = `{
                 "banned": {
                     "type": "boolean"
                 },
+                "bio": {
+                    "type": "string"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -16040,6 +16099,9 @@ const docTemplate = `{
             "properties": {
                 "banned": {
                     "type": "boolean"
+                },
+                "bio": {
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"

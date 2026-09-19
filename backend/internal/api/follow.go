@@ -55,6 +55,7 @@ func (a *API) getUserProfile(w http.ResponseWriter, r *http.Request) {
 	a.attachTopics(repos)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username":     u.Username,
+		"bio":          u.Bio,
 		"created_at":   u.CreatedAt,
 		"followers":    followers,
 		"following":    following,

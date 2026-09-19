@@ -5,6 +5,7 @@ import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { formatDate } from "@/lib/utils";
 import { EmailSection } from "./profile/EmailSection";
+import { BioSection } from "./profile/BioSection";
 import { AvatarSection } from "./profile/AvatarSection";
 import { ByokSection } from "./profile/ByokSection";
 import { PasswordSection } from "./profile/PasswordSection";
@@ -55,6 +56,7 @@ export default function ProfilePage() {
         onChanged={loadProfile}
       />
       <AvatarSection username={profile.username} />
+      <BioSection />
       <ByokSection />
       <PasswordSection />
       <MFASection mfaEnabled={profile.mfa_enabled} onChanged={loadProfile} />
