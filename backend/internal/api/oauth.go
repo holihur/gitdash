@@ -25,17 +25,21 @@ func reqBase(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
-		if i := strings.IndexByte(fwd, ','); i > 0 {
-			fwd = fwd[:i]
-		}
-		if fwd = strings.TrimSpace(fwd); fwd != "" {
-			scheme = fwd
-		}
-	}
 	host := r.Host
-	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
-		host = strings.TrimSpace(strings.Split(h, ",")[0])
+	// 仅当直连方是受信反代时才信任 X-Forwarded-*，避免客户端伪造 Host/Proto
+	// 污染邮件/验证链接（安全评审 §L6）。
+	if trustedProxyRequest(r) {
+		if fwd := r.Header.Get("X-Forwarded-Proto"); fwd != "" {
+			if i := strings.IndexByte(fwd, ','); i > 0 {
+				fwd = fwd[:i]
+			}
+			if fwd = strings.TrimSpace(fwd); fwd != "" {
+				scheme = fwd
+			}
+		}
+		if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+			host = strings.TrimSpace(strings.Split(h, ",")[0])
+		}
 	}
 	return scheme + "://" + host
 }

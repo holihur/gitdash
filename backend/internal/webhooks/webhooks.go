@@ -214,7 +214,7 @@ func (d *Dispatcher) drain(spoolDir string, handlers []func(Event)) {
 		if ev.Event == "push" && d.q != nil {
 			if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
 				if err := d.q.EnqueueMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey); err != nil {
-					logx.Infof("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, m.URL, err)
+					logx.Infof("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, logx.RedactURL(m.URL), err)
 				}
 			}
 		}

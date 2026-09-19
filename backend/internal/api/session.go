@@ -88,6 +88,16 @@ func isTrustedProxy(addr netip.Addr) bool {
 	return false
 }
 
+// trustedProxyRequest 判断直连方是否为受信反代，据此才信任 X-Forwarded-*。
+func trustedProxyRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	addr, err := netip.ParseAddr(host)
+	return err == nil && isTrustedProxy(addr)
+}
+
 // clientIP 仅在直连地址是受信反代时才信任 X-Forwarded-For，避免伪造头部绕过限流。
 //
 // 注意：这里取 XFF 最左值（首个地址），其语义是“最初的客户端”，但该值由客户端可伪造。

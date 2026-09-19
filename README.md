@@ -204,6 +204,7 @@ Environment variables (all optional):
 | `GITDASH_PIPELINE_VOLUMES_DIR` | empty (denied) | Host directory CI may mount; unset denies all host volume mounts |
 | `GITDASH_SSH_KNOWN_HOSTS` | empty (accept-new) | Path to a `known_hosts` file; when set, import/push-mirror SSH uses `StrictHostKeyChecking=yes` (pins host keys, blocks first-connect MITM) |
 | `GITDASH_OAUTH_TOKEN_TTL` | `2160h` (90 days) | Lifetime of OAuth / device-flow access tokens; `0` disables expiry (not recommended) |
+| `GITDASH_METRICS_TOKEN` | empty | When set, `/metrics` requires `Authorization: Bearer <token>` |
 
 > With deb/rpm packages the service reads these optional variables from `EnvironmentFile=-/etc/gitdash/gitdash.env` (the package post-install script creates a commented sample, mode 0600). Add `GITDASH_ADMIN_PASSWORD` etc. there, then `sudo systemctl restart gitdash`.
 

@@ -217,7 +217,9 @@ func run() {
 		defer func() { _ = shutdown(context.Background()) }()
 	}
 	sender := notify.NewSender()
-	a.SetEmailSender(sender)
+	if sender != nil {
+		a.SetEmailSender(sender)
+	}
 
 	// 流水线 / 任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
 	// runner（自托管 CI agent）功能需要 redis（跨实例派发与心跳）

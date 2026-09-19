@@ -17,6 +17,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -133,4 +134,15 @@ func envBool(key string, def bool) bool {
 	default:
 		return def
 	}
+}
+
+// RedactURL 去除 URL 中的 `user:pass@` 凭据后再用于日志（安全评审 §L8）。
+// 无法解析时原样返回。
+func RedactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return raw
+	}
+	u.User = nil
+	return u.String()
 }

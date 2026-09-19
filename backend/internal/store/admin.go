@@ -189,20 +189,20 @@ func (s *Store) PruneMFAChallenges(nowStr string) (int64, error) {
 // ---- email MFA 验证码（6 位邮箱验证码，key 为 email_mfa:<username 或 mfa_token>）----
 
 type emailMFACodeData struct {
-	Code    string `json:"c"`
+	Code    string `json:"c"` // 验证码的 sha256（不落库明文）
 	Expires string `json:"e"`
 }
 
-// PutEmailMFACode 写入（或覆盖）邮箱 MFA 验证码。
+// PutEmailMFACode 写入（或覆盖）邮箱 MFA 验证码（只存 sha256，安全评审 §L5）。
 func (s *Store) PutEmailMFACode(key, code, expiresAt string) error {
-	v, err := json.Marshal(emailMFACodeData{Code: code, Expires: expiresAt})
+	v, err := json.Marshal(emailMFACodeData{Code: patHash(code), Expires: expiresAt})
 	if err != nil {
 		return err
 	}
 	return s.SetSetting("email_mfa:"+key, string(v))
 }
 
-// GetEmailMFACode 读取邮箱 MFA 验证码（不消费）；不存在返回 ErrNotFound。
+// GetEmailMFACode 读取邮箱 MFA 验证码哈希（不消费）；不存在返回 ErrNotFound。
 func (s *Store) GetEmailMFACode(key string) (code, expiresAt string, err error) {
 	v := s.GetSetting("email_mfa:" + key)
 	if v == "" {

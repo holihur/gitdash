@@ -2,6 +2,9 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"gitdash/backend/internal/logx"
 	"math/big"
@@ -9,6 +12,12 @@ import (
 	"strings"
 	"time"
 )
+
+// emailCodeHash 与 store.PutEmailMFACode 使用的 sha256 编码保持一致。
+func emailCodeHash(code string) string {
+	sum := sha256.Sum256([]byte(code))
+	return hex.EncodeToString(sum[:])
+}
 
 // ---- email MFA（独立 MFA 方式：向已验证邮箱发送 6 位验证码）----
 
@@ -40,6 +49,7 @@ func (a *API) issueEmailMFACode(key, username, email, subject string) (err error
 }
 
 // checkEmailMFACode 校验验证码；命中则消费（删除）并返回 true。
+// 库中只存 sha256，比较使用恒定时间（安全评审 §L5）。
 func (a *API) checkEmailMFACode(key, code string) bool {
 	code = strings.TrimSpace(code)
 	if code == "" {
@@ -49,7 +59,8 @@ func (a *API) checkEmailMFACode(key, code string) bool {
 	if err != nil || expires <= time.Now().UTC().Format(time.RFC3339) {
 		return false
 	}
-	if stored != code {
+	want := emailCodeHash(code)
+	if subtle.ConstantTimeCompare([]byte(stored), []byte(want)) != 1 {
 		return false
 	}
 	_ = a.store.DeleteEmailMFACode(key)

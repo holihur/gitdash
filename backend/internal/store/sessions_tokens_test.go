@@ -73,3 +73,21 @@ func TestOAuthTokenDefaultExpiry(t *testing.T) {
 		t.Fatalf("GITDASH_OAUTH_TOKEN_TTL=0 should disable expiry, got %q", pat2.ExpiresAt)
 	}
 }
+
+// TestEmailMFACodeHashed 覆盖安全评审 §L5：邮箱 MFA 验证码只存 sha256。
+func TestEmailMFACodeHashed(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PutEmailMFACode("challenge", "123456", time.Now().Add(time.Minute).UTC().Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	stored, _, err := s.GetEmailMFACode("challenge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored == "123456" || stored != patHash("123456") {
+		t.Fatalf("stored email code = %q, want sha256", stored)
+	}
+}

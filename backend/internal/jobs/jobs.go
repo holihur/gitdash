@@ -156,7 +156,7 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 	case KindMirror:
 		_ = m.st.SetMirrorStatus(p.Owner, p.Repo, StatusRunning, "")
 		if err := gitsvc.PushMirror(p.Owner, p.Repo, p.URL, p.PrivateKey); err != nil {
-			logx.Infof("jobs: mirror %s/%s -> %s: %v", p.Owner, p.Repo, p.URL, err)
+			logx.Infof("jobs: mirror %s/%s -> %s: %v", p.Owner, p.Repo, logx.RedactURL(p.URL), err)
 			_ = m.st.SetMirrorStatus(p.Owner, p.Repo, StatusFailed, err.Error())
 			return nil
 		}

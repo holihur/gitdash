@@ -3,20 +3,37 @@ package tests
 import (
 	"net/http/httptest"
 	"path/filepath"
+	"regexp"
+	"sync"
 	"testing"
 
 	"gitdash/backend/internal/api"
 	"gitdash/backend/internal/gitsvc"
-	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/store"
 )
 
-// startSMTP 启动带 SMTP 发送器（投递会失败但仅记日志）的 HTTP 实例，
-// 用于 email MFA 全流程测试；验证码可通过 env.Store.GetEmailMFACode 读取。
+// mailSink 捕获最近一封邮件正文，供测试从中解析 6 位验证码。
+type mailSink struct {
+	mu   sync.Mutex
+	body string
+}
+
+func (m *mailSink) Send(_, _, body string) error {
+	m.mu.Lock()
+	m.body = body
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *mailSink) lastCode() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return regexp.MustCompile(`\b\d{6}\b`).FindString(m.body)
+}
+
+// startSMTP 启动带邮件捕获发送器的 HTTP 实例，用于 email MFA 全流程测试。
 func startSMTP(t *testing.T) *Env {
 	t.Helper()
-	t.Setenv("GITDASH_SMTP_HOST", "127.0.0.1")
-	t.Setenv("GITDASH_SMTP_PORT", "1")
 	t.Setenv("GITDASH_DISABLE_RATE_LIMIT", "1")
 	dir := t.TempDir()
 	t.Setenv("GITDASH_DATA", dir)
@@ -27,11 +44,12 @@ func startSMTP(t *testing.T) *Env {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
+	sink := &mailSink{}
 	ap := api.New(st, "test")
-	ap.SetEmailSender(notify.NewSender())
+	ap.SetEmailSender(sink)
 	hs := httptest.NewServer(ap.Handler(""))
 	t.Cleanup(hs.Close)
-	return &Env{t: t, BaseURL: hs.URL, ReposDir: gitsvc.ReposDir(), DataDir: dir, Store: st}
+	return &Env{t: t, BaseURL: hs.URL, ReposDir: gitsvc.ReposDir(), DataDir: dir, Store: st, MailCode: sink.lastCode}
 }
 
 // verifiedEmail 设置并"验证"用户邮箱（绕过邮件链接：直接标记已验证）。
@@ -45,9 +63,12 @@ func verifiedEmail(t *testing.T, env *Env, c *Client, username, email string) {
 
 func emailCode(t *testing.T, env *Env, key string) string {
 	t.Helper()
-	code, expires, err := env.Store.GetEmailMFACode(key)
-	if err != nil || code == "" || expires == "" {
-		t.Fatalf("read email mfa code %q: %v", key, err)
+	if env.MailCode == nil {
+		t.Fatal("mail sink not configured")
+	}
+	code := env.MailCode()
+	if code == "" {
+		t.Fatalf("no verification code captured in email for %q", key)
 	}
 	return code
 }

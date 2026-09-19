@@ -59,6 +59,8 @@ type Env struct {
 	APISpool string
 	// Store 服务端使用的同一存储实例（需要直连 store 的用例使用，如 pipeline 队列绑定）
 	Store *store.Store
+	// MailCode 返回最近一封邮件中的 6 位验证码（email MFA 用例注入捕获发送器时设置）
+	MailCode func() string
 }
 
 // start 启动 in-process 的 HTTP + SSH 服务（每测一个独立实例）。

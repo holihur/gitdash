@@ -67,3 +67,42 @@ func TestRequestSessionToken(t *testing.T) {
 		t.Fatalf("no-credential token = %q", got)
 	}
 }
+
+// TestSameOriginRequestRejectsNull 覆盖安全评审 §L3：Origin: null（sandbox/file://）
+// 不得被当作同源放行。
+func TestSameOriginRequestRejectsNull(t *testing.T) {
+	req := httptest.NewRequest("POST", "/api/x", nil)
+	req.Host = "gitdash.example"
+	req.Header.Set("Origin", "null")
+	if sameOriginRequest(req) {
+		t.Fatal("Origin: null must not be treated as same-origin")
+	}
+	req.Header.Set("Origin", "https://gitdash.example")
+	if !sameOriginRequest(req) {
+		t.Fatal("same origin should pass")
+	}
+	req.Header.Set("Origin", "https://evil.example")
+	if sameOriginRequest(req) {
+		t.Fatal("cross origin must be rejected")
+	}
+}
+
+// TestReqBaseTrustsProxyHeadersOnlyFromTrustedProxy 覆盖安全评审 §L6：非受信
+// 直连方的 X-Forwarded-Host/Proto 不得污染邮件/验证链接 base URL。
+func TestReqBaseTrustsProxyHeadersOnlyFromTrustedProxy(t *testing.T) {
+	t.Setenv("GITDASH_TRUSTED_PROXIES", "")
+	// 直连为非回环：忽略转发头，使用 r.Host。
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "real.example"
+	req.RemoteAddr = "203.0.113.5:9999"
+	req.Header.Set("X-Forwarded-Host", "evil.example")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	if got := reqBase(req); got != "http://real.example" {
+		t.Fatalf("untrusted reqBase = %q", got)
+	}
+	// 直连为回环（默认受信）：采用转发头。
+	req.RemoteAddr = "127.0.0.1:9999"
+	if got := reqBase(req); got != "https://evil.example" {
+		t.Fatalf("trusted reqBase = %q", got)
+	}
+}

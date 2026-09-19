@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"gitdash/backend/internal/api/docs"
@@ -11,7 +12,6 @@ import (
 	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/metrics"
-	"gitdash/backend/internal/notify"
 	"gitdash/backend/internal/runner"
 	"gitdash/backend/internal/store"
 	"gitdash/backend/internal/telemetry"
@@ -103,7 +103,7 @@ type API struct {
 	Publish func(webhooks.Event)
 
 	// EmailSender 由 main 注入（nil = SMTP 未配置，邮箱验证降级为直接视为已验证）
-	emailSender *notify.Sender
+	emailSender EmailSender
 
 	// MFA challenge 与 OAuth/OIDC state 均存 settings 表
 	// （PutMFAChallenge/PutOAuthState），重启与多实例下均有效
@@ -169,8 +169,13 @@ func New(s *store.Store, version string) *API {
 	}
 }
 
+// EmailSender 抽象邮件发送（便于测试注入；*notify.Sender 实现）。
+type EmailSender interface {
+	Send(to, subject, body string) error
+}
+
 // SetEmailSender 注入 SMTP 发送器（nil = 未配置）。
-func (a *API) SetEmailSender(s *notify.Sender) { a.emailSender = s }
+func (a *API) SetEmailSender(s EmailSender) { a.emailSender = s }
 
 // SetJobsManager 注入异步任务管理器（导入 / 镜像 / webhook 投递）。
 func (a *API) SetJobsManager(m *jobs.Manager) { a.jobsMgr = m }
@@ -623,9 +628,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.Handle("GET /api/swagger", http.RedirectHandler("/api/swagger/", http.StatusMovedPermanently))
 	mux.Handle("GET /api/swagger/", httpSwagger.WrapHandler)
 
-	// public
 	// prometheus metrics
-	mux.Handle("GET /metrics", metrics.Handler())
+	mux.Handle("GET /metrics", metricsHandler())
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		// readiness：确认数据库可达（2s 超时），失败返回 503；liveness 见 /api/health/live。
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -654,6 +658,21 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	a.routePatterns = mux.Routes()
 	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(routeCoverage(mux))))))
+}
+
+// metricsHandler 暴露 Prometheus 指标。设置 GITDASH_METRICS_TOKEN 后要求
+// `Authorization: Bearer <token>`（保护含命名空间信息的面板，安全评审 §L7）。
+func metricsHandler() http.Handler {
+	h := metrics.Handler()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tok := strings.TrimSpace(os.Getenv("GITDASH_METRICS_TOKEN")); tok != "" {
+			if subtle.ConstantTimeCompare([]byte(bearerToken(r)), []byte(tok)) != 1 {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // routeCoverage optionally installs the black-box route-hit recorder. It is a
@@ -696,8 +715,12 @@ func csrfGuard(next http.Handler) http.Handler {
 // 两者都缺失时放行（非浏览器客户端如 curl/CI，不构成 CSRF）。
 func sameOriginRequest(r *http.Request) bool {
 	match := func(raw string) bool {
-		if raw == "" || raw == "null" {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
 			return true
+		}
+		if raw == "null" {
+			return false // sandboxed iframe / file:// 页面，非本实例同源（§L3）
 		}
 		u, err := url.Parse(raw)
 		if err != nil || u.Host == "" {

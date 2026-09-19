@@ -60,3 +60,16 @@ func TestSetupDebugLevel(t *testing.T) {
 		t.Fatalf("debug not logged: %s", string(b))
 	}
 }
+
+// TestRedactURL 覆盖安全评审 §L8：日志中的 URL 凭据被剥离。
+func TestRedactURL(t *testing.T) {
+	if got := RedactURL("https://user:pass@example.com/x.git"); got != "https://example.com/x.git" {
+		t.Fatalf("RedactURL = %q", got)
+	}
+	if got := RedactURL("git@github.com:owner/repo.git"); got != "git@github.com:owner/repo.git" {
+		t.Fatalf("scp-like should be unchanged, got %q", got)
+	}
+	if got := RedactURL("not a url"); got != "not a url" {
+		t.Fatalf("invalid url should be unchanged, got %q", got)
+	}
+}

@@ -47,6 +47,7 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.store.IsOrg(username) { // 组织占用同名命名空间
+		a.rateFail(ipKey)
 		writeCode(w, http.StatusConflict, "username_taken", "username is already taken")
 		return
 	}
@@ -87,6 +88,10 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 
 // BcryptCost 密码哈希 cost（12 兼顾安全与登录延迟；旧哈希按其内嵌 cost 校验不受影响）。
 const BcryptCost = 12
+
+// dummyBcryptHash 是一个 cost 12 的固定哈希：用户不存在时也会跑一次 bcrypt，
+// 使登录耗时与“用户存在但密码错误”一致，避免时序枚举用户名（安全评审 §L1）。
+const dummyBcryptHash = "$2a$12$tNeGcII7N89yVUvyNfUnG.9lEBUh5WAD.WVZY2Z1bXa.clGIdrwQK"
 
 // 密码强度策略：至少 8 位，且至少包含 4 类字符（小写字母、大写字母、数字、特殊字符）中的 3 类。
 var (
@@ -148,6 +153,8 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 	}
 	ua, err := a.store.GetByUsername(username)
 	if err != nil {
+		// 不存在也跑一次 bcrypt，保持与密码错误路径同构的耗时。
+		_ = bcrypt.CompareHashAndPassword([]byte(dummyBcryptHash), []byte(in.Password))
 		a.rateFail(key)
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
 		return
@@ -225,6 +232,12 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusUnauthorized, "mfa_challenge_expired", "mfa challenge expired, sign in again")
 		return
 	}
+	// 账户/IP 维度限流：防止重新登录拿新挑战绕过每次 5 次的限制（§L2）。
+	rateKey := a.rateKey(username, clientIP(r))
+	if a.rateBlocked(rateKey) {
+		writeCode(w, http.StatusTooManyRequests, "too_many_attempts", "too many attempts, try again later")
+		return
+	}
 	ua, err := a.store.GetByUsername(username)
 	if err != nil || !ua.MFAEnabled {
 		writeCode(w, http.StatusUnauthorized, "invalid_credentials", "invalid username or password")
@@ -234,18 +247,14 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusForbidden, "account_banned", "account is banned")
 		return
 	}
-	nowStr := now.Format(time.RFC3339)
 	ok := false
-	if ua.MFAMethod == "email" { // email 方式：比对登录时下发的邮箱验证码
-		stored, expires, err := a.store.GetEmailMFACode(in.MFAToken)
-		if err == nil && expires > nowStr && stored == strings.TrimSpace(in.Code) {
-			ok = true
-			_ = a.store.DeleteEmailMFACode(in.MFAToken)
-		}
+	if ua.MFAMethod == "email" { // email 方式：比对登录时下发的邮箱验证码（哈希 + 恒定时间）
+		ok = a.checkEmailMFACode(in.MFAToken, in.Code)
 	} else {
 		ok = totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1)
 	}
 	if !ok {
+		a.rateFail(rateKey)
 		attempts++
 		expired := attempts >= 5
 		if expired {
@@ -261,6 +270,7 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 校验通过：令牌一次性作废并签发正式会话
+	a.rateReset(rateKey)
 	_ = a.store.DeleteMFAChallenge(in.MFAToken)
 	a.startSession(w, r, http.StatusOK, ua.Username)
 }

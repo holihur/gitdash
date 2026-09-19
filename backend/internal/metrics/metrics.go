@@ -3,6 +3,7 @@ package metrics
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -52,7 +53,8 @@ func Handler() http.Handler {
 	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 }
 
-// normalizePath 将具体路径归一化，避免 /repos/{name} 之类路由产生高基数标签。
+// normalizePath 将具体路径归一化，避免 /repos/{name} 之类路由产生高基数标签，
+// 并剔除 /v2/<namespace>/... 中的 owner 名（安全评审 §L7）。
 func normalizePath(p string) string {
 	if len(p) > 6 && p[:5] == "/api/" {
 		rest := p[5:]
@@ -62,6 +64,9 @@ func normalizePath(p string) string {
 			}
 		}
 		return p
+	}
+	if strings.HasPrefix(p, "/v2/") || p == "/v2" {
+		return "/v2"
 	}
 	return p
 }
