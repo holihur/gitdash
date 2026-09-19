@@ -3693,6 +3693,73 @@ const docTemplate = `{
                 ]
             }
         },
+        "/package-files/{type}/{owner}/{name}": {
+            "get": {
+                "description": "不带 filename 时列出包的全部版本制品；带 filename 时：",
+                "tags": [
+                    "packages"
+                ],
+                "summary": "浏览包文件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "包类型",
+                        "name": "type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "版本",
+                        "name": "version",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "制品文件名",
+                        "name": "filename",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "=1 列出归档条目",
+                        "name": "entries",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "归档内条目名",
+                        "name": "entry",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "=1 作为附件下载",
+                        "name": "download",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
         "/packages/cargo/{owner}/api/v1/crates/new": {
             "put": {
                 "tags": [
@@ -4164,6 +4231,12 @@ const docTemplate = `{
                         "description": "包类型",
                         "name": "type",
                         "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "按包名模糊搜索",
+                        "name": "q",
+                        "in": "query"
                     }
                 ],
                 "responses": {

@@ -146,6 +146,7 @@ func servePackageBytes(w http.ResponseWriter, p store.Package, content []byte, c
 //	@Tags        packages
 //	@Param       owner  path string true "用户或组织"
 //	@Param       type   path string false "包类型"
+//	@Param       q      query string false "按包名模糊搜索"
 //	@Produce     json
 //	@Success     200 {array} store.Package
 //	@Router      /packages/{owner}/{type} [get]
@@ -176,7 +177,7 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pageParams(r)
-	pkgs, total, err := a.store.ListPackages(owner, typ, limit, offset)
+	pkgs, total, err := a.store.ListPackages(owner, typ, r.URL.Query().Get("q"), limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return

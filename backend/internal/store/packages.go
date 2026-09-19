@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -226,6 +227,22 @@ func (s *Store) CreatePackageFromFile(p *Package, tmpPath string) error {
 
 // GetPackageFile 读取包文件内容并递增下载计数；不存在返回 ErrNotFound。
 func (s *Store) GetPackageFile(owner, typ, name, version, filename string) (Package, []byte, error) {
+	p, content, err := s.readPackageFile(owner, typ, name, version, filename)
+	if err != nil {
+		return Package{}, nil, err
+	}
+	_ = s.db.Model(&packageRow{}).Where("id = ?", p.ID).
+		UpdateColumn("downloads", gorm.Expr("downloads + 1")).Error
+	p.Downloads++
+	return p, content, nil
+}
+
+// ReadPackageFile 读取包文件内容但不递增下载计数（供网页端预览 / 列出归档条目）。
+func (s *Store) ReadPackageFile(owner, typ, name, version, filename string) (Package, []byte, error) {
+	return s.readPackageFile(owner, typ, name, version, filename)
+}
+
+func (s *Store) readPackageFile(owner, typ, name, version, filename string) (Package, []byte, error) {
 	var row packageRow
 	err := s.db.Where("owner = ? AND type = ? AND name = ? AND version = ? AND filename = ?",
 		owner, typ, name, version, filename).First(&row).Error
@@ -236,9 +253,6 @@ func (s *Store) GetPackageFile(owner, typ, name, version, filename string) (Pack
 	if err != nil {
 		return Package{}, nil, err
 	}
-	_ = s.db.Model(&packageRow{}).Where("id = ?", row.ID).
-		UpdateColumn("downloads", gorm.Expr("downloads + 1")).Error
-	row.Downloads++
 	return packageFromRow(row), content, nil
 }
 
@@ -272,31 +286,33 @@ func (s *Store) ListPackageVersions(owner, typ, name string) ([]Package, error) 
 	return out, nil
 }
 
-// ListPackages 列出命名空间下某类型的包（按 name 去重，取最新一条展示）。
-func (s *Store) ListPackages(owner, typ string, limit, offset int) ([]Package, int, error) {
-	var total int64
-	q := s.db.Model(&packageRow{}).Where("owner = ?", owner)
-	if typ != "" { // 空类型 = 列出全部类型（管理/概览视图）
-		q = q.Where("type = ?", typ)
+// ListPackages 列出命名空间下某类型的包：每个 (type, name) 只取最新一行，
+// 支持按名称模糊搜索（q，不区分大小写）与分页；total 为去重后的包数。
+func (s *Store) ListPackages(owner, typ, search string, limit, offset int) ([]Package, int, error) {
+	// 同一 (type, name) 只保留最新（max id）的一行，使 total/分页按「包」而不是按「版本行」计算。
+	latest := "id = (SELECT MAX(p2.id) FROM packages p2" +
+		" WHERE p2.owner = packages.owner AND p2.type = packages.type AND p2.name = packages.name)"
+	build := func() *gorm.DB {
+		tx := s.db.Model(&packageRow{}).Where("owner = ?", owner).Where(latest)
+		if typ != "" { // 空类型 = 列出全部类型（管理/概览视图）
+			tx = tx.Where("type = ?", typ)
+		}
+		if search != "" {
+			tx = tx.Where("LOWER(name) LIKE ?", "%"+strings.ToLower(search)+"%")
+		}
+		return tx
 	}
-	if err := q.Count(&total).Error; err != nil {
+
+	var total int64
+	if err := build().Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var rows []packageRow
-	if err := q.Order("name ASC, created_at DESC, id DESC").Limit(limit).Offset(offset).
-		Find(&rows).Error; err != nil {
+	if err := build().Order("name ASC").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, 0, err
 	}
 	out := make([]Package, 0, len(rows))
-	// 按 (type, name) 去重：不同生态可以有同名包（如 npm 与 pypi 都叫 hello），
-	// 只去重同一包的多版本。
-	seen := map[string]bool{}
 	for _, r := range rows {
-		key := r.Type + "\x00" + r.Name
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
 		out = append(out, packageFromRow(r))
 	}
 	return out, int(total), nil

@@ -744,3 +744,144 @@ def test_packages_list_keeps_same_name_across_types(base_url, pkg_user):
     got = {(p["type"], p["name"]) for p in listed}
     assert ("npm", name) in got, got
     assert ("pypi", name) in got, got
+
+
+def _tgz_bytes(files: dict[str, bytes]) -> bytes:
+    import gzip as _gzip
+
+    tbuf = io.BytesIO()
+    with tarfile.open(fileobj=tbuf, mode="w") as tf:
+        for name, content in files.items():
+            ti = tarfile.TarInfo(name)
+            ti.size = len(content)
+            tf.addfile(ti, io.BytesIO(content))
+    gzbuf = io.BytesIO()
+    with _gzip.GzipFile(fileobj=gzbuf, mode="wb") as gz:
+        gz.write(tbuf.getvalue())
+    return gzbuf.getvalue()
+
+
+def test_package_files_browse_archive_and_preview(base_url, pkg_user, anon):
+    """网页端包文件浏览：列出制品 / 归档条目 / 预览文本 / 下载原始文件。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    pkg = f"brw-{uuid.uuid4().hex[:8]}"
+    tarball = _tgz_bytes(
+        {
+            "package/package.json": b'{"name": "x"}',
+            "package/index.js": b"module.exports = 1;",
+        }
+    )
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"data": base64.b64encode(tarball).decode()}},
+    }
+    assert requests.put(
+        f"{base_url}/api/packages/npm/{username}/{pkg}", json=body, headers=h, timeout=10
+    ).status_code == 201
+
+    # 未认证：401
+    assert requests.get(f"{base_url}/api/package-files/npm/{username}/{pkg}", timeout=10).status_code == 401
+
+    files = requests.get(f"{base_url}/api/package-files/npm/{username}/{pkg}", headers=h, timeout=10)
+    assert files.status_code == 200
+    assert files.json()[0]["filename"] == f"{pkg}-1.0.0.tgz"
+
+    params = {"version": "1.0.0", "filename": f"{pkg}-1.0.0.tgz"}
+    entries = requests.get(
+        f"{base_url}/api/package-files/npm/{username}/{pkg}", params={**params, "entries": "1"}, headers=h, timeout=10
+    )
+    assert entries.status_code == 200
+    assert "package/package.json" in {e["name"] for e in entries.json()}
+
+    preview = requests.get(
+        f"{base_url}/api/package-files/npm/{username}/{pkg}",
+        params={**params, "entry": "package/package.json"},
+        headers=h,
+        timeout=10,
+    )
+    assert preview.status_code == 200
+    assert preview.json()["name"] == "x"
+    assert preview.headers["Content-Type"].startswith("application/json")
+
+    raw = requests.get(
+        f"{base_url}/api/package-files/npm/{username}/{pkg}", params=params, headers=h, timeout=10
+    )
+    assert raw.content == tarball
+
+    # 不存在的归档条目：404
+    missing = requests.get(
+        f"{base_url}/api/package-files/npm/{username}/{pkg}",
+        params={**params, "entry": "nope.txt"},
+        headers=h,
+        timeout=10,
+    )
+    assert missing.status_code == 404
+
+    # 非归档（maven .pom 是纯文本）：entries 返回 400
+    grp = f"com/example/{username}"
+    art = f"txt-{uuid.uuid4().hex[:6]}"
+    pom = b"<project/>"
+    requests.put(
+        f"{base_url}/api/packages/maven/{username}/{grp}/{art}/1.0.0/{art}-1.0.0.pom",
+        data=pom,
+        headers=h,
+        timeout=10,
+    )
+    not_archive = requests.get(
+        f"{base_url}/api/package-files/maven/{username}/{grp}/{art}",
+        params={"version": "1.0.0", "filename": f"{art}-1.0.0.pom", "entries": "1"},
+        headers=h,
+        timeout=10,
+    )
+    assert not_archive.status_code == 400
+
+
+def test_packages_search_and_pagination(base_url, pkg_user):
+    """列表支持按名称搜索 + 分页，且 X-Total-Count 为去重后的包数。"""
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    prefix = f"pg{uuid.uuid4().hex[:6]}"
+    for i in range(3):
+        name = f"{prefix}-{i}"
+        body = {
+            "name": name,
+            "versions": {"1.0.0": {}},
+            "_attachments": {f"{name}-1.0.0.tgz": {"data": base64.b64encode(b"a").decode()}},
+        }
+        assert requests.put(
+            f"{base_url}/api/packages/npm/{username}/{name}", json=body, headers=h, timeout=10
+        ).status_code == 201
+
+    # 搜索：只返回名称匹配的包
+    found = requests.get(
+        f"{base_url}/api/packages/{username}/npm", params={"q": f"{prefix}-1"}, headers=h, timeout=10
+    ).json()
+    assert [p["name"] for p in found] == [f"{prefix}-1"]
+
+    # 分页：第一页 2 条 + 总数 3；第二页 1 条
+    p1 = requests.get(
+        f"{base_url}/api/packages/{username}/npm", params={"limit": 2, "offset": 0}, headers=h, timeout=10
+    )
+    assert len(p1.json()) == 2
+    assert p1.headers["X-Total-Count"] == "3"
+    p2 = requests.get(
+        f"{base_url}/api/packages/{username}/npm", params={"limit": 2, "offset": 2}, headers=h, timeout=10
+    )
+    assert len(p2.json()) == 1
+
+    # 分页按「包」而不是「版本行」计数：同名多版本只算 1
+    multi = f"{prefix}-multi"
+    for v in ("1.0.0", "2.0.0"):
+        body = {
+            "name": multi,
+            "versions": {v: {}},
+            "_attachments": {f"{multi}-{v}.tgz": {"data": base64.b64encode(b"a").decode()}},
+        }
+        requests.put(f"{base_url}/api/packages/npm/{username}/{multi}", json=body, headers=h, timeout=10)
+    r = requests.get(
+        f"{base_url}/api/packages/{username}/npm", params={"q": multi}, headers=h, timeout=10
+    )
+    assert r.headers["X-Total-Count"] == "1"
+    assert r.json()[0]["version"] == "2.0.0"
