@@ -139,7 +139,7 @@ func readArchiveEntry(kind string, data []byte, name string, max int64) ([]byte,
 				if err != nil {
 					return nil, false, false
 				}
-				defer rc.Close()
+				defer func() { _ = rc.Close() }()
 				return readLimited(rc)
 			}
 		}
