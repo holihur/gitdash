@@ -78,9 +78,10 @@ private/loopback/metadata addresses are rejected unless the host is in
 | `GITDASH_COPILOT_AGENT_URL` | empty | External agent base URL (skip spawning) |
 | `GITDASH_LLM_ALLOW_HOSTS` | empty | Comma-separated `host` or `host:port` allowed to bypass the LLM SSRF guard (e.g. a private gateway or local Ollama). Scoped to BYOK/copilot only; webhook/import SSRF protection is unaffected. `GITDASH_SSRF_ALLOW_PRIVATE=1` still allows all private addresses. |
 
-Injected into every agent process: `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`,
+Injected into every agent process: `LLM_API_KEY_FILE` (a short-lived 0600 file so
+the key is not exposed via the process environment), `LLM_BASE_URL`, `LLM_MODEL`,
 `LLM_PROVIDER`, `LLM_AUTH_STYLE` (all from the selected BYOK preset; `ollama` uses a
-placeholder key when none is given).
+placeholder key when none is given). The agent also accepts `LLM_API_KEY` directly.
 
 ## CLI
 

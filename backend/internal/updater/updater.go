@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -29,6 +30,17 @@ const DefaultRepo = "holihur/gitdash"
 const maxBinarySize = 512 << 20 // 512MB
 
 var httpClient = &http.Client{Timeout: 15 * time.Minute}
+
+// validReleaseURL 校验 release 资产 URL：必须 https，且主机属于 GitHub 域。
+func validReleaseURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" {
+		return false
+	}
+	h := strings.ToLower(u.Hostname())
+	return h == "github.com" || strings.HasSuffix(h, ".github.com") ||
+		h == "githubusercontent.com" || strings.HasSuffix(h, ".githubusercontent.com")
+}
 
 // Repo 返回 release 来源仓库，可用 GITDASH_UPDATE_REPO 覆盖（fork / 测试）。
 func Repo() string {
@@ -104,6 +116,10 @@ func apply(ctx context.Context, rel *Release) error {
 	}
 	if sumsURL == "" {
 		return fmt.Errorf("release %s 缺少 checksums.txt", rel.TagName)
+	}
+	// 防被指向非 GitHub/非 https 的下载源（安全评审 §3.6）。
+	if !validReleaseURL(archiveURL) || !validReleaseURL(sumsURL) {
+		return fmt.Errorf("release %s 的下载地址不可信", rel.TagName)
 	}
 
 	fmt.Printf("下载 %s\n", archiveURL)

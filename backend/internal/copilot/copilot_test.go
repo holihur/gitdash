@@ -209,3 +209,26 @@ func TestNewAgentToken(t *testing.T) {
 		t.Fatalf("token = %q / %q, want 64-hex and unique", a, b)
 	}
 }
+
+// TestWriteAgentKeyFile 覆盖安全评审 §3.4：LLM key 经 0600 临时文件传给 agent。
+func TestWriteAgentKeyFile(t *testing.T) {
+	path, cleanup, err := writeAgentKeyFile("sk-secret-value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil || string(b) != "sk-secret-value" {
+		t.Fatalf("key file = %q err=%v", b, err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("key file mode = %o, want 600", fi.Mode().Perm())
+	}
+	cleanup()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("key file not removed: %v", err)
+	}
+}

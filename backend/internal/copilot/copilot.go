@@ -161,6 +161,28 @@ func newAgentToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// writeAgentKeyFile 把 LLM key 写入 0600 临时文件（0600），由 agent 经
+// `LLM_API_KEY_FILE` 读取。避免密钥出现在 agent 环境（/proc/<pid>/environ）
+// 并被其派生的 git 等子进程继承。
+func writeAgentKeyFile(key string) (string, func(), error) {
+	f, err := os.CreateTemp("", "gitdash-agent-key-*")
+	if err != nil {
+		return "", nil, err
+	}
+	path := f.Name()
+	if _, err := f.WriteString(key); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return "", nil, err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", nil, err
+	}
+	_ = os.Chmod(path, 0o600)
+	return path, func() { _ = os.Remove(path) }, nil
+}
+
 // agentBinary 解析 agent 可执行文件：显式 env > 与 gitdash 同目录的 agent > PATH。
 func agentBinary() (string, error) {
 	if p := strings.TrimSpace(os.Getenv("GITDASH_COPILOT_AGENT_BIN")); p != "" {
@@ -327,9 +349,14 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 	if spec, ok := Provider(provider); ok && spec.AuthStyle != "" {
 		authStyle = spec.AuthStyle
 	}
+	keyFile, cleanupKey, err := writeAgentKeyFile(secret.APIKey)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanupKey()
 	cmd.Env = append(os.Environ(),
 		"AGENT_API_TOKEN="+agentToken,
-		"LLM_API_KEY="+secret.APIKey,
+		"LLM_API_KEY_FILE="+keyFile,
 		"LLM_BASE_URL="+baseURL,
 		"LLM_MODEL="+EffectiveModel(provider, secret.Model),
 		"LLM_PROVIDER="+provider,
