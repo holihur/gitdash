@@ -29,6 +29,12 @@ test.describe("@happy 仓库管理", () => {
     await expect(
       page.getByText(`git clone ssh://git@`, { exact: false }).first(),
     ).toContainText(`${username}/${repoName}.git`);
+
+    // 「Copy clone command」应把命令写入剪贴板（回归：移动端点击菜单项不复制）
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("menuitem", { name: "Copy clone command" }).click();
+    const clip = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clip).toContain(`${username}/${repoName}.git`);
   });
 
   test("同名仓库被拒绝（错误提示）", async ({ page }) => {

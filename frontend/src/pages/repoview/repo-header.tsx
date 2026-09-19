@@ -128,7 +128,9 @@ export default function RepoHeader({
               {cloneCommand(owner, name)}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onCopy(cloneCommand(owner, name))}>
+            {/* onSelect 而非 onClick：移动端菜单项在 pointerup 后关闭，
+                用 onSelect 能确保选中时同步触发复制（保留用户手势）。 */}
+            <DropdownMenuItem onSelect={() => onCopy(cloneCommand(owner, name))}>
               <Copy />
               {t("repo.copyCloneCommand")}
             </DropdownMenuItem>
