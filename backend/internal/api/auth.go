@@ -29,6 +29,10 @@ import (
 //	@Failure     429 {object} map[string]string
 //	@Router      /auth/register [post]
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
+	if registrationDisabled() {
+		writeCode(w, http.StatusForbidden, "registration_disabled", "registration is disabled")
+		return
+	}
 	var in struct {
 		Username string `json:"username"`
 		Password string `json:"password"`

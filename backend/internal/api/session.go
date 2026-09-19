@@ -18,6 +18,13 @@ func (a *API) rateKey(username, ip string) string { return username + "|" + ip }
 // 避免黑盒测试套件（同 IP 大量注册/登录失败）误触发 429。
 var rateLimitDisabled = os.Getenv("GITDASH_DISABLE_RATE_LIMIT") == "1"
 
+// registrationDisabled 是否关闭开放注册（GITDASH_DISABLE_REGISTRATION=1/true）。
+// 每次读取，便于测试通过 t.Setenv 覆盖，也允许运维运行时切换。
+func registrationDisabled() bool {
+	v := strings.TrimSpace(os.Getenv("GITDASH_DISABLE_REGISTRATION"))
+	return v == "1" || strings.EqualFold(v, "true")
+}
+
 // 限速记录持久化在 store（login_fails 表）：重启与多实例共享同一窗口，
 // 不再有内存 map 的无限增长问题。
 

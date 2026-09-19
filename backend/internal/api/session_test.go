@@ -28,3 +28,22 @@ func TestClientIPTrustedProxies(t *testing.T) {
 		t.Fatalf("trusted CIDR XFF = %q, want 1.2.3.4", got)
 	}
 }
+
+// TestRegistrationDisabled 覆盖安全评审 §8.1：运维可通过
+// GITDASH_DISABLE_REGISTRATION 关闭开放注册，收敛“人人可触发服务端 SSRF”的链条。
+func TestRegistrationDisabled(t *testing.T) {
+	t.Setenv("GITDASH_DISABLE_REGISTRATION", "")
+	if registrationDisabled() {
+		t.Fatal("registration should be enabled by default")
+	}
+	for _, v := range []string{"1", "true", "TRUE"} {
+		t.Setenv("GITDASH_DISABLE_REGISTRATION", v)
+		if !registrationDisabled() {
+			t.Fatalf("registrationDisabled() = false for %q", v)
+		}
+	}
+	t.Setenv("GITDASH_DISABLE_REGISTRATION", "0")
+	if registrationDisabled() {
+		t.Fatal("registrationDisabled() = true for \"0\"")
+	}
+}
