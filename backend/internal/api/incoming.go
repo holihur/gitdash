@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"net/http"
 	"strings"
@@ -123,7 +124,11 @@ func (a *API) createIssueFromIncomingWebhook(w http.ResponseWriter, r *http.Requ
 		token = bearerToken(r)
 	}
 	if token == "" {
-		token = strings.TrimSpace(r.URL.Query().Get("token"))
+		// 兼容 ?token=，但查询串会被代理/访问日志记录，建议改用 X-Gitdash-Token 头（§L4）。
+		if q := strings.TrimSpace(r.URL.Query().Get("token")); q != "" {
+			logx.Warnf("incoming webhook %s/%s used deprecated ?token= query; use the X-Gitdash-Token header", owner, repo)
+			token = q
+		}
 	}
 	ok, err := a.store.ResolveIncomingWebhook(owner, repo, token)
 	if err != nil {
