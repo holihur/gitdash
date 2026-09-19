@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -44,6 +45,15 @@ type registryManifestRow struct {
 }
 
 func (registryManifestRow) TableName() string { return "registry_manifests" }
+
+// registryBlobAccessRow 记录命名空间对某 blob 的访问权（仅在实际上传成功时授予）。
+// 拉取 blob 时必须命中本表，防止凭 digest 跨命名空间读取私有层（安全评审 §3.2）。
+type registryBlobAccessRow struct {
+	Owner  string `gorm:"primaryKey;size:255"`
+	Digest string `gorm:"primaryKey;size:71"`
+}
+
+func (registryBlobAccessRow) TableName() string { return "registry_blob_access" }
 
 func toRegistryManifest(r registryManifestRow) RegistryManifest {
 	return RegistryManifest{
@@ -126,6 +136,28 @@ func (s *Store) RegistryBlobExists(digest string) bool {
 	return ok
 }
 
+// GrantRegistryBlobAccess 记录命名空间对 blob 的访问权（上传成功后调用）。
+func (s *Store) GrantRegistryBlobAccess(owner, digest string) error {
+	if _, ok := digestHex(digest); !ok {
+		return errors.New("invalid digest")
+	}
+	row := registryBlobAccessRow{Owner: owner, Digest: digest}
+	return s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error
+}
+
+// RegistryBlobAccessible 判断命名空间是否可读取该 blob。
+func (s *Store) RegistryBlobAccessible(owner, digest string) bool {
+	if _, ok := digestHex(digest); !ok {
+		return false
+	}
+	var n int64
+	if err := s.db.Model(&registryBlobAccessRow{}).
+		Where("owner = ? AND digest = ?", owner, digest).Count(&n).Error; err != nil {
+		return false
+	}
+	return n > 0
+}
+
 // PutRegistryManifest 写入 / 覆盖某 reference 的 manifest。
 func (s *Store) PutRegistryManifest(owner, image, reference, mediaType, digest string, content []byte) error {
 	row := registryManifestRow{
@@ -195,4 +227,51 @@ func (s *Store) ListRegistryCatalog() ([]string, error) {
 		out = append(out, r.Owner+"/"+r.Image)
 	}
 	return out, nil
+}
+
+// manifestReferencedDigests 解析 manifest JSON，返回 config 与 layers 的 digest。
+func manifestReferencedDigests(content []byte) []string {
+	var m struct {
+		Config struct {
+			Digest string `json:"digest"`
+		} `json:"config"`
+		Layers []struct {
+			Digest string `json:"digest"`
+		} `json:"layers"`
+	}
+	if json.Unmarshal(content, &m) != nil {
+		return nil
+	}
+	out := make([]string, 0, len(m.Layers)+1)
+	if m.Config.Digest != "" {
+		out = append(out, m.Config.Digest)
+	}
+	for _, l := range m.Layers {
+		if l.Digest != "" {
+			out = append(out, l.Digest)
+		}
+	}
+	return out
+}
+
+// BackfillRegistryBlobAccess 在升级到访问控制后，根据既有 manifest 为其 owner
+// 补授 blob 访问权（仅当访问表为空时执行），避免存量镜像拉取失效。
+func (s *Store) BackfillRegistryBlobAccess() error {
+	var n int64
+	if err := s.db.Model(&registryBlobAccessRow{}).Count(&n).Error; err != nil || n > 0 {
+		return err
+	}
+	var rows []registryManifestRow
+	if err := s.db.Select("owner, content").Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, r := range rows {
+		for _, d := range manifestReferencedDigests(r.Content) {
+			row := registryBlobAccessRow{Owner: r.Owner, Digest: d}
+			if err := s.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&row).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

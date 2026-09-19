@@ -274,7 +274,13 @@ func (a *API) registryManifest(w http.ResponseWriter, r *http.Request, name, ref
 }
 
 func (a *API) registryBlob(w http.ResponseWriter, r *http.Request, name, digest, user string) {
-	if _, _, ok := a.checkRegistryRepo(w, name, user); !ok {
+	ns, _, ok := a.checkRegistryRepo(w, name, user)
+	if !ok {
+		return
+	}
+	// 仅允许上传过该 blob 的命名空间读取，防止凭 digest 跨命名空间拉取私有层（§3.2）。
+	if !a.store.RegistryBlobAccessible(ns, digest) {
+		writeRegistryError(w, http.StatusNotFound, "BLOB_UNKNOWN", "blob unknown")
 		return
 	}
 	path, exists := a.store.RegistryBlobPath(digest)
@@ -391,6 +397,11 @@ func (a *API) registryUploadChunk(w http.ResponseWriter, r *http.Request, name, 
 		if err := a.store.SaveRegistryBlobFromFile(sess.path, digest); err != nil {
 			registryUploads.Delete(uid)
 			writeRegistryError(w, http.StatusBadRequest, "DIGEST_INVALID", err.Error())
+			return
+		}
+		if err := a.store.GrantRegistryBlobAccess(ns, digest); err != nil {
+			registryUploads.Delete(uid)
+			internalError(w, err)
 			return
 		}
 		registryUploads.Delete(uid)

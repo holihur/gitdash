@@ -67,6 +67,7 @@ func (s *Store) migrate() error {
 		&packageTagRow{},
 		&packageAuditRow{},
 		&registryManifestRow{},
+		&registryBlobAccessRow{},
 		&runnerRow{},
 		&runnerTokenRow{},
 		&byokKeyRow{},
@@ -78,6 +79,10 @@ func (s *Store) migrate() error {
 		&incomingWebhookRow{},
 		&ipBanRow{},
 	); err != nil {
+		return err
+	}
+	// 升级到 blob 访问控制后，为存量 manifest 补授访问权（仅表为空时执行）。
+	if err := s.BackfillRegistryBlobAccess(); err != nil {
 		return err
 	}
 	// 邮箱唯一性（部分唯一索引：空串表示未设置，允许多个）

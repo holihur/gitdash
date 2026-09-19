@@ -152,3 +152,47 @@ func TestDockerRegistryPushPull(t *testing.T) {
 		t.Fatalf("cross-namespace access = %d, want 403", resp.StatusCode)
 	}
 }
+
+// TestDockerRegistryBlobCrossNamespaceDenied 覆盖安全评审 §3.2：知道 digest 的
+// 攻击者不能通过自己的命名空间 URL 读取其它命名空间的私有 blob。
+func TestDockerRegistryBlobCrossNamespaceDenied(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	bob := register(t, env, "bobby", "bob-pass-123")
+	_ = bob
+
+	atok := alice.mustStatus("POST", "/tokens", map[string]any{"name": "alice-docker"}, 201)["token"].(string)
+	btok := bob.mustStatus("POST", "/tokens", map[string]any{"name": "bob-docker"}, 201)["token"].(string)
+
+	blob := []byte("alice-private-layer")
+	sum := sha256.Sum256(blob)
+	digest := "sha256:" + hex.EncodeToString(sum[:])
+
+	// alice 上传 blob
+	resp := registryReq(t, "POST", env.BaseURL+"/v2/alice/demo/blobs/uploads/", "alice", atok, nil, "")
+	loc := resp.Header.Get("Location")
+	closeBody(t, resp)
+	resp = registryReq(t, "PATCH", env.BaseURL+loc, "alice", atok, bytes.NewReader(blob), "application/octet-stream")
+	closeBody(t, resp)
+	resp = registryReq(t, "PUT", env.BaseURL+loc+"?digest="+digest, "alice", atok, nil, "")
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("alice blob put = %d", resp.StatusCode)
+	}
+	closeBody(t, resp)
+
+	// 本人可读
+	resp = registryReq(t, "GET", env.BaseURL+"/v2/alice/demo/blobs/"+digest, "alice", atok, nil, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("alice blob get = %d", resp.StatusCode)
+	}
+	closeBody(t, resp)
+
+	// 攻击者用**自己的**命名空间路径 + alice 的 digest → 必须 404
+	for _, method := range []string{"GET", "HEAD"} {
+		resp = registryReq(t, method, env.BaseURL+"/v2/bobby/anything/blobs/"+digest, "bobby", btok, nil, "")
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("cross-namespace %s blob = %d, want 404", method, resp.StatusCode)
+		}
+		closeBody(t, resp)
+	}
+}
