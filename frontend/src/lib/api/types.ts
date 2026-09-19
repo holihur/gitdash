@@ -24,6 +24,12 @@ export interface PackageEntry {
   created_at: string;
 }
 
+export interface PackageFileEntry {
+  name: string;
+  size: number;
+  is_dir: boolean;
+}
+
 export interface PackageAuditEntry {
   id: number;
   owner: string;

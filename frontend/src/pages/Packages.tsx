@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Package as PackageIcon, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { Copy, Package as PackageIcon, Search, Terminal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, type DockerImage, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
+import { packageDetailPath } from "@/lib/api/packages";
+import { packageUseCommand } from "@/lib/package-command";
+import { copyText } from "@/lib/utils";
+import { useQueryState } from "@/lib/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -14,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
 import { TabsListOverflow } from "@/components/ui/tabs-overflow";
+import Pagination from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { formatDate } from "@/lib/utils";
@@ -23,31 +30,66 @@ import { apiErrorMsg } from "@/lib/errors";
 const PKG_TYPES = ["npm", "composer", "pypi", "rubygems", "go", "cargo", "maven", "docker"] as const;
 
 export default function Packages() {
-  const [type, setType] = useState<string>("");
+  const { t, lang } = useI18n();
+  const locale = dateLocale(lang);
+  // type / 搜索词 / 页码 / 页大小同步进 URL(?type/?q/?page/?size)
+  const { get, getNum, set } = useQueryState();
+  const type = get("type", "");
+  const query = get("q", "");
+  const page = getNum("page", 1);
+  const pageSize = getNum("size", 20);
+
   const [pkgs, setPkgs] = useState<PackageEntry[]>([]);
+  const [pkgTotal, setPkgTotal] = useState(0);
   const [dockerImages, setDockerImages] = useState<DockerImage[]>([]);
   const [self, setSelf] = useState("");
   const [audit, setAudit] = useState<PackageAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<PackageEntry | null>(null);
-  const { t, lang } = useI18n();
-  const locale = dateLocale(lang);
+
+  // 搜索框本地态 + 300ms 防抖写回 URL（避免每敲一个字符发一次请求）
+  const [qInput, setQInput] = useState(query);
+  useEffect(() => setQInput(query), [query]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onSearch = (v: string) => {
+    setQInput(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => set({ q: v || null, page: null }), 300);
+  };
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const setType = (v: string) => set({ type: v || null, page: null }, { push: true });
+  const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
+  const setPageSize = (s: number) => set({ size: s === 20 ? null : s, page: null });
+
+  useEffect(() => {
+    api.me().then((m) => setSelf(m.username)).catch(() => undefined);
+  }, []);
 
   const load = useCallback(async () => {
+    if (!self) return;
     setLoading(true);
     try {
-      const me = await api.me();
-      setSelf(me.username);
       if (type === "docker") {
-        const images = await api.listDockerImages(me.username);
-        setDockerImages(images);
+        setDockerImages(await api.listDockerImages(self));
         setPkgs([]);
+        setPkgTotal(0);
       } else {
         const [list, log] = await Promise.all([
-          api.listPackages(me.username, type || undefined),
-          api.listPackageAudit(me.username),
+          api.listPackagesPage(self, type || undefined, {
+            q: query.trim() || undefined,
+            limit: pageSize,
+            offset: (page - 1) * pageSize,
+          }),
+          api.listPackageAudit(self),
         ]);
-        setPkgs(list);
+        setPkgs(list.items);
+        setPkgTotal(list.total);
         setAudit(log);
       }
     } catch (e) {
@@ -55,7 +97,7 @@ export default function Packages() {
     } finally {
       setLoading(false);
     }
-  }, [type, t]);
+  }, [self, type, query, page, pageSize, t]);
 
   useEffect(() => {
     void load();
@@ -68,6 +110,18 @@ export default function Packages() {
     ],
     [t],
   );
+
+  // docker 镜像接口不分页，前端做过滤 + 分页
+  const dockerFiltered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return needle ? dockerImages.filter((i) => i.name.toLowerCase().includes(needle)) : dockerImages;
+  }, [dockerImages, query]);
+  const dockerPageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return dockerFiltered.slice(start, start + pageSize);
+  }, [dockerFiltered, page, pageSize]);
+
+  const total = type === "docker" ? dockerFiltered.length : pkgTotal;
 
   const remove = async (p: PackageEntry) => {
     try {
@@ -84,12 +138,44 @@ export default function Packages() {
     const tag = img.tags[0] ?? "latest";
     const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
     try {
-      await navigator.clipboard.writeText(`docker pull ${host}/${self}/${img.name}:${tag}`);
+      await copyText(`docker pull ${host}/${self}/${img.name}:${tag}`);
       toast.success(t("common.copied"));
     } catch {
       toast.error(t("common.copyFailed"));
     }
   };
+
+  // 一键复制该包的安装 / 依赖命令
+  const copyUse = async (p: PackageEntry) => {
+    try {
+      await copyText(packageUseCommand(p));
+      toast.success(t("common.copied"));
+    } catch {
+      toast.error(t("common.copyFailed"));
+    }
+  };
+
+  const searchBox = (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        className="pl-9"
+        placeholder={t("packages.searchPlaceholder")}
+        value={qInput}
+        onChange={(e) => onSearch(e.target.value)}
+      />
+    </div>
+  );
+
+  const pagination = (
+    <Pagination
+      page={page}
+      pageSize={pageSize}
+      total={total}
+      onPageChange={setPage}
+      onPageSizeChange={setPageSize}
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -101,6 +187,8 @@ export default function Packages() {
       <Tabs value={type} onValueChange={setType}>
         <TabsListOverflow tabs={packageTabs} value={type} onValueChange={setType} />
       </Tabs>
+
+      {searchBox}
 
       {loading ? (
         <div className="space-y-2">
@@ -115,47 +203,50 @@ export default function Packages() {
             <p className="text-sm">{t("packages.dockerEmpty")}</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("packages.type")}</TableHead>
-                <TableHead>{t("common.name")}</TableHead>
-                <TableHead>{t("packages.version")}</TableHead>
-                <TableHead>{t("packages.dockerPull")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {dockerImages.map((img) => {
-                const tag = img.tags[0] ?? "latest";
-                const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
-                const pull = `docker pull ${host}/${self}/${img.name}:${tag}`;
-                return (
-                  <TableRow key={img.name}>
-                    <TableCell>
-                      <Badge variant="secondary">docker</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{img.name}</TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {img.tags.length ? img.tags.join(", ") : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <code className="max-w-[60vw] truncate rounded bg-muted px-2 py-1 text-xs">{pull}</code>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => void copyPull(img)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="whitespace-nowrap">{t("packages.type")}</TableHead>
+                  <TableHead className="whitespace-nowrap">{t("common.name")}</TableHead>
+                  <TableHead className="whitespace-nowrap">{t("packages.version")}</TableHead>
+                  <TableHead className="whitespace-nowrap">{t("packages.dockerPull")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dockerPageItems.map((img) => {
+                  const tag = img.tags[0] ?? "latest";
+                  const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
+                  const pull = `docker pull ${host}/${self}/${img.name}:${tag}`;
+                  return (
+                    <TableRow key={img.name}>
+                      <TableCell>
+                        <Badge variant="secondary">docker</Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{img.name}</TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {img.tags.length ? img.tags.join(", ") : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <code className="max-w-[60vw] truncate rounded bg-muted px-2 py-1 text-xs">{pull}</code>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            onClick={() => void copyPull(img)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            {pagination}
+          </>
         )
       ) : pkgs.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
@@ -163,55 +254,77 @@ export default function Packages() {
           <p className="text-sm">{t("packages.empty")}</p>
         </div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t("packages.type")}</TableHead>
-              <TableHead>{t("common.name")}</TableHead>
-              <TableHead>{t("packages.version")}</TableHead>
-              <TableHead>{t("packages.size")}</TableHead>
-              <TableHead>{t("packages.downloads")}</TableHead>
-              <TableHead>{t("common.createdAt")}</TableHead>
-              <TableHead className="w-12" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {pkgs.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>
-                  <Badge variant="secondary">{p.type}</Badge>
-                </TableCell>
-                <TableCell className="font-mono text-sm">{p.name}</TableCell>
-                <TableCell className="font-mono text-sm">{p.version}</TableCell>
-                <TableCell className="text-sm">{(p.size / 1024).toFixed(1)} KB</TableCell>
-                <TableCell className="text-sm">{p.downloads}</TableCell>
-                <TableCell className="text-sm">{formatDate(p.created_at, locale)}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive"
-                    onClick={() => setPendingDelete(p)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="whitespace-nowrap">{t("packages.type")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("common.name")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("packages.version")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("packages.size")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("packages.downloads")}</TableHead>
+                <TableHead className="whitespace-nowrap">{t("common.createdAt")}</TableHead>
+                <TableHead className="w-12" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {pkgs.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>
+                    <Badge variant="secondary">{p.type}</Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    <Link to={packageDetailPath(p.type, p.owner, p.name)} className="hover:underline">
+                      {p.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">{p.version}</TableCell>
+                  <TableCell className="text-sm">{(p.size / 1024).toFixed(1)} KB</TableCell>
+                  <TableCell className="text-sm">{p.downloads}</TableCell>
+                  <TableCell className="text-sm">{formatDate(p.created_at, locale)}</TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        title={t("packages.useCommand")}
+                        aria-label={t("packages.useCommand")}
+                        onClick={() => void copyUse(p)}
+                      >
+                        <Terminal className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => setPendingDelete(p)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {pagination}
+        </>
       )}
 
       {type !== "docker" && audit.length > 0 && (
         <div>
           <h2 className="mb-2 text-lg font-semibold">{t("packages.audit")}</h2>
-          <div className="rounded-md border p-3 text-sm">
+          <div className="overflow-hidden rounded-md border p-3 text-sm">
             {audit.slice(0, 20).map((a) => (
-              <div key={a.id} className="flex gap-2 py-0.5 text-muted-foreground">
-                <span>{formatDate(a.created_at, locale)}</span>
-                <span className="font-mono">{a.actor}</span>
-                <span className="font-medium">{a.action}</span>
-                <span className="font-mono">
+              <div
+                key={a.id}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-0.5 text-muted-foreground"
+              >
+                <span className="whitespace-nowrap">{formatDate(a.created_at, locale)}</span>
+                <span className="whitespace-nowrap font-mono">{a.actor}</span>
+                <span className="whitespace-nowrap font-medium">{a.action}</span>
+                <span className="min-w-0 break-all font-mono">
                   {a.type}/{a.name}
                   {a.version ? `@${a.version}` : ""}
                 </span>
