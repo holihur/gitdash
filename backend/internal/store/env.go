@@ -31,7 +31,11 @@ func (s *Store) ListRepoEnvVars(owner, repo string) ([]RepoEnvVar, error) {
 	}
 	out := make([]RepoEnvVar, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, RepoEnvVar{Key: r.Key, Value: r.Value, CreatedAt: r.CreatedAt})
+		v, err := openSecret(r.Value)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, RepoEnvVar{Key: r.Key, Value: v, CreatedAt: r.CreatedAt})
 	}
 	return out, nil
 }
@@ -53,7 +57,7 @@ func (s *Store) SetRepoEnvVar(owner, repo, key, value string) error {
 	if n >= MaxRepoEnvVars {
 		return errors.New("too many env vars")
 	}
-	row := repoEnvVarRow{Owner: owner, Repo: repo, Key: key, Value: value, CreatedAt: now()}
+	row := repoEnvVarRow{Owner: owner, Repo: repo, Key: key, Value: sealSecret(value), CreatedAt: now()}
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "owner"}, {Name: "repo"}, {Name: "key"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),

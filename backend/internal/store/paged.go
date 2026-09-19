@@ -86,7 +86,11 @@ func (s *Store) ListWebhooksPaged(owner, repo string, limit, offset int) ([]Webh
 	}
 	ws := make([]Webhook, 0, len(rows))
 	for _, r := range rows {
-		ws = append(ws, toWebhook(r))
+		w, err := toWebhook(r)
+		if err != nil {
+			return nil, err
+		}
+		ws = append(ws, w)
 	}
 	return ws, nil
 }

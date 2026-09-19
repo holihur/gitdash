@@ -615,7 +615,7 @@ type byokKeyRow struct {
 	Username  string `gorm:"not null;index;size:255"`
 	Name      string `gorm:"not null;size:64"`
 	Provider  string `gorm:"not null;size:32"`
-	APIKey    string `gorm:"not null;size:1024"`
+	APIKey    string `gorm:"not null;size:4096"`
 	BaseURL   string `gorm:"not null;default:'';size:1024"`
 	Model     string `gorm:"not null;default:'';size:255"`
 	CreatedAt string `gorm:"not null"`

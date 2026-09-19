@@ -33,7 +33,7 @@ func byokRowToDTO(r byokKeyRow) ByokKey {
 func (s *Store) CreateByokKey(username, name, provider, apiKey, baseURL, model string) (ByokKey, error) {
 	ts := now()
 	row := byokKeyRow{
-		Username: username, Name: name, Provider: provider, APIKey: apiKey,
+		Username: username, Name: name, Provider: provider, APIKey: sealSecret(apiKey),
 		BaseURL: baseURL, Model: model, CreatedAt: ts, UpdatedAt: ts,
 	}
 	if err := s.db.Create(&row).Error; err != nil {
@@ -70,7 +70,11 @@ func (s *Store) GetByokSecret(username string, id int64) (ByokSecret, error) {
 	if err := s.db.Where("username = ? AND id = ?", username, id).First(&row).Error; err != nil {
 		return ByokSecret{}, notFoundErr(err)
 	}
-	return ByokSecret{Provider: row.Provider, APIKey: row.APIKey, BaseURL: row.BaseURL, Model: row.Model}, nil
+	apiKey, err := openSecret(row.APIKey)
+	if err != nil {
+		return ByokSecret{}, err
+	}
+	return ByokSecret{Provider: row.Provider, APIKey: apiKey, BaseURL: row.BaseURL, Model: row.Model}, nil
 }
 
 // UpdateByokKey 更新 BYOK 密钥；apiKey 为空表示保留原密钥。
@@ -79,7 +83,7 @@ func (s *Store) UpdateByokKey(username string, id int64, name, provider, apiKey,
 		"name": name, "provider": provider, "base_url": baseURL, "model": model, "updated_at": now(),
 	}
 	if apiKey != "" {
-		updates["api_key"] = apiKey
+		updates["api_key"] = sealSecret(apiKey)
 	}
 	res := s.db.Model(&byokKeyRow{}).Where("username = ? AND id = ?", username, id).Updates(updates)
 	if res.Error != nil {

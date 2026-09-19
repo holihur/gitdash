@@ -61,6 +61,13 @@ func (l *sqlLogger) Error(_ context.Context, msg string, args ...interface{}) {
 	}
 }
 
+// ParamsFilter 实现 gormlogger.ParamsFilter：始终剥离绑定值，使慢查询/错误日志
+// 只记录占位符，避免 repo_secrets / mirrors.private_key / webhooks.secret /
+// byok_keys.api_key 等参数值被写进日志（安全评审 §3.1）。
+func (l *sqlLogger) ParamsFilter(_ context.Context, sql string, _ ...interface{}) (string, []interface{}) {
+	return sql, nil
+}
+
 // Trace 记录每条 SQL 的耗时；按耗时与错误分流到 warn/error。
 func (l *sqlLogger) Trace(_ context.Context, begin time.Time, fc func() (string, int64), err error) {
 	if l.level <= gormlogger.Silent {

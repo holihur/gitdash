@@ -83,14 +83,15 @@ func (s *Store) ImportStatus(owner, repo string) (string, string, error) {
 
 // ---- mirrors ----
 
-// SetMirror 配置仓库的 push 镜像目标（覆盖式）。
+// SetMirror 配置仓库的 push 镜像目标（覆盖式）。privateKey 加密存储。
 func (s *Store) SetMirror(owner, repo, url, privateKey string) error {
-	row := mirrorRow{Owner: owner, Repo: repo, URL: url, PrivateKey: privateKey, CreatedAt: now()}
+	sealed := sealSecret(privateKey)
+	row := mirrorRow{Owner: owner, Repo: repo, URL: url, PrivateKey: sealed, CreatedAt: now()}
 	return s.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "owner"}, {Name: "repo"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"url":         url,
-			"private_key": privateKey,
+			"private_key": sealed,
 		}),
 	}).Create(&row).Error
 }
@@ -105,6 +106,20 @@ func (s *Store) GetMirror(owner, repo string) (Mirror, error) {
 		}
 		return Mirror{}, err
 	}
+	m, err := mirrorRowToDTO(row)
+	if err != nil {
+		return Mirror{}, err
+	}
+	return m, nil
+}
+
+// mirrorRowToDTO 解密私钥并转换为 DTO。
+func mirrorRowToDTO(row mirrorRow) (Mirror, error) {
+	pk, err := openSecret(row.PrivateKey)
+	if err != nil {
+		return Mirror{}, err
+	}
+	row.PrivateKey = pk
 	return Mirror(row), nil
 }
 
@@ -136,8 +151,17 @@ func (s *Store) PendingImports() ([]importRow, error) {
 // PendingMirrors 返回卡在 queued/running 的镜像同步任务（启动续跑用）。
 func (s *Store) PendingMirrors() ([]mirrorRow, error) {
 	var rows []mirrorRow
-	err := s.db.Where("status IN ?", []string{"queued", "running"}).Find(&rows).Error
-	return rows, err
+	if err := s.db.Where("status IN ?", []string{"queued", "running"}).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		pk, err := openSecret(rows[i].PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		rows[i].PrivateKey = pk
+	}
+	return rows, nil
 }
 
 // ---- orgs (namespace) ----

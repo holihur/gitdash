@@ -7,12 +7,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// toWebhook 把行记录转换为 DTO。
-func toWebhook(r webhookRow) Webhook {
-	return Webhook{
-		ID: r.ID, Owner: r.Owner, Repo: r.Repo, URL: r.URL, Secret: r.Secret,
-		Events: splitEvents(r.Events), CreatedAt: r.CreatedAt,
+// toWebhook 把行记录转换为 DTO（secret 解密）。
+func toWebhook(r webhookRow) (Webhook, error) {
+	secret, err := openSecret(r.Secret)
+	if err != nil {
+		return Webhook{}, err
 	}
+	return Webhook{
+		ID: r.ID, Owner: r.Owner, Repo: r.Repo, URL: r.URL, Secret: secret,
+		Events: splitEvents(r.Events), CreatedAt: r.CreatedAt,
+	}, nil
 }
 
 // splitEvents 解析逗号分隔的事件订阅（去空、去重、保序）；空串返回空切片（= 全部）。
@@ -55,7 +59,7 @@ func (s *Store) CreateWebhook(owner, repo, url, secret string, events ...string)
 	}
 	ev := joinEvents(events)
 	w := Webhook{Owner: owner, Repo: repo, URL: url, Secret: secret, Events: splitEvents(ev), CreatedAt: now()}
-	row := webhookRow{Owner: owner, Repo: repo, URL: url, Secret: secret, Events: ev, CreatedAt: w.CreatedAt}
+	row := webhookRow{Owner: owner, Repo: repo, URL: url, Secret: sealSecret(secret), Events: ev, CreatedAt: w.CreatedAt}
 	if err := s.db.Create(&row).Error; err != nil {
 		if isUniqueErr(err) {
 			return w, ErrExists
@@ -74,7 +78,11 @@ func (s *Store) ListWebhooks(owner, repo string) ([]Webhook, error) {
 	}
 	ws := make([]Webhook, 0, len(rows))
 	for _, r := range rows {
-		ws = append(ws, toWebhook(r))
+		w, err := toWebhook(r)
+		if err != nil {
+			return nil, err
+		}
+		ws = append(ws, w)
 	}
 	return ws, nil
 }
@@ -154,7 +162,11 @@ func (s *Store) GetWebhookByID(id int64) (Webhook, bool, error) {
 	if err != nil {
 		return Webhook{}, false, err
 	}
-	return toWebhook(row), true, nil
+	w, err := toWebhook(row)
+	if err != nil {
+		return Webhook{}, false, err
+	}
+	return w, true, nil
 }
 
 // ListDeliveries 列出某 webhook 最近的投递记录（校验 hook 归属；id 降序）。
