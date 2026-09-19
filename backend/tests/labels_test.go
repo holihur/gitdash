@@ -122,7 +122,8 @@ func TestLabelsMilestonesPermissions(t *testing.T) {
 	bob := register(t, env, "bobby", "bob-pass-123456")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "lm"}, 201)
 
-	(&Client{env: env}).mustFail("GET", lmPath("alice", "lm", "labels", ""), nil, 401)
+	// 未登录 / 无权限一律 404（不泄露仓库存在性）
+	(&Client{env: env}).mustFail("GET", lmPath("alice", "lm", "labels", ""), nil, 404)
 	bob.mustFail("GET", lmPath("alice", "lm", "labels", ""), nil, 404)
 	alice.mustStatus("POST", "/users/alice/repos/lm/collabs",
 		map[string]string{"username": "bobby", "permission": "read"}, 200)

@@ -110,8 +110,8 @@ func TestProjectsPermissions(t *testing.T) {
 	other.mustFail("POST", projectP(owner, "sec"), map[string]string{"name": "x"}, 404)
 	other.mustFail("DELETE", projectP(owner, "sec", pid), nil, 404)
 
-	// 未登录
+	// 未登录：读路由 404（不泄露存在性），写路由 401（需登录）
 	anon := &Client{env: env}
-	anon.mustFail("GET", projectP(owner, "sec"), nil, 401)
+	anon.mustFail("GET", projectP(owner, "sec"), nil, 404)
 	anon.mustFail("POST", projectP(owner, "sec"), map[string]string{"name": "x"}, 401)
 }

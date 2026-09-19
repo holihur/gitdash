@@ -77,8 +77,8 @@ func TestRefsPermissions(t *testing.T) {
 		"changes": []any{map[string]any{"path": "a.txt", "action": "create", "content": "1"}},
 	}, 201)
 
-	// 无权限：401/404；read 协作者可看 tags 不能写
-	(&Client{env: env}).mustFail("GET", refsPath("alice", "refs2", "/tags"), nil, 401)
+	// 无权限一律 404（不泄露仓库存在性）；read 协作者可看 tags 不能写
+	(&Client{env: env}).mustFail("GET", refsPath("alice", "refs2", "/tags"), nil, 404)
 	bob.mustFail("GET", refsPath("alice", "refs2", "/tags"), nil, 404)
 	alice.mustStatus("POST", refsPath("alice", "refs2", "/collabs"),
 		map[string]string{"username": "bobby", "permission": "read"}, 200)
