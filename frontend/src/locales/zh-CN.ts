@@ -1146,6 +1146,8 @@ export const zhCN: Messages = {
     deleteDesc: "删除 {name} 及其全部版本？",
     audit: "最近操作",
     searchPlaceholder: "按包名搜索",
+    namespaceLabel: "命名空间",
+    namespacePersonal: "个人",
     useCommand: "安装 / 使用",
     useCommandHint: "复制后执行即可安装该包",
     setup: "一次性配置",

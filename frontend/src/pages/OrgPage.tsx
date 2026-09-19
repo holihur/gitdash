@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   FolderGit2,
+  Package,
   Star,
   Trash2,
   UserMinus,
@@ -176,6 +177,12 @@ export default function OrgPage() {
               {t("orgs.deleteOrg")}
             </Button>
           )}
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Link to={`/packages?owner=${encodeURIComponent(profile.name)}`}>
+              <Package className="h-4 w-4" />
+              {t("packages.title")}
+            </Link>
+          </Button>
           <Button
             variant={profile.is_following ? "outline" : "default"}
             size="sm"

@@ -885,3 +885,52 @@ def test_packages_search_and_pagination(base_url, pkg_user):
     )
     assert r.headers["X-Total-Count"] == "1"
     assert r.json()[0]["version"] == "2.0.0"
+
+
+def test_org_namespace_packages(base_url, user_factory):
+    """组织级包仓库：org owner 可发布，成员可读，普通成员不可发布。"""
+    owner, _, c = user_factory("po")
+    member, _, c2 = user_factory("pm")
+    org = c.post(
+        "/orgs", json={"name": f"org-{uuid.uuid4().hex[:8]}", "display": "Org"}, expect=201
+    ).json()["name"]
+    c.post(f"/orgs/{org}/members", json={"username": member, "role": "member"}, expect=200)
+
+    pat = c.post("/tokens", json={"name": "pkg", "scopes": ["repo"]}, expect=201).json()["token"]
+    h = basic(owner, pat)
+    pkg = f"orgpkg-{uuid.uuid4().hex[:8]}"
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"data": base64.b64encode(b"a").decode()}},
+    }
+    assert requests.put(
+        f"{base_url}/api/packages/npm/{org}/{pkg}", json=body, headers=h, timeout=10
+    ).status_code == 201
+
+    # 成员（或任意已认证用户）可列出并读取组织包
+    mpat = c2.post("/tokens", json={"name": "pkg", "scopes": ["repo"]}, expect=201).json()["token"]
+    mh = basic(member, mpat)
+    listed = requests.get(f"{base_url}/api/packages/{org}/npm", headers=mh, timeout=10)
+    assert listed.status_code == 200
+    assert any(p["name"] == pkg for p in listed.json())
+    assert requests.get(
+        f"{base_url}/api/packages/npm/{org}/{pkg}", headers=mh, timeout=10
+    ).status_code == 200
+
+    # 普通成员不能发布到组织命名空间
+    pkg2 = f"orgpkg2-{uuid.uuid4().hex[:8]}"
+    body2 = {
+        "name": pkg2,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg2}-1.0.0.tgz": {"data": base64.b64encode(b"a").decode()}},
+    }
+    assert requests.put(
+        f"{base_url}/api/packages/npm/{org}/{pkg2}", json=body2, headers=mh, timeout=10
+    ).status_code == 403
+
+    # 提升为 org owner 后可发布
+    c.post(f"/orgs/{org}/members", json={"username": member, "role": "owner"}, expect=200)
+    assert requests.put(
+        f"{base_url}/api/packages/npm/{org}/{pkg2}", json=body2, headers=mh, timeout=10
+    ).status_code == 201

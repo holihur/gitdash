@@ -1151,6 +1151,8 @@ export const en = {
     deleteDesc: "Delete {name} and all its versions?",
     audit: "Recent activity",
     searchPlaceholder: "Search packages by name",
+    namespaceLabel: "Namespace",
+    namespacePersonal: "Personal",
     useCommand: "Install / use",
     useCommandHint: "Copy and run to install this package",
     setup: "One-time setup",

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Copy, Package as PackageIcon, Search, Terminal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { api, type DockerImage, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
+import { api, type DockerImage, type Org, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
 import { packageDetailPath } from "@/lib/api/packages";
 import { packageUseCommand } from "@/lib/package-command";
 import { copyText } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { useQueryState } from "@/lib/query-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -38,14 +39,22 @@ export default function Packages() {
   const query = get("q", "");
   const page = getNum("page", 1);
   const pageSize = getNum("size", 20);
+  const ownerParam = get("owner", "");
 
   const [pkgs, setPkgs] = useState<PackageEntry[]>([]);
   const [pkgTotal, setPkgTotal] = useState(0);
   const [dockerImages, setDockerImages] = useState<DockerImage[]>([]);
-  const [self, setSelf] = useState("");
+  const [username, setUsername] = useState("");
+  const [orgs, setOrgs] = useState<Org[]>([]);
   const [audit, setAudit] = useState<PackageAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<PackageEntry | null>(null);
+
+  // 命名空间：默认个人，可切到所属组织（?owner= 同步进 URL）
+  const owner = ownerParam || username;
+  const selectedOrg = orgs.find((o) => o.name === owner);
+  // 组织只有 owner 角色可发布/删除；个人命名空间总能管理
+  const canManage = owner !== "" && (owner === username || selectedOrg?.role === "owner");
 
   // 搜索框本地态 + 300ms 防抖写回 URL（避免每敲一个字符发一次请求）
   const [qInput, setQInput] = useState(query);
@@ -64,29 +73,31 @@ export default function Packages() {
   );
 
   const setType = (v: string) => set({ type: v || null, page: null }, { push: true });
+  const setOwner = (v: string) => set({ owner: v || null, page: null }, { push: true });
   const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
   const setPageSize = (s: number) => set({ size: s === 20 ? null : s, page: null });
 
   useEffect(() => {
-    api.me().then((m) => setSelf(m.username)).catch(() => undefined);
+    api.me().then((m) => setUsername(m.username)).catch(() => undefined);
+    api.listOrgs().then(setOrgs).catch(() => setOrgs([]));
   }, []);
 
   const load = useCallback(async () => {
-    if (!self) return;
+    if (!owner) return;
     setLoading(true);
     try {
       if (type === "docker") {
-        setDockerImages(await api.listDockerImages(self));
+        setDockerImages(await api.listDockerImages(owner));
         setPkgs([]);
         setPkgTotal(0);
       } else {
         const [list, log] = await Promise.all([
-          api.listPackagesPage(self, type || undefined, {
+          api.listPackagesPage(owner, type || undefined, {
             q: query.trim() || undefined,
             limit: pageSize,
             offset: (page - 1) * pageSize,
           }),
-          api.listPackageAudit(self),
+          api.listPackageAudit(owner),
         ]);
         setPkgs(list.items);
         setPkgTotal(list.total);
@@ -97,7 +108,7 @@ export default function Packages() {
     } finally {
       setLoading(false);
     }
-  }, [self, type, query, page, pageSize, t]);
+  }, [owner, type, query, page, pageSize, t]);
 
   useEffect(() => {
     void load();
@@ -138,7 +149,7 @@ export default function Packages() {
     const tag = img.tags[0] ?? "latest";
     const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
     try {
-      await copyText(`docker pull ${host}/${self}/${img.name}:${tag}`);
+      await copyText(`docker pull ${host}/${owner}/${img.name}:${tag}`);
       toast.success(t("common.copied"));
     } catch {
       toast.error(t("common.copyFailed"));
@@ -154,6 +165,31 @@ export default function Packages() {
       toast.error(t("common.copyFailed"));
     }
   };
+
+  const namespaceSelect =
+    orgs.length > 0 ? (
+      <div className="flex items-center gap-2">
+        <Label htmlFor="pkg-owner" className="shrink-0">
+          {t("packages.namespaceLabel")}
+        </Label>
+        <select
+          id="pkg-owner"
+          value={ownerParam}
+          onChange={(e) => setOwner(e.target.value)}
+          className="h-9 w-full max-w-[16rem] rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">
+            {username ? `${t("packages.namespacePersonal")} (${username})` : t("packages.namespacePersonal")}
+          </option>
+          {orgs.map((o) => (
+            <option key={o.name} value={o.name}>
+              {o.name}
+              {o.role === "owner" ? " · owner" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+    ) : null;
 
   const searchBox = (
     <div className="relative">
@@ -183,6 +219,8 @@ export default function Packages() {
         <h1 className="text-2xl font-bold">{t("packages.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("packages.subtitle")}</p>
       </div>
+
+      {namespaceSelect}
 
       <Tabs value={type} onValueChange={setType}>
         <TabsListOverflow tabs={packageTabs} value={type} onValueChange={setType} />
@@ -217,7 +255,7 @@ export default function Packages() {
                 {dockerPageItems.map((img) => {
                   const tag = img.tags[0] ?? "latest";
                   const host = typeof window !== "undefined" ? window.location.host : "localhost:8080";
-                  const pull = `docker pull ${host}/${self}/${img.name}:${tag}`;
+                  const pull = `docker pull ${host}/${owner}/${img.name}:${tag}`;
                   return (
                     <TableRow key={img.name}>
                       <TableCell>
@@ -294,14 +332,16 @@ export default function Packages() {
                       >
                         <Terminal className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => setPendingDelete(p)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => setPendingDelete(p)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
