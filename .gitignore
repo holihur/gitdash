@@ -39,3 +39,6 @@ tests/ui/bug.md
 frontend/tsconfig.tsbuildinfo
 *.tsbuildinfo
 .data/
+
+# 本地协调清单（不入库）
+help.md
