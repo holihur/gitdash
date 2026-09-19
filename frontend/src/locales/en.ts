@@ -245,6 +245,9 @@ export const en = {
     revertTitle: "Revert commit",
     revertConfirm: "Create a new commit on {branch} that undoes the changes of {sha}?",
     reverted: "Reverted as {sha}",
+    searchPlaceholder: "Search commits (message, author, or SHA)",
+    noMatches: "No commits match your search",
+    graph: "Commit graph",
   },
   repo: {
     notFound: "Repository not found: {error}",

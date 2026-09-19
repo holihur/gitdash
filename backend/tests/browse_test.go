@@ -21,9 +21,66 @@ type Entry struct {
 }
 
 type Commit struct {
-	SHA     string `json:"sha"`
-	Author  string `json:"author"`
-	Message string `json:"message"`
+	SHA     string   `json:"sha"`
+	Author  string   `json:"author"`
+	Message string   `json:"message"`
+	Parents []string `json:"parents"`
+	Refs    []string `json:"refs"`
+}
+
+// TestCommitsGraphAndSearch 覆盖提交图数据（parents/refs）与搜索过滤。
+func TestCommitsGraphAndSearch(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "graph"}, 201)
+
+	c1 := writeCommit(t, alice, "alice", "graph", map[string]any{
+		"branch":  "main",
+		"message": "first commit",
+		"changes": []any{map[string]any{"path": "a.txt", "action": "create", "content": "1"}},
+	}, 201)["sha"].(string)
+	c2 := writeCommit(t, alice, "alice", "graph", map[string]any{
+		"branch":  "main",
+		"message": "Add Feature X",
+		"changes": []any{map[string]any{"path": "b.txt", "action": "create", "content": "2"}},
+	}, 201)["sha"].(string)
+
+	cs := getJSON[[]Commit](t, alice, "/repos/graph/commits?ref=main", 200)
+	if len(cs) != 2 || cs[0].SHA != c2 || cs[1].SHA != c1 {
+		t.Fatalf("commits = %+v", cs)
+	}
+	if len(cs[0].Parents) != 1 || cs[0].Parents[0] != c1 {
+		t.Fatalf("parents = %v, want [%s]", cs[0].Parents, c1)
+	}
+	if len(cs[1].Parents) != 0 {
+		t.Fatalf("root commit should have no parents, got %v", cs[1].Parents)
+	}
+	foundRef := false
+	for _, r := range cs[0].Refs {
+		if r == "HEAD -> main" {
+			foundRef = true
+		}
+	}
+	if !foundRef {
+		t.Fatalf("refs = %v, want HEAD -> main", cs[0].Refs)
+	}
+
+	// 搜索：提交信息（大小写不敏感）
+	if m := getJSON[[]Commit](t, alice, "/repos/graph/commits?ref=main&q=feature", 200); len(m) != 1 || m[0].SHA != c2 {
+		t.Fatalf("message search = %+v", m)
+	}
+	// 搜索：作者
+	if a := getJSON[[]Commit](t, alice, "/repos/graph/commits?ref=main&q=ALICE", 200); len(a) != 2 {
+		t.Fatalf("author search = %+v", a)
+	}
+	// 搜索：sha 前缀
+	if s := getJSON[[]Commit](t, alice, "/repos/graph/commits?ref=main&q="+c1[:8], 200); len(s) != 1 || s[0].SHA != c1 {
+		t.Fatalf("sha search = %+v", s)
+	}
+	// 搜索无命中
+	if n := getJSON[[]Commit](t, alice, "/repos/graph/commits?ref=main&q=zzz-nope", 200); len(n) != 0 {
+		t.Fatalf("no-match search = %+v", n)
+	}
 }
 
 // seedCommits 用 file:// 协议向 bare 仓库推入初始提交（不依赖 ssh）。

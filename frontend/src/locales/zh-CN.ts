@@ -245,6 +245,9 @@ export const zhCN: Messages = {
     revertTitle: "撤销提交",
     revertConfirm: "将在 {branch} 上创建一个新提交，撤销 {sha} 的改动。是否继续？",
     reverted: "已撤销，生成提交 {sha}",
+    searchPlaceholder: "搜索提交（提交信息 / 作者 / SHA）",
+    noMatches: "没有匹配的提交",
+    graph: "提交图",
   },
   repo: {
     notFound: "仓库不存在：{error}",

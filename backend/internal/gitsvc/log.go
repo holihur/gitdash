@@ -67,22 +67,32 @@ func rawCommits(owner, name string, shas []string) map[string][]byte {
 }
 
 type Commit struct {
-	SHA     string `json:"sha"`
-	Author  string `json:"author"`
-	Date    string `json:"date"`
-	Message string `json:"message"`
+	SHA     string   `json:"sha"`
+	Author  string   `json:"author"`
+	Date    string   `json:"date"`
+	Message string   `json:"message"`
+	Parents []string `json:"parents,omitempty"` // 父提交 sha（用于提交图）；根提交为空
+	Refs    []string `json:"refs,omitempty"`    // 指向该提交的本地分支/标签（如 "HEAD -> main"、"tag: v1.0"）
 }
 
-func commits(owner, name, ref string, limit int) ([]Commit, error) {
+// maxCommitScan 带搜索词时最多向后扫描的提交数（避免超大仓库全量遍历）。
+const maxCommitScan = 500
+
+func commits(owner, name, ref string, limit int, query string) ([]Commit, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
+	q := strings.TrimSpace(query)
+	scan := limit
+	if q != "" {
+		scan = maxCommitScan
+	}
 	out, err := gitOut(repoPath(owner, name),
-		"log", "--max-count="+strconv.Itoa(limit), "--date=iso-strict",
-		"--pretty=format:%H%x1f%an%x1f%ad%x1f%s%x1e", ref)
+		"log", "--max-count="+strconv.Itoa(scan), "--date=iso-strict",
+		"--pretty=format:%H%x1f%P%x1f%an%x1f%ad%x1f%D%x1f%s%x1e", ref)
 	if err != nil {
 		return nil, err
 	}
@@ -93,12 +103,45 @@ func commits(owner, name, ref string, limit int) ([]Commit, error) {
 			continue
 		}
 		parts := strings.Split(rec, "\x1f")
-		if len(parts) < 4 {
+		if len(parts) < 6 {
 			continue
 		}
-		commits = append(commits, Commit{SHA: parts[0], Author: parts[1], Date: parts[2], Message: parts[3]})
+		c := Commit{
+			SHA: parts[0], Author: parts[2], Date: parts[3], Message: parts[5],
+			Parents: strings.Fields(parts[1]), Refs: splitRefDecorations(parts[4]),
+		}
+		if q != "" && !commitMatches(c, q) {
+			continue
+		}
+		commits = append(commits, c)
+		if len(commits) >= limit {
+			break
+		}
 	}
 	return commits, nil
+}
+
+// splitRefDecorations 拆分 `git log --pretty=%D` 的引用列表（逗号分隔）。
+func splitRefDecorations(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	out := []string{}
+	for _, p := range strings.Split(raw, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// commitMatches 大小写不敏感地匹配 sha 前缀 / 作者 / 提交信息。
+func commitMatches(c Commit, query string) bool {
+	q := strings.ToLower(query)
+	return strings.HasPrefix(strings.ToLower(c.SHA), q) ||
+		strings.Contains(strings.ToLower(c.Author), q) ||
+		strings.Contains(strings.ToLower(c.Message), q)
 }
 
 // LastCommit 返回 ref 上最近一次改动 path（文件或目录；空 = 仓库根）的提交。

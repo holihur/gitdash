@@ -118,8 +118,11 @@ export const reposApi = {
     req<Blob>(
       `/users/${owner}/repos/${name}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
     ),
-  commits: (owner: string, name: string, ref: string) =>
-    req<Commit[]>(`/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}`),
+  commits: (owner: string, name: string, ref: string, q?: string) =>
+    req<Commit[]>(
+      `/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}` +
+        (q ? `&q=${encodeURIComponent(q)}` : ""),
+    ),
   blame: (owner: string, name: string, ref: string, path: string) =>
     req<Blame>(
       `/users/${owner}/repos/${name}/blame?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,

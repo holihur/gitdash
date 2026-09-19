@@ -250,6 +250,10 @@ export interface Commit {
   author: string;
   date: string;
   message: string;
+  /** 父提交 sha（用于提交图）；根提交缺省 */
+  parents?: string[];
+  /** 指向该提交的本地分支/标签，如 "HEAD -> main"、"tag: v1.0" */
+  refs?: string[];
   /** 经已注册 GPG 公钥验证的提交所属用户 */
   gpg_verified?: string;
   /** GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省） */

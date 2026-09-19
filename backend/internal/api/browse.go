@@ -191,7 +191,7 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []commitResp{})
 		return
 	}
-	cs, err := gitsvc.Commits(owner, name, ref, limit)
+	cs, err := gitsvc.Commits(owner, name, ref, limit, r.URL.Query().Get("q"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
@@ -206,7 +206,7 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 	raws := gitsvc.RawCommits(owner, name, shas)
 	out := make([]commitResp, 0, len(cs))
 	for _, c := range cs {
-		r := commitResp{SHA: c.SHA, Author: c.Author, Date: c.Date, Message: c.Message}
+		r := commitResp{SHA: c.SHA, Author: c.Author, Date: c.Date, Message: c.Message, Parents: c.Parents, Refs: c.Refs}
 		if raw, ok := raws[c.SHA]; ok {
 			if user, _, status := gpgsig.VerifyCommit(raw, keys); status != gpgsig.StatusUnsigned {
 				r.GPGStatus = status
@@ -221,11 +221,13 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 }
 
 type commitResp struct {
-	SHA         string `json:"sha"`
-	Author      string `json:"author"`
-	Date        string `json:"date"`
-	Message     string `json:"message"`
-	GPGVerified string `json:"gpg_verified,omitempty"`
+	SHA         string   `json:"sha"`
+	Author      string   `json:"author"`
+	Date        string   `json:"date"`
+	Message     string   `json:"message"`
+	Parents     []string `json:"parents,omitempty"`
+	Refs        []string `json:"refs,omitempty"`
+	GPGVerified string   `json:"gpg_verified,omitempty"`
 	// GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省，与旧行为兼容）
 	GPGStatus string `json:"gpg_status,omitempty"`
 }
