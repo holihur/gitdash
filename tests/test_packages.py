@@ -713,3 +713,34 @@ def test_generic_package_delete(base_url, pkg_user):
     assert d.status_code == 204, d.text
     after = requests.get(f"{base_url}/api/packages/{username}/pypi", headers=h, timeout=10).json()
     assert not any(p["name"] == pkg for p in after)
+
+
+def test_packages_list_keeps_same_name_across_types(base_url, pkg_user):
+    """不同生态可以有同名包：列出全部类型时不能被按 name 去重丢掉。
+
+    回归：`hello-<x>` 同时发布 npm 与 pypi 后，GET /packages/{owner} 曾只保留
+    createdAt 较新的一条，另一个生态的包在 UI 概览里消失。
+    """
+    username, pat, _ = pkg_user
+    h = basic(username, pat)
+    name = f"same-{uuid.uuid4().hex[:8]}"
+
+    body = {
+        "name": name,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{name}-1.0.0.tgz": {"data": base64.b64encode(b"a").decode()}},
+    }
+    assert requests.put(
+        f"{base_url}/api/packages/npm/{username}/{name}", json=body, headers=h, timeout=10
+    ).status_code == 201
+    assert requests.post(
+        f"{base_url}/api/packages/pypi/{username}/",
+        data={"name": name, "version": "1.0.0"},
+        files={"content": (f"{name}-1.0.0.tar.gz", b"sdists")},
+        headers=h, timeout=10,
+    ).status_code == 200
+
+    listed = requests.get(f"{base_url}/api/packages/{username}", headers=h, timeout=10).json()
+    got = {(p["type"], p["name"]) for p in listed}
+    assert ("npm", name) in got, got
+    assert ("pypi", name) in got, got

@@ -288,12 +288,15 @@ func (s *Store) ListPackages(owner, typ string, limit, offset int) ([]Package, i
 		return nil, 0, err
 	}
 	out := make([]Package, 0, len(rows))
+	// 按 (type, name) 去重：不同生态可以有同名包（如 npm 与 pypi 都叫 hello），
+	// 只去重同一包的多版本。
 	seen := map[string]bool{}
 	for _, r := range rows {
-		if seen[r.Name] {
+		key := r.Type + "\x00" + r.Name
+		if seen[key] {
 			continue
 		}
-		seen[r.Name] = true
+		seen[key] = true
 		out = append(out, packageFromRow(r))
 	}
 	return out, int(total), nil
