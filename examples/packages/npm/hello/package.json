@@ -1,0 +1,8 @@
+{
+  "name": "hello",
+  "version": "1.0.0",
+  "description": "gitdash package registry demo package",
+  "main": "index.js",
+  "files": ["index.js"],
+  "license": "MIT"
+}

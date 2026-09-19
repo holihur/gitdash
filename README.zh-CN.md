@@ -25,7 +25,7 @@ English | 简体中文
 - **仓库设置**：owner 可设置默认分支（决定浏览/HEAD 分支）、开启或关闭 issue 功能，并管理可见性与模版标记；支持一键 **`git gc`**（仓库维护）打包松散对象、回收磁盘空间
 - **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索
 - **代码浏览与网页编辑**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame；可新建 / 编辑 / 删除文件与目录，在提交记录页撤销某次提交（生成反向提交），并在代码页比较任意两个分支 / 标签 / 提交的差异
-- **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md)
+- **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md) 及可直接运行的 [examples/packages](examples/packages/)
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml` 或 `.gitdash/*.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；每个仓库可放多个独立流水线文件，按各自的 `on:` 规则分别触发；任务默认进程内执行，也可走 Redis（asynq）持久化队列
 - **BYOK Copilot**：与运行在仓库检出副本中的独立 agent 运行时（由 `deps/agent` 子模块构建的 `agent` 二进制）对话；它能读、改、执行命令，每轮结束后 gitdash 会把改动提交并推送到 `copilot/session-<id>` 分支；关联 issue 的会话在 agent 推送后自动开 PR（正文 `Closes #N`），网页端与 `gitdash-cli copilot fix` 均可触发——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)

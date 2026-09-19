@@ -367,3 +367,18 @@ docker pull your-host:8080/<owner>/hello:1.0
 - 包关联仓库（可见性跟随仓库）：发布时带 `X-Gitdash-Repo: <repo>` 头
 - Web UI：顶部导航「包仓库」页（列表 / 删除 / 最近操作）
 - `GET /api/openapi.json` — 完整端点文档
+
+---
+
+## 可运行的示例
+
+[`examples/packages/`](../examples/packages/) 为每个注册表提供一个最小项目，
+并附带只用标准库的 `publish.py`：向实例发布全部示例并验证下载，可作为手动
+端到端测试与 HTTP 请求体参考。脚本不依赖任何原生工具链：
+
+```bash
+export GITDASH_URL=http://127.0.0.1:8080
+export GITDASH_USER=alice          # 在该用户/组织下发布
+export GITDASH_PAT=<repo 作用域 PAT>
+python3 examples/packages/publish.py
+```

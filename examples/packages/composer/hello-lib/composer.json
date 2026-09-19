@@ -1,0 +1,10 @@
+{
+  "name": "example/hello-lib",
+  "description": "gitdash package registry demo library",
+  "type": "library",
+  "version": "1.0.0",
+  "license": "MIT",
+  "autoload": {
+    "files": ["src/hello.php"]
+  }
+}

@@ -372,3 +372,19 @@ Supported endpoints: `/v2/` (version/login), blob upload (`POST`/`PATCH`/`PUT` +
 - Link a package to a repo (visibility follows the repo): send `X-Gitdash-Repo: <repo>` on publish
 - Web UI: *Packages* page in the header (list / delete / recent activity)
 - `GET /api/openapi.json` — full endpoint docs
+
+---
+
+## Runnable examples
+
+[`examples/packages/`](../examples/packages/) contains one minimal project per
+registry plus a stdlib-only `publish.py` that publishes each of them to a live
+instance and verifies the download — handy as a manual end-to-end test and as
+a reference for the HTTP payloads. The script needs no native toolchains:
+
+```bash
+export GITDASH_URL=http://127.0.0.1:8080
+export GITDASH_USER=alice          # publish under this user/org
+export GITDASH_PAT=<repo-scoped PAT>
+python3 examples/packages/publish.py
+```

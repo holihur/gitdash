@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.example</groupId>
+  <artifactId>hello</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+  <description>gitdash package registry demo artifact</description>
+
+  <!-- Deploy target: replace <owner> with your gitdash user/org and add the
+       matching server credentials (id: gitdash) in ~/.m2/settings.xml. -->
+  <distributionManagement>
+    <repository>
+      <id>gitdash</id>
+      <url>http://your-host:8080/api/packages/maven/&lt;owner&gt;</url>
+    </repository>
+  </distributionManagement>
+</project>

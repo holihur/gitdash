@@ -1,0 +1,9 @@
+[package]
+name = "hello-lib"
+version = "0.1.0"
+edition = "2021"
+description = "gitdash package registry demo crate"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
