@@ -8,6 +8,13 @@ test.skip(
   "UI tests need a server instance: set GITDASH_BIN or GITDASH_UI_URL",
 );
 
+async function waitToastsGone(page: import("@playwright/test").Page) {
+  for (let i = 0; i < 60; i++) {
+    if ((await page.locator("[data-sonner-toast]").count()) === 0) return;
+    await page.waitForTimeout(500);
+  }
+}
+
 async function openSettings(page: import("@playwright/test").Page) {
   await page.getByRole("tab", { name: "Settings" }).click();
 }
@@ -33,14 +40,18 @@ test.describe("@happy 仓库设置", () => {
     await expect(toast(page)).toContainText("Tags updated");
 
     // Issues 开 → 关
+    await waitToastsGone(page);
     await page.getByRole("button", { name: "Disable issues" }).click();
     await expect(toast(page)).toContainText("Issues disabled");
+    await waitToastsGone(page);
     await page.getByRole("button", { name: "Enable issues" }).click();
     await expect(toast(page)).toContainText("Issues enabled");
 
     // 模板 开 → 关
+    await waitToastsGone(page);
     await page.getByRole("button", { name: "Make template" }).click();
     await expect(toast(page)).toContainText("Repository is now a template");
+    await waitToastsGone(page);
     await page.getByRole("button", { name: "Remove template" }).click();
     await expect(toast(page)).toContainText("Repository is no longer a template");
   });
