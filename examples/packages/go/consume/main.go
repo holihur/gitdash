@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	hello "example.com/<owner>/hello"
+	hello "example.com/gitdash/hello"
 )
 
 func main() {

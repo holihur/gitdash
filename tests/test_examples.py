@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / "examples" / "packages"
 PUBLISH = ROOT / "publish.py"
-CONSUME = ROOT / "consume" / "consume.py"
+CONSUME = ROOT / "consume.py"
 
 
 def _run(script: Path, env: dict[str, str], timeout: int = 180) -> subprocess.CompletedProcess:

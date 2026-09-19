@@ -1,13 +1,17 @@
 # Package registry examples
 
-Runnable examples for the gitdash [private package registry](../../docs/packages.md),
-in two halves:
+Runnable examples for the gitdash [private package registry](../../docs/packages.md).
+Each ecosystem directory pairs a **publisher** project with a **consumer**
+project, so you can see the full round trip:
 
-- **[publish/](.)** (this directory) — one minimal project per ecosystem plus a
-  stdlib-only `publish.py` that publishes each to a live instance.
-- **[consume/](consume/)** — matching projects that *install* the private
-  packages (`.npmrc` / `pip.conf` / `.cargo/config.toml` / ...) plus a
-  stdlib-only `consume.py` read-side verifier.
+```
+npm/hello/      <- publish      npm/consume/      <- install
+pypi/hello-py/  <- publish      pypi/consume/     <- install
+...
+```
+
+Two stdlib-only scripts drive the whole thing without any package manager
+installed: `publish.py` (write side) and `consume.py` (read side).
 
 ## Quick start (no extra toolchains)
 
@@ -45,6 +49,35 @@ Every run publishes a unique `*-<hex>` name so it can be repeated safely. The
 Docker / OCI registry is not covered by the script (it needs a real image
 client); use the example below.
 
+Then pull them back the same way (read side):
+
+```bash
+export GITDASH_OWNER=alice   # namespace to consume (defaults to GITDASH_USER)
+python3 examples/packages/consume.py
+
+#   7/7 registries consumed
+```
+
+### One command for both layers
+
+`e2e.py` runs the stdlib scripts **and** a real publish + install per ecosystem,
+using the native client when it is on `PATH` (npm, cargo, pip). Missing tools
+are reported as `skip`, so it is safe in CI:
+
+```bash
+export GITDASH_URL=http://127.0.0.1:8080 GITDASH_USER=alice GITDASH_PAT=<PAT>
+python3 examples/packages/e2e.py
+
+#   ok   publish.py + consume.py
+#   ok   npm (native)
+#   ok   cargo (native)
+#   ok   pypi (native)
+#   skip go (native) — go client needs HTTPS to send credentials
+```
+
+The standard-library round trip is also exercised by
+[`tests/test_examples.py`](../../tests/test_examples.py), which runs in CI.
+
 ## Native tooling
 
 The example projects are buildable with the real package managers. Replace
@@ -68,20 +101,40 @@ index URL. Full, copy-pasteable commands and `.npmrc` / `Cargo.toml` /
 `settings.xml` snippets live in [`docs/packages.md`](../../docs/packages.md).
 
 The read side (installing these packages from a project) is covered by the
-consumer projects in [`consume/`](consume/).
+`consume/` project next to each publisher — see
+[CONSUME.md](CONSUME.md) for the native client commands.
 
 ## Layout
 
 ```
 packages/
+├── README.md
+├── CONSUME.md                 # consumer-side setup per ecosystem
 ├── publish.py                 # stdlib-only publish + verify script
-├── npm/hello/                 # package.json + index.js
-├── pypi/hello-py/             # pyproject.toml + src/hello_py/
-├── composer/hello-lib/        # composer.json + src/hello.php
-├── cargo/hello-lib/           # Cargo.toml + src/lib.rs
-├── go/hello/                  # go.mod + hello.go
-├── rubygems/hello/            # hello.gemspec + lib/hello.rb
-├── maven/hello/               # pom.xml + src/main/java/com/example/Hello.java
-├── docker/                    # Dockerfile + hello.sh
-└── consume/                   # consumer projects + consume.py (read side)
+├── consume.py                 # stdlib-only consume (read) script
+├── e2e.py                     # runs both layers + native clients
+├── npm/
+│   ├── hello/                 # package.json + index.js
+│   └── consume/               # package.json + .npmrc
+├── pypi/
+│   ├── hello-py/              # pyproject.toml + src/hello_py/
+│   └── consume/               # requirements.txt + pip.conf
+├── composer/
+│   ├── hello-lib/             # composer.json + src/hello.php
+│   └── consume/               # composer.json
+├── cargo/
+│   ├── hello-lib/             # Cargo.toml + src/lib.rs
+│   └── consume/               # Cargo.toml + .cargo/config.toml + src/
+├── go/
+│   ├── hello/                 # go.mod + hello.go
+│   └── consume/               # go.mod + main.go
+├── rubygems/
+│   ├── hello/                 # hello.gemspec + lib/hello.rb
+│   └── consume/               # Gemfile
+├── maven/
+│   ├── hello/                 # pom.xml + src/main/java/com/example/Hello.java
+│   └── consume/               # pom.xml + settings.xml
+└── docker/
+    ├── Dockerfile + hello.sh  # build/push the image
+    └── consume/               # FROM <host>/<owner>/hello:1.0
 ```
