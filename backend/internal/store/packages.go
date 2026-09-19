@@ -29,6 +29,7 @@ type Package struct {
 	Checksum  string `json:"checksum"` // sha256 hex
 	Downloads int64  `json:"downloads"`
 	Yanked    bool   `json:"yanked"`
+	Private   bool   `json:"private"` // 单个包（owner+type+name）的可见性，true = 仅 owner/组织成员/协作者
 	Uploader  string `json:"uploader"`
 	Meta      string `json:"meta,omitempty"` // 生态相关扩展元数据（JSON/文本），如 cargo deps/features、pypi Requires-Python
 	CreatedAt string `json:"created_at"`
@@ -46,6 +47,7 @@ type packageRow struct {
 	Checksum  string `gorm:"not null;default:'';size:64"`
 	Downloads int64  `gorm:"not null;default:0"`
 	Yanked    bool   `gorm:"not null;default:false"`
+	Private   bool   `gorm:"not null;default:false"`
 	Uploader  string `gorm:"not null;size:255"`
 	Meta      string `gorm:"not null;default:'';size:8192"`
 	BlobPath  string `gorm:"column:blob_path;not null;default:'';size:512"`
@@ -154,7 +156,7 @@ func packageFromRow(row packageRow) Package {
 	return Package{
 		ID: row.ID, Owner: row.Owner, Repo: row.Repo, Type: row.Type, Name: row.Name,
 		Version: row.Version, Filename: row.Filename, Size: row.Size, Checksum: row.Checksum,
-		Downloads: row.Downloads, Yanked: row.Yanked, Uploader: row.Uploader, Meta: row.Meta, CreatedAt: row.CreatedAt,
+		Downloads: row.Downloads, Yanked: row.Yanked, Private: row.Private, Uploader: row.Uploader, Meta: row.Meta, CreatedAt: row.CreatedAt,
 	}
 }
 
@@ -168,7 +170,8 @@ func (s *Store) CreatePackage(p *Package, content []byte) error {
 	row := packageRow{
 		Owner: p.Owner, Repo: p.Repo, Type: p.Type, Name: p.Name, Version: p.Version,
 		Filename: p.Filename, Size: int64(len(content)), Checksum: sha, Uploader: p.Uploader,
-		Meta: p.Meta, BlobPath: blobPath, Content: content, CreatedAt: now(),
+		Private: s.IsPackagePrivate(p.Owner, p.Type, p.Name),
+		Meta:    p.Meta, BlobPath: blobPath, Content: content, CreatedAt: now(),
 	}
 	if blobPath != "" {
 		row.Content = []byte{} // 内容已落盘，DB 只存元数据
@@ -213,6 +216,7 @@ func (s *Store) CreatePackageFromFile(p *Package, tmpPath string) error {
 	row := packageRow{
 		Owner: p.Owner, Repo: p.Repo, Type: p.Type, Name: p.Name, Version: p.Version,
 		Filename: p.Filename, Size: size, Checksum: sha, Uploader: p.Uploader, Meta: p.Meta,
+		Private:  s.IsPackagePrivate(p.Owner, p.Type, p.Name),
 		BlobPath: blobPath, CreatedAt: now(),
 	}
 	if err := s.db.Create(&row).Error; err != nil {
@@ -324,6 +328,30 @@ func (s *Store) ListAllPackageNames(owner, typ string) ([]string, error) {
 	err := s.db.Model(&packageRow{}).Where("owner = ? AND type = ?", owner, typ).
 		Distinct("name").Order("name").Pluck("name", &names).Error
 	return names, err
+}
+
+// IsPackagePrivate 返回该包（owner+type+name）是否被设为私有（任一行 private 即视为私有）。
+func (s *Store) IsPackagePrivate(owner, typ, name string) bool {
+	var n int64
+	s.db.Model(&packageRow{}).
+		Where("owner = ? AND type = ? AND name = ? AND private = ?", owner, typ, name, true).
+		Count(&n)
+	return n > 0
+}
+
+// SetPackagePrivate 设置整个包（全版本）的可见性；包不存在返回 ErrNotFound。
+func (s *Store) SetPackagePrivate(owner, typ, name string, private bool) error {
+	var n int64
+	if err := s.db.Model(&packageRow{}).
+		Where("owner = ? AND type = ? AND name = ?", owner, typ, name).Count(&n).Error; err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return s.db.Model(&packageRow{}).
+		Where("owner = ? AND type = ? AND name = ?", owner, typ, name).
+		Update("private", private).Error
 }
 
 // DeletePackage 删除整个包（全版本）。

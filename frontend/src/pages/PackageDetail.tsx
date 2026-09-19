@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronLeft, Copy, FileText, Folder, Loader2 } from "lucide-react";
+import { ChevronLeft, Copy, FileText, Folder, Loader2, Lock, Unlock } from "lucide-react";
 import { toast } from "sonner";
 import { api, type PackageEntry, type PackageFileEntry } from "@/lib/api";
 import { packageFilePath } from "@/lib/api/packages";
@@ -56,6 +56,7 @@ export default function PackageDetail() {
   const name = splat.replace(/^\/+/, "").replace(/\/+$/, "");
 
   const [files, setFiles] = useState<PackageEntry[] | null>(null);
+  const [canManage, setCanManage] = useState(false);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<PackageEntry | null>(null);
   const [entries, setEntries] = useState<PackageFileEntry[] | null>(null);
@@ -74,6 +75,33 @@ export default function PackageDetail() {
   }, [type, owner, name, to]);
 
   const latest = files?.[0] ?? null;
+  const isPrivate = latest?.private ?? false;
+
+  useEffect(() => {
+    api
+      .me()
+      .then(async (m) => {
+        if (m.username === owner) {
+          setCanManage(true);
+          return;
+        }
+        const orgs = await api.listOrgs().catch(() => []);
+        setCanManage(orgs.some((o) => o.name === owner && o.role === "owner"));
+      })
+      .catch(() => undefined);
+  }, [owner]);
+
+  const toggleVisibility = async () => {
+    if (!latest) return;
+    const next = !isPrivate;
+    try {
+      await api.setPackageVisibility(type, owner, name, next);
+      toast.success(t(next ? "packages.madePrivate" : "packages.madePublic"));
+      setFiles((prev) => prev?.map((f) => ({ ...f, private: next })) ?? prev);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    }
+  };
   const useCommand = useMemo(
     () => (latest ? packageUseCommand(latest) : ""),
     [latest],
@@ -164,6 +192,15 @@ export default function PackageDetail() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{type}</Badge>
             <h1 className="break-all font-mono text-xl font-bold">{name}</h1>
+            <Badge variant={isPrivate ? "secondary" : "outline"} className="gap-1">
+              {isPrivate ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+              {t(isPrivate ? "packages.private" : "packages.public")}
+            </Badge>
+            {canManage && latest && (
+              <Button size="sm" variant="outline" onClick={() => void toggleVisibility()}>
+                {t(isPrivate ? "packages.makePublic" : "packages.makePrivate")}
+              </Button>
+            )}
           </div>
 
           {latest && (

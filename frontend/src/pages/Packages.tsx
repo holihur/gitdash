@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Copy, Package as PackageIcon, Search, Terminal, Trash2 } from "lucide-react";
+import {
+  ChevronLeft,
+  Container,
+  Copy,
+  Lock,
+  Package as PackageIcon,
+  Search,
+  Terminal,
+  Trash2,
+  Unlock,
+} from "lucide-react";
 import { toast } from "sonner";
 import { api, type DockerImage, type Org, type PackageAuditEntry, type PackageEntry } from "@/lib/api";
 import { packageDetailPath } from "@/lib/api/packages";
@@ -19,8 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs } from "@/components/ui/tabs";
-import { TabsListOverflow } from "@/components/ui/tabs-overflow";
 import Pagination from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -29,13 +37,29 @@ import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
 const PKG_TYPES = ["npm", "composer", "pypi", "rubygems", "go", "cargo", "maven", "docker"] as const;
+type PkgType = (typeof PKG_TYPES)[number];
+
+// 首页各仓库卡片的一句话说明（生态语言基本无需翻译）。
+const PKG_LANG: Record<PkgType, string> = {
+  npm: "JavaScript / Node",
+  composer: "PHP",
+  pypi: "Python",
+  rubygems: "Ruby",
+  go: "Go modules",
+  cargo: "Rust",
+  maven: "Java",
+  docker: "Docker / OCI",
+};
 
 export default function Packages() {
   const { t, lang } = useI18n();
   const locale = dateLocale(lang);
-  // type / 搜索词 / 页码 / 页大小同步进 URL(?type/?q/?page/?size)
+  // type / 搜索词 / 页码 / 页大小 / 命名空间同步进 URL
   const { get, getNum, set } = useQueryState();
-  const type = get("type", "");
+  const rawType = get("type", "");
+  const type: PkgType | "" = (PKG_TYPES as readonly string[]).includes(rawType)
+    ? (rawType as PkgType)
+    : "";
   const query = get("q", "");
   const page = getNum("page", 1);
   const pageSize = getNum("size", 20);
@@ -44,11 +68,13 @@ export default function Packages() {
   const [pkgs, setPkgs] = useState<PackageEntry[]>([]);
   const [pkgTotal, setPkgTotal] = useState(0);
   const [dockerImages, setDockerImages] = useState<DockerImage[]>([]);
+  const [counts, setCounts] = useState<Partial<Record<PkgType, number>>>({});
   const [username, setUsername] = useState("");
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [audit, setAudit] = useState<PackageAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingDelete, setPendingDelete] = useState<PackageEntry | null>(null);
+  const [tick, setTick] = useState(0);
 
   // 命名空间：默认个人，可切到所属组织（?owner= 同步进 URL）
   const owner = ownerParam || username;
@@ -72,7 +98,7 @@ export default function Packages() {
     [],
   );
 
-  const setType = (v: string) => set({ type: v || null, page: null }, { push: true });
+  const setType = (v: string) => set({ type: v || null, q: null, page: null }, { push: true });
   const setOwner = (v: string) => set({ owner: v || null, page: null }, { push: true });
   const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
   const setPageSize = (s: number) => set({ size: s === 20 ? null : s, page: null });
@@ -83,7 +109,7 @@ export default function Packages() {
   }, []);
 
   const load = useCallback(async () => {
-    if (!owner) return;
+    if (!owner || !type) return;
     setLoading(true);
     try {
       if (type === "docker") {
@@ -92,7 +118,7 @@ export default function Packages() {
         setPkgTotal(0);
       } else {
         const [list, log] = await Promise.all([
-          api.listPackagesPage(owner, type || undefined, {
+          api.listPackagesPage(owner, type, {
             q: query.trim() || undefined,
             limit: pageSize,
             offset: (page - 1) * pageSize,
@@ -114,13 +140,27 @@ export default function Packages() {
     void load();
   }, [load]);
 
-  const packageTabs = useMemo(
-    () => [
-      { value: "", label: t("packages.all") },
-      ...PKG_TYPES.map((tp) => ({ value: tp, label: tp })),
-    ],
-    [t],
-  );
+  // 首页每个仓库的包数量（各类型一次轻量请求，只取 X-Total-Count）
+  useEffect(() => {
+    if (!owner || type) return;
+    let alive = true;
+    (async () => {
+      const entries = await Promise.all(
+        PKG_TYPES.map(async (tp) => {
+          try {
+            const r = await api.listPackagesPage(owner, tp, { limit: 1, offset: 0 });
+            return [tp, r.total] as const;
+          } catch {
+            return [tp, 0] as const;
+          }
+        }),
+      );
+      if (alive) setCounts(Object.fromEntries(entries) as Partial<Record<PkgType, number>>);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [owner, type, tick]);
 
   // docker 镜像接口不分页，前端做过滤 + 分页
   const dockerFiltered = useMemo(() => {
@@ -139,6 +179,7 @@ export default function Packages() {
       await api.deletePackage(p.type, p.owner, p.name);
       toast.success(t("packages.deleted"));
       setPendingDelete(null);
+      setTick((n) => n + 1);
       void load();
     } catch (e) {
       toast.error(apiErrorMsg(t, e));
@@ -166,67 +207,108 @@ export default function Packages() {
     }
   };
 
-  const namespaceSelect =
-    orgs.length > 0 ? (
-      <div className="flex items-center gap-2">
-        <Label htmlFor="pkg-owner" className="shrink-0">
-          {t("packages.namespaceLabel")}
-        </Label>
-        <select
-          id="pkg-owner"
-          value={ownerParam}
-          onChange={(e) => setOwner(e.target.value)}
-          className="h-9 w-full max-w-[16rem] rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">
-            {username ? `${t("packages.namespacePersonal")} (${username})` : t("packages.namespacePersonal")}
-          </option>
-          {orgs.map((o) => (
-            <option key={o.name} value={o.name}>
-              {o.name}
-              {o.role === "owner" ? " · owner" : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-    ) : null;
+  // 切换单个包的公开 / 私有
+  const togglePrivate = async (p: PackageEntry) => {
+    const next = !p.private;
+    try {
+      await api.setPackageVisibility(p.type, p.owner, p.name, next);
+      toast.success(t(next ? "packages.madePrivate" : "packages.madePublic"));
+      setPkgs((prev) => prev.map((x) => (x.type === p.type && x.name === p.name ? { ...x, private: next } : x)));
+      setTick((n) => n + 1);
+    } catch (e) {
+      toast.error(apiErrorMsg(t, e));
+    }
+  };
 
-  const searchBox = (
-    <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      <Input
-        className="pl-9"
-        placeholder={t("packages.searchPlaceholder")}
-        value={qInput}
-        onChange={(e) => onSearch(e.target.value)}
-      />
+  const namespaceSelect = orgs.length > 0 && (
+    <div className="flex items-center gap-2">
+      <Label htmlFor="pkg-owner" className="shrink-0">
+        {t("packages.namespaceLabel")}
+      </Label>
+      <select
+        id="pkg-owner"
+        value={ownerParam}
+        onChange={(e) => setOwner(e.target.value)}
+        className="h-9 w-full max-w-[16rem] rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <option value="">
+          {username ? `${t("packages.namespacePersonal")} (${username})` : t("packages.namespacePersonal")}
+        </option>
+        {orgs.map((o) => (
+          <option key={o.name} value={o.name}>
+            {o.name}
+            {o.role === "owner" ? " · owner" : ""}
+          </option>
+        ))}
+      </select>
     </div>
   );
 
-  const pagination = (
-    <Pagination
-      page={page}
-      pageSize={pageSize}
-      total={total}
-      onPageChange={setPage}
-      onPageSizeChange={setPageSize}
-    />
-  );
+  // 首页：仓库（生态）选择，而不是一个混在一起的大列表
+  if (!type) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">{t("packages.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("packages.registriesHint")}</p>
+        </div>
+
+        {namespaceSelect}
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {PKG_TYPES.map((tp) => (
+            <button
+              key={tp}
+              onClick={() => setType(tp)}
+              className="flex flex-col gap-1 rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent"
+            >
+              <div className="flex items-center justify-between">
+                {tp === "docker" ? (
+                  <Container className="h-5 w-5 text-muted-foreground" />
+                ) : (
+                  <PackageIcon className="h-5 w-5 text-muted-foreground" />
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {t("packages.count", { n: counts[tp] ?? 0 })}
+                </span>
+              </div>
+              <span className="font-medium">{tp}</span>
+              <span className="text-xs text-muted-foreground">{PKG_LANG[tp]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{t("packages.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("packages.subtitle")}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-2 gap-1.5"
+            onClick={() => setType("")}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {t("packages.allRegistries")}
+          </Button>
+          <h1 className="text-xl font-bold">{type}</h1>
+          <Badge variant="secondary">{PKG_LANG[type]}</Badge>
+        </div>
+        {namespaceSelect}
       </div>
 
-      {namespaceSelect}
-
-      <Tabs value={type} onValueChange={setType}>
-        <TabsListOverflow tabs={packageTabs} value={type} onValueChange={setType} />
-      </Tabs>
-
-      {searchBox}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          className="pl-9"
+          placeholder={t("packages.searchPlaceholder")}
+          value={qInput}
+          onChange={(e) => onSearch(e.target.value)}
+        />
+      </div>
 
       {loading ? (
         <div className="space-y-2">
@@ -283,7 +365,13 @@ export default function Packages() {
                 })}
               </TableBody>
             </Table>
-            {pagination}
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </>
         )
       ) : pkgs.length === 0 ? (
@@ -296,7 +384,6 @@ export default function Packages() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="whitespace-nowrap">{t("packages.type")}</TableHead>
                 <TableHead className="whitespace-nowrap">{t("common.name")}</TableHead>
                 <TableHead className="whitespace-nowrap">{t("packages.version")}</TableHead>
                 <TableHead className="whitespace-nowrap">{t("packages.size")}</TableHead>
@@ -308,13 +395,16 @@ export default function Packages() {
             <TableBody>
               {pkgs.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell>
-                    <Badge variant="secondary">{p.type}</Badge>
-                  </TableCell>
                   <TableCell className="font-mono text-sm">
                     <Link to={packageDetailPath(p.type, p.owner, p.name)} className="hover:underline">
                       {p.name}
                     </Link>
+                    {p.private && (
+                      <Badge variant="secondary" className="ml-2 gap-1 align-middle">
+                        <Lock className="h-3 w-3" />
+                        {t("packages.private")}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="font-mono text-sm">{p.version}</TableCell>
                   <TableCell className="text-sm">{(p.size / 1024).toFixed(1)} KB</TableCell>
@@ -322,6 +412,18 @@ export default function Packages() {
                   <TableCell className="text-sm">{formatDate(p.created_at, locale)}</TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      {canManage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title={t(p.private ? "packages.makePublic" : "packages.makePrivate")}
+                          aria-label={t(p.private ? "packages.makePublic" : "packages.makePrivate")}
+                          onClick={() => void togglePrivate(p)}
+                        >
+                          {p.private ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -348,7 +450,13 @@ export default function Packages() {
               ))}
             </TableBody>
           </Table>
-          {pagination}
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </>
       )}
 

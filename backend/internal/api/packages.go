@@ -49,18 +49,29 @@ func (a *API) pkgLinkedRepo(owner, typ, name string) string {
 	return ""
 }
 
-// canReadPackage 读权限：默认任意已认证用户；若包关联了私有仓库，则要求仓库读权限。
+// canReadPackage 读权限：默认任意已认证用户；若包被设为私有（显式 private），或
+// 关联了私有仓库，则要求 owner / 组织成员 / 仓库协作者的读权限。
 func (a *API) canReadPackage(owner, typ, name, username string) bool {
+	private := a.store.IsPackagePrivate(owner, typ, name)
 	repo := a.pkgLinkedRepo(owner, typ, name)
-	if repo == "" {
-		return true
+
+	// 公开且未关联私有仓库：任意已认证用户可读
+	if !private {
+		if repo == "" {
+			return true
+		}
+		r, err := a.store.GetRepo(owner, repo)
+		if err != nil || !r.Private {
+			return true
+		}
 	}
-	r, err := a.store.GetRepo(owner, repo)
-	if err != nil || !r.Private {
-		return true
-	}
+
+	// 私有包 / 私有仓库：owner、组织成员或仓库协作者
 	if username == owner || a.store.OrgRole(owner, username) != "" {
 		return true
+	}
+	if repo == "" {
+		return false
 	}
 	collabs, err := a.store.ListCollabs(owner, repo)
 	if err != nil {
@@ -182,8 +193,16 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	// 过滤掉当前用户无权读取的私有包（total 仍为命名空间内包数）
+	user := pkgUser(r)
+	visible := pkgs[:0]
+	for _, p := range pkgs {
+		if a.canReadPackage(p.Owner, p.Type, p.Name, user) {
+			visible = append(visible, p)
+		}
+	}
 	setTotal(w, total)
-	writeJSON(w, http.StatusOK, pkgs)
+	writeJSON(w, http.StatusOK, visible)
 }
 
 // listPackageAudit 包操作审计记录
@@ -242,4 +261,44 @@ func (a *API) deletePackageUI(w http.ResponseWriter, r *http.Request) {
 		_ = a.store.AddPackageAudit(owner, typ, name, "", "delete", user)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// setPackageVisibility 设置单个包（owner+type+name，全版本）的公开 / 私有
+//
+//	@Summary     设置包可见性
+//	@Tags        packages
+//	@Param       type  path string true "包类型"
+//	@Param       owner path string true "用户或组织"
+//	@Param       name  path string true "包名"
+//	@Success     200
+//	@Router      /packages/{type}/{owner}/{name} [patch]
+func (a *API) setPackageVisibility(w http.ResponseWriter, r *http.Request) {
+	owner := r.PathValue("owner")
+	typ := r.PathValue("type")
+	name := r.PathValue("name")
+	if !validPkgTypes[typ] {
+		writeCode(w, http.StatusBadRequest, "invalid_type", "unknown package type")
+		return
+	}
+	user := pkgUser(r)
+	if !a.canPublishPackage(owner, user) {
+		pkgForbidden(w)
+		return
+	}
+	var in struct {
+		Private bool `json:"private"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if err := a.store.SetPackagePrivate(owner, typ, name, in.Private); err != nil {
+		writeCode(w, http.StatusNotFound, "not_found", "not found")
+		return
+	}
+	action := "public"
+	if in.Private {
+		action = "private"
+	}
+	_ = a.store.AddPackageAudit(owner, typ, name, "", action, user)
+	writeJSON(w, http.StatusOK, map[string]any{"private": in.Private})
 }

@@ -20,6 +20,8 @@ export interface PackageEntry {
   size: number;
   checksum: string;
   downloads: number;
+  yanked: boolean;
+  private: boolean;
   uploader: string;
   created_at: string;
 }

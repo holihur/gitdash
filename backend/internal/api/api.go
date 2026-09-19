@@ -560,6 +560,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/packages/{owner}/{type}", a.auth(a.listPackagesUI))
 	mux.HandleFunc("GET /api/packages/{owner}/audit", a.auth(a.listPackageAudit))
 	mux.HandleFunc("DELETE /api/packages/{type}/{owner}/{name...}", a.auth(a.deletePackageUI))
+	// 单个包的公开 / 私有
+	mux.HandleFunc("PATCH /api/packages/{type}/{owner}/{name...}", a.auth(a.setPackageVisibility))
 	// 网页端包文件浏览（列出制品 / 归档条目 / 预览 / 下载）
 	mux.HandleFunc("GET /api/package-files/{type}/{owner}/{name...}", a.auth(a.packageFiles))
 

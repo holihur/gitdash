@@ -982,3 +982,46 @@ def test_cargo_real_client_protocol(base_url, pkg_user):
         headers={"Authorization": pat}, timeout=10,
     )
     assert raw.status_code == 200
+
+
+def test_package_visibility_public_private(base_url, pkg_user, user_factory):
+    """单个包可设为私有：非成员禁止读取 / 下载，且从列表隐藏；可再设回公开。"""
+    owner, pat, _ = pkg_user
+    oh = basic(owner, pat)
+    other, opat, _ = user_factory("pv")
+    xh = basic(other, opat)
+
+    pkg = f"vis-{uuid.uuid4().hex[:8]}"
+    tarball = b"tarball-bytes"
+    body = {
+        "name": pkg,
+        "versions": {"1.0.0": {}},
+        "_attachments": {f"{pkg}-1.0.0.tgz": {"data": base64.b64encode(tarball).decode()}},
+    }
+    url = f"{base_url}/api/packages/npm/{owner}/{pkg}"
+    assert requests.put(url, json=body, headers=oh, timeout=10).status_code == 201
+
+    # 默认公开：其他已认证用户可读
+    assert requests.get(url, headers=xh, timeout=10).status_code == 200
+
+    # 只有可发布者能改可见性
+    assert requests.patch(url, json={"private": True}, headers=xh, timeout=10).status_code == 403
+    r = requests.patch(url, json={"private": True}, headers=oh, timeout=10)
+    assert r.status_code == 200 and r.json()["private"] is True
+
+    # owner 仍可读；其他用户 403（元数据 + 下载）
+    meta = requests.get(url, headers=oh, timeout=10).json()
+    assert requests.get(url, headers=xh, timeout=10).status_code == 403
+    tar_url = meta["versions"]["1.0.0"]["dist"]["tarball"]
+    assert requests.get(tar_url, headers=xh, timeout=10).status_code == 403
+
+    # 列表中对外部用户隐藏
+    listed = requests.get(f"{base_url}/api/packages/{owner}", headers=xh, timeout=10).json()
+    assert not any(p["name"] == pkg for p in listed)
+    # owner 自己能列出来
+    own = requests.get(f"{base_url}/api/packages/{owner}", headers=oh, timeout=10).json()
+    assert any(p["name"] == pkg and p["private"] for p in own)
+
+    # 设回公开
+    assert requests.patch(url, json={"private": False}, headers=oh, timeout=10).status_code == 200
+    assert requests.get(url, headers=xh, timeout=10).status_code == 200

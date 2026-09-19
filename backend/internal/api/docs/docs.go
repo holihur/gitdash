@@ -4286,6 +4286,40 @@ const docTemplate = `{
                         "description": "No Content"
                     }
                 }
+            },
+            "patch": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "设置包可见性",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "包类型",
+                        "name": "type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
             }
         },
         "/repos": {
@@ -15456,6 +15490,10 @@ const docTemplate = `{
                 },
                 "owner": {
                     "type": "string"
+                },
+                "private": {
+                    "description": "单个包（owner+type+name）的可见性，true = 仅 owner/组织成员/协作者",
+                    "type": "boolean"
                 },
                 "repo": {
                     "description": "可选：关联仓库（跟随其可见性），空 = 不关联",
