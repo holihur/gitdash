@@ -19,6 +19,7 @@ import (
 	"gitdash/backend/internal/api"
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/grpcserver"
 	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/notify"
@@ -67,6 +68,7 @@ func run() {
 	dataDir := getenv("GITDASH_DATA", "./data")
 	httpAddr := getenv("GITDASH_HTTP_ADDR", ":8080")
 	sshAddr := getenv("GITDASH_SSH_ADDR", ":2222")
+	grpcAddr := os.Getenv("GITDASH_GRPC_ADDR")
 	staticDir := getenv("GITDASH_STATIC", "")
 
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
@@ -169,6 +171,18 @@ func run() {
 			logx.Fatalf("ssh server: %v", err)
 		}
 	}()
+
+	// 授权面 gRPC（默认关闭）：仅当显式设置 GITDASH_GRPC_ADDR 时启动，
+	// 供后续独立的 SSH 网关调用；不影响现有进程内 SSH 的任何行为。
+	if grpcAddr != "" {
+		grpcToken := os.Getenv("GITDASH_GRPC_TOKEN")
+		go func() {
+			logx.Infof("gitdash grpc authz listening on %s", grpcAddr)
+			if err := grpcserver.Serve(grpcAddr, grpcToken, st); err != nil {
+				logx.Fatalf("grpc authz server: %v", err)
+			}
+		}()
+	}
 
 	// 自动更新默认关闭；需显式 GITDASH_AUTO_UPDATE=1 且非 dev 版本
 	if autoUpdateEnabled() && version != "dev" {

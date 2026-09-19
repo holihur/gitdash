@@ -1,0 +1,154 @@
+// Package grpcserver 提供 gitdash 的授权面 gRPC 服务（AuthzService）。
+//
+// 设计目标：把当前 SSH 服务在进程内直接调用的鉴权逻辑收敛为稳定的 RPC 契约，
+// 供后续独立的 SSH 网关通过 gRPC 调用。本服务只做「决策」，不接触仓库数据，
+// 也不改变现有 SSH/API/hook 的任何行为——它默认不启动，需显式配置 GITDASH_GRPC_ADDR。
+//
+// 安全默认：
+//   - 仅在显式设置 GITDASH_GRPC_ADDR 时监听（默认关闭，老部署零影响）；
+//   - 必须提供 GITDASH_GRPC_TOKEN，所有 RPC 经一元拦截器校验 Bearer 令牌；
+//   - 不注册 reflection，避免暴露接口面。
+package grpcserver
+
+import (
+	"bytes"
+	"context"
+	"crypto/subtle"
+	"errors"
+	"net"
+	"strings"
+
+	"golang.org/x/crypto/ssh"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
+	"gitdash/backend/internal/grpcserver/authzv1"
+	"gitdash/backend/internal/store"
+)
+
+// maxRecvMsgSize 授权请求都很小；限制入站消息体，降低滥用面。
+const maxRecvMsgSize = 1 << 20 // 1 MiB
+
+// AuthzServer 实现 authzv1.AuthzService，决策逻辑与 internal/sshserver 的
+// PublicKeyCallback / CanRead / CanWrite 保持一致。
+type AuthzServer struct {
+	authzv1.UnimplementedAuthzServiceServer
+	st *store.Store
+}
+
+// New 创建授权面服务实现。
+func New(st *store.Store) *AuthzServer {
+	return &AuthzServer{st: st}
+}
+
+// AuthorizePublicKey 比对 SSH 公钥并返回其所属用户。
+//
+// 与 sshserver.PublicKeyCallback 语义一致：
+//  1. 遍历已登记公钥，按 (type, wire-blob) 精确匹配（不做模糊/前缀匹配）；
+//  2. 命中后若账号被封禁则拒绝；
+//  3. 未命中返回 authorized=false。
+//
+// 注意：比对在服务端完成，绝不回传公钥列表，避免授权面成为信息泄漏点。
+func (s *AuthzServer) AuthorizePublicKey(_ context.Context, req *authzv1.AuthorizePublicKeyRequest) (*authzv1.AuthorizePublicKeyResponse, error) {
+	keys, err := s.st.PublicKeys()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list public keys: %v", err)
+	}
+	for _, ka := range keys {
+		parsed, _, _, _, perr := ssh.ParseAuthorizedKey([]byte(ka.Line))
+		if perr != nil {
+			continue
+		}
+		if parsed.Type() == req.GetKeyType() && bytes.Equal(parsed.Marshal(), req.GetKeyBlob()) {
+			if s.st.IsUserBanned(ka.Username) {
+				return &authzv1.AuthorizePublicKeyResponse{
+					Authorized: false,
+					Reason:     "account is banned",
+				}, nil
+			}
+			return &authzv1.AuthorizePublicKeyResponse{
+				Authorized: true,
+				Username:   ka.Username,
+			}, nil
+		}
+	}
+	return &authzv1.AuthorizePublicKeyResponse{
+		Authorized: false,
+		Reason:     "unknown public key",
+	}, nil
+}
+
+// IsIPBanned 报告来源 IP 是否命中管理员黑名单（IP/CIDR）。
+func (s *AuthzServer) IsIPBanned(_ context.Context, req *authzv1.IsIPBannedRequest) (*authzv1.IsIPBannedResponse, error) {
+	return &authzv1.IsIPBannedResponse{Banned: s.st.IsIPBanned(req.GetIp())}, nil
+}
+
+// CanRead 报告用户对仓库是否有读权限（clone/fetch/archive）。
+func (s *AuthzServer) CanRead(_ context.Context, req *authzv1.CanReadRequest) (*authzv1.CanReadResponse, error) {
+	return &authzv1.CanReadResponse{
+		Allowed: s.st.CanRead(req.GetOwner(), req.GetRepo(), req.GetUsername()),
+	}, nil
+}
+
+// CanWrite 报告用户对仓库是否有写权限（push）。
+func (s *AuthzServer) CanWrite(_ context.Context, req *authzv1.CanWriteRequest) (*authzv1.CanWriteResponse, error) {
+	return &authzv1.CanWriteResponse{
+		Allowed: s.st.CanWrite(req.GetOwner(), req.GetRepo(), req.GetUsername()),
+	}, nil
+}
+
+// NewGRPCServer 构造带令牌校验的 gRPC server（未启动监听）。测试可直接复用。
+func NewGRPCServer(st *store.Store, token string) (*grpc.Server, error) {
+	if strings.TrimSpace(token) == "" {
+		return nil, errors.New("grpc authz: GITDASH_GRPC_TOKEN must be set")
+	}
+	srv := grpc.NewServer(
+		grpc.UnaryInterceptor(tokenAuthInterceptor(token)),
+		grpc.MaxRecvMsgSize(maxRecvMsgSize),
+	)
+	authzv1.RegisterAuthzServiceServer(srv, New(st))
+	return srv, nil
+}
+
+// Serve 在 addr 上启动授权面 gRPC 服务（阻塞，直到 listener 关闭或出错）。
+func Serve(addr, token string, st *store.Store) error {
+	srv, err := NewGRPCServer(st, token)
+	if err != nil {
+		return err
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	return srv.Serve(ln)
+}
+
+// tokenAuthInterceptor 校验每个一元 RPC 的 Bearer 令牌（常数时间比较）。
+func tokenAuthInterceptor(token string) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if !hasValidToken(ctx, token) {
+			return nil, status.Error(codes.Unauthenticated, "invalid service token")
+		}
+		return handler(ctx, req)
+	}
+}
+
+// hasValidToken 从 incoming metadata 的 authorization 头提取 Bearer 令牌并比较。
+func hasValidToken(ctx context.Context, token string) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false
+	}
+	for _, v := range md.Get("authorization") {
+		v = strings.TrimSpace(v)
+		if len(v) >= 7 && strings.EqualFold(v[:7], "bearer ") {
+			v = strings.TrimSpace(v[7:])
+		}
+		if subtle.ConstantTimeCompare([]byte(v), []byte(token)) == 1 {
+			return true
+		}
+	}
+	return false
+}

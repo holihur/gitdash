@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+// AuthzService 是 gitdash 的授权面（control plane）。
+//
+// 它把当前 SSH 服务在进程内直接调用的鉴权逻辑，收敛成一组稳定的一元 RPC，
+// 供独立的 SSH 网关（后续拆分）通过 gRPC 调用。本服务只做「决策」，不碰仓库数据。
+//
+// 当前进程内 SSH 实现（internal/sshserver）的调用与 RPC 的对应关系：
+//   - PublicKeyCallback: st.PublicKeys() 全表比对 + st.IsUserBanned  -> AuthorizePublicKey
+//   - handleConn:        st.IsIPBanned                               -> IsIPBanned
+//   - runGit:            st.CanWrite / st.CanRead                    -> CanWrite / CanRead
+package gitdash.authz.v1;
+
+option go_package = "gitdash/backend/internal/grpcserver/authzv1;authzv1";
+
+// AuthzService 授权决策服务。
+service AuthzService {
+  // AuthorizePublicKey 比对 SSH 公钥并返回其所属用户。
+  // 比对在服务端完成（不回传任何公钥列表），语义与 sshserver.PublicKeyCallback 完全一致：
+  // 命中后若账号被封禁则拒绝；未命中返回 authorized=false（reason=unknown public key）。
+  rpc AuthorizePublicKey(AuthorizePublicKeyRequest) returns (AuthorizePublicKeyResponse);
+
+  // IsIPBanned 报告来源 IP 是否命中管理员黑名单（IP/CIDR）。
+  rpc IsIPBanned(IsIPBannedRequest) returns (IsIPBannedResponse);
+
+  // CanRead 报告用户对仓库是否有读权限（clone/fetch/archive）。
+  // 语义等价于 store.CanRead（已包含仓库封禁判断）。
+  rpc CanRead(CanReadRequest) returns (CanReadResponse);
+
+  // CanWrite 报告用户对仓库是否有写权限（push）。
+  // 语义等价于 store.CanWrite（已包含仓库封禁判断）。
+  rpc CanWrite(CanWriteRequest) returns (CanWriteResponse);
+}
+
+// AuthorizePublicKeyRequest 待鉴权的 SSH 公钥。
+message AuthorizePublicKeyRequest {
+  // SSH 公钥类型，如 "ssh-ed25519"、"ssh-rsa"（对应 ssh.PublicKey.Type()）。
+  string key_type = 1;
+  // SSH wire 格式的公钥主体（对应 ssh.PublicKey.Marshal()）。
+  bytes key_blob = 2;
+}
+
+// AuthorizePublicKeyResponse 公钥鉴权结果。
+message AuthorizePublicKeyResponse {
+  // 是否通过鉴权（命中公钥且账号未被封禁）。
+  bool authorized = 1;
+  // 通过时为用户名的公钥所有者；未通过为空。
+  string username = 2;
+  // 拒绝原因，便于日志与排查：如 "unknown public key"、"account is banned"。
+  string reason = 3;
+}
+
+// IsIPBannedRequest 来源 IP 查询。
+message IsIPBannedRequest {
+  // 单个 IP（IPv4/IPv6）。
+  string ip = 1;
+}
+
+// IsIPBannedResponse IP 黑名单查询结果。
+message IsIPBannedResponse {
+  bool banned = 1;
+}
+
+// CanReadRequest 读权限查询。
+message CanReadRequest {
+  string owner = 1;
+  string repo = 2;
+  string username = 3;
+}
+
+// CanReadResponse 读权限结果。
+message CanReadResponse {
+  bool allowed = 1;
+}
+
+// CanWriteRequest 写权限查询。
+message CanWriteRequest {
+  string owner = 1;
+  string repo = 2;
+  string username = 3;
+}
+
+// CanWriteResponse 写权限结果。
+message CanWriteResponse {
+  bool allowed = 1;
+}

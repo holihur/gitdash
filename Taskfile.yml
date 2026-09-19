@@ -29,6 +29,20 @@ tasks:
     generates:
       - internal/api/docs/docs.go
 
+  proto:
+    desc: 重新生成授权面 gRPC 代码（修改 proto 后运行）
+    dir: backend
+    cmds:
+      - go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+      - go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+      - PATH="$PATH:$(go env GOPATH)/bin" go run github.com/bufbuild/buf/cmd/buf@v1.47.2 generate
+    sources:
+      - proto/**/*.proto
+      - buf.yaml
+      - buf.gen.yaml
+    generates:
+      - internal/grpcserver/authzv1/*.pb.go
+
   backend:
     desc: 构建后端二进制（不内嵌前端）
     deps: [swagger, agent]
