@@ -185,7 +185,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if method == "email" {
-			if a.emailSender == nil {
+			if !a.emailReady() {
 				_ = a.store.DeleteMFAChallenge(token)
 				writeCode(w, http.StatusServiceUnavailable, "mfa_unavailable", "email mfa requires SMTP to be configured")
 				return
@@ -354,7 +354,7 @@ func (a *API) updateProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// 邮箱验证流程：生成 24h 令牌；SMTP 未配置时无验证途径，直接视为已验证
-		verified := a.emailSender == nil
+		verified := !a.emailReady()
 		token := ""
 		if !verified && email != "" {
 			var err error
@@ -465,7 +465,7 @@ func (a *API) resendEmailVerification(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if a.emailSender == nil {
+	if !a.emailReady() {
 		writeCode(w, http.StatusBadRequest, "smtp_not_configured", "SMTP is not configured")
 		return
 	}
@@ -521,7 +521,7 @@ func (a *API) mfaEmailResend(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusUnauthorized, "mfa_challenge_expired", "mfa challenge expired, sign in again")
 		return
 	}
-	if a.emailSender == nil {
+	if !a.emailReady() {
 		writeCode(w, http.StatusServiceUnavailable, "mfa_unavailable", "email mfa requires SMTP to be configured")
 		return
 	}

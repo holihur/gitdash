@@ -194,3 +194,51 @@ def test_email_mfa_requires_verified_email(base_url, client_factory, smtp_sink):
     c.post("/me/profile", json={"email": f"{username}@example.com"}, expect=200)
     r = c.post("/me/mfa/email/enroll", expect=400).json()
     assert r["code"] == "email_not_verified"
+
+
+# ---- 找回密码 happy path（需 SMTP sink）----
+
+
+def test_password_reset_flow(base_url, client_factory, smtp_sink):
+    username = f"pr-{_uuid()}"
+    email = f"{username}@example.com"
+    old_password = "pr-old-pass-123456"
+    new_password = "pr-new-pass-123456"
+
+    c = client_factory()
+    c.post("/auth/register", json={"username": username, "password": old_password}, expect=201)
+    # 设置并验证邮箱
+    c.post("/me/profile", json={"email": email}, expect=200)
+    vtoken = re.search(
+        r"verify_email=([A-Za-z0-9]+)",
+        _wait_for_mail(smtp_sink, "verify your email")["body"],
+    ).group(1)
+    c.post("/me/email/verify", json={"token": vtoken}, expect=200)
+
+    # 请求重置密码，从邮件中提取一次性 token
+    assert c.post("/auth/forgot-password", json={"email": email}, expect=200).json()["sent"] is True
+    rtoken = re.search(
+        r"reset_password=([A-Za-z0-9]+)",
+        _wait_for_mail(smtp_sink, "reset your password")["body"],
+    ).group(1)
+
+    # 弱密码在消费 token 之前就被拒，token 仍可用
+    c.post("/auth/reset-password", json={"token": rtoken, "password": "short"}, expect=400)
+
+    # 正确重置 → 旧会话全部失效
+    out = c.post(
+        "/auth/reset-password", json={"token": rtoken, "password": new_password}, expect=200
+    ).json()
+    assert out["username"] == username and out["reset"] is True
+    c.get("/me", expect=401)
+
+    # token 一次性
+    c.post("/auth/reset-password", json={"token": rtoken, "password": new_password}, expect=400)
+
+    # 旧密码失效，新密码可登录
+    client_factory().post(
+        "/auth/login", json={"username": username, "password": old_password}, expect=401
+    )
+    assert client_factory().post(
+        "/auth/login", json={"username": username, "password": new_password}, expect=200
+    ).json()["token"]

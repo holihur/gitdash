@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
 import { CommandPalette } from "@/components/command-palette";
 import { UserMenu } from "@/components/header-controls";
+import { FeedbackWidget } from "@/components/feedback-widget";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -59,6 +60,13 @@ export default function App() {
         const qs = params.toString();
         window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
       }
+      // 重置密码链接（?reset_password=token）：即使已有会话也展示重置界面，
+      // 避免被已登录外壳吞掉（Login 组件负责处理 token）。
+      if (params.get("reset_password")) {
+        setUser(null);
+        setReady(true);
+        return;
+      }
       try {
         // 会话在 httpOnly cookie 中自动携带：刷新后直接探测 /api/me 恢复登录态
         const me = await api.me();
@@ -105,6 +113,7 @@ export default function App() {
       ) : (
         <Login onAuthed={(u) => setUser(u)} />
       )}
+      <FeedbackWidget />
       <Toaster richColors position="top-center" theme={resolved} />
     </BrowserRouter>
   );

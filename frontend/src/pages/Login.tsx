@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { GitBranch, Github, ShieldCheck } from "lucide-react";
+import { GitBranch, Github, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -25,6 +25,15 @@ export default function Login({ onAuthed }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // 找回密码 / 重置密码视图（重置链接带 ?reset_password=token）
+  const [resetToken] = useState(() => searchParams.get("reset_password") ?? "");
+  const [view, setView] = useState<"auth" | "forgot" | "reset">(
+    (searchParams.get("reset_password") ?? "") ? "reset" : "auth",
+  );
+  const [resetEnabled, setResetEnabled] = useState(false);
+  const [email, setEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   // MFA 二次验证阶段
   const [mfaToken, setMfaToken] = useState("");
   const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
@@ -43,6 +52,7 @@ export default function Login({ onAuthed }: Props) {
         setGithubEnabled(Boolean(d?.github?.enabled));
         setGoogleEnabled(Boolean(d?.google?.enabled));
         setOidc({ enabled: Boolean(d?.oidc?.enabled), name: d?.oidc?.name || "OIDC" });
+        setResetEnabled(Boolean(d?.password_reset?.enabled));
       })
       .catch(() => {
         // 不再静默吞掉：接口异常时给出可见提示与重试入口
@@ -120,6 +130,50 @@ export default function Login({ onAuthed }: Props) {
     }
   };
 
+  const clearResetParam = () => {
+    const params = new URLSearchParams(window.location.search);
+    params.delete("reset_password");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
+  };
+
+  const submitForgot = async () => {
+    if (!email.trim()) {
+      toast.error(t("login.forgotMissingEmail"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.forgotPassword(email.trim());
+      toast.success(t("login.forgotSent"));
+      setView("auth");
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitReset = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error(t("login.resetMismatch"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.resetPassword(resetToken, newPassword);
+      toast.success(t("login.resetDone"));
+      clearResetParam();
+      setNewPassword("");
+      setConfirmPassword("");
+      setView("auth");
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (mfaToken) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -190,6 +244,120 @@ export default function Login({ onAuthed }: Props) {
     );
   }
 
+  if (view === "forgot") {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
+          <ThemeToggle />
+          <LangToggle />
+        </div>
+        <div className="flex flex-1 items-center justify-center px-4 pb-8">
+          <Card className="w-full max-w-sm">
+            <CardHeader className="items-center text-center">
+              <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Mail className="h-6 w-6" />
+              </div>
+              <CardTitle>{t("login.forgotTitle")}</CardTitle>
+              <CardDescription>{t("login.forgotSubtitle")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitForgot();
+                }}
+              >
+                <div className="grid gap-2">
+                  <Label htmlFor="forgot-email">{t("login.email")}</Label>
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" className="mt-4 w-full" disabled={busy}>
+                  {t("login.forgotSend")}
+                </Button>
+              </form>
+              <Button variant="ghost" size="sm" className="w-full" onClick={() => setView("auth")}>
+                {t("login.back")}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === "reset") {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
+          <ThemeToggle />
+          <LangToggle />
+        </div>
+        <div className="flex flex-1 items-center justify-center px-4 pb-8">
+          <Card className="w-full max-w-sm">
+            <CardHeader className="items-center text-center">
+              <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <KeyRound className="h-6 w-6" />
+              </div>
+              <CardTitle>{t("login.resetTitle")}</CardTitle>
+              <CardDescription>{t("login.resetSubtitle")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitReset();
+                }}
+              >
+                <div className="grid gap-2">
+                  <Label htmlFor="reset-password">{t("login.newPassword")}</Label>
+                  <Input
+                    id="reset-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="mt-3 grid gap-2">
+                  <Label htmlFor="reset-confirm">{t("login.confirmPassword")}</Label>
+                  <Input
+                    id="reset-confirm"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+                <PasswordStrengthMeter password={newPassword} />
+                <Button type="submit" className="mt-4 w-full" disabled={busy}>
+                  {t("login.resetSubmit")}
+                </Button>
+              </form>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => {
+                  clearResetParam();
+                  setView("auth");
+                }}
+              >
+                {t("login.back")}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col">
       <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
@@ -234,6 +402,15 @@ export default function Login({ onAuthed }: Props) {
                   <Button type="submit" className="w-full" disabled={busy}>
                     {t("login.signIn")}
                   </Button>
+                  {resetEnabled && (
+                    <button
+                      type="button"
+                      className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                      onClick={() => setView("forgot")}
+                    >
+                      {t("login.forgotLink")}
+                    </button>
+                  )}
                 </TabsContent>
               </form>
               <form

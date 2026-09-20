@@ -4,6 +4,8 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { adminReq, toastError, type Settings } from "./api";
 import { GithubSettings, GoogleSettings, OidcSettings } from "./OAuthSettings";
+import { SmtpSettings } from "./SmtpSettings";
+import { FeedbackSettings } from "./FeedbackSettings";
 import { PasswordCard } from "./PasswordCard";
 import { UsersSection } from "./sections/UsersSection";
 import { ReposSection } from "./sections/ReposSection";
@@ -52,6 +54,8 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
       <GithubSettings settings={settings} onChange={load} />
       <GoogleSettings settings={settings} onChange={load} />
       <OidcSettings settings={settings} onChange={load} />
+      <SmtpSettings settings={settings} onChange={load} />
+      <FeedbackSettings settings={settings} onChange={load} />
       <PasswordCard />
       <UsersSection />
       <ReposSection />

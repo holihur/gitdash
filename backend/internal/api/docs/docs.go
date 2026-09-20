@@ -769,7 +769,7 @@ const docTemplate = `{
                 "summary": "保存系统设置",
                 "parameters": [
                     {
-                        "description": "设置项（github/google/oidc 开关与配置）",
+                        "description": "设置项（github/google/oidc/smtp/feedback 开关与配置）",
                         "name": "body",
                         "in": "body",
                         "required": true,
@@ -798,6 +798,67 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/smtp/test": {
+            "post": {
+                "description": "使用当前生效的 SMTP 配置向指定邮箱发送测试邮件，用于校验配置。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "发送 SMTP 测试邮件",
+                "parameters": [
+                    {
+                        "description": "to",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1116,6 +1177,53 @@ const docTemplate = `{
                 ]
             }
         },
+        "/auth/forgot-password": {
+            "post": {
+                "description": "根据邮箱发送重置链接。无论邮箱是否存在都返回 200（防止账户枚举）；\nSMTP 未配置或邮箱非法时同样返回 200 但不发送。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "请求密码重置",
+                "parameters": [
+                    {
+                        "description": "email",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "返回会话 token；若启用 MFA 则返回 mfa_required 与临时 mfa_token。",
@@ -1396,6 +1504,62 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/reset-password": {
+            "post": {
+                "description": "校验邮件链接中的一次性令牌，设置新密码并撤销该用户的全部会话。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "重置密码",
+                "parameters": [
+                    {
+                        "description": "token 与新密码",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/explore/repos": {
             "get": {
                 "produces": [
@@ -1456,6 +1620,96 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
+            }
+        },
+        "/feedback": {
+            "get": {
+                "description": "返回反馈组件是否已由管理员启用并完成配置。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feedback"
+                ],
+                "summary": "反馈功能状态",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "使用管理员配置的仓库地址与令牌，在对应仓库创建 Issue（GitHub / Gitea 兼容 API）。登录用户会附带身份信息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "feedback"
+                ],
+                "summary": "提交反馈",
+                "parameters": [
+                    {
+                        "description": "反馈内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.feedbackBodyReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/gpg": {
@@ -13868,6 +14122,18 @@ const docTemplate = `{
                 "message": {
                     "type": "string"
                 },
+                "parents": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "refs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "sha": {
                     "type": "string"
                 }
@@ -14198,6 +14464,20 @@ const docTemplate = `{
                 },
                 "password": {
                     "description": "当前密码",
+                    "type": "string"
+                }
+            }
+        },
+        "api.feedbackBodyReq": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }
@@ -14705,7 +14985,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "changes": {
-                    "description": "文件变更列表（create/update/delete/delete_tree）",
+                    "description": "文件变更列表（create/update/delete/delete_tree/move）",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/gitsvc.FileChange"
@@ -14854,6 +15134,20 @@ const docTemplate = `{
                 "message": {
                     "type": "string"
                 },
+                "parents": {
+                    "description": "父提交 sha（用于提交图）；根提交为空",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "refs": {
+                    "description": "指向该提交的本地分支/标签（如 \"HEAD -\u003e main\"、\"tag: v1.0\"）",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "sha": {
                     "type": "string"
                 }
@@ -14866,6 +15160,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "content": {
+                    "type": "string"
+                },
+                "from": {
                     "type": "string"
                 },
                 "path": {

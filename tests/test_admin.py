@@ -86,3 +86,89 @@ def test_admin_requires_auth(admin, anon):
     anon.get("/admin/users", expect=401)
     anon.get("/admin/settings", expect=401)
     anon.post("/admin/users", json={"username": "x", "password": "x-pass-123456"}, expect=401)
+
+
+def test_admin_smtp_settings_roundtrip(admin):
+    orig = admin.get("/admin/settings", expect=200).json()
+    try:
+        admin.post(
+            "/admin/settings",
+            json={
+                "smtp_enabled": True,
+                "smtp_host": "127.0.0.1",
+                "smtp_port": "59999",
+                "smtp_user": "user@example.com",
+                "smtp_from": "gitdash@example.com",
+            },
+            expect=200,
+        )
+        s = admin.get("/admin/settings", expect=200).json()
+        assert s["smtp_enabled"] is True
+        assert s["smtp_host"] == "127.0.0.1"
+        assert s["smtp_port"] == "59999"
+        assert s["smtp_from"] == "gitdash@example.com"
+        # 密码只写不读
+        admin.post("/admin/settings", json={"smtp_pass": "s3cret"}, expect=200)
+        assert admin.get("/admin/settings", expect=200).json()["smtp_has_pass"] is True
+
+        # 测试邮件：非法收件人 400；不可达主机 502
+        admin.post("/admin/smtp/test", json={"to": "not-an-email"}, expect=400)
+        r = admin.post("/admin/smtp/test", json={"to": "someone@example.com"})
+        assert r.status_code == 502, r.text
+    finally:
+        admin.post(
+            "/admin/settings",
+            json={
+                "smtp_enabled": orig.get("smtp_enabled", False),
+                "smtp_host": orig.get("smtp_host", ""),
+                "smtp_port": orig.get("smtp_port", ""),
+                "smtp_user": orig.get("smtp_user", ""),
+                "smtp_from": orig.get("smtp_from", ""),
+            },
+            expect=200,
+        )
+
+
+def test_admin_feedback_settings_roundtrip(admin, anon):
+    orig = admin.get("/admin/settings", expect=200).json()
+    try:
+        # 开启前必须先给出合法的仓库地址与令牌
+        r = admin.post(
+            "/admin/settings",
+            json={"feedback_enabled": True, "feedback_repo": "not-a-url"},
+        )
+        assert r.status_code == 400, r.text
+        r = admin.post(
+            "/admin/settings",
+            json={"feedback_enabled": True, "feedback_repo": "https://github.com/acme/feedback"},
+        )
+        assert r.status_code == 400, r.text
+
+        admin.post(
+            "/admin/settings",
+            json={
+                "feedback_enabled": True,
+                "feedback_repo": "https://github.com/acme/feedback",
+                "feedback_token": "s3cret",
+            },
+            expect=200,
+        )
+        s = admin.get("/admin/settings", expect=200).json()
+        assert s["feedback_enabled"] is True
+        assert s["feedback_repo"] == "https://github.com/acme/feedback"
+        # 令牌只写不读
+        assert s["feedback_has_token"] is True
+
+        # 公开状态端点无需登录，但不泄漏仓库/令牌
+        cfg = anon.get("/feedback", expect=200).json()
+        assert cfg["enabled"] is True
+        assert "feedback_repo" not in cfg and "feedback_token" not in cfg
+    finally:
+        admin.post(
+            "/admin/settings",
+            json={
+                "feedback_enabled": orig.get("feedback_enabled", False),
+                "feedback_repo": orig.get("feedback_repo", ""),
+            },
+            expect=200,
+        )

@@ -121,6 +121,40 @@ def test_login_empty_body(anon):
     anon.post("/auth/login", json={}, expect=401)
 
 
+# ---- 找回密码 / 重置密码（无 SMTP 环境：不发送但仍返回 200）----
+
+
+def test_forgot_password_no_enumeration(anon):
+    r = anon.post(
+        "/auth/forgot-password",
+        json={"email": f"nobody-{uuid4hex()}@example.com"},
+        expect=200,
+    )
+    assert r.json().get("sent") is True
+
+
+def test_forgot_password_empty_and_invalid_email(anon):
+    assert anon.post("/auth/forgot-password", json={}, expect=200).json()["sent"] is True
+    assert anon.post("/auth/forgot-password", json={"email": "not-an-email"}, expect=200).json()["sent"] is True
+
+
+def test_reset_password_bad_requests(anon):
+    r = anon.post("/auth/reset-password", json={"password": PASSWORD}, expect=400)
+    assert r.json()["code"] == "token_required"
+    r = anon.post(
+        "/auth/reset-password",
+        json={"token": "whatever", "password": "short"},
+        expect=400,
+    )
+    assert r.json()["code"] == "password_too_short"
+    r = anon.post(
+        "/auth/reset-password",
+        json={"token": f"bogus-{uuid4hex()}", "password": PASSWORD},
+        expect=400,
+    )
+    assert r.json()["code"] == "invalid_token"
+
+
 # ---- 无 token 访问受保护端点 ----
 
 @pytest.mark.parametrize(

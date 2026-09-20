@@ -13,6 +13,16 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  forgotPassword: (email: string) =>
+    req<{ sent: boolean }>("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+  resetPassword: (token: string, password: string) =>
+    req<{ username: string; reset: boolean }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, password }),
+    }),
   mfaVerify: (mfaToken: string, code: string) =>
     req<{ token: string; username: string }>("/auth/mfa-verify", {
       method: "POST",
@@ -31,6 +41,7 @@ export const authApi = {
       github?: { enabled?: boolean };
       google?: { enabled?: boolean };
       oidc?: { enabled?: boolean; name?: string };
+      password_reset?: { enabled?: boolean };
     }>("/auth/providers"),
   version: () => req<{ version: string }>("/version"),
   verifyEmail: (token: string) =>

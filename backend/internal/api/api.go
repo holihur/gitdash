@@ -177,6 +177,19 @@ type EmailSender interface {
 // SetEmailSender 注入 SMTP 发送器（nil = 未配置）。
 func (a *API) SetEmailSender(s EmailSender) { a.emailSender = s }
 
+// emailReady 报告当前是否可发送邮件（SMTP 已配置）。
+// 管理端可运行时配置 SMTP：store 支持的发送器实现 Configured() 动态判断；
+// 测试注入的简单发送器默认视为已配置。
+func (a *API) emailReady() bool {
+	if a.emailSender == nil {
+		return false
+	}
+	if c, ok := a.emailSender.(interface{ Configured() bool }); ok {
+		return c.Configured()
+	}
+	return true
+}
+
 // SetJobsManager 注入异步任务管理器（导入 / 镜像 / webhook 投递）。
 func (a *API) SetJobsManager(m *jobs.Manager) { a.jobsMgr = m }
 
@@ -229,6 +242,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// auth providers (public) & github oauth
 	mux.HandleFunc("GET /api/auth/providers", a.providers)
 	mux.HandleFunc("GET /api/instance", a.instance)
+	mux.HandleFunc("GET /api/feedback", a.feedbackConfig)
+	mux.HandleFunc("POST /api/feedback", a.authOptional(a.submitFeedback))
 	mux.HandleFunc("POST /api/me/email/verify", a.auth(a.verifyEmail))
 	mux.HandleFunc("POST /api/me/email/resend", a.auth(a.resendEmailVerification))
 	mux.HandleFunc("GET /api/auth/github", a.githubStart)
@@ -260,6 +275,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/settings", a.adminAuth(a.adminSettings))
 	mux.HandleFunc("POST /api/admin/settings", a.adminAuth(a.adminSaveSettings))
 	mux.HandleFunc("POST /api/admin/password", a.adminAuth(a.adminChangePassword))
+	mux.HandleFunc("POST /api/admin/smtp/test", a.adminAuth(a.adminSMTPTest))
 	mux.HandleFunc("GET /api/admin/quota", a.adminAuth(a.adminGetQuota))
 	mux.HandleFunc("POST /api/admin/quota", a.adminAuth(a.adminSaveQuotaDefault))
 	mux.HandleFunc("PUT /api/admin/quota/{scope}/{name}", a.adminAuth(a.adminSaveQuotaOverride))
@@ -285,6 +301,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// auth
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
+	mux.HandleFunc("POST /api/auth/forgot-password", a.forgotPassword)
+	mux.HandleFunc("POST /api/auth/reset-password", a.resetPassword)
 	mux.HandleFunc("POST /api/auth/mfa-verify", a.mfaVerify)
 	mux.HandleFunc("POST /api/auth/mfa-email/resend", a.mfaEmailResend)
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))

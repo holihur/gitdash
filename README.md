@@ -21,6 +21,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
 - **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR / copilot) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
 - **Admin panel**: admin users, settings (OAuth providers), password management, user/repo/org bans and an IP/CIDR blacklist
+- **User feedback**: admins can enable a floating feedback button (bottom-right); submitted messages are filed as issues in a configured repository via a GitHub/Gitea-compatible API (Admin panel → User feedback)
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings; filter by tag and free-text search
 - **Repo settings**: owner-managed default branch (drives the browsed/HEAD branch), issue tracker on/off toggle, visibility and template flags; one-click **`git gc`** (repository maintenance) to pack loose objects and reclaim disk space
 - **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore

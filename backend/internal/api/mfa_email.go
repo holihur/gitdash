@@ -86,7 +86,7 @@ func (a *API) mfaEmailEnroll(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if a.emailSender == nil {
+	if !a.emailReady() {
 		writeCode(w, http.StatusBadRequest, "smtp_not_configured", "SMTP is not configured")
 		return
 	}
@@ -130,7 +130,7 @@ func (a *API) mfaEmailActivate(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusConflict, "mfa_already_enabled", "mfa is already enabled")
 		return
 	}
-	if a.emailSender == nil {
+	if !a.emailReady() {
 		writeCode(w, http.StatusBadRequest, "smtp_not_configured", "SMTP is not configured")
 		return
 	}
@@ -174,7 +174,7 @@ func (a *API) mfaEmailSend(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusConflict, "mfa_not_enabled", "email mfa is not enabled")
 		return
 	}
-	if a.emailSender == nil || ua.Email == "" || !ua.EmailVerified {
+	if !a.emailReady() || ua.Email == "" || !ua.EmailVerified {
 		writeCode(w, http.StatusBadRequest, "email_not_verified", "verified email and SMTP are required")
 		return
 	}

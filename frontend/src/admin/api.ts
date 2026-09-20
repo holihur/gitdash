@@ -100,6 +100,15 @@ export interface Settings {
   oidc_issuer: string;
   oidc_client_id: string;
   oidc_has_secret: boolean;
+  smtp_enabled: boolean;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_from: string;
+  smtp_has_pass: boolean;
+  feedback_enabled: boolean;
+  feedback_repo: string;
+  feedback_has_token: boolean;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {

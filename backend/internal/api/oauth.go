@@ -74,9 +74,10 @@ func (a *API) oauthSettings() (enabled bool, clientID, clientSecret string) {
 //	@Router      /auth/providers [get]
 func (a *API) providers(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{
-		"github": map[string]any{"enabled": false},
-		"google": map[string]any{"enabled": false},
-		"oidc":   map[string]any{"enabled": false},
+		"github":         map[string]any{"enabled": false},
+		"google":         map[string]any{"enabled": false},
+		"oidc":           map[string]any{"enabled": false},
+		"password_reset": map[string]any{"enabled": a.emailReady()},
 	}
 	ghEnabled, ghID, _ := a.oauthSettings()
 	if ghEnabled && ghID != "" {

@@ -19,6 +19,15 @@ export const ko: DeepPartial<Messages> = {
     signedInAs: "로그인 계정",
     accountMenu: "계정 메뉴",
   },
+  feedback: {
+    button: "피드백",
+    title: "피드백 보내기",
+    hint: "문제가 있거나 빠졌거나 이해하기 어려운 점을 알려주세요. 메시지는 추적 저장소에 이슈로 등록됩니다.",
+    placeholder: "피드백을 설명해 주세요…",
+    submit: "보내기",
+    sending: "보내는 중…",
+    submitted: "감사합니다! 피드백이 이슈 #{number}(으)로 등록되었습니다.",
+  },
   nav: {
     repos: "저장소",
     explore: "탐색",
@@ -828,6 +837,12 @@ export const ko: DeepPartial<Messages> = {
     ipBanAdded: "{cidr} 차단됨",
     ipBanRemoved: "{cidr} 차단 해제됨",
     ipBanFailed: "요청 실패",
+    feedbackTitle: "사용자 피드백",
+    feedbackHint: "기본적으로 꺼져 있습니다. 켜면 웹 UI 오른쪽 아래에 버튼이 나타나며, 제출된 메시지는 아래 저장소에 이슈로 생성됩니다(GitHub 또는 Gitea/Forgejo 호환 API).",
+    feedbackEnable: "피드백 사용",
+    feedbackRepo: "이슈 저장소 URL",
+    feedbackRepoPlaceholder: "https://github.com/owner/repo 또는 https://host/owner/repo/issues",
+    feedbackToken: "액세스 토큰",
   },
   user: {
     memberSince: "{date} 가입",

@@ -147,6 +147,15 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"oidc_issuer":          a.store.GetSetting("oidc_issuer"),
 		"oidc_client_id":       a.store.GetSetting("oidc_client_id"),
 		"oidc_has_secret":      a.store.GetSetting("oidc_client_secret") != "",
+		"smtp_enabled":         a.store.GetSetting("smtp_enabled") == "1",
+		"smtp_host":            a.store.GetSetting("smtp_host"),
+		"smtp_port":            a.store.GetSetting("smtp_port"),
+		"smtp_user":            a.store.GetSetting("smtp_user"),
+		"smtp_from":            a.store.GetSetting("smtp_from"),
+		"smtp_has_pass":        a.store.GetSetting("smtp_pass") != "",
+		"feedback_enabled":     a.store.GetSetting("feedback_enabled") == "1",
+		"feedback_repo":        a.store.GetSetting("feedback_repo"),
+		"feedback_has_token":   a.store.GetSetting("feedback_token") != "",
 	})
 }
 
@@ -156,7 +165,7 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 //	@Tags        admin
 //	@Accept      json
 //	@Produce     json
-//	@Param       body body map[string]any true "设置项（github/google/oidc 开关与配置）"
+//	@Param       body body map[string]any true "设置项（github/google/oidc/smtp/feedback 开关与配置）"
 //	@Success     200 {object} map[string]any
 //	@Failure     400 {object} map[string]string
 //	@Failure     401 {object} map[string]string
@@ -198,7 +207,76 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := in["oidc_client_secret"].(string); ok && v != "" {
 		_ = a.store.SetSetting("oidc_client_secret", strings.TrimSpace(v))
 	}
+	setBool("smtp_enabled", in["smtp_enabled"])
+	writeStr("smtp_host", in["smtp_host"])
+	writeStr("smtp_port", in["smtp_port"])
+	writeStr("smtp_user", in["smtp_user"])
+	writeStr("smtp_from", in["smtp_from"])
+	if v, ok := in["smtp_pass"].(string); ok && v != "" {
+		_ = a.store.SetSetting("smtp_pass", v)
+	}
+	// 反馈：开启前校验仓库地址格式，避免保存后再由用户请求时才报错。
+	if enable, ok := in["feedback_enabled"].(bool); ok && enable {
+		repoVal, _ := in["feedback_repo"].(string)
+		if repoVal == "" {
+			repoVal = a.store.GetSetting("feedback_repo")
+		}
+		if _, _, _, valid := feedbackRepoFromURL(repoVal); !valid {
+			writeCode(w, http.StatusBadRequest, "invalid_feedback_repo", "feedback repository must look like https://host/owner/repo")
+			return
+		}
+		hasToken := a.store.GetSetting("feedback_token") != ""
+		if v, ok := in["feedback_token"].(string); ok && strings.TrimSpace(v) != "" {
+			hasToken = true
+		}
+		if !hasToken {
+			writeCode(w, http.StatusBadRequest, "feedback_token_required", "feedback access token is required")
+			return
+		}
+	}
+	setBool("feedback_enabled", in["feedback_enabled"])
+	writeStr("feedback_repo", in["feedback_repo"])
+	if v, ok := in["feedback_token"].(string); ok && v != "" {
+		_ = a.store.SetSetting("feedback_token", strings.TrimSpace(v))
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// adminSMTPTest 使用当前 SMTP 配置发送一封测试邮件。
+//
+//	@Summary     发送 SMTP 测试邮件
+//	@Description 使用当前生效的 SMTP 配置向指定邮箱发送测试邮件，用于校验配置。
+//	@Tags        admin
+//	@Accept      json
+//	@Produce     json
+//	@Param       body body map[string]string true "to"
+//	@Success     200 {object} map[string]any
+//	@Failure     400 {object} map[string]string
+//	@Failure     502 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /admin/smtp/test [post]
+func (a *API) adminSMTPTest(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		To string `json:"to"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	to := strings.TrimSpace(in.To)
+	if to == "" || !emailRe.MatchString(to) {
+		writeCode(w, http.StatusBadRequest, "invalid_email", "a valid recipient email is required")
+		return
+	}
+	if !a.emailReady() {
+		writeCode(w, http.StatusBadRequest, "smtp_not_configured", "SMTP is not configured")
+		return
+	}
+	body := "This is a test email from your gitdash instance.\n\nIf you received it, SMTP is configured correctly.\n\n-- gitdash"
+	if err := a.emailSender.Send(to, "gitdash: SMTP test", body); err != nil {
+		writeCode(w, http.StatusBadGateway, "smtp_send_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sent": true})
 }
 
 // adminChangePassword 修改管理员密码。

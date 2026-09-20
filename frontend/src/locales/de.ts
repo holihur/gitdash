@@ -19,6 +19,15 @@ export const de: DeepPartial<Messages> = {
     signedInAs: "Angemeldet als",
     accountMenu: "Kontomenü",
   },
+  feedback: {
+    button: "Feedback",
+    title: "Feedback senden",
+    hint: "Sag uns, was kaputt, unklar oder fehlend ist. Deine Nachricht wird als Issue in unserem Tracker angelegt.",
+    placeholder: "Beschreibe dein Feedback…",
+    submit: "Senden",
+    sending: "Wird gesendet…",
+    submitted: "Danke! Feedback wurde als Issue #{number} angelegt.",
+  },
   nav: {
     repos: "Repositories",
     explore: "Entdecken",
@@ -828,6 +837,12 @@ export const de: DeepPartial<Messages> = {
     ipBanAdded: "{cidr} gesperrt",
     ipBanRemoved: "{cidr} entsperrt",
     ipBanFailed: "Anfrage fehlgeschlagen",
+    feedbackTitle: "Nutzer-Feedback",
+    feedbackHint: "Standardmäßig deaktiviert. Wenn aktiviert, erscheint unten rechts in der Weboberfläche eine Schaltfläche; eingesendete Nachrichten werden als Issues im unten angegebenen Repository angelegt (GitHub- oder Gitea/Forgejo-kompatible API).",
+    feedbackEnable: "Feedback aktivieren",
+    feedbackRepo: "Issue-Repository-URL",
+    feedbackRepoPlaceholder: "https://github.com/owner/repo oder https://host/owner/repo/issues",
+    feedbackToken: "Zugriffstoken",
   },
   user: {
     memberSince: "Beigetreten am {date}",

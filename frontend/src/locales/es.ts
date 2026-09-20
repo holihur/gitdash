@@ -19,6 +19,15 @@ export const es: DeepPartial<Messages> = {
     signedInAs: "Sesión iniciada como",
     accountMenu: "Menú de cuenta",
   },
+  feedback: {
+    button: "Comentarios",
+    title: "Enviar comentarios",
+    hint: "Cuéntanos qué está roto, falta o resulta confuso. Tu mensaje se registrará como incidencia en nuestro tracker.",
+    placeholder: "Describe tus comentarios…",
+    submit: "Enviar",
+    sending: "Enviando…",
+    submitted: "¡Gracias! Comentarios enviados como incidencia #{number}.",
+  },
   nav: {
     repos: "Repositorios",
     explore: "Explorar",
@@ -828,6 +837,12 @@ export const es: DeepPartial<Messages> = {
     ipBanAdded: "{cidr} bloqueada",
     ipBanRemoved: "{cidr} desbloqueada",
     ipBanFailed: "La solicitud falló",
+    feedbackTitle: "Comentarios de usuarios",
+    feedbackHint: "Desactivado por defecto. Al activarlo, aparece un botón flotante en la interfaz web y los mensajes se registran como incidencias en el repositorio indicado (API compatible con GitHub o Gitea/Forgejo).",
+    feedbackEnable: "Activar comentarios",
+    feedbackRepo: "URL del repositorio de incidencias",
+    feedbackRepoPlaceholder: "https://github.com/owner/repo o https://host/owner/repo/issues",
+    feedbackToken: "Token de acceso",
   },
   user: {
     memberSince: "Se unió el {date}",
