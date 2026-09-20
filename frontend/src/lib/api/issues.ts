@@ -8,13 +8,14 @@ export const issuesApi = {
     name: string,
     limit?: number,
     offset?: number,
-    filters?: { q?: string; state?: string },
+    filters?: { q?: string; state?: string; milestone?: string },
   ) => {
     const params = new URLSearchParams();
     if (limit) params.set("limit", String(limit));
     if (offset) params.set("offset", String(offset));
     if (filters?.q) params.set("q", filters.q);
     if (filters?.state) params.set("state", filters.state);
+    if (filters?.milestone) params.set("milestone", filters.milestone);
     const qs = params.toString();
     return reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${qs ? `?${qs}` : ""}`);
   },

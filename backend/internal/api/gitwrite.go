@@ -151,7 +151,7 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 // writeCommit 写入一次提交。
 //
 //	@Summary     创建提交
-//	@Description 支持批量文件变更（create/update/delete/delete_tree），总内容不超过 2MB。
+//	@Description 支持批量文件变更（create/update/delete/delete_tree/move），总内容不超过 2MB。move 通过 from 指定原路径。
 //	@Tags        repos
 //	@Accept      json
 //	@Produce     json
@@ -205,13 +205,24 @@ func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusBadRequest, "invalid_path", err.Error())
 			return
 		}
+		c.From = strings.TrimSpace(c.From)
+		c.From = strings.TrimPrefix(c.From, "/")
 		if c.Action == "" {
 			c.Action = "update"
 		}
 		switch c.Action {
 		case "create", "update", "delete", "delete_tree":
+		case "move":
+			if c.From == "" {
+				writeCode(w, http.StatusBadRequest, "from_required", "move requires a source path")
+				return
+			}
+			if _, err := gitsvc.CleanPath(c.From); err != nil {
+				writeCode(w, http.StatusBadRequest, "invalid_from", err.Error())
+				return
+			}
 		default:
-			writeCode(w, http.StatusBadRequest, "invalid_action", "action must be create/update/delete/delete_tree")
+			writeCode(w, http.StatusBadRequest, "invalid_action", "action must be create/update/delete/delete_tree/move")
 			return
 		}
 		total += len(c.Content)

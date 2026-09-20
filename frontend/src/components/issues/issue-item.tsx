@@ -174,67 +174,81 @@ export function IssueItem({
         </div>
       </div>
       {openDetail && (
-        <div className="space-y-3 border-t bg-muted/30 px-4 py-3">
-          {issue.body.trim() ? (
-            <MarkdownView text={issue.body} />
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("issues.noBody")}</p>
-          )}
-          <div className="space-y-3 rounded-lg border bg-card p-3">
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
-                {t("issues.labels")}
-              </p>
-              {labels.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t("labels.emptyHint")}</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {labels.map((l) => {
-                    const selected = draft.labels.includes(l.id);
-                    return (
-                      <button
-                        key={l.id}
-                        type="button"
-                        onClick={() => onToggleLabel(l.id)}
-                        className={cn(
-                          "rounded-full outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring",
-                          selected ? "ring-2 ring-ring ring-offset-1" : "opacity-50 hover:opacity-80",
-                        )}
-                      >
-                        <LabelChip label={l} />
-                      </button>
-                    );
-                  })}
+        <div className="border-t bg-muted/30 px-4 py-4">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+            {/* 左栏：issue 正文与评论 */}
+            <div className="min-w-0 space-y-4">
+              <div className="rounded-lg border bg-card p-4">
+                {issue.body.trim() ? (
+                  <MarkdownView text={issue.body} />
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t("issues.noBody")}</p>
+                )}
+              </div>
+              <CommentSection owner={owner} name={name} number={issue.number} />
+            </div>
+
+            {/* 右栏：标签 / 里程碑设置 */}
+            <aside className="self-start">
+              <div className="space-y-4 rounded-lg border bg-card p-3">
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    {t("issues.labels")}
+                  </p>
+                  {labels.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">{t("labels.emptyHint")}</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {labels.map((l) => {
+                        const selected = draft.labels.includes(l.id);
+                        return (
+                          <button
+                            key={l.id}
+                            type="button"
+                            onClick={() => onToggleLabel(l.id)}
+                            className={cn(
+                              "rounded-full outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring",
+                              selected ? "ring-2 ring-ring ring-offset-1" : "opacity-50 hover:opacity-80",
+                            )}
+                          >
+                            <LabelChip label={l} />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-medium text-muted-foreground">
-                {t("issues.milestone")}
-              </p>
-              <select
-                value={draft.milestone || ""}
-                onChange={(e) => onSetMilestone(Number(e.target.value) || 0)}
-                className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">{t("issues.noMilestone")}</option>
-                {milestones.map((m) => (
-                  <option key={m.id} value={m.id} disabled={m.state === "closed"}>
-                    {m.title}
-                    {m.state === "closed" ? ` · ${t("issues.closed")}` : ""}
-                  </option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                disabled={savingMeta || !metaChanged}
-                onClick={onSaveMeta}
-              >
-                {t("issues.saveMeta")}
-              </Button>
-            </div>
+
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {t("issues.milestone")}
+                  </p>
+                  <select
+                    value={draft.milestone || ""}
+                    onChange={(e) => onSetMilestone(Number(e.target.value) || 0)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">{t("issues.noMilestone")}</option>
+                    {milestones.map((m) => (
+                      <option key={m.id} value={m.id} disabled={m.state === "closed"}>
+                        {m.title}
+                        {m.state === "closed" ? ` · ${t("issues.closed")}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <Button
+                  size="sm"
+                  className="w-full"
+                  disabled={savingMeta || !metaChanged}
+                  onClick={onSaveMeta}
+                >
+                  {t("issues.saveMeta")}
+                </Button>
+              </div>
+            </aside>
           </div>
-          <CommentSection owner={owner} name={name} number={issue.number} />
         </div>
       )}
     </div>

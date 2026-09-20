@@ -4898,6 +4898,12 @@ const docTemplate = `{
                         "description": "状态过滤：open 或 closed（空 = 全部）",
                         "name": "state",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "里程碑过滤：里程碑 id 或 none（未指派，空 = 全部）",
+                        "name": "milestone",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -6871,7 +6877,7 @@ const docTemplate = `{
                 ]
             },
             "post": {
-                "description": "支持批量文件变更（create/update/delete/delete_tree），总内容不超过 2MB。",
+                "description": "支持批量文件变更（create/update/delete/delete_tree/move），总内容不超过 2MB。move 通过 from 指定原路径。",
                 "consumes": [
                     "application/json"
                 ],
@@ -7943,6 +7949,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "状态过滤：open 或 closed（空 = 全部）",
                         "name": "state",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "里程碑过滤：里程碑 id 或 none（未指派，空 = 全部）",
+                        "name": "milestone",
                         "in": "query"
                     }
                 ],

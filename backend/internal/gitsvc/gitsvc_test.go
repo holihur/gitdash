@@ -415,3 +415,63 @@ func TestSSHEnvKnownHostsPinning(t *testing.T) {
 		t.Fatalf("default command %q should use accept-new", cmd)
 	}
 }
+
+func TestWriteCommitMoveFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "mv"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "mv"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteCommit("alice", "mv", "main", "add", "alice",
+		[]FileChange{{Path: "a.txt", Action: "create", Content: "hello"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteCommit("alice", "mv", "main", "move", "alice",
+		[]FileChange{{Path: "docs/a.txt", Action: "move", From: "a.txt"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadBlob("alice", "mv", "main", "a.txt"); err == nil {
+		t.Fatal("old path a.txt still exists after move")
+	}
+	b, err := ReadBlob("alice", "mv", "main", "docs/a.txt")
+	if err != nil || b == nil || b.Content != "hello" {
+		t.Fatalf("moved blob = %+v, %v", b, err)
+	}
+}
+
+func TestWriteCommitMoveFolder(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "mvdir"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "mvdir"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteCommit("alice", "mvdir", "main", "add", "alice", []FileChange{
+		{Path: "old/a.txt", Action: "create", Content: "a"},
+		{Path: "old/b.txt", Action: "create", Content: "b"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteCommit("alice", "mvdir", "main", "move dir", "alice",
+		[]FileChange{{Path: "new", Action: "move", From: "old"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadBlob("alice", "mvdir", "main", "old/a.txt"); err == nil {
+		t.Fatal("old folder still exists after move")
+	}
+	for name, want := range map[string]string{"new/a.txt": "a", "new/b.txt": "b"} {
+		b, err := ReadBlob("alice", "mvdir", "main", name)
+		if err != nil || b == nil || b.Content != want {
+			t.Fatalf("moved blob %s = %+v, %v", name, b, err)
+		}
+	}
+}

@@ -151,3 +151,53 @@ func TestCountPairsChunksManyOwners(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateRepoSeedsDefaultLabels(t *testing.T) {
+	s := openReposStore(t)
+	if _, err := s.CreateUser("alice", "alice-pass-123"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRepo("alice", "demo", "", false); err != nil {
+		t.Fatal(err)
+	}
+	labels, err := s.ListLabels("alice", "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(labels) != len(defaultLabels) {
+		t.Fatalf("default labels = %d, want %d (%+v)", len(labels), len(defaultLabels), labels)
+	}
+	found := map[string]bool{}
+	for _, l := range labels {
+		found[l.Name] = true
+	}
+	for _, want := range defaultLabels {
+		if !found[want.Name] {
+			t.Fatalf("missing default label %q", want.Name)
+		}
+	}
+
+	// 标签仅属于该仓库：另一仓库有各自独立的一份。
+	if _, err := s.CreateRepo("alice", "other", "", false); err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.ListLabels("alice", "other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(other) != len(defaultLabels) {
+		t.Fatalf("other repo labels = %d, want %d", len(other), len(defaultLabels))
+	}
+
+	// 重复创建同名仓库应返回 ErrExists，且不重复写入标签（事务回滚）。
+	if _, err := s.CreateRepo("alice", "demo", "", false); err != ErrExists {
+		t.Fatalf("duplicate CreateRepo err = %v, want ErrExists", err)
+	}
+	again, err := s.ListLabels("alice", "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again) != len(defaultLabels) {
+		t.Fatalf("labels after duplicate create = %d, want %d", len(again), len(defaultLabels))
+	}
+}

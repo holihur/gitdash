@@ -27,7 +27,7 @@ export const REPO_TABS = [
 
 export type RepoTab = (typeof REPO_TABS)[number];
 export type RepoCodeKind = "tree" | "blob" | "blame";
-export type FileOpMode = "new" | "edit";
+export type FileOpMode = "new" | "edit" | "rename";
 
 export interface RepoRoute {
   tab: RepoTab;
@@ -62,10 +62,11 @@ export function parseRepoRoute(splat: string | undefined): RepoRoute {
 }
 
 /**
- * 构造「新建 / 编辑文件」整页的 pathname（不含查询参数）。
+ * 构造「新建 / 编辑 / 重命名文件」整页的 pathname（不含查询参数）。
  * 参数说明：
  *   /repo/:owner/:name/new?kind=file|dir&dir=<dir>&ref=<branch>
  *   /repo/:owner/:name/edit?path=<path>&ref=<branch>
+ *   /repo/:owner/:name/rename?path=<path>&kind=file|dir&ref=<branch>
  */
 export function buildFileOpPath(owner: string, name: string, mode: FileOpMode): string {
   return `/repo/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/${mode}`;

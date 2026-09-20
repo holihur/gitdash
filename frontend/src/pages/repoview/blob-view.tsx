@@ -1,5 +1,5 @@
 import type { Ref } from "react";
-import { History, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { History, MoreHorizontal, Pencil, TextCursorInput, Trash2 } from "lucide-react";
 import type { Blame, Blob } from "@/lib/api";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,7 @@ interface Props {
   codeHostRef: Ref<HTMLDivElement>;
   onToggleBlame: () => void;
   onEdit: () => void;
+  onRename: () => void;
   onDelete: () => void;
   onOpenRepoLink: (target: RepoLinkTarget) => void;
 }
@@ -48,6 +49,7 @@ export default function BlobView({
   codeHostRef,
   onToggleBlame,
   onEdit,
+  onRename,
   onDelete,
   onOpenRepoLink,
 }: Props) {
@@ -89,6 +91,10 @@ export default function BlobView({
                 <DropdownMenuItem onClick={onEdit}>
                   <Pencil className="h-4 w-4" />
                   {t("fops.editFile")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onRename}>
+                  <TextCursorInput className="h-4 w-4" />
+                  {t("fops.rename")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"

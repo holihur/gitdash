@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, FilePlus2, FolderPlus, Pencil } from "lucide-react";
+import { ChevronLeft, FilePlus2, FolderPlus, Pencil, TextCursorInput } from "lucide-react";
 import { toast } from "sonner";
 import { api, type Branch } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
 
-export type FileOpKind = "create-file" | "create-dir" | "edit";
+export type FileOpKind = "create-file" | "create-dir" | "edit" | "rename";
 
-/** 新建 / 编辑文件的整页表单（替代原弹框，URL 可分享、可刷新、可回退）。 */
+/** 新建 / 编辑 / 重命名文件的整页表单（替代原弹框，URL 可分享、可刷新、可回退）。 */
 export default function FileOpPage({ mode }: { mode: FileOpMode }) {
   const { t, to } = useI18n();
   const navigate = useNavigate();
@@ -23,16 +23,28 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
   const [searchParams] = useSearchParams();
 
   const editPath = mode === "edit" ? (searchParams.get("path") ?? "") : "";
+  const renameFrom = mode === "rename" ? (searchParams.get("path") ?? "") : "";
+  const renameIsDir = mode === "rename" && searchParams.get("kind") === "dir";
   const dir = searchParams.get("dir") ?? "";
   const urlRef = searchParams.get("ref") ?? "";
   const kind: FileOpKind =
-    mode === "edit" ? "edit" : searchParams.get("kind") === "dir" ? "create-dir" : "create-file";
+    mode === "rename"
+      ? "rename"
+      : mode === "edit"
+        ? "edit"
+        : searchParams.get("kind") === "dir"
+          ? "create-dir"
+          : "create-file";
   const isDir = kind === "create-dir";
+  const isRename = kind === "rename";
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branch, setBranch] = useState(urlRef);
-  // 新建时路径可编辑；编辑时直接跟随 URL 里的 path，避免组件复用导致的陈旧值。
-  const [newPath, setNewPath] = useState(dir ? `${dir.replace(/\/+$/, "")}/` : "");
+  // 新建时路径可编辑；编辑时直接跟随 URL 里的 path，避免组件复用导致的陈旧值；
+  // 重命名时初值取原路径，用户改成新路径后提交 move。
+  const [newPath, setNewPath] = useState(() =>
+    mode === "rename" ? (searchParams.get("path") ?? "") : dir ? `${dir.replace(/\/+$/, "")}/` : "",
+  );
   const path = kind === "edit" ? editPath : newPath;
   const [content, setContent] = useState("");
   const [message, setMessage] = useState("");
@@ -55,6 +67,11 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
       alive = false;
     };
   }, [owner, name]);
+
+  // 重命名：URL 里的原路径变化时重置输入框（组件复用时避免陈旧值）。
+  useEffect(() => {
+    if (mode === "rename") setNewPath(renameFrom);
+  }, [mode, renameFrom]);
 
   // 编辑模式：按 branch + path 拉取文件内容（刷新页面也能恢复）。
   useEffect(() => {
@@ -107,38 +124,63 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
     [owner, name, branch],
   );
 
-  // 取消：编辑回到文件，新建回到当前目录。
+  const blobUrl = useCallback(
+    (targetPath: string) => {
+      const p = buildRepoPath(owner, name, { tab: "code", kind: "blob", path: targetPath });
+      return branch ? `${p}?ref=${encodeURIComponent(branch)}` : p;
+    },
+    [owner, name, branch],
+  );
+
+  // 取消：重命名回到原文件 / 目录，编辑回到文件，新建回到当前目录。
   const cancelUrl = useMemo(() => {
+    if (mode === "rename" && renameFrom) {
+      return renameIsDir ? codeUrl(renameFrom) : blobUrl(renameFrom);
+    }
     if (mode === "edit" && editPath) {
       const p = buildRepoPath(owner, name, { tab: "code", kind: "blob", path: editPath });
       return branch ? `${p}?ref=${encodeURIComponent(branch)}` : p;
     }
     return codeUrl(dir);
-  }, [mode, editPath, owner, name, branch, codeUrl, dir]);
+  }, [mode, editPath, renameFrom, renameIsDir, owner, name, branch, codeUrl, blobUrl, dir]);
 
   const submit = async () => {
     if (!submitPath) {
       toast.error(t("fops.pathRequired"));
       return;
     }
+    if (isRename && submitPath === renameFrom) {
+      toast.error(t("fops.renameSame"));
+      return;
+    }
     if (!branch) return;
     setBusy(true);
     const msg =
       message.trim() ||
-      (kind === "create-dir"
-        ? t("fops.msgCreateDir", { path: path.trim().replace(/\/+$/, "") })
-        : kind === "edit"
-          ? t("fops.msgUpdate", { path: submitPath })
-          : t("fops.msgCreate", { path: submitPath }));
+      (kind === "rename"
+        ? t("fops.msgRename", { from: renameFrom, to: submitPath })
+        : kind === "create-dir"
+          ? t("fops.msgCreateDir", { path: path.trim().replace(/\/+$/, "") })
+          : kind === "edit"
+            ? t("fops.msgUpdate", { path: submitPath })
+            : t("fops.msgCreate", { path: submitPath }));
     try {
-      await api.createCommit(owner, name, branch, msg, [
-        // 新建文件夹通过提交 <dir>/.gitkeep 占位实现，其内容无意义，固定为空。
-        { path: submitPath, action, content: isDir ? "" : content },
-      ]);
-      toast.success(t("fops.saved", { path: submitPath }));
-      // 提交后回到父目录（避免把文件名当目录加载）
-      const i = submitPath.lastIndexOf("/");
-      navigate(codeUrl(i > 0 ? submitPath.slice(0, i) : ""));
+      if (kind === "rename") {
+        await api.createCommit(owner, name, branch, msg, [
+          { path: submitPath, action: "move", from: renameFrom },
+        ]);
+        toast.success(t("fops.renamed", { from: renameFrom, to: submitPath }));
+        navigate(renameIsDir ? codeUrl(submitPath) : blobUrl(submitPath));
+      } else {
+        await api.createCommit(owner, name, branch, msg, [
+          // 新建文件夹通过提交 <dir>/.gitkeep 占位实现，其内容无意义，固定为空。
+          { path: submitPath, action, content: isDir ? "" : content },
+        ]);
+        toast.success(t("fops.saved", { path: submitPath }));
+        // 提交后回到父目录（避免把文件名当目录加载）
+        const i = submitPath.lastIndexOf("/");
+        navigate(codeUrl(i > 0 ? submitPath.slice(0, i) : ""));
+      }
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {
@@ -147,8 +189,20 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
   };
 
   const title =
-    kind === "create-dir" ? t("fops.newFolder") : kind === "edit" ? t("fops.editFile") : t("fops.newFile");
-  const Icon = isDir ? FolderPlus : kind === "edit" ? Pencil : FilePlus2;
+    kind === "rename"
+      ? t("fops.rename")
+      : kind === "create-dir"
+        ? t("fops.newFolder")
+        : kind === "edit"
+          ? t("fops.editFile")
+          : t("fops.newFile");
+  const Icon = isRename
+    ? TextCursorInput
+    : isDir
+      ? FolderPlus
+      : kind === "edit"
+        ? Pencil
+        : FilePlus2;
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">
@@ -184,8 +238,15 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
             </select>
           </div>
 
+          {isRename && (
+            <div className="grid gap-2">
+              <Label htmlFor="fop-old-path">{t("fops.oldPathLabel")}</Label>
+              <Input id="fop-old-path" readOnly value={renameFrom} className="font-mono" />
+            </div>
+          )}
+
           <div className="grid gap-2">
-            <Label htmlFor="fop-path">{t("fops.pathLabel")}</Label>
+            <Label htmlFor="fop-path">{isRename ? t("fops.newPathLabel") : t("fops.pathLabel")}</Label>
             <Input
               id="fop-path"
               readOnly={kind === "edit"}
@@ -198,7 +259,7 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
             {isDir && <p className="text-xs text-muted-foreground">{t("fops.folderHint")}</p>}
           </div>
 
-          {!isDir && (
+          {!isDir && !isRename && (
             <div className="grid gap-2">
               <Label>{t("fops.contentLabel")}</Label>
               {loadError ? (
@@ -208,12 +269,12 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
               ) : loading ? (
                 <Skeleton className="min-h-64 w-full" />
               ) : (
-                <div className="max-h-[60vh] overflow-auto rounded-md border bg-background">
+                <div className="h-[60vh] overflow-hidden rounded-md border bg-background">
                   <CodeMirrorEditor
                     value={content}
                     path={submitPath}
                     onDocChange={setContent}
-                    className="min-h-64"
+                    className="h-full"
                   />
                 </div>
               )}
@@ -229,7 +290,10 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
             <Button variant="outline" asChild disabled={busy}>
               <Link to={cancelUrl}>{t("common.cancel")}</Link>
             </Button>
-            <Button onClick={submit} disabled={busy || !submitPath || !!loadError}>
+            <Button
+              onClick={submit}
+              disabled={busy || !submitPath || !!loadError || (isRename && submitPath === renameFrom)}
+            >
               {t("fops.commit")}
             </Button>
           </div>

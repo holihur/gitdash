@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"gorm.io/gorm"
@@ -68,9 +69,10 @@ func (s *Store) ListIssues(owner, repo string, limit, offset int) ([]Issue, erro
 	return issues, nil
 }
 
-// issueQuery 构造仓库 issue 查询（可选关键词与状态过滤）。
+// issueQuery 构造仓库 issue 查询（可选关键词、状态与里程碑过滤）。
 // 关键词命中标题 / 正文 / 作者（大小写不敏感）。
-func (s *Store) issueQuery(owner, repo, q, state string) *gorm.DB {
+// milestone 取值："" 不过滤；"none" 仅未指派里程碑；数字字符串按里程碑 id 过滤。
+func (s *Store) issueQuery(owner, repo, q, state, milestone string) *gorm.DB {
 	query := s.db.Model(&issueRow{}).Where("owner = ? AND repo = ?", owner, repo)
 	if state == "open" || state == "closed" {
 		query = query.Where("state = ?", state)
@@ -82,12 +84,23 @@ func (s *Store) issueQuery(owner, repo, q, state string) *gorm.DB {
 			pat, pat, pat,
 		)
 	}
+	switch {
+	case milestone == "none":
+		query = query.Where("milestone_id IS NULL")
+	case milestone != "":
+		if id, err := strconv.ParseInt(milestone, 10, 64); err == nil {
+			query = query.Where("milestone_id = ?", id)
+		} else {
+			// 非法值不应匹配任何行，而不是被忽略而返回全部。
+			query = query.Where("1 = 0")
+		}
+	}
 	return query
 }
 
-// SearchIssuesInRepo 在仓库内搜索 issue（可按状态过滤），排序与 ListIssues 一致。
-func (s *Store) SearchIssuesInRepo(owner, repo, q, state string, limit, offset int) ([]Issue, error) {
-	query := s.issueQuery(owner, repo, q, state).Order("pinned DESC, state = 'open' DESC, number DESC")
+// SearchIssuesInRepo 在仓库内搜索 issue（可按状态与里程碑过滤），排序与 ListIssues 一致。
+func (s *Store) SearchIssuesInRepo(owner, repo, q, state, milestone string, limit, offset int) ([]Issue, error) {
+	query := s.issueQuery(owner, repo, q, state, milestone).Order("pinned DESC, state = 'open' DESC, number DESC")
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
@@ -103,9 +116,9 @@ func (s *Store) SearchIssuesInRepo(owner, repo, q, state string, limit, offset i
 }
 
 // CountSearchIssuesInRepo 与 SearchIssuesInRepo 同过滤条件的总数。
-func (s *Store) CountSearchIssuesInRepo(owner, repo, q, state string) (int, error) {
+func (s *Store) CountSearchIssuesInRepo(owner, repo, q, state, milestone string) (int, error) {
 	var n int64
-	if err := s.issueQuery(owner, repo, q, state).Count(&n).Error; err != nil {
+	if err := s.issueQuery(owner, repo, q, state, milestone).Count(&n).Error; err != nil {
 		return 0, err
 	}
 	return int(n), nil

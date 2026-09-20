@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Folder, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, FileText, Folder, Pencil, TextCursorInput, Trash2 } from "lucide-react";
 import type { TreeEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ interface Props {
   locale: string;
   onOpenEntry: (entry: TreeEntry) => void;
   onEditPath: (path: string) => void;
+  onRename: (path: string, isDir: boolean) => void;
   onRemove: (path: string, isDir: boolean) => void;
 }
 
@@ -28,6 +29,7 @@ export default function TreeListing({
   locale,
   onOpenEntry,
   onEditPath,
+  onRename,
   onRemove,
 }: Props) {
   const { t } = useI18n();
@@ -78,6 +80,10 @@ export default function TreeListing({
                               {t("fops.editFile")}
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem onClick={() => onRename(targetPath, entry.type === "tree")}>
+                            <TextCursorInput className="h-3.5 w-3.5" />
+                            {t("fops.rename")}
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => onRemove(targetPath, entry.type === "tree")}

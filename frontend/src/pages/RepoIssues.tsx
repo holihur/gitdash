@@ -32,6 +32,10 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const filterLabel = get("i_label", "") ? Number(get("i_label", "")) : null;
   const setFilterLabel = (id: number | null) =>
     set({ i_label: id ?? null, i_page: null }, { push: true });
+  // 里程碑过滤："" 全部 | "none" 未指派 | 里程碑 id 字符串
+  const milestoneFilter = get("i_milestone", "");
+  const setMilestoneFilter = (v: string) =>
+    set({ i_milestone: v || null, i_page: null }, { push: true });
   // 搜索词 / 状态过滤同步进 URL(?i_q/?i_state)
   const urlQuery = get("i_q", "");
   const stateFilter = get("i_state", ""); // "" | "open" | "closed"
@@ -114,6 +118,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         api.listIssues(owner, name, pageSize, (page - 1) * pageSize, {
           q: urlQuery,
           state: stateFilter,
+          milestone: milestoneFilter,
         }),
         api.listLabels(owner, name),
         api.listMilestones(owner, name),
@@ -128,7 +133,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
     } finally {
       setLoading(false);
     }
-  }, [owner, name, page, pageSize, urlQuery, stateFilter]);
+  }, [owner, name, page, pageSize, urlQuery, stateFilter, milestoneFilter]);
 
   useEffect(() => {
     load();
@@ -345,6 +350,9 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         labels={labels}
         filterLabel={filterLabel}
         onFilterLabel={setFilterLabel}
+        milestones={milestones}
+        filterMilestone={milestoneFilter}
+        onFilterMilestone={setMilestoneFilter}
       />
 
       {error && !loading && (
@@ -357,7 +365,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
 
       {loading && <ListSkeleton rows={5} header={false} />}
 
-      {!loading && !error && issues.length === 0 && urlQuery === "" && stateFilter === "" && (
+      {!loading && !error && issues.length === 0 && urlQuery === "" && stateFilter === "" && milestoneFilter === "" && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <MessageSquare className="h-10 w-10 text-muted-foreground" />
@@ -371,7 +379,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         </Card>
       )}
 
-      {!loading && !error && issues.length === 0 && filterLabel === null && (urlQuery !== "" || stateFilter !== "") && (
+      {!loading && !error && issues.length === 0 && filterLabel === null && (urlQuery !== "" || stateFilter !== "" || milestoneFilter !== "") && (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Search className="h-8 w-8 text-muted-foreground" />
@@ -382,6 +390,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
               onClick={() => {
                 setSearchInput("");
                 setStateFilter("");
+                setMilestoneFilter("");
               }}
             >
               {t("issues.clearSearch")}

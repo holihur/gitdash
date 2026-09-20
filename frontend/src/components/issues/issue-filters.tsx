@@ -1,12 +1,12 @@
 import { Search } from "lucide-react";
-import type { Label } from "@/lib/api";
+import type { Label, Milestone } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import LabelChip from "@/components/label-chip";
 
-/** issue 搜索框 + 状态筛选 + 标签筛选条 */
+/** issue 搜索框 + 状态筛选 + 标签/里程碑筛选条 */
 export function IssueFilters({
   searchInput,
   onSearchInput,
@@ -15,6 +15,9 @@ export function IssueFilters({
   labels,
   filterLabel,
   onFilterLabel,
+  milestones,
+  filterMilestone,
+  onFilterMilestone,
 }: {
   searchInput: string;
   onSearchInput: (v: string) => void;
@@ -23,6 +26,9 @@ export function IssueFilters({
   labels: Label[];
   filterLabel: number | null;
   onFilterLabel: (id: number | null) => void;
+  milestones: Milestone[];
+  filterMilestone: string; // "" | "none" | milestone id
+  onFilterMilestone: (v: string) => void;
 }) {
   const { t } = useI18n();
 
@@ -54,6 +60,24 @@ export function IssueFilters({
             </Button>
           ))}
         </div>
+        <select
+          aria-label={t("issues.milestone")}
+          title={t("issues.milestone")}
+          value={filterMilestone}
+          onChange={(e) => onFilterMilestone(e.target.value)}
+          className={cn(
+            "h-9 max-w-44 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            filterMilestone !== "" && "border-primary text-foreground",
+          )}
+        >
+          <option value="">{t("issues.allMilestones")}</option>
+          <option value="none">{t("issues.noMilestone")}</option>
+          {milestones.map((m) => (
+            <option key={m.id} value={String(m.id)}>
+              {m.title}
+            </option>
+          ))}
+        </select>
       </div>
 
       {labels.length > 0 && (

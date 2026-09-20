@@ -49,17 +49,24 @@ func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo,
 		vis = "public"
 	}
 	// 用 map 插入绕过 GORM 对 default 字段零值的改写（private=false 必须显式落库）
-	if err := s.db.Table("repos").Create(map[string]any{
-		"owner":          row.Owner,
-		"name":           row.Name,
-		"description":    row.Description,
-		"private":        private,
-		"visibility":     vis,
-		"is_template":    isTemplate,
-		"default_branch": row.DefaultBranch,
-		"has_issues":     row.HasIssues,
-		"created_at":     row.CreatedAt,
-	}).Error; err != nil {
+	// 仓库与默认标签同一事务：任一失败则整体回滚，避免出现无初始标签的半成品仓库。
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Table("repos").Create(map[string]any{
+			"owner":          row.Owner,
+			"name":           row.Name,
+			"description":    row.Description,
+			"private":        private,
+			"visibility":     vis,
+			"is_template":    isTemplate,
+			"default_branch": row.DefaultBranch,
+			"has_issues":     row.HasIssues,
+			"created_at":     row.CreatedAt,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Create(defaultLabelRows(owner, name)).Error
+	})
+	if err != nil {
 		if isUniqueErr(err) {
 			return toRepo(row), ErrExists
 		}

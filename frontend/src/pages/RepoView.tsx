@@ -140,6 +140,14 @@ export default function RepoView() {
     navigate(`${buildFileOpPath(owner, name, "edit")}?${params.toString()}`);
   };
 
+  const openRenamePage = (targetPath: string, isDir: boolean) => {
+    const params = new URLSearchParams();
+    params.set("path", targetPath);
+    params.set("kind", isDir ? "dir" : "file");
+    if (ref) params.set("ref", ref);
+    navigate(`${buildFileOpPath(owner, name, "rename")}?${params.toString()}`);
+  };
+
   const removeEntry = (targetPath: string, isDir: boolean) => {
     setPendingRemove({ path: targetPath, isDir });
   };
@@ -291,6 +299,7 @@ export default function RepoView() {
               openRefs={() => setRefsOpen(true)}
               openCreateDialog={openCreatePage}
               openEditDialog={openEditPage}
+              renameEntry={openRenamePage}
               removeEntry={removeEntry}
               copy={copy}
             />

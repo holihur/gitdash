@@ -21,6 +21,7 @@ import (
 //	@Param       offset query int    false "偏移量"
 //	@Param       q      query string false "关键词（标题/正文/作者）"
 //	@Param       state  query string false "状态过滤：open 或 closed（空 = 全部）"
+//	@Param       milestone query string false "里程碑过滤：里程碑 id 或 none（未指派，空 = 全部）"
 //	@Success     200 {array} store.Issue
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues [get]
@@ -37,12 +38,19 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_state", "state must be 'open' or 'closed'")
 		return
 	}
-	issues, err := a.store.SearchIssuesInRepo(owner, name, q, state, limit, offset)
+	milestone := strings.TrimSpace(r.URL.Query().Get("milestone"))
+	if milestone != "" && milestone != "none" {
+		if id, err := strconv.ParseInt(milestone, 10, 64); err != nil || id <= 0 {
+			writeCode(w, http.StatusBadRequest, "invalid_milestone", "milestone must be a milestone id or 'none'")
+			return
+		}
+	}
+	issues, err := a.store.SearchIssuesInRepo(owner, name, q, state, milestone, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	total, err := a.store.CountSearchIssuesInRepo(owner, name, q, state)
+	total, err := a.store.CountSearchIssuesInRepo(owner, name, q, state, milestone)
 	if err != nil {
 		internalError(w, err)
 		return

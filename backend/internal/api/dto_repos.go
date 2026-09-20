@@ -47,7 +47,7 @@ type createRefReq struct {
 type writeCommitReq struct {
 	Branch  string              `json:"branch"`  // 目标分支，可选，默认 main
 	Message string              `json:"message"` // 提交信息
-	Changes []gitsvc.FileChange `json:"changes"` // 文件变更列表（create/update/delete/delete_tree）
+	Changes []gitsvc.FileChange `json:"changes"` // 文件变更列表（create/update/delete/delete_tree/move）
 }
 
 // revertCommitReq 撤销提交请求体。

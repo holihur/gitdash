@@ -44,6 +44,7 @@ export interface CodeTabProps {
   openRefs: () => void;
   openCreateDialog: (kind: "create-file" | "create-dir") => void;
   openEditDialog: (filePath: string) => void;
+  renameEntry: (targetPath: string, isDir: boolean) => void;
   removeEntry: (targetPath: string, isDir: boolean) => void;
   copy: (text: string) => void;
 }
@@ -73,6 +74,7 @@ export default function CodeTab({
   openRefs,
   openCreateDialog,
   openEditDialog,
+  renameEntry,
   removeEntry,
   copy,
 }: CodeTabProps) {
@@ -304,6 +306,7 @@ export default function CodeTab({
         currentDir={currentDir}
         onOpenEntry={openEntry}
         onEditPath={openEditDialog}
+        onRenamePath={renameEntry}
         onRemoveEntry={removeEntry}
         readmeContent={readmeContent}
         readmeEntryName={readmeEntryName}

@@ -10,29 +10,57 @@ func lmPath(owner, repo, kind, suffix string) string {
 	return fmt.Sprintf("/users/%s/repos/%s/%s%s", owner, repo, kind, suffix)
 }
 
+func findLabelByName(labels []map[string]any, name string) (map[string]any, bool) {
+	for _, l := range labels {
+		if l["name"] == name {
+			return l, true
+		}
+	}
+	return nil, false
+}
+
+func decodeIssues(t *testing.T, raw string) []map[string]any {
+	t.Helper()
+	var out []map[string]any
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		t.Fatalf("issues decode: %s err=%v", raw, err)
+	}
+	return out
+}
+
 func TestIssueLabelsManagement(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "lm"}, 201)
 	alice.mustStatus("POST", "/repos/lm/issues", map[string]string{"title": "bug"}, 201)
 
-	// label CRUD
-	m := alice.mustStatus("POST", lmPath("alice", "lm", "labels", ""),
-		map[string]string{"name": "bug", "color": "d73a4a"}, 201)
-	if m["name"] != "bug" || m["color"] != "d73a4a" {
-		t.Fatalf("create label = %v", m)
+	// 新建仓库会预置一批默认标签：应能找到 bug 且颜色为默认值。
+	raw := rawGet(t, alice, lmPath("alice", "lm", "labels", ""))
+	var labels []map[string]any
+	if err := json.Unmarshal([]byte(raw), &labels); err != nil {
+		t.Fatalf("labels decode: %v", err)
 	}
-	lid := int64(m["id"].(float64))
+	seeded := len(labels)
+	if seeded == 0 {
+		t.Fatalf("expected seeded default labels, got %s", raw)
+	}
+	bug, ok := findLabelByName(labels, "bug")
+	if !ok || bug["color"] != "d73a4a" {
+		t.Fatalf("seeded bug label = %v", bug)
+	}
+	lid := int64(bug["id"].(float64))
+
+	// label CRUD
 	alice.mustFail("POST", lmPath("alice", "lm", "labels", ""),
-		map[string]string{"name": "bug"}, 409) // 同名
+		map[string]string{"name": "bug"}, 409) // 与默认标签同名
 	alice.mustFail("POST", lmPath("alice", "lm", "labels", ""),
 		map[string]string{"name": "x", "color": "red"}, 400) // 非法颜色
 	l2 := alice.mustStatus("POST", lmPath("alice", "lm", "labels", ""),
-		map[string]string{"name": "enhancement"}, 201)
+		map[string]string{"name": "regression"}, 201)
 	l2id := int64(l2["id"].(float64))
-	raw := rawGet(t, alice, lmPath("alice", "lm", "labels", ""))
-	var labels []map[string]any
-	if err := json.Unmarshal([]byte(raw), &labels); err != nil || len(labels) != 2 {
+	raw = rawGet(t, alice, lmPath("alice", "lm", "labels", ""))
+	labels = nil
+	if err := json.Unmarshal([]byte(raw), &labels); err != nil || len(labels) != seeded+1 {
 		t.Fatalf("labels = %s err=%v", raw, err)
 	}
 
@@ -102,11 +130,29 @@ func TestIssueMilestonesManagement(t *testing.T) {
 		t.Fatalf("issue milestone = %v", issues[0]["milestone"])
 	}
 
+	// 按里程碑过滤：指定 id / 未指派 / 与状态组合 / 非法值。
+	byMs := decodeIssues(t, rawGet(t, alice, "/repos/lm/issues?milestone="+fmt.Sprint(mid)))
+	if len(byMs) != 2 {
+		t.Fatalf("milestone filter = %+v", byMs)
+	}
+	if none := decodeIssues(t, rawGet(t, alice, "/repos/lm/issues?milestone=none")); len(none) != 0 {
+		t.Fatalf("no-milestone filter should be empty, got %+v", none)
+	}
+	closedByMs := decodeIssues(t, rawGet(t, alice, "/repos/lm/issues?state=closed&milestone="+fmt.Sprint(mid)))
+	if len(closedByMs) != 1 || closedByMs[0]["number"] != float64(2) {
+		t.Fatalf("combined filter = %+v", closedByMs)
+	}
+	alice.mustFail("GET", "/repos/lm/issues?milestone=abc", nil, 400)
+
 	// 更新状态 / 标题；清除指派
 	alice.mustStatus("PATCH", lmPath("alice", "lm", "milestones", fmt.Sprintf("/%d", mid)),
 		map[string]string{"state": "closed", "title": "v0.7-final"}, 200)
 	alice.mustStatus("POST", "/users/alice/repos/lm/issues/1/milestone",
 		map[string]any{"milestone_id": 0}, 200)
+	// 清除后，未指派过滤应命中 issue 1。
+	if none := decodeIssues(t, rawGet(t, alice, "/repos/lm/issues?milestone=none")); len(none) != 1 || none[0]["number"] != float64(1) {
+		t.Fatalf("no-milestone after clear = %+v", none)
+	}
 	// 非法 milestone id（跨仓库）
 	alice.mustFail("POST", "/users/alice/repos/lm/issues/1/milestone",
 		map[string]any{"milestone_id": 7777}, 400)

@@ -33,6 +33,7 @@ interface Props {
   currentDir: string;
   onOpenEntry: (entry: TreeEntry) => void;
   onEditPath: (targetPath: string) => void;
+  onRenamePath: (targetPath: string, isDir: boolean) => void;
   onRemoveEntry: (targetPath: string, isDir: boolean) => void;
   readmeContent: string | null;
   readmeEntryName: string | null;
@@ -62,6 +63,7 @@ export function RepoCodeBody({
   currentDir,
   onOpenEntry,
   onEditPath,
+  onRenamePath,
   onRemoveEntry,
   readmeContent,
   readmeEntryName,
@@ -123,6 +125,7 @@ export function RepoCodeBody({
           codeHostRef={codeHostRef}
           onToggleBlame={onToggleBlame}
           onEdit={() => onEditBlob(blob.path)}
+          onRename={() => onRenamePath(blob.path, false)}
           onDelete={() => onDeleteBlob(blob.path)}
           onOpenRepoLink={onOpenRepoLink}
         />
@@ -135,6 +138,7 @@ export function RepoCodeBody({
           locale={locale}
           onOpenEntry={onOpenEntry}
           onEditPath={onEditPath}
+          onRename={onRenamePath}
           onRemove={onRemoveEntry}
         />
       )}

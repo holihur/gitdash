@@ -255,7 +255,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
               </Suspense>
             }
           />
-          {/* 文件新建 / 编辑整页（替代弹框）：/repo/:owner/:name/new|edit */}
+          {/* 文件新建 / 编辑 / 重命名整页（替代弹框）：/repo/:owner/:name/new|edit|rename */}
           <Route
             path="/repo/:owner/:name/new"
             element={
@@ -269,6 +269,14 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             element={
               <Suspense fallback={<PageLoading />}>
                 <FileOpPage mode="edit" />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/repo/:owner/:name/rename"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <FileOpPage mode="rename" />
               </Suspense>
             }
           />

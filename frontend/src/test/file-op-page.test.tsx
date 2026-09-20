@@ -39,13 +39,14 @@ vi.mock("@/components/code-editor-lazy", () => ({
 
 const { api } = (await import("@/lib/api")) as typeof import("@/lib/api");
 
-function renderPage(path: string, mode: "new" | "edit") {
+function renderPage(path: string, mode: "new" | "edit" | "rename") {
   return render(
     <I18nProvider>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/repo/:owner/:name/new" element={<FileOpPage mode={mode} />} />
           <Route path="/repo/:owner/:name/edit" element={<FileOpPage mode={mode} />} />
+          <Route path="/repo/:owner/:name/rename" element={<FileOpPage mode={mode} />} />
           <Route path="*" element={<div>landed</div>} />
         </Routes>
       </MemoryRouter>
@@ -121,6 +122,29 @@ describe("FileOpPage", () => {
       expect(api.createCommit).toHaveBeenCalledWith("alice", "demo", "main", "Update README.md", [
         { path: "README.md", action: "update", content: "# Hi" },
       ]),
+    );
+  });
+
+  it("重命名文件：提交 move（from -> path）", async () => {
+    const user = userEvent.setup();
+    renderPage("/repo/alice/demo/rename?path=README.md&kind=file&ref=main", "rename");
+
+    expect(await screen.findByText("Rename")).toBeInTheDocument();
+    const newPathInput = screen.getByLabelText("New path") as HTMLInputElement;
+    await waitFor(() => expect(newPathInput.value).toBe("README.md"));
+
+    await user.clear(newPathInput);
+    await user.type(newPathInput, "docs/README.md");
+    await user.click(screen.getByRole("button", { name: "Commit changes" }));
+
+    await waitFor(() =>
+      expect(api.createCommit).toHaveBeenCalledWith(
+        "alice",
+        "demo",
+        "main",
+        "Rename README.md to docs/README.md",
+        [{ path: "docs/README.md", action: "move", from: "README.md" }],
+      ),
     );
   });
 

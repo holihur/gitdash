@@ -138,7 +138,13 @@ export const reposApi = {
     name: string,
     branch: string,
     message: string,
-    changes: { path: string; action: "create" | "update" | "delete" | "delete_tree"; content?: string }[],
+    changes: {
+      path: string;
+      action: "create" | "update" | "delete" | "delete_tree" | "move";
+      content?: string;
+      /** move 动作的原路径 */
+      from?: string;
+    }[],
   ) =>
     req<{ sha: string; branch: string; message: string }>(
       `/users/${owner}/repos/${name}/commits`,

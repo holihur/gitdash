@@ -6,6 +6,35 @@ import (
 	"gorm.io/gorm"
 )
 
+// defaultLabel 新建仓库时预置的标签定义（名称 + 颜色）。
+type defaultLabel struct {
+	Name  string
+	Color string
+}
+
+// defaultLabels 仓库初始化时自动创建的默认标签，沿用 GitHub 默认分类，开箱即用。
+var defaultLabels = []defaultLabel{
+	{Name: "bug", Color: "d73a4a"},
+	{Name: "documentation", Color: "0075ca"},
+	{Name: "duplicate", Color: "cfd3d7"},
+	{Name: "enhancement", Color: "a2eeef"},
+	{Name: "good first issue", Color: "7057ff"},
+	{Name: "help wanted", Color: "008672"},
+	{Name: "invalid", Color: "e4e669"},
+	{Name: "question", Color: "d876e3"},
+	{Name: "wontfix", Color: "ffffff"},
+}
+
+// defaultLabelRows 构造某仓库的默认标签行（由 CreateRepo 与仓库同事务写入）。
+func defaultLabelRows(owner, repo string) []repoLabelRow {
+	created := now()
+	rows := make([]repoLabelRow, 0, len(defaultLabels))
+	for _, l := range defaultLabels {
+		rows = append(rows, repoLabelRow{Owner: owner, Repo: repo, Name: l.Name, Color: l.Color, CreatedAt: created})
+	}
+	return rows
+}
+
 func (s *Store) CreateLabel(owner, repo, name, color string) (Label, error) {
 	r := repoLabelRow{Owner: owner, Repo: repo, Name: name, Color: color, CreatedAt: now()}
 	if err := s.db.Create(&r).Error; err != nil {

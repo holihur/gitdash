@@ -77,11 +77,13 @@ func initTemplate(owner, name string) error {
 	return nil
 }
 
-// FileChange 一次网页端文件/目录操作（action: create | update | delete | delete_tree）。
+// FileChange 一次网页端文件/目录操作（action: create | update | delete | delete_tree | move）。
+// move 用 From 指定原路径、Path 指定新路径，支持文件与目录（底层等价于 git mv）。
 type FileChange struct {
 	Path    string `json:"path"`
 	Action  string `json:"action"`
 	Content string `json:"content"`
+	From    string `json:"from,omitempty"`
 }
 
 // WriteCommit 在目标分支上应用一组文件操作并提交（bare 仓库在临时工作区完成）。
@@ -148,7 +150,7 @@ func writeCommit(owner, name, branch, message, author string, changes []FileChan
 		}
 		cleaned := map[string]bool{}
 		for _, c := range changes {
-			if (c.Action == "create" || c.Action == "update") && c.Path != "" {
+			if (c.Action == "create" || c.Action == "update" || c.Action == "move") && c.Path != "" {
 				if i := strings.LastIndex(c.Path, "/"); i > 0 {
 					gk := c.Path[:i] + "/.gitkeep"
 					if tracked[gk] && !cleaned[gk] {
@@ -184,6 +186,22 @@ func writeCommit(owner, name, branch, message, author string, changes []FileChan
 		case "delete_tree":
 			if _, err := gitOut(tmp, "rm", "-q", "-r", "--", p); err != nil {
 				return "", fmt.Errorf("delete directory %q: %w", p, err)
+			}
+		case "move":
+			from, err := CleanPath(c.From)
+			if err != nil {
+				return "", err
+			}
+			if from == "" || from == p {
+				continue
+			}
+			// 目标父目录需先存在，git mv 不会自动创建中间目录。
+			dst := filepath.Join(tmp, filepath.FromSlash(p))
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return "", err
+			}
+			if _, err := gitOut(tmp, "mv", "--", from, p); err != nil {
+				return "", fmt.Errorf("move %q -> %q: %w", from, p, err)
 			}
 		default:
 			return "", fmt.Errorf("invalid action %q", c.Action)
