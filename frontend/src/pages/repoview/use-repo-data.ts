@@ -95,7 +95,9 @@ export function useRepoData({
       const data = await api.tree(owner, name, ref, currentDir);
       setEntries(data.entries);
       setTreeLatestCommit(data.latest_commit ?? null);
-      setBlob(null);
+      // 不要在这里清空 blob：打开子目录中的文件时 currentDir 会变为 ""，
+      // 该回调会重新按根目录取树，若清空 blob 会把刚加载的文件内容冲掉。
+      // blob 的清理由下方 fileParam 为空时的副作用负责。
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

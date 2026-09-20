@@ -139,4 +139,29 @@ describe("RepoView", () => {
       expect(api.blob).toHaveBeenCalledWith("alice", "demo", "main", "docs/x.md"),
     );
   });
+
+  it("子目录中的文件在目录树加载完成后仍保持可见", async () => {
+    // 回归：打开子目录中的文件时 currentDir 变为 ""，会触发按根目录重新取树；
+    // 该请求若晚于 blob 返回，不得清空已加载的文件内容（否则深层文件看不到了）。
+    (api.me as Mock).mockResolvedValue({ username: "bob" });
+    (api.getRepo as Mock).mockResolvedValue(repo());
+    (api.branches as Mock).mockResolvedValue([{ name: "main", is_head: true }]);
+    (api.blob as Mock).mockResolvedValue({
+      path: "src/a/b/c/deep.md",
+      encoding: "utf-8",
+      content: "# Deep Heading",
+      size: 16,
+    });
+    // 目录树请求晚于 blob 返回，构造出会覆盖 blob 的竞态。
+    (api.tree as Mock).mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve({ entries: [] }), 30)),
+    );
+
+    renderRepo("alice", "/blob/src/a/b/c/deep.md?ref=main");
+
+    expect(await screen.findByRole("heading", { name: "Deep Heading" })).toBeInTheDocument();
+    // 等待目录树请求返回后，文件内容仍应保留。
+    await new Promise((r) => setTimeout(r, 60));
+    expect(screen.getByRole("heading", { name: "Deep Heading" })).toBeInTheDocument();
+  });
 });
