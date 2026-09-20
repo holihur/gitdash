@@ -1,6 +1,6 @@
-# gitdash documentation site (Hugo). Deployed independently: `hugo` writes public/.
+# Gitdash documentation site (Hugo). Deployed independently: `hugo` writes public/.
 baseURL = "https://holihur.github.io/gitdash/"
-title = "gitdash Docs"
+title = "Gitdash Docs"
 languageCode = "en"
 defaultContentLanguage = "en"
 defaultContentLanguageInSubdir = false
@@ -10,7 +10,7 @@ summaryLength = 30
 
 [params]
   gitdashRepo = "https://github.com/holihur/gitdash"
-  description = "Documentation for the self-hosted Git service gitdash, organized by module and feature."
+  description = "Documentation for the self-hosted Git service Gitdash, organized by module and feature."
 
 [markup]
   [markup.highlight]
@@ -30,19 +30,19 @@ summaryLength = 30
     languageName = "English"
     languageCode = "en"
     weight = 1
-    title = "gitdash Docs"
+    title = "Gitdash Docs"
     contentDir = "content/en"
     [languages.en.params]
-      description = "Documentation for the self-hosted Git service gitdash, organized by module and feature."
+      description = "Documentation for the self-hosted Git service Gitdash, organized by module and feature."
       docsLabel = "Docs"
   [languages.zh-cn]
     languageName = "中文"
     languageCode = "zh-CN"
     weight = 2
-    title = "gitdash 文档"
+    title = "Gitdash 文档"
     contentDir = "content/zh-cn"
     [languages.zh-cn.params]
-      description = "自托管 Git 服务 gitdash 的使用文档：按模块与功能组织。"
+      description = "自托管 Git 服务 Gitdash 的使用文档：按模块与功能组织。"
       docsLabel = "文档"
   [languages.ja]
     languageName = "日本語"

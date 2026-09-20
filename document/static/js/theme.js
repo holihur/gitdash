@@ -56,3 +56,24 @@
     }
   });
 })();
+
+// 移动端侧边导航折叠开关。
+(function () {
+  function toggleNav(force) {
+    var open = typeof force === "boolean" ? force : !document.body.classList.contains("nav-open");
+    document.body.classList.toggle("nav-open", open);
+    var btn = document.querySelector(".nav-toggle");
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    var btn = document.querySelector(".nav-toggle");
+    if (!btn) return;
+    btn.addEventListener("click", function () { toggleNav(); });
+    var sidebar = document.getElementById("sidebar");
+    if (sidebar) {
+      sidebar.addEventListener("click", function (e) {
+        if (e.target.closest("a")) toggleNav(false);
+      });
+    }
+  });
+})();

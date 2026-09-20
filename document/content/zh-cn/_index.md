@@ -1,9 +1,9 @@
 ---
-title: "gitdash 文档"
-summary: "自托管 Git 服务 gitdash 的使用文档：按模块与功能组织。"
+title: "Gitdash 文档"
+summary: "自托管 Git 服务 Gitdash 的使用文档：按模块与功能组织。"
 ---
 
-gitdash 是一个极简的自托管 Git 服务（类似 mini-Gitea），覆盖仓库托管、Issue / PR、看板、CI、包仓库、AI Copilot 等能力。本手册按**模块**与**功能**组织，既适合新用户上手，也适合自托管运维查阅。
+Gitdash 是一个极简的自托管 Git 服务（类似 mini-Gitea），覆盖仓库托管、Issue / PR、看板、CI、包仓库、AI Copilot 等能力。本手册按**模块**与**功能**组织，既适合新用户上手，也适合自托管运维查阅。
 
 ## 从哪里开始
 

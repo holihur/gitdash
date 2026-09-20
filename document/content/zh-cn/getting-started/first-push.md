@@ -1,7 +1,7 @@
 ---
 title: "首次推送"
 weight: 4
-summary: "初始化本地仓库并推送到 gitdash。"
+summary: "初始化本地仓库并推送到 Gitdash。"
 ---
 
 ```bash

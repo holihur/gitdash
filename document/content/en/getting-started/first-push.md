@@ -1,7 +1,7 @@
 ---
 title: "First push"
 weight: 4
-summary: "Initialize a local repository and push it to gitdash."
+summary: "Initialize a local repository and push it to Gitdash."
 ---
 
 ```bash

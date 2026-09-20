@@ -1,7 +1,7 @@
 ---
 title: "配置 SSH"
 weight: 3
-summary: "生成密钥并把公钥添加到 gitdash，用 SSH 克隆与推送。"
+summary: "生成密钥并把公钥添加到 Gitdash，用 SSH 克隆与推送。"
 ---
 
 推荐使用 SSH 访问仓库。

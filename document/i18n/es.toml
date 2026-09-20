@@ -17,7 +17,7 @@ other = "Oscuro"
 other = "Sistema"
 
 [footerText]
-other = "Documentación de gitdash, organizada por módulo y función."
+other = "Documentación de Gitdash, organizada por módulo y función."
 
 [sourceRepo]
 other = "Repositorio fuente"

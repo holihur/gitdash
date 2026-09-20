@@ -17,10 +17,19 @@ other = "Dark"
 other = "System"
 
 [footerText]
-other = "gitdash documentation, organized by module and feature."
+other = "Gitdash documentation, organized by module and feature."
 
 [sourceRepo]
 other = "Source repository"
 
 [language]
 other = "Language"
+
+[menu]
+other = "Menu"
+
+[search]
+other = "Search"
+
+[searchClose]
+other = "Close search"

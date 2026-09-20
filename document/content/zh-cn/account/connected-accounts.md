@@ -11,7 +11,7 @@ summary: "绑定 GitHub / GitLab / Gitea / Bitbucket，用于批量导入仓库�
 - **Gitea / Forgejo**
 - **Bitbucket**
 
-绑定使用 OAuth 授权，gitdash 会保存访问令牌（加密存储），仅用于**列出并导入你的仓库**。随时可以解绑，解绑会删除令牌。
+绑定使用 OAuth 授权，Gitdash 会保存访问令牌（加密存储），仅用于**列出并导入你的仓库**。随时可以解绑，解绑会删除令牌。
 
 ## 前提
 

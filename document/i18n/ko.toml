@@ -17,7 +17,7 @@ other = "다크"
 other = "시스템"
 
 [footerText]
-other = "gitdash 문서 · 모듈과 기능별로 구성."
+other = "Gitdash 문서 · 모듈과 기능별로 구성."
 
 [sourceRepo]
 other = "소스 저장소"

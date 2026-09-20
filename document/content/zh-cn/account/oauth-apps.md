@@ -1,7 +1,7 @@
 ---
 title: "OAuth 应用"
 weight: 7
-summary: "把 gitdash 作为 OAuth 2.0 授权服务器，签发访问令牌给第三方应用。"
+summary: "把 Gitdash 作为 OAuth 2.0 授权服务器，签发访问令牌给第三方应用。"
 ---
 
 在 **OAuth Apps** 页面注册第三方应用：

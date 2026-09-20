@@ -17,10 +17,19 @@ other = "深色"
 other = "跟随系统"
 
 [footerText]
-other = "gitdash 文档 · 按模块与功能组织。"
+other = "Gitdash 文档 · 按模块与功能组织。"
 
 [sourceRepo]
 other = "源码仓库"
 
 [language]
 other = "语言"
+
+[menu]
+other = "菜单"
+
+[search]
+other = "搜索"
+
+[searchClose]
+other = "关闭搜索"

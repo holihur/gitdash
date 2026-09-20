@@ -1,5 +1,12 @@
 <header class="site-header">
   <div class="container header-inner">
+    <button class="icon-btn nav-toggle" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="{{ i18n "menu" }}">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <line x1="4" x2="20" y1="6" y2="6"></line>
+        <line x1="4" x2="20" y1="12" y2="12"></line>
+        <line x1="4" x2="20" y1="18" y2="18"></line>
+      </svg>
+    </button>
     <a class="brand" href="{{ .Site.Home.RelPermalink }}">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="6" x2="6" y1="3" y2="15"></line>
@@ -7,13 +14,19 @@
         <circle cx="6" cy="18" r="3"></circle>
         <path d="M18 9a9 9 0 0 1-9 9"></path>
       </svg>
-      <span>gitdash</span>
+      <span>Gitdash</span>
       <span class="brand-sub muted">{{ .Site.Params.docsLabel | default "Docs" }}</span>
     </a>
     <div class="header-actions">
+      <button class="icon-btn search-toggle" type="button" aria-haspopup="dialog" aria-controls="search-overlay" aria-label="{{ i18n "search" }}">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.3-4.3"></path>
+        </svg>
+      </button>
       <a class="header-link" href="{{ "getting-started/" | relLangURL }}">{{ i18n "quickStart" }}</a>
       {{ with .Site.Params.gitdashRepo }}
-      <a class="header-link" href="{{ . }}" target="_blank" rel="noopener">{{ i18n "github" }}</a>
+      <a class="header-link header-link-github" href="{{ . }}" target="_blank" rel="noopener">{{ i18n "github" }}</a>
       {{ end }}
       <label class="lang-switch">
         <span class="sr-only">{{ i18n "language" }}</span>

@@ -17,7 +17,7 @@ other = "ダーク"
 other = "システム"
 
 [footerText]
-other = "gitdash ドキュメント · モジュールと機能別に構成。"
+other = "Gitdash ドキュメント · モジュールと機能別に構成。"
 
 [sourceRepo]
 other = "ソースリポジトリ"

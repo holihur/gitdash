@@ -11,7 +11,7 @@ Under **Profile → Connected accounts** you can link third-party code hosting a
 - **Gitea / Forgejo**
 - **Bitbucket**
 
-Linking uses OAuth. gitdash stores the access token (encrypted) and uses it only to **list and import your repositories**. You can unlink at any time; unlinking deletes the token.
+Linking uses OAuth. Gitdash stores the access token (encrypted) and uses it only to **list and import your repositories**. You can unlink at any time; unlinking deletes the token.
 
 ## Prerequisite
 

@@ -9,4 +9,4 @@ When opening a PR, choose the base (target) and head (source) branches and add a
 - An approving review (see [Review](review/)).
 - Passing status checks (for example CI).
 
-gitdash supports merge strategies (such as squash) and a merge queue for ordered merging.
+Gitdash supports merge strategies (such as squash) and a merge queue for ordered merging.

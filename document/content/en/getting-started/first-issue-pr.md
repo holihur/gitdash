@@ -24,7 +24,7 @@ Open the repository **Issues** tab, click **New issue**, add a title and body, a
 
 ## Email patches (optional)
 
-gitdash also supports a `git send-email`-style patch and email reply workflow — see [PR · Email patches](../pulls/email-patches/).
+Gitdash also supports a `git send-email`-style patch and email reply workflow — see [PR · Email patches](../pulls/email-patches/).
 
 ## Next
 

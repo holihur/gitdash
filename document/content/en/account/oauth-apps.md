@@ -1,7 +1,7 @@
 ---
 title: "OAuth apps"
 weight: 7
-summary: "Use gitdash as an OAuth 2.0 authorization server for third-party apps."
+summary: "Use Gitdash as an OAuth 2.0 authorization server for third-party apps."
 ---
 
 Register third-party applications on the **OAuth Apps** page:

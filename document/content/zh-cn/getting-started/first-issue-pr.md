@@ -24,7 +24,7 @@ summary: "提 issue、开分支、发 PR、评审与合并。"
 
 ## 邮件补丁（可选）
 
-gitdash 也支持 `git send-email` 风格的补丁与邮件回复流程，见 [PR · 邮件补丁](../pulls/email-patches/)。
+Gitdash 也支持 `git send-email` 风格的补丁与邮件回复流程，见 [PR · 邮件补丁](../pulls/email-patches/)。
 
 ## 下一步
 

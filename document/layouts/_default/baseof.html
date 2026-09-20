@@ -10,5 +10,15 @@
     </main>
   </div>
   {{ partial "footer.html" . }}
+  <div class="search-overlay" id="search-overlay" hidden>
+    <div class="search-modal" role="dialog" aria-modal="true" aria-label="{{ i18n "search" }}">
+      <div class="search-modal-bar">
+        <div id="search"></div>
+        <button class="icon-btn search-close" type="button" aria-label="{{ i18n "searchClose" }}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>

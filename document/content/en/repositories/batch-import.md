@@ -11,7 +11,7 @@ Then **Repositories → Import repository → From connected account**:
 1. Choose a linked account.
 2. Load the repositories it can access and filter as needed.
 3. Select one or more repositories (select all / clear), and choose visibility.
-4. Click **Import**; gitdash creates and mirror-imports each repository asynchronously.
+4. Click **Import**; Gitdash creates and mirror-imports each repository asynchronously.
 
 Notes:
 

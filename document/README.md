@@ -1,6 +1,6 @@
-# gitdash documentation site (Hugo)
+# Gitdash documentation site (Hugo)
 
-This directory is an **independently deployed** Hugo site documenting gitdash,
+This directory is an **independently deployed** Hugo site documenting Gitdash,
 organized by module and feature. The application links to it via
 `GITDASH_DOCS_URL` and shows a docs entry on the login page and in the header.
 
@@ -40,10 +40,24 @@ hugo server -D --source document
 # Open http://localhost:1313/gitdash/
 ```
 
-## Build
+## Search
+
+The site has built-in full-text search powered by [Pagefind](https://pagefind.app/).
+The search index is generated at build time and lives in `public/pagefind/`.
 
 ```bash
 hugo --source document --minify
+npx --yes pagefind@1.3.0 --site document/public
+```
+
+> The header search button loads Pagefind lazily, so a plain `hugo server`
+> preview works without the index (search simply reports that it isn't built).
+
+## Build
+
+```bash
+make build
+# or: hugo --source document --minify && npx --yes pagefind@1.3.0 --site document/public
 # Output in document/public/
 ```
 
