@@ -1,0 +1,6 @@
+<footer class="site-footer">
+  <p>
+    {{ i18n "footerText" }}
+    {{ with .Site.Params.gitdashRepo }}<a href="{{ . }}" target="_blank" rel="noopener">{{ i18n "sourceRepo" }}</a>{{ end }}
+  </p>
+</footer>

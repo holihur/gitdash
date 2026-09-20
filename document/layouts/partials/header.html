@@ -1,0 +1,52 @@
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="{{ .Site.Home.RelPermalink }}">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="6" x2="6" y1="3" y2="15"></line>
+        <circle cx="18" cy="6" r="3"></circle>
+        <circle cx="6" cy="18" r="3"></circle>
+        <path d="M18 9a9 9 0 0 1-9 9"></path>
+      </svg>
+      <span>gitdash</span>
+      <span class="brand-sub muted">{{ .Site.Params.docsLabel | default "Docs" }}</span>
+    </a>
+    <div class="header-actions">
+      <a class="header-link" href="{{ "getting-started/" | relLangURL }}">{{ i18n "quickStart" }}</a>
+      {{ with .Site.Params.gitdashRepo }}
+      <a class="header-link" href="{{ . }}" target="_blank" rel="noopener">{{ i18n "github" }}</a>
+      {{ end }}
+      <label class="lang-switch">
+        <span class="sr-only">{{ i18n "language" }}</span>
+        <select id="lang-select" onchange="if(this.value)location.href=this.value" aria-label="{{ i18n "language" }}">
+          {{ range .Site.Sites }}
+          {{ $site := . }}
+          {{ $url := $site.Home.RelPermalink }}
+          {{ range $.AllTranslations }}{{ if eq .Language.Lang $site.Language.Lang }}{{ $url = .RelPermalink }}{{ end }}{{ end }}
+          <option value="{{ $url }}"{{ if eq $site.Language.Lang $.Site.Language.Lang }} selected{{ end }}>{{ $site.Language.LanguageName }}</option>
+          {{ end }}
+        </select>
+      </label>
+      <label class="theme-switch">
+        <span class="sr-only">{{ i18n "theme" }}</span>
+        <select id="theme-select" aria-label="{{ i18n "theme" }}">
+          <option value="light">{{ i18n "themeLight" }}</option>
+          <option value="dark">{{ i18n "themeDark" }}</option>
+          <option value="system">{{ i18n "themeSystem" }}</option>
+        </select>
+      </label>
+      <script>
+        // 解析时立即回填已保存主题，避免下拉框短暂显示为默认值。
+        (function () {
+          var sel = document.getElementById("theme-select");
+          if (!sel) return;
+          try {
+            var v = localStorage.getItem("gitdash-theme");
+            sel.value = v === "light" || v === "dark" || v === "system" ? v : "system";
+          } catch (e) {
+            sel.value = "system";
+          }
+        })();
+      </script>
+    </div>
+  </div>
+</header>

@@ -1560,6 +1560,181 @@ const docTemplate = `{
                 }
             }
         },
+        "/connections": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "列出第三方账号绑定",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/api.connectionView"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/connections/{provider}": {
+            "delete": {
+                "tags": [
+                    "connections"
+                ],
+                "summary": "解除第三方账号绑定",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "provider",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/connections/{provider}/callback": {
+            "get": {
+                "tags": [
+                    "connections"
+                ],
+                "summary": "第三方账号绑定回调",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "provider",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
+        "/connections/{provider}/repos": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "列出远程仓库",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "provider",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/api.forgeRepo"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "Bad Gateway",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/connections/{provider}/start": {
+            "get": {
+                "tags": [
+                    "connections"
+                ],
+                "summary": "开始绑定第三方账号",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "github|gitlab|gitea|bitbucket",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/explore/repos": {
             "get": {
                 "produces": [
@@ -1980,6 +2155,72 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/imports/batch": {
+            "post": {
+                "description": "使用已绑定的第三方账号，把选中的远程仓库批量创建并异步导入。单个仓库失败不影响其余。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "connections"
+                ],
+                "summary": "批量导入仓库",
+                "parameters": [
+                    {
+                        "description": "provider 与 full_name 列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.batchImportReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/api.batchImportResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -14040,6 +14281,47 @@ const docTemplate = `{
                 }
             }
         },
+        "api.batchImportReq": {
+            "type": "object",
+            "properties": {
+                "namespace": {
+                    "description": "可选：目标组织",
+                    "type": "string"
+                },
+                "private": {
+                    "description": "是否私有，默认 true",
+                    "type": "boolean"
+                },
+                "provider": {
+                    "description": "已绑定的 provider",
+                    "type": "string"
+                },
+                "repos": {
+                    "description": "远程仓库 full_name 列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "api.batchImportResult": {
+            "type": "object",
+            "properties": {
+                "imported": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "skipped": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "api.boardResp": {
             "type": "object",
             "properties": {
@@ -14135,6 +14417,32 @@ const docTemplate = `{
                     }
                 },
                 "sha": {
+                    "type": "string"
+                }
+            }
+        },
+        "api.connectionView": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "connected": {
+                    "type": "boolean"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "login": {
+                    "type": "string"
+                },
+                "provider": {
                     "type": "string"
                 }
             }
@@ -14479,6 +14787,32 @@ const docTemplate = `{
                 },
                 "url": {
                     "type": "string"
+                }
+            }
+        },
+        "api.forgeRepo": {
+            "type": "object",
+            "properties": {
+                "clone_url": {
+                    "type": "string"
+                },
+                "default_branch": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "full_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "private": {
+                    "type": "boolean"
                 }
             }
         },

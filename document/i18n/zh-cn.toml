@@ -1,0 +1,26 @@
+[quickStart]
+other = "快速开始"
+
+[github]
+other = "GitHub"
+
+[theme]
+other = "主题"
+
+[themeLight]
+other = "浅色"
+
+[themeDark]
+other = "深色"
+
+[themeSystem]
+other = "跟随系统"
+
+[footerText]
+other = "gitdash 文档 · 按模块与功能组织。"
+
+[sourceRepo]
+other = "源码仓库"
+
+[language]
+other = "语言"

@@ -45,7 +45,8 @@ type Backend interface {
 	// ForkRepo mirrors a repository into a new owner/name.
 	ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error
 	// ImportRepo mirrors a remote URL into a new owner/name.
-	ImportRepo(url, targetOwner, targetName, privateKey string) error
+	// credential ("user:token", may be empty) is used for HTTPS basic auth.
+	ImportRepo(url, targetOwner, targetName, privateKey, credential string) error
 	// PushMirror pushes all refs to a remote URL.
 	PushMirror(owner, name, url, privateKey string) error
 	// RepoSize returns the repository disk usage in bytes.
@@ -177,8 +178,8 @@ func Delete(owner, name string) error { return CurrentBackend().Delete(owner, na
 func ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 	return CurrentBackend().ForkRepo(sourceOwner, sourceName, targetOwner, targetName)
 }
-func ImportRepo(url, targetOwner, targetName, privateKey string) error {
-	return CurrentBackend().ImportRepo(url, targetOwner, targetName, privateKey)
+func ImportRepo(url, targetOwner, targetName, privateKey, credential string) error {
+	return CurrentBackend().ImportRepo(url, targetOwner, targetName, privateKey, credential)
 }
 func PushMirror(owner, name, url, privateKey string) error {
 	return CurrentBackend().PushMirror(owner, name, url, privateKey)

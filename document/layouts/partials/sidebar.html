@@ -1,0 +1,16 @@
+<aside class="sidebar">
+  <nav>
+    {{ range .Site.Sections }}
+    <div class="nav-group">
+      <a class="nav-group-title" href="{{ .RelPermalink }}">{{ .Title }}</a>
+      <ul>
+        {{ range .Pages }}
+        <li>
+          <a href="{{ .RelPermalink }}"{{ if eq .RelPermalink $.RelPermalink }} class="active"{{ end }}>{{ .Title }}</a>
+        </li>
+        {{ end }}
+      </ul>
+    </div>
+    {{ end }}
+  </nav>
+</aside>

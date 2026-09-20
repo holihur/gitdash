@@ -1,0 +1,26 @@
+[quickStart]
+other = "クイックスタート"
+
+[github]
+other = "GitHub"
+
+[theme]
+other = "テーマ"
+
+[themeLight]
+other = "ライト"
+
+[themeDark]
+other = "ダーク"
+
+[themeSystem]
+other = "システム"
+
+[footerText]
+other = "gitdash ドキュメント · モジュールと機能別に構成。"
+
+[sourceRepo]
+other = "ソースリポジトリ"
+
+[language]
+other = "言語"

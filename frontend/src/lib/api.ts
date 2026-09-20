@@ -19,6 +19,7 @@ import { usersApi } from "./api/users";
 import { copilotApi } from "./api/copilot";
 import { applicationsApi } from "./api/applications";
 import { feedbackApi } from "./api/feedback";
+import { connectionsApi } from "./api/connections";
 
 export const api = {
   ...authApi,
@@ -37,4 +38,5 @@ export const api = {
   ...copilotApi,
   ...applicationsApi,
   ...feedbackApi,
+  ...connectionsApi,
 };

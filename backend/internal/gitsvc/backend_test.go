@@ -48,7 +48,7 @@ func TestCLIBackendOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = ForkRepo("alice", "demo", "bob", "forked")
-	_ = ImportRepo(path, "bob", "imported", "")
+	_ = ImportRepo(path, "bob", "imported", "", "")
 	target := filepath.Join(t.TempDir(), "mirror.git")
 	_, _ = GitOut("", "init", "--bare", "--initial-branch=main", target)
 	_ = PushMirror("alice", "demo", target, "")

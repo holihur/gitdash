@@ -1,0 +1,15 @@
+{{ define "main" }}
+<article class="doc">
+  <nav class="breadcrumb">
+    {{ with .CurrentSection }}{{ if not .IsHome }}<a href="{{ .RelPermalink }}">{{ .Title }}</a> / {{ end }}{{ end }}
+  </nav>
+  <h1>{{ .Title }}</h1>
+  {{ with .Params.summary }}<p class="lead">{{ . }}</p>{{ end }}
+  {{ .Content }}
+  {{ if .Pages }}
+  <ul class="child-list">
+    {{ range .Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}
+  </ul>
+  {{ end }}
+</article>
+{{ end }}

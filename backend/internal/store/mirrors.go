@@ -42,6 +42,12 @@ func (s *Store) SetImportSource(owner, repo, url string) error {
 	}).Create(&row).Error
 }
 
+// SetImportCredential 记录导入用的 HTTPS 账号凭据（加密存储）。
+func (s *Store) SetImportCredential(owner, repo, credential string) error {
+	return s.db.Model(&importRow{}).Where("owner = ? AND repo = ?", owner, repo).
+		Update("credential", sealSecret(credential)).Error
+}
+
 // ImportSource 返回导入来源 URL；非导入仓库返回空串。
 func (s *Store) ImportSource(owner, repo string) (string, error) {
 	var row importRow
@@ -141,11 +147,21 @@ func (s *Store) SetMirrorStatus(owner, repo, status, errMsg string) error {
 	return nil
 }
 
-// PendingImports 返回卡在 queued/running 的导入任务（启动续跑用）。
+// PendingImports 返回卡在 queued/running 的导入任务（启动续跑用），
+// Credential 已解密。
 func (s *Store) PendingImports() ([]importRow, error) {
 	var rows []importRow
-	err := s.db.Where("status IN ?", []string{"queued", "running"}).Find(&rows).Error
-	return rows, err
+	if err := s.db.Where("status IN ?", []string{"queued", "running"}).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		cred, err := openSecret(rows[i].Credential)
+		if err != nil {
+			return nil, err
+		}
+		rows[i].Credential = cred
+	}
+	return rows, nil
 }
 
 // PendingMirrors 返回卡在 queued/running 的镜像同步任务（启动续跑用）。

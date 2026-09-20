@@ -703,3 +703,30 @@ export interface FollowState {
   following: number;
   is_following: boolean;
 }
+
+// ---- 第三方账号绑定与批量导入 ----
+
+export interface Connection {
+  provider: string;
+  label: string;
+  enabled: boolean;
+  connected: boolean;
+  login?: string;
+  avatar_url?: string;
+  base_url?: string;
+}
+
+export interface RemoteRepo {
+  full_name: string;
+  name: string;
+  owner: string;
+  private: boolean;
+  clone_url: string;
+  default_branch: string;
+  description: string;
+}
+
+export interface BatchImportResult {
+  imported: string[];
+  skipped: Record<string, string>;
+}

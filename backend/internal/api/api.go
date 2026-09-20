@@ -194,11 +194,11 @@ func (a *API) emailReady() bool {
 func (a *API) SetJobsManager(m *jobs.Manager) { a.jobsMgr = m }
 
 // enqueueImport 通过注入的任务队列排队导入；队列未启用时返回错误。
-func (a *API) enqueueImport(owner, repo, url, privateKey string) error {
+func (a *API) enqueueImport(owner, repo, url, privateKey, credential string) error {
 	if a.jobsMgr == nil {
 		return errors.New("task queue not configured")
 	}
-	return a.jobsMgr.EnqueueImport(owner, repo, url, privateKey)
+	return a.jobsMgr.EnqueueImport(owner, repo, url, privateKey, credential)
 }
 
 // enqueueMirror 通过注入的任务队列排队镜像推送；队列未启用时返回错误。
@@ -225,7 +225,15 @@ func (a *API) SetSSHPort(addr string) {
 //	@Success     200 {object} object
 //	@Router      /instance [get]
 func (a *API) instance(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"version": a.version, "ssh_port": a.sshPort})
+	writeJSON(w, http.StatusOK, map[string]any{"version": a.version, "ssh_port": a.sshPort, "docs_url": a.docsURL()})
+}
+
+// docsURL 返回文档站地址：环境变量 GITDASH_DOCS_URL 优先，其次管理端设置 docs_url；未配置返回空串。
+func (a *API) docsURL() string {
+	if v := strings.TrimSpace(os.Getenv("GITDASH_DOCS_URL")); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return strings.TrimRight(strings.TrimSpace(a.store.GetSetting("docs_url")), "/")
 }
 
 type ctxUser struct{}
@@ -368,6 +376,14 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/star", a.auth(a.unstarRepo))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/fork", a.auth(a.forkRepo))
 	mux.HandleFunc("POST /api/imports", a.auth(a.importRepo))
+	mux.HandleFunc("POST /api/imports/batch", a.auth(a.importBatch))
+
+	// third-party account connections（绑定 GitHub/GitLab/Gitea/Bitbucket 并批量导入）
+	mux.HandleFunc("GET /api/connections", a.auth(a.listConnections))
+	mux.HandleFunc("GET /api/connections/{provider}/start", a.auth(a.connectStart))
+	mux.HandleFunc("GET /api/connections/{provider}/callback", a.authOptional(a.connectCallback))
+	mux.HandleFunc("DELETE /api/connections/{provider}", a.auth(a.disconnectProvider))
+	mux.HandleFunc("GET /api/connections/{provider}/repos", a.auth(a.listProviderRepos))
 
 	// watch & inbox（关注仓库 + 收件箱通知）
 	mux.HandleFunc("GET /api/watched", a.auth(a.listWatched))

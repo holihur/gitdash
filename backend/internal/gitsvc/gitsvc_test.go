@@ -129,7 +129,7 @@ func TestImportRepoFromLocalPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 从本地 bare 路径导入（模拟远程 URL）
-	if err := ImportRepo(RepoPath("alice", "upstream"), "bob", "imported", ""); err != nil {
+	if err := ImportRepo(RepoPath("alice", "upstream"), "bob", "imported", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if !Exists("bob", "imported") {

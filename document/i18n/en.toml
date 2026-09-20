@@ -1,0 +1,26 @@
+[quickStart]
+other = "Quick start"
+
+[github]
+other = "GitHub"
+
+[theme]
+other = "Theme"
+
+[themeLight]
+other = "Light"
+
+[themeDark]
+other = "Dark"
+
+[themeSystem]
+other = "System"
+
+[footerText]
+other = "gitdash documentation, organized by module and feature."
+
+[sourceRepo]
+other = "Source repository"
+
+[language]
+other = "Language"

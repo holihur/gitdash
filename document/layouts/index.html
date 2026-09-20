@@ -1,0 +1,14 @@
+{{ define "main" }}
+<article class="doc home">
+  <h1>{{ .Title }}</h1>
+  {{ .Content }}
+  <div class="home-sections">
+    {{ range .Site.Sections }}
+    <a class="home-card" href="{{ .RelPermalink }}">
+      <h3>{{ .Title }}</h3>
+      {{ with .Params.summary }}<p>{{ . }}</p>{{ end }}
+    </a>
+    {{ end }}
+  </div>
+</article>
+{{ end }}

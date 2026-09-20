@@ -355,6 +355,25 @@ type userOAuthRow struct {
 
 func (userOAuthRow) TableName() string { return "user_oauth" }
 
+// linkedAccountRow 是用户绑定的第三方账号（GitHub/GitLab/Gitea/Bitbucket），
+// 用于列出并批量导入远程仓库。访问令牌加密存储（sealSecret）。
+// 每个用户对每个 provider 至多保留一个绑定。
+type linkedAccountRow struct {
+	UserID       int64  `gorm:"primaryKey"`
+	Provider     string `gorm:"primaryKey;size:32"`
+	ExternalID   string `gorm:"not null;default:'';size:255"`
+	Login        string `gorm:"not null;default:'';size:255"`
+	AvatarURL    string `gorm:"not null;default:''"`
+	BaseURL      string `gorm:"not null;default:''"`
+	AccessToken  string `gorm:"not null;default:''"`
+	RefreshToken string `gorm:"not null;default:''"`
+	Scope        string `gorm:"not null;default:''"`
+	CreatedAt    string `gorm:"not null"`
+	UpdatedAt    string `gorm:"not null"`
+}
+
+func (linkedAccountRow) TableName() string { return "linked_accounts" }
+
 // ---- stars / watches / notifications / forks / imports / mirrors ----
 
 type starRow struct {
@@ -411,12 +430,13 @@ type forkRow struct {
 func (forkRow) TableName() string { return "repo_forks" }
 
 type importRow struct {
-	Owner     string `gorm:"primaryKey;size:255"`
-	Repo      string `gorm:"primaryKey;size:255"`
-	SourceURL string `gorm:"not null"`
-	Status    string `gorm:"not null;default:''"` // queued/running/synced/failed；空 = 旧数据已导入
-	Error     string `gorm:"not null;default:''"` // 最近一次失败原因
-	CreatedAt string `gorm:"not null"`
+	Owner      string `gorm:"primaryKey;size:255"`
+	Repo       string `gorm:"primaryKey;size:255"`
+	SourceURL  string `gorm:"not null"`
+	Credential string `gorm:"not null;default:''"` // 加密的 HTTPS 账号凭据（"user:token"），OAuth 账号导入用
+	Status     string `gorm:"not null;default:''"`   // queued/running/synced/failed；空 = 旧数据已导入
+	Error      string `gorm:"not null;default:''"`   // 最近一次失败原因
+	CreatedAt  string `gorm:"not null"`
 }
 
 func (importRow) TableName() string { return "repo_imports" }

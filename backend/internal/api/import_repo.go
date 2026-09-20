@@ -198,7 +198,7 @@ func (a *API) importRepo(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if err := a.enqueueImport(targetOwner, targetName, raw, in.PrivateKey); err != nil {
+	if err := a.enqueueImport(targetOwner, targetName, raw, in.PrivateKey, ""); err != nil {
 		_ = a.store.SetImportStatus(targetOwner, targetName, jobs.StatusFailed, "enqueue: "+err.Error())
 		internalError(w, err)
 		return

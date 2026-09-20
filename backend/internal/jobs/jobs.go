@@ -36,6 +36,7 @@ type payload struct {
 	Repo       string `json:"repo"`
 	URL        string `json:"url"`
 	PrivateKey string `json:"private_key,omitempty"`
+	Credential string `json:"credential,omitempty"`
 }
 
 // WebhookPayload webhook 投递任务载荷。
@@ -77,35 +78,35 @@ func (m *Manager) RequeuePending() {
 	ctx := context.Background()
 	if rows, err := m.st.PendingImports(); err == nil {
 		for _, r := range rows {
-			if err := m.enqueue(ctx, KindImport, r.Owner, r.Repo, r.SourceURL, ""); err != nil {
+			if err := m.enqueue(ctx, KindImport, r.Owner, r.Repo, r.SourceURL, "", r.Credential); err != nil {
 				logx.Infof("jobs: requeue import %s/%s: %v", r.Owner, r.Repo, err)
 			}
 		}
 	}
 	if rows, err := m.st.PendingMirrors(); err == nil {
 		for _, r := range rows {
-			if err := m.enqueue(ctx, KindMirror, r.Owner, r.Repo, r.URL, r.PrivateKey); err != nil {
+			if err := m.enqueue(ctx, KindMirror, r.Owner, r.Repo, r.URL, r.PrivateKey, ""); err != nil {
 				logx.Infof("jobs: requeue mirror %s/%s: %v", r.Owner, r.Repo, err)
 			}
 		}
 	}
 }
 
-// EnqueueImport 排队一次仓库导入。
-func (m *Manager) EnqueueImport(owner, repo, url, privateKey string) error {
-	return m.enqueue(context.Background(), KindImport, owner, repo, url, privateKey)
+// EnqueueImport 排队一次仓库导入。credential 为可选的 HTTPS 账号凭据（"user:token"）。
+func (m *Manager) EnqueueImport(owner, repo, url, privateKey, credential string) error {
+	return m.enqueue(context.Background(), KindImport, owner, repo, url, privateKey, credential)
 }
 
 // EnqueueMirror 排队一次镜像推送。
 func (m *Manager) EnqueueMirror(owner, repo, url, privateKey string) error {
-	return m.enqueue(context.Background(), KindMirror, owner, repo, url, privateKey)
+	return m.enqueue(context.Background(), KindMirror, owner, repo, url, privateKey, "")
 }
 
-func (m *Manager) enqueue(ctx context.Context, kind, owner, repo, url, privateKey string) error {
+func (m *Manager) enqueue(ctx context.Context, kind, owner, repo, url, privateKey, credential string) error {
 	if m.q == nil {
 		return queue.ErrQueueFull
 	}
-	p, err := json.Marshal(payload{Owner: owner, Repo: repo, URL: url, PrivateKey: privateKey})
+	p, err := json.Marshal(payload{Owner: owner, Repo: repo, URL: url, PrivateKey: privateKey, Credential: credential})
 	if err != nil {
 		return err
 	}
@@ -147,7 +148,7 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 	switch j.Kind {
 	case KindImport:
 		_ = m.st.SetImportStatus(p.Owner, p.Repo, StatusRunning, "")
-		if err := gitsvc.ImportRepo(p.URL, p.Owner, p.Repo, p.PrivateKey); err != nil {
+		if err := gitsvc.ImportRepo(p.URL, p.Owner, p.Repo, p.PrivateKey, p.Credential); err != nil {
 			logx.Infof("jobs: import %s/%s: %v", p.Owner, p.Repo, err)
 			_ = m.st.SetImportStatus(p.Owner, p.Repo, StatusFailed, err.Error())
 			return nil

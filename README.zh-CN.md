@@ -15,6 +15,7 @@ English | 简体中文
 - **Pull Request**：基于 fork 的 PR，支持 squash 合并
 - **Star 与 Fork**：一键 star / fork 仓库
 - **镜像与导入**：从远端 URL 导入仓库，push 镜像到 GitHub/GitLab 等远端
+- **账号绑定与批量导入**：通过 OAuth 绑定 GitHub、GitLab、Gitea/Forgejo、Bitbucket 账号，在导入弹窗中勾选并批量导入仓库
 - **Webhook**：仓库级出站 webhook，支持按事件类型订阅（push / issue / PR / 评论 / 分支标签 / Release / 流水线 / fork / star / watch），HMAC 签名推送，经任务队列异步派发并按退避重试；另提供**入站 webhook** token，外部系统可凭其创建 issue
 - **GPG Key**：上传 GPG 公钥验证提交签名
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
@@ -22,6 +23,7 @@ English | 简体中文
 - **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR / copilot），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理、用户/仓库/组织封禁与 IP/CIDR 黑名单
 - **用户反馈**：管理员可开启右下角浮动反馈按钮，用户提交的内容通过 GitHub/Gitea 兼容 API 在指定仓库创建 issue（管理面板 → 用户反馈）
+- **上手引导与文档**：首页提供快速上手清单，登录页与页头提供指向独立部署、多语言（英文为主）的 [Hugo 文档站](document/) 的入口（`GITDASH_DOCS_URL` 或管理面板 → 文档站）
 - **发现（Explore）**：浏览公开仓库；支持按标签筛选与关键词搜索；仓库设置页可切换公开 / 私有
 - **仓库设置**：owner 可设置默认分支（决定浏览/HEAD 分支）、开启或关闭 issue 功能，并管理可见性与模版标记；支持一键 **`git gc`**（仓库维护）打包松散对象、回收磁盘空间
 - **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索

@@ -26,6 +26,7 @@ import CollaboratorsDialog from "@/components/collabs-dialog";
 import WebhooksDialog from "@/components/webhooks-dialog";
 import RepoCard from "./repos/RepoCard";
 import ImportRepoDialog from "./repos/ImportRepoDialog";
+import { GettingStarted } from "@/components/getting-started";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
@@ -179,6 +180,7 @@ export default function Repos() {
 
   return (
     <div className="space-y-6">
+      {!loading && <GettingStarted hasRepos={repoTotal > 0} />}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t("repos.title")}</h1>
@@ -404,6 +406,7 @@ export default function Repos() {
         onKey={setImportKey}
         busy={importBusy}
         onImport={doImport}
+        onBatchDone={load}
       />
     </div>
   );

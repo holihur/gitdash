@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Github, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
+import { docsUrl } from "@/lib/docs";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { takeReturnPath } from "@/lib/auth-expiry";
@@ -444,6 +445,19 @@ export default function Login({ onAuthed }: Props) {
               >
                 {t("login.apiDocs")}
               </a>
+              {docsUrl() && (
+                <>
+                  <span className="mx-1 text-muted-foreground">·</span>
+                  <a
+                    href={docsUrl()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    {t("login.docs")}
+                  </a>
+                </>
+              )}
             </p>
             {(githubEnabled || googleEnabled || oidc.enabled || providersError) && (
               <div className="mt-3 space-y-2">

@@ -19,6 +19,20 @@ tasks:
       - pnpm install --frozen-lockfile
       - pnpm run build
 
+  docs:
+    desc: 构建 Hugo 文档站（document/public；需安装 hugo）
+    dir: document
+    cmds:
+      - hugo --minify
+    sources:
+      - content/**/*
+      - layouts/**/*
+      - static/**/*
+      - i18n/**/*
+      - hugo.toml
+    generates:
+      - public
+
   swagger:
     desc: 重新生成 OpenAPI 文档（修改 API 注解后运行）
     dir: backend

@@ -1,0 +1,50 @@
+name: Docs
+
+# 构建并发布 document/ 下的 Hugo 文档站到 GitHub Pages。
+# 需要在仓库 Settings → Pages 中选择 "GitHub Actions" 作为源。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "document/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "document/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.128.0"
+          extended: true
+      - name: Build
+        run: hugo --source document --minify
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: document/public
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

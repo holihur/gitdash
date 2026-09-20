@@ -44,6 +44,7 @@ func (s *Store) migrate() error {
 		&adminSessionRow{},
 		&settingRow{},
 		&userOAuthRow{},
+		&linkedAccountRow{},
 		&starRow{},
 		&watchRow{},
 		&followRow{},

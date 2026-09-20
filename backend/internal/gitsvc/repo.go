@@ -135,7 +135,9 @@ func forkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 
 // ImportRepo 从远程 URL 镜像导入仓库到目标路径（保留全部分支/标签）。
 // privateKey 非空时用于 SSH 认证（专用导入 key，如 GitHub/GitLab 的只读 deploy key）。
-func importRepo(url, targetOwner, targetName, privateKey string) error {
+// credential 非空时（"user:token"）通过 GIT_ASKPASS 提供 HTTPS Basic 认证，
+// 用于 OAuth 绑定的账号导入私有仓库，避免令牌出现在命令行参数中。
+func importRepo(url, targetOwner, targetName, privateKey, credential string) error {
 	if !ValidName(targetOwner) || !ValidName(targetName) {
 		return fmt.Errorf("invalid target repo")
 	}
@@ -155,6 +157,14 @@ func importRepo(url, targetOwner, targetName, privateKey string) error {
 	if cleanup != nil {
 		defer cleanup()
 	}
+	cenv, ccleanup, err := credEnv(credential)
+	if err != nil {
+		return err
+	}
+	if ccleanup != nil {
+		defer ccleanup()
+	}
+	env = append(env, cenv...)
 	if _, err := gitOutEnv(env, "", "clone", "--mirror", "--quiet", url, dst); err != nil {
 		_ = os.RemoveAll(dst)
 		return err
@@ -209,6 +219,36 @@ func sshEnv(url, privateKey string) ([]string, func(), error) {
 	}
 	cmd += " -i '" + strings.ReplaceAll(keyPath, "'", "'\\''") + "' -o IdentitiesOnly=yes"
 	return []string{"GIT_SSH_COMMAND=" + cmd}, func() { _ = os.Remove(keyPath) }, nil
+}
+
+// credEnv 为 HTTPS 远端构造 GIT_ASKPASS 环境变量，从环境变量读取用户名/口令，
+// 避免把令牌写入命令行参数或 URL（后者会出现在 ps / 错误日志里）。
+// credential 形如 "user:token"；无冒号时视为纯 token（用户名留空）。
+func credEnv(credential string) ([]string, func(), error) {
+	credential = strings.TrimSpace(credential)
+	if credential == "" {
+		return nil, nil, nil
+	}
+	user, pass, ok := strings.Cut(credential, ":")
+	if !ok {
+		user, pass = "", credential
+	}
+	dir, err := os.MkdirTemp("", "gitdash-askpass-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	path := filepath.Join(dir, "askpass.sh")
+	script := "#!/bin/sh\ncase \"$1\" in\n*[Uu]sername*) printf '%s' \"$GITDASH_GIT_USER\" ;;\n*) printf '%s' \"$GITDASH_GIT_PASS\" ;;\nesac\n"
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		_ = os.RemoveAll(dir)
+		return nil, nil, err
+	}
+	return []string{
+		"GIT_ASKPASS=" + path,
+		"GIT_TERMINAL_PROMPT=0",
+		"GITDASH_GIT_USER=" + user,
+		"GITDASH_GIT_PASS=" + pass,
+	}, func() { _ = os.RemoveAll(dir) }, nil
 }
 
 // sshBaseOptions 返回 git 远端 SSH 的 -o 选项。设置 GITDASH_SSH_KNOWN_HOSTS

@@ -1,0 +1,26 @@
+[quickStart]
+other = "Schnellstart"
+
+[github]
+other = "GitHub"
+
+[theme]
+other = "Design"
+
+[themeLight]
+other = "Hell"
+
+[themeDark]
+other = "Dunkel"
+
+[themeSystem]
+other = "System"
+
+[footerText]
+other = "gitdash-Dokumentation, nach Modul und Funktion gegliedert."
+
+[sourceRepo]
+other = "Quell-Repository"
+
+[language]
+other = "Sprache"

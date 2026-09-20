@@ -157,6 +157,18 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"feedback_repo":        a.store.GetSetting("feedback_repo"),
 		"feedback_has_token":   a.store.GetSetting("feedback_token") != "",
 		"feedback_local":       a.feedbackSelfTarget(a.store.GetSetting("feedback_repo")),
+		"gitlab_enabled":       a.store.GetSetting("gitlab_enabled") == "1",
+		"gitlab_client_id":     a.store.GetSetting("gitlab_client_id"),
+		"gitlab_has_secret":    a.store.GetSetting("gitlab_client_secret") != "",
+		"gitlab_base_url":      a.store.GetSetting("gitlab_base_url"),
+		"gitea_enabled":        a.store.GetSetting("gitea_enabled") == "1",
+		"gitea_client_id":      a.store.GetSetting("gitea_client_id"),
+		"gitea_has_secret":     a.store.GetSetting("gitea_client_secret") != "",
+		"gitea_base_url":       a.store.GetSetting("gitea_base_url"),
+		"bitbucket_enabled":    a.store.GetSetting("bitbucket_enabled") == "1",
+		"bitbucket_client_id":  a.store.GetSetting("bitbucket_client_id"),
+		"bitbucket_has_secret": a.store.GetSetting("bitbucket_client_secret") != "",
+		"docs_url":             a.store.GetSetting("docs_url"),
 	})
 }
 
@@ -240,6 +252,25 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if v, ok := in["feedback_token"].(string); ok && v != "" {
 		_ = a.store.SetSetting("feedback_token", strings.TrimSpace(v))
 	}
+	// 第三方账号绑定（批量导入）：GitLab / Gitea / Bitbucket。
+	writeStr("gitlab_base_url", in["gitlab_base_url"])
+	setBool("gitlab_enabled", in["gitlab_enabled"])
+	writeStr("gitlab_client_id", in["gitlab_client_id"])
+	if v, ok := in["gitlab_client_secret"].(string); ok && v != "" {
+		_ = a.store.SetSetting("gitlab_client_secret", strings.TrimSpace(v))
+	}
+	writeStr("gitea_base_url", in["gitea_base_url"])
+	setBool("gitea_enabled", in["gitea_enabled"])
+	writeStr("gitea_client_id", in["gitea_client_id"])
+	if v, ok := in["gitea_client_secret"].(string); ok && v != "" {
+		_ = a.store.SetSetting("gitea_client_secret", strings.TrimSpace(v))
+	}
+	setBool("bitbucket_enabled", in["bitbucket_enabled"])
+	writeStr("bitbucket_client_id", in["bitbucket_client_id"])
+	if v, ok := in["bitbucket_client_secret"].(string); ok && v != "" {
+		_ = a.store.SetSetting("bitbucket_client_secret", strings.TrimSpace(v))
+	}
+	writeStr("docs_url", in["docs_url"])
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

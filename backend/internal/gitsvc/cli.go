@@ -35,8 +35,8 @@ func (c *cliBackend) Delete(owner, name string) error { return deleteRepo(owner,
 func (c *cliBackend) ForkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 	return forkRepo(sourceOwner, sourceName, targetOwner, targetName)
 }
-func (c *cliBackend) ImportRepo(url, targetOwner, targetName, privateKey string) error {
-	return importRepo(url, targetOwner, targetName, privateKey)
+func (c *cliBackend) ImportRepo(url, targetOwner, targetName, privateKey, credential string) error {
+	return importRepo(url, targetOwner, targetName, privateKey, credential)
 }
 func (c *cliBackend) PushMirror(owner, name, url, privateKey string) error {
 	return pushMirror(owner, name, url, privateKey)

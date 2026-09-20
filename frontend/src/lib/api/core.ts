@@ -1,6 +1,7 @@
 // 会话通过 httpOnly Cookie(gitdash_session) 自动携带，前端不再持有 token。
 
 import { authExpired, stashReturnPath } from "@/lib/auth-expiry";
+import { setDocsURL } from "@/lib/docs";
 
 export class ApiError extends Error {
   status: number;
@@ -16,11 +17,12 @@ export class ApiError extends Error {
 
 let sshPort = "2222";
 
-/** 启动时调用：拉取实例信息（真实 SSH 端口），失败保持默认 2222。 */
+/** 启动时调用：拉取实例信息（真实 SSH 端口、文档站地址），失败保持默认。 */
 export async function loadInstanceInfo(): Promise<void> {
   try {
-    const r = await req<{ version: string; ssh_port: string }>("/instance");
+    const r = await req<{ version: string; ssh_port: string; docs_url?: string }>("/instance");
     if (r.ssh_port) sshPort = r.ssh_port;
+    if (r.docs_url) setDocsURL(r.docs_url);
   } catch {
     /* ignore：回退默认端口 */
   }

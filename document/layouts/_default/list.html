@@ -1,0 +1,19 @@
+{{ define "main" }}
+<article class="doc">
+  <h1>{{ .Title }}</h1>
+  {{ with .Content }}{{ . }}{{ end }}
+  {{ $pages := .Pages }}
+  {{ if $pages }}
+  <ul class="child-list">
+    {{ range $pages }}
+    <li>
+      <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+      {{ with .Params.summary }}<span class="muted">— {{ . }}</span>{{ end }}
+    </li>
+    {{ end }}
+  </ul>
+  {{ else }}
+  <p class="muted">本模块文档正在补充中。</p>
+  {{ end }}
+</article>
+{{ end }}

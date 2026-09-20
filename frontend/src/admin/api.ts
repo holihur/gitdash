@@ -110,6 +110,18 @@ export interface Settings {
   feedback_repo: string;
   feedback_has_token: boolean;
   feedback_local: boolean;
+  gitlab_enabled: boolean;
+  gitlab_client_id: string;
+  gitlab_has_secret: boolean;
+  gitlab_base_url: string;
+  gitea_enabled: boolean;
+  gitea_client_id: string;
+  gitea_has_secret: boolean;
+  gitea_base_url: string;
+  bitbucket_enabled: boolean;
+  bitbucket_client_id: string;
+  bitbucket_has_secret: boolean;
+  docs_url: string;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {

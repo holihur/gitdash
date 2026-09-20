@@ -1,0 +1,26 @@
+[quickStart]
+other = "Быстрый старт"
+
+[github]
+other = "GitHub"
+
+[theme]
+other = "Тема"
+
+[themeLight]
+other = "Светлая"
+
+[themeDark]
+other = "Тёмная"
+
+[themeSystem]
+other = "Системная"
+
+[footerText]
+other = "Документация gitdash, организованная по модулям и функциям."
+
+[sourceRepo]
+other = "Исходный репозиторий"
+
+[language]
+other = "Язык"

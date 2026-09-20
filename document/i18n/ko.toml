@@ -1,0 +1,26 @@
+[quickStart]
+other = "빠른 시작"
+
+[github]
+other = "GitHub"
+
+[theme]
+other = "테마"
+
+[themeLight]
+other = "라이트"
+
+[themeDark]
+other = "다크"
+
+[themeSystem]
+other = "시스템"
+
+[footerText]
+other = "gitdash 문서 · 모듈과 기능별로 구성."
+
+[sourceRepo]
+other = "소스 저장소"
+
+[language]
+other = "언어"
