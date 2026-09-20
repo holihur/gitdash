@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Toaster } from "sonner";
 import { I18nProvider } from "@/lib/i18n";
@@ -90,5 +90,28 @@ describe("FeedbackWidget", () => {
       const post = calls.find((c) => c.init?.method === "POST");
       expect(JSON.parse(String(post!.init!.body))).toMatchObject({ body: "**bold** text" });
     });
+  });
+
+  it("支持拖拽移动位置并记住，拖拽后不打开弹窗", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => jsonRes({ enabled: true })),
+    );
+    renderWidget();
+
+    const button = await screen.findByRole("button", { name: "Feedback" });
+    expect(button.style.left).toBe(""); // 默认右下角定位
+
+    fireEvent.pointerDown(button, { clientX: 800, clientY: 700, pointerId: 1 });
+    fireEvent.pointerMove(button, { clientX: 700, clientY: 600, pointerId: 1 });
+    fireEvent.pointerUp(button, { clientX: 700, clientY: 600, pointerId: 1 });
+
+    // 位置写入 localStorage 并应用为 left/top。
+    await waitFor(() => expect(localStorage.getItem("gitdash-feedback-pos")).toBeTruthy());
+    expect(Number.parseInt(button.style.left, 10)).toBeGreaterThanOrEqual(8);
+
+    // 拖拽结束后的 click 不应打开反馈弹窗。
+    fireEvent.click(button);
+    expect(screen.queryByText("Send feedback")).not.toBeInTheDocument();
   });
 });
