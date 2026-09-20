@@ -1,8 +1,10 @@
-# Authorization Plane gRPC (AuthzService)
+---
+title: "授权面 gRPC（AuthzService）"
+weight: 1
+summary: "把 SSH 鉴权收敛为 gRPC 服务，供未来的独立 SSH 网关调用。"
+---
 
-> English version: [authz-grpc.md](./authz-grpc.md)
-
-`AuthzService` 是 gitdash 的**授权面（control plane）**：把当前 SSH 服务在进程内直接调用的鉴权逻辑，收敛成一组稳定的一元 gRPC 接口，供后续**独立的 SSH 网关**通过 gRPC 调用。
+`AuthzService` 是 Gitdash 的**授权面（control plane）**：把当前 SSH 服务在进程内直接调用的鉴权逻辑，收敛成一组稳定的一元 gRPC 接口，供后续**独立的 SSH 网关**通过 gRPC 调用。
 
 它只做「决策」，不接触仓库数据，也**不改变现有进程内 SSH / API / hook 的任何行为**。
 
@@ -139,7 +141,7 @@ cd backend && go test ./internal/grpcserver/...
 
 ### 黑盒测试（独立进程 + 真实网络）
 
-`backend/tests/blackbox/` 是对授权面的**独立黑盒测试**：现场构建 gitdash 二进制（或复用 `GITDASH_BIN`），在独立临时数据目录 + 随机端口上以子进程启动，只经 HTTP / gRPC 网络接口交互，不 import 任何服务端实现（仅用生成的 gRPC 客户端桩），因此验证的是 `main.go` 的真实接线（env → gRPC listener → store）。
+`backend/tests/blackbox/` 是对授权面的**独立黑盒测试**：现场构建 Gitdash 二进制（或复用 `GITDASH_BIN`），在独立临时数据目录 + 随机端口上以子进程启动，只经 HTTP / gRPC 网络接口交互，不 import 任何服务端实现（仅用生成的 gRPC 客户端桩），因此验证的是 `main.go` 的真实接线（env → gRPC listener → store）。
 
 ```bash
 cd backend && go test ./tests/blackbox/ -v

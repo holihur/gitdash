@@ -1,6 +1,10 @@
-# Git 后端抽象层
+---
+title: "Git 后端抽象层"
+weight: 3
+summary: "gitsvc.Backend 抽象与如何新增实现。"
+---
 
-gitdash 通过单一抽象 `gitsvc.Backend`（`backend/internal/gitsvc/backend.go`）
+Gitdash 通过单一抽象 `gitsvc.Backend`（`backend/internal/gitsvc/backend.go`）
 访问仓库。默认实现 `cli` 调用系统 `git` 二进制；其它实现（纯 Go 的 `go-git`、
 libgit2 绑定、forge API、测试用的内存假实现等）只需实现该接口并注册即可。
 

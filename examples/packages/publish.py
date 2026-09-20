@@ -16,7 +16,7 @@ It doubles as a manual end-to-end test of a running gitdash instance:
 Create the PAT under *Settings -> Keys -> PAT* with the ``repo`` scope.
 Use the native example projects in this directory with the real tools
 (``npm publish`` / ``twine`` / ``cargo publish`` / ...) as described in
-``docs/packages.md``.
+the packages docs at https://holihur.github.io/gitdash/packages/publish-install/.
 """
 from __future__ import annotations
 

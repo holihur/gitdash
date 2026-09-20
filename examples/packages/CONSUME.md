@@ -1,6 +1,6 @@
 # Consuming the private packages
 
-Consumer-side examples for the gitdash [private package registry](../../docs/packages.md):
+Consumer-side examples for the gitdash [private package registry](https://holihur.github.io/gitdash/packages/publish-install/):
 each ecosystem has a `consume/` project next to its publisher project, showing
 how to point the native client at your instance and install the package.
 

@@ -1,4 +1,8 @@
-# Coverage & Defect-Hunting Roadmap
+---
+title: "Coverage & defect-hunting roadmap"
+weight: 2
+summary: "Staged coverage plan and the defects found so far."
+---
 
 > The point of coverage is to find defects. Numbers are targets, not the goal:
 > every newly-covered endpoint/line is a place where a bug can hide. This file

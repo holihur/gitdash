@@ -11,7 +11,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **User system**: register / login (bcrypt + session token, valid for 7 days); repos and SSH keys belong to users; profile email with uniqueness enforced (partially, empty allowed)
 - **Organizations**: create orgs, manage members (owner / member roles), host repos under an org namespace, and follow orgs from a public organization profile page
 - **Issues & labels**: per-repo issues with labels & milestones, edit / delete, keyword + state search, and pin-to-top; activity pushes to watchers' inboxes
-- **Projects (kanban)**: per-repo kanban projects with columns, swimlanes and cards (issue-linked or text notes), drag & drop in the web UI — see [docs/projects.md](docs/projects.md)
+- **Projects (kanban)**: per-repo kanban projects with columns, swimlanes and cards (issue-linked or text notes), drag & drop in the web UI — see the [Projects docs](https://holihur.github.io/gitdash/projects/kanban/)
 - **Pull requests**: fork-based pull requests with squash merge and reviewer flow
 - **Stars & forks**: star repos and fork them with one click
 - **Repo mirroring & import**: import from a remote URL and push-mirror to GitHub/GitLab-like remotes
@@ -28,7 +28,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Repo settings**: owner-managed default branch (drives the browsed/HEAD branch), issue tracker on/off toggle, visibility and template flags; one-click **`git gc`** (repository maintenance) to pack loose objects and reclaim disk space
 - **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore
 - **Code browsing & web editing**: browse repos by branch / directory, view file contents, commit history and blame on the web; create / edit / delete files and folders, revert a commit (creates an inverse commit) from the Commits tab, and compare any two branches / tags / commits from the Code tab
-- **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust), Maven (Java) and Docker/OCI images under user/org namespaces, authenticated with a PAT (Basic auth) — see [docs/packages.md](docs/packages.md) and the runnable [examples/packages](examples/packages/)
+- **Private package registry**: publish & install packages for npm, composer (PHP), pypi (Python), rubygems (Ruby), Go modules, cargo (Rust), Maven (Java) and Docker/OCI images under user/org namespaces, authenticated with a PAT (Basic auth) — see the [packages docs](https://holihur.github.io/gitdash/packages/publish-install/) and the runnable [examples/packages](examples/packages/)
 - **Watching & inbox**: watch / unwatch repos; repo issue / PR activity (opened / closed / reopened / merged) is pushed to your personal inbox (unread badge + read / delete management)
 - **CI pipeline (MVP)**: per-repo pipeline toggle in the web UI; on push, steps defined in `.gitdash.yml` or `.gitdash/*.yml` (custom YAML DSL) run inside Docker containers with logs stored per run; multiple independent pipeline files per repo are each evaluated and triggered on their own `on:` rules; jobs can be processed in-process (default) or via a Redis-backed asynq queue
 - **BYOK copilot**: chat with a standalone agent runtime (the `agent` binary built from the `deps/agent` submodule) inside a checkout of the repo; it can read, edit and run commands, and gitdash commits + pushes its changes to a `copilot/session-<id>` branch after every turn; sessions linked to an issue auto-open a pull request (`Closes #N`) once the agent pushes, from the web UI or `gitdash-cli copilot fix` — see [docs/copilot.md](docs/copilot.md)
@@ -37,7 +37,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Structured logging & tracing**: `log/slog`-based logs with levels + text/JSON format, optional rotating file output (`GITDASH_LOG_FILE`), and OpenTelemetry tracing via OTLP (`OTEL_EXPORTER_OTLP_ENDPOINT`)
 - **Pipeline visualization**: the Pipeline tab renders the `.gitdash.yml` step DAG (parallel groups included)
 - **Mermaid in markdown**: ` ```mermaid ` code blocks render as diagrams (lazily loaded)
-- **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection) — see [docs/runners.md](docs/runners.md)
+- **Self-hosted runners**: deploy `gitdash-runner` agents that connect out to the server; `.gitdash.yml` can target them via `runs-on` labels (user/org scoping, workspace snapshot streaming, log streaming, cancel, offline detection) — see the [runner docs](https://holihur.github.io/gitdash/ci/runners/)
 - **Git SSH service**: built-in SSH server (default `:2222`), public keys bound to users, supports `git clone` / `push` / `pull`
 - **SSH key management**: add / remove public keys via the web UI (CRUD); a public key acts as the user's credential
 - **Self-update**: `gitdash update` for manual updates; optional background auto-update (**off by default**)
@@ -176,7 +176,7 @@ Environment variables (all optional):
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
 | `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<name>/<name>` repo when an account or organization is first created (`0` disables) |
-| `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash / in PATH | Path to the agent runtime for copilot sessions (see [docs/copilot.md](docs/copilot.md)) |
+| `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash / in PATH | Path to the agent runtime for copilot sessions (see the [copilot docs](https://holihur.github.io/gitdash/copilot/sessions/)) |
 | `GITDASH_COPILOT_AGENT_URL` | empty | Use an already-running agent (`http://host:port`) instead of spawning one per session |
 | `GITDASH_LLM_ALLOW_HOSTS` | empty | Comma-separated `host` or `host:port` allowed to bypass the LLM SSRF guard (private gateway / local Ollama); scoped to BYOK/copilot only |
 | `GITDASH_LOG_LEVEL` | `info` | Log level: `debug` / `info` / `warn` / `error` |
@@ -197,7 +197,7 @@ Environment variables (all optional):
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | empty | SMTP username / password |
 | `GITDASH_SMTP_FROM` | SMTP user | From address |
 | `GITDASH_EMAIL_PUSH` | off | Set to `1` to also send email notifications for `push` events |
-| `GITDASH_MAIL_REPLY_DOMAIN` | empty (off) | Domain used for reply-by-email `Reply-To` / `Message-ID` (see `docs/email-replies.md`) |
+| `GITDASH_MAIL_REPLY_DOMAIN` | empty (off) | Domain used for reply-by-email `Reply-To` / `Message-ID` (see the [email replies docs](https://holihur.github.io/gitdash/pulls/email-replies/)) |
 | `GITDASH_MAIL_SECRET` | `GITDASH_SECRET_KEY` | HMAC secret for reply-by-email tokens |
 | `GITDASH_MAIL_INBOUND_SECRET` | `GITDASH_MAIL_SECRET` | Shared secret required by `POST /api/mail/inbound` |
 | `GITDASH_TRUSTED_PROXIES` | empty (loopback only) | Comma-separated proxy IP/CIDR allowed to set `X-Forwarded-For`. The proxy **must strip/overwrite** the incoming `X-Forwarded-For` (not append client headers), otherwise a client can spoof the left-most IP and bypass PAT IP allow-lists / login rate limits |
@@ -646,7 +646,7 @@ gitdash-runner register -server http://gitdash.internal:8080 \
 gitdash-runner serve   # binds the url port; -listen to override, -tls-cert/-tls-key for TLS
 ```
 
-The server dials with `Authorization: Bearer {name}:{sha256(secret)}` (it stores only the hash); a Redis leader lock keeps a single instance dialing each reverse runner. Use `wss://` (TLS) on public networks. See [docs/runners.md](docs/runners.md).
+The server dials with `Authorization: Bearer {name}:{sha256(secret)}` (it stores only the hash); a Redis leader lock keeps a single instance dialing each reverse runner. Use `wss://` (TLS) on public networks. See the [runner docs](https://holihur.github.io/gitdash/ci/runners/).
 
 Security model: agents execute arbitrary repo code on their host — treat agent hosts as trusted CI machines; the same sandbox as builtin (no network by default, resource caps, docker.sock mounts rejected) is applied on the agent side. Registration is limited: a personal runner only ever receives that user's repos, an org runner only that org's repos.
 

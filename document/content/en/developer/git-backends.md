@@ -1,6 +1,10 @@
-# Git Backends
+---
+title: "Git backends"
+weight: 3
+summary: "The gitsvc.Backend abstraction and how to add an implementation."
+---
 
-gitdash talks to repositories through a single abstraction,
+Gitdash talks to repositories through a single abstraction,
 `gitsvc.Backend` (in `backend/internal/gitsvc/backend.go`). The default
 implementation, `cli`, shells out to the system `git` binary. Alternative
 implementations (pure-Go `go-git`, libgit2 bindings, a forge API, an in-memory

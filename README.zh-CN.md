@@ -11,7 +11,7 @@ English | 简体中文
 - **用户系统**：注册 / 登录（bcrypt + 会话 token，7 天有效），仓库与 SSH Key 归属用户；资料邮箱支持设置，数据库层唯一（空值除外）
 - **组织**：创建组织、管理成员（owner / member 角色）、可将仓库建到组织命名空间下，并提供公开的组织主页与关注（follow）
 - **Issue 与标签**：仓库 issue 支持标签、里程碑，编辑 / 删除、关键词与状态搜索、置顶；动态推送给关注者
-- **项目看板**：仓库级看板项目，支持列、泳道与卡片（关联 issue 或文本便签），网页端拖拽流转 —— 详见 [docs/projects.zh-CN.md](docs/projects.zh-CN.md)
+- **项目看板**：仓库级看板项目，支持列、泳道与卡片（关联 issue 或文本便签），网页端拖拽流转 —— 详见[项目文档](https://holihur.github.io/gitdash/zh-cn/projects/kanban/)
 - **Pull Request**：基于 fork 的 PR，支持 squash 合并
 - **Star 与 Fork**：一键 star / fork 仓库
 - **镜像与导入**：从远端 URL 导入仓库，push 镜像到 GitHub/GitLab 等远端
@@ -28,7 +28,7 @@ English | 简体中文
 - **仓库设置**：owner 可设置默认分支（决定浏览/HEAD 分支）、开启或关闭 issue 功能，并管理可见性与模版标记；支持一键 **`git gc`**（仓库维护）打包松散对象、回收磁盘空间
 - **仓库标签（topics）**：owner 可为仓库管理标签（最多 20 个），在仓库页展示、用于 Explore 筛选与搜索
 - **代码浏览与网页编辑**：网页端按分支 / 目录浏览仓库、查看文件内容、提交历史与 blame；可新建 / 编辑 / 删除文件与目录，在提交记录页撤销某次提交（生成反向提交），并在代码页比较任意两个分支 / 标签 / 提交的差异
-- **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见 [docs/packages.zh-CN.md](docs/packages.zh-CN.md) 及可直接运行的 [examples/packages](examples/packages/)
+- **私有包仓库**：为 npm、composer（PHP）、pypi（Python）、rubygems（Ruby）、Go modules、cargo（Rust）、Maven（Java）以及 Docker/OCI 镜像提供私有发布与安装，按用户/组织命名空间隔离，PAT（Basic 认证）鉴权 —— 详见[包仓库文档](https://holihur.github.io/gitdash/zh-cn/packages/publish-install/) 及可直接运行的 [examples/packages](examples/packages/)
 - **关注与收件箱**：watch / unwatch 仓库；仓库的 issue / PR 动态（打开 / 关闭 / 重开 / 合并）推送到个人收件箱（未读角标 + 已读 / 删除管理）
 - **CI 流水线 (MVP)**：仓库设置页可开启/关闭流水线；push 时按 `.gitdash.yml` 或 `.gitdash/*.yml`（自定义 YAML DSL）定义的步骤在 Docker 容器中执行，逐步骤记录日志；每个仓库可放多个独立流水线文件，按各自的 `on:` 规则分别触发；任务默认进程内执行，也可走 Redis（asynq）持久化队列
 - **BYOK Copilot**：与运行在仓库检出副本中的独立 agent 运行时（由 `deps/agent` 子模块构建的 `agent` 二进制）对话；它能读、改、执行命令，每轮结束后 gitdash 会把改动提交并推送到 `copilot/session-<id>` 分支；关联 issue 的会话在 agent 推送后自动开 PR（正文 `Closes #N`），网页端与 `gitdash-cli copilot fix` 均可触发——详见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)
@@ -37,7 +37,7 @@ English | 简体中文
 - **结构化日志与链路追踪**：基于 `log/slog` 的日志（级别 + text/JSON 格式），支持滚动文件输出（`GITDASH_LOG_FILE`）；通过 OTLP 导出 OpenTelemetry trace（`OTEL_EXPORTER_OTLP_ENDPOINT`）
 - **流水线可视化**：流水线页渲染 `.gitdash.yml` 的步骤 DAG（含并行组）
 - **Markdown 支持 Mermaid**：` ```mermaid ` 代码块渲染为图表（按需懒加载）
-- **自托管 Runner**：部署 `gitdash-runner` agent 主动连接服务端执行流水线；`.gitdash.yml` 用 `runs-on` 标签指定目标 agent（个人/组织 scope、工作区快照流、日志回传、取消、掉线检测），详见 [docs/runners.zh-CN.md](docs/runners.zh-CN.md)
+- **自托管 Runner**：部署 `gitdash-runner` agent 主动连接服务端执行流水线；`.gitdash.yml` 用 `runs-on` 标签指定目标 agent（个人/组织 scope、工作区快照流、日志回传、取消、掉线检测），详见[Runner 文档](https://holihur.github.io/gitdash/zh-cn/ci/runners/)
 - **Git SSH 服务**：内置 SSH server（默认 `:2222`），公钥绑定用户，支持 `git clone` / `push` / `pull`
 - **SSH Key 管理**：网页端增删公钥（CRUD），公钥即用户凭证
 - **自更新**：`gitdash update` 手动更新；可选后台自动更新（**默认关闭**）
@@ -176,7 +176,7 @@ go run .
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
 | `GITDASH_PROFILE_REPO` | `1` | 用户 / 组织首次创建时自动创建公开的 `<名称>/<名称>` 仓库（`0` 关闭） |
-| `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent` / PATH | copilot 会话使用的 agent 运行时路径（见 [docs/copilot.zh-CN.md](docs/copilot.zh-CN.md)） |
+| `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent` / PATH | copilot 会话使用的 agent 运行时路径（见 [Copilot 文档](https://holihur.github.io/gitdash/zh-cn/copilot/sessions/)） |
 | `GITDASH_COPILOT_AGENT_URL` | 空 | 使用已在运行的 agent（`http://host:port`），而不是每会话拉起一个 |
 | `GITDASH_LLM_ALLOW_HOSTS` | 空 | 逗号分隔的 `host` 或 `host:port` 白名单，放行 LLM 端点的 SSRF 拦截（私有网关 / 本地 Ollama）；仅作用于 BYOK/copilot |
 | `GITDASH_LOG_LEVEL` | `info` | 日志级别：`debug` / `info` / `warn` / `error` |
@@ -197,7 +197,7 @@ go run .
 | `GITDASH_SMTP_USER` / `GITDASH_SMTP_PASS` | 空 | SMTP 账号 / 密码 |
 | `GITDASH_SMTP_FROM` | SMTP 用户名 | 发件人地址 |
 | `GITDASH_EMAIL_PUSH` | 关闭 | 设为 `1` 时 push 事件也发送邮件通知 |
-| `GITDASH_MAIL_REPLY_DOMAIN` | 空（关闭） | 邮件回复（reply-by-email）的 `Reply-To` / `Message-ID` 域名（见 `docs/email-replies.zh-CN.md`） |
+| `GITDASH_MAIL_REPLY_DOMAIN` | 空（关闭） | 邮件回复（reply-by-email）的 `Reply-To` / `Message-ID` 域名（见[邮件回复文档](https://holihur.github.io/gitdash/zh-cn/pulls/email-replies/)） |
 | `GITDASH_MAIL_SECRET` | `GITDASH_SECRET_KEY` | 邮件回复 token 的 HMAC 密钥 |
 | `GITDASH_MAIL_INBOUND_SECRET` | `GITDASH_MAIL_SECRET` | `POST /api/mail/inbound` 要求的共享密钥 |
 | `GITDASH_TRUSTED_PROXIES` | 空（仅回环） | 信任 `X-Forwarded-For` 的反代 IP/CIDR 列表（逗号分隔）。反代**必须重写/剥离**外部传入的 `X-Forwarded-For`（而非追加客户端头部），否则客户端可伪造最左 IP，绕过 PAT IP 白名单 / 登录限流 |
@@ -597,7 +597,7 @@ gitdash-runner register -server http://gitdash.internal:8080 \
 gitdash-runner serve   # 监听 url 端口；-listen 覆盖，-tls-cert/-tls-key 直接启用 TLS
 ```
 
-服务端以 `Authorization: Bearer {name}:{sha256(secret)}` 拨号认证（只存 hash）；多实例经 Redis 选主锁保证只有一个实例拨号。公网部署请用 `wss://`（TLS）或仅在受信网络使用 `ws://`。详见 [docs/runners.zh-CN.md](docs/runners.zh-CN.md)。
+服务端以 `Authorization: Bearer {name}:{sha256(secret)}` 拨号认证（只存 hash）；多实例经 Redis 选主锁保证只有一个实例拨号。公网部署请用 `wss://`（TLS）或仅在受信网络使用 `ws://`。详见[Runner 文档](https://holihur.github.io/gitdash/zh-cn/ci/runners/)。
 
 安全模型：agent 在其宿主上执行仓库任意代码 —— 请将 agent 主机视为受信 CI 机器；agent 侧应用与内置执行一致的沙箱（默认禁外网、资源限制、拒绝 docker.sock 挂载）。注册即隔离：个人 runner 只会收到该用户仓库的任务，组织 runner 只会收到该组织仓库的任务。
 

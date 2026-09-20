@@ -1,6 +1,6 @@
 # Package registry examples
 
-Runnable examples for the gitdash [private package registry](../../docs/packages.md).
+Runnable examples for the gitdash [private package registry](https://holihur.github.io/gitdash/packages/publish-install/).
 Each ecosystem directory pairs a **publisher** project with a **consumer**
 project, so you can see the full round trip:
 
@@ -98,7 +98,7 @@ Authenticate the clients with **Basic auth**: your username as the user and a
 **PAT** (not your password) as the password. npm uses `_authToken` in `.npmrc`,
 cargo uses `cargo login --registry gitdash`, pip/uv embed the credentials in the
 index URL. Full, copy-pasteable commands and `.npmrc` / `Cargo.toml` /
-`settings.xml` snippets live in [`docs/packages.md`](../../docs/packages.md).
+`settings.xml` snippets live in [packages docs](https://holihur.github.io/gitdash/packages/publish-install/).
 
 The read side (installing these packages from a project) is covered by the
 `consume/` project next to each publisher — see

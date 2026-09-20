@@ -1,8 +1,10 @@
-# Authorization Plane gRPC (AuthzService)
+---
+title: "Authorization gRPC plane"
+weight: 1
+summary: "AuthzService: the authorization plane a future standalone SSH gateway calls over gRPC."
+---
 
-> 中文版：[authz-grpc.zh-CN.md](./authz-grpc.zh-CN.md)
-
-`AuthzService` is gitdash's **authorization plane (control plane)**: it consolidates
+`AuthzService` is Gitdash's **authorization plane (control plane)**: it consolidates
 the auth checks that the SSH server currently performs in-process into a stable set
 of unary gRPC methods, so a future **standalone SSH gateway** can call them over gRPC.
 
@@ -157,7 +159,7 @@ owner/public-repo/collaborator branches, and missing/wrong token returning
 ### Black-box tests (separate process + real network)
 
 `backend/tests/blackbox/` is an **independent black-box test** for the authorization
-plane: it builds the gitdash binary on the fly (or reuses `GITDASH_BIN`), starts it as a
+plane: it builds the Gitdash binary on the fly (or reuses `GITDASH_BIN`), starts it as a
 child process on a fresh temp data dir + random ports, and interacts only over the
 HTTP / gRPC wire — it imports no server-side implementation (only the generated gRPC
 client stub), so it exercises `main.go`'s real wiring (env → gRPC listener → store).
