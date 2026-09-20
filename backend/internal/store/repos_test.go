@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -190,7 +191,7 @@ func TestCreateRepoSeedsDefaultLabels(t *testing.T) {
 	}
 
 	// 重复创建同名仓库应返回 ErrExists，且不重复写入标签（事务回滚）。
-	if _, err := s.CreateRepo("alice", "demo", "", false); err != ErrExists {
+	if _, err := s.CreateRepo("alice", "demo", "", false); !errors.Is(err, ErrExists) {
 		t.Fatalf("duplicate CreateRepo err = %v, want ErrExists", err)
 	}
 	again, err := s.ListLabels("alice", "demo")
