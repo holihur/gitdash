@@ -182,7 +182,7 @@ func createRemoteIssue(ctx context.Context, apiBase, owner, repo, token, title, 
 	if err != nil {
 		return "", 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return "", 0, fmt.Errorf("remote issue API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))

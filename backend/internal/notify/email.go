@@ -157,13 +157,13 @@ func sendMail(cfg Config, to, subject, body string, h Headers) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	client, err := smtp.NewClient(conn, cfg.Host)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	if ok, _ := client.Extension("STARTTLS"); ok {
 		if err := client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
 			return err

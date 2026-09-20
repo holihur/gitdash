@@ -172,3 +172,11 @@ def test_admin_feedback_settings_roundtrip(admin, anon):
             },
             expect=200,
         )
+
+
+def test_feedback_submit_while_disabled(admin, anon):
+    # 未启用反馈时提交返回 404；同时覆盖 POST /api/feedback 的黑盒路由。
+    admin.post("/admin/settings", json={"feedback_enabled": False}, expect=200)
+    r = anon.post("/feedback", json={"body": "hello"})
+    assert r.status_code == 404, r.text
+    assert r.json().get("code") == "feedback_disabled"
