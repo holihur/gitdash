@@ -843,6 +843,7 @@ export const de: DeepPartial<Messages> = {
     feedbackRepo: "Issue-Repository-URL",
     feedbackRepoPlaceholder: "https://github.com/owner/repo oder https://host/owner/repo/issues",
     feedbackToken: "Zugriffstoken",
+    feedbackTokenSelf: "Für diese Instanz optional",
   },
   user: {
     memberSince: "Beigetreten am {date}",

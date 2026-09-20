@@ -20,7 +20,7 @@ export const en = {
   feedback: {
     button: "Feedback",
     title: "Send feedback",
-    hint: "Tell us what is broken, missing or confusing. Your message is filed as an issue in our tracker.",
+    hint: "Tell us what is broken, missing or confusing. Markdown is supported. Your message is filed as an issue in our tracker.",
     placeholder: "Describe your feedback…",
     submit: "Submit",
     sending: "Submitting…",
@@ -1039,11 +1039,12 @@ export const en = {
     ipBanRemoved: "Unblocked {cidr}",
     ipBanFailed: "Request failed",
     feedbackTitle: "User feedback",
-    feedbackHint: "Enabled by default off. When on, a floating button appears in the web UI and submitted messages are filed as issues in the repository below (GitHub or Gitea/Forgejo compatible API).",
+    feedbackHint: "Disabled by default. When enabled, a floating button appears in the web UI and submitted messages are filed as issues in the repository below. Point it at this instance's own repository URL and leave the token empty to file feedback locally; otherwise a GitHub or Gitea/Forgejo compatible API plus an access token is required.",
     feedbackEnable: "Enable feedback",
     feedbackRepo: "Issue repository URL",
-    feedbackRepoPlaceholder: "https://github.com/owner/repo or https://host/owner/repo/issues",
+    feedbackRepoPlaceholder: "https://github.com/owner/repo or http://this-instance/owner/repo",
     feedbackToken: "Access token",
+    feedbackTokenSelf: "optional for this instance",
   },
   user: {
     memberSince: "Joined {date}",

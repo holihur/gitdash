@@ -109,6 +109,7 @@ export interface Settings {
   feedback_enabled: boolean;
   feedback_repo: string;
   feedback_has_token: boolean;
+  feedback_local: boolean;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {

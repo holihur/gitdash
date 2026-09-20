@@ -57,6 +57,46 @@ func feedbackRepoFromURL(raw string) (owner, repo, apiBase string, ok bool) {
 	return owner, repo, apiBase, true
 }
 
+// knownExternalGitHosts 是常见第三方 Git 托管站点；指向这些站点时始终按远端处理。
+var knownExternalGitHosts = map[string]bool{
+	"github.com":    true,
+	"gitlab.com":    true,
+	"gitea.com":     true,
+	"bitbucket.org": true,
+}
+
+// feedbackSelfTarget 判断反馈目标是否为本实例仓库：非第三方托管站点，且本实例
+// 存在同名仓库时直接在本地创建 issue（无需访问令牌，也不发起自请求）。
+//
+// 这样即使服务端位于反向代理之后（Host 被改写为内部地址）也能正确识别本实例。
+func (a *API) feedbackSelfTarget(raw string) bool {
+	owner, repo, _, ok := feedbackRepoFromURL(raw)
+	if !ok {
+		return false
+	}
+	if u, err := url.Parse(strings.TrimSpace(raw)); err == nil && knownExternalGitHosts[strings.ToLower(u.Hostname())] {
+		return false
+	}
+	info, err := a.store.GetRepo(owner, repo)
+	if err != nil || info.Banned || a.store.IsOrgBanned(owner) {
+		return false
+	}
+	return true
+}
+
+// feedbackIssueNumber 从 enrichIssues 返回的 JSON map 中取回 issue 编号。
+func feedbackIssueNumber(m map[string]any) int {
+	switch v := m["number"].(type) {
+	case float64:
+		return int(v)
+	case int64:
+		return int(v)
+	case int:
+		return v
+	}
+	return 0
+}
+
 // feedbackConfig 公开反馈功能是否可用（不泄漏仓库地址与令牌）。
 //
 //	@Summary     反馈功能状态
@@ -68,7 +108,8 @@ func feedbackRepoFromURL(raw string) (owner, repo, apiBase string, ok bool) {
 func (a *API) feedbackConfig(w http.ResponseWriter, r *http.Request) {
 	enabled, repo, token := a.feedbackSettings()
 	_, _, _, valid := feedbackRepoFromURL(repo)
-	writeJSON(w, http.StatusOK, map[string]any{"enabled": enabled && valid && token != ""})
+	ready := valid && (token != "" || a.feedbackSelfTarget(repo))
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": enabled && ready})
 }
 
 // feedbackBodyReq 反馈提交体。
@@ -81,7 +122,7 @@ type feedbackBodyReq struct {
 // submitFeedback 提交用户反馈：在管理员配置的远端仓库创建 Issue。
 //
 //	@Summary     提交反馈
-//	@Description 使用管理员配置的仓库地址与令牌，在对应仓库创建 Issue（GitHub / Gitea 兼容 API）。登录用户会附带身份信息。
+//	@Description 使用管理员配置的仓库地址与令牌，在对应仓库创建 Issue；若目标指向本实例仓库则直接创建本地 Issue（无需令牌）。登录用户会附带身份信息。
 //	@Tags        feedback
 //	@Accept      json
 //	@Produce     json
@@ -95,7 +136,8 @@ type feedbackBodyReq struct {
 func (a *API) submitFeedback(w http.ResponseWriter, r *http.Request) {
 	enabled, rawRepo, token := a.feedbackSettings()
 	owner, repo, apiBase, ok := feedbackRepoFromURL(rawRepo)
-	if !enabled || !ok || token == "" {
+	selfTarget := ok && a.feedbackSelfTarget(rawRepo)
+	if !enabled || !ok || (!selfTarget && token == "") {
 		writeCode(w, http.StatusNotFound, "feedback_disabled", "feedback is not enabled")
 		return
 	}
@@ -123,15 +165,34 @@ func (a *API) submitFeedback(w http.ResponseWriter, r *http.Request) {
 
 	title := truncateRunes(strings.TrimSpace(in.Title), feedbackMaxTitle)
 	if title == "" {
-		title = truncateRunes(firstLine(content), feedbackMaxTitle)
+		title = truncateRunes(feedbackTitleFromContent(content), feedbackMaxTitle)
 	}
 	if title == "" {
 		title = "Feedback"
 	}
 	page := truncateRunes(strings.TrimSpace(in.URL), feedbackMaxPageURL)
 
-	issueURL, number, err := createRemoteIssue(r.Context(), apiBase, owner, repo, token, title,
-		buildFeedbackBody(content, page, userFrom(r), r.UserAgent()))
+	body := buildFeedbackBody(content, page, userFrom(r), r.UserAgent())
+
+	// 目标为本实例仓库：直接创建本地 issue，无需令牌，也不发起自请求。
+	if selfTarget {
+		author := userFrom(r)
+		if author == "" {
+			author = owner
+		}
+		issue, created := a.newIssue(w, owner, repo, author, title, body)
+		if !created {
+			return
+		}
+		number := feedbackIssueNumber(issue)
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"url":    fmt.Sprintf("%s/repo/%s/%s/issues/%d", reqBase(r), url.PathEscape(owner), url.PathEscape(repo), number),
+			"number": number,
+		})
+		return
+	}
+
+	issueURL, number, err := createRemoteIssue(r.Context(), apiBase, owner, repo, token, title, body)
 	if err != nil {
 		logx.Warnf("feedback issue creation failed (%s/%s): %v", owner, repo, err)
 		writeCode(w, http.StatusBadGateway, "feedback_failed", "failed to create feedback issue")
@@ -203,6 +264,24 @@ func firstLine(s string) string {
 		s = s[:i]
 	}
 	return strings.TrimSpace(s)
+}
+
+// feedbackTitleFromContent 从反馈正文推导标题：取首行并去掉常见 Markdown 前缀
+// （标题 #、引用 >、列表 -/*/+），避免把 "# " 之类的标记写进 Issue 标题。
+func feedbackTitleFromContent(s string) string {
+	line := firstLine(s)
+	for _, p := range []string{"#", ">"} {
+		for strings.HasPrefix(line, p) {
+			line = strings.TrimSpace(strings.TrimPrefix(line, p))
+		}
+	}
+	for _, p := range []string{"- ", "* ", "+ "} {
+		if strings.HasPrefix(line, p) {
+			line = strings.TrimSpace(strings.TrimPrefix(line, p))
+			break
+		}
+	}
+	return line
 }
 
 // truncateRunes 按字符数截断，避免在多字节字符中间切断。

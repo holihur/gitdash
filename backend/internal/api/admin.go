@@ -156,6 +156,7 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"feedback_enabled":     a.store.GetSetting("feedback_enabled") == "1",
 		"feedback_repo":        a.store.GetSetting("feedback_repo"),
 		"feedback_has_token":   a.store.GetSetting("feedback_token") != "",
+		"feedback_local":       a.feedbackSelfTarget(a.store.GetSetting("feedback_repo")),
 	})
 }
 
@@ -229,7 +230,7 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 		if v, ok := in["feedback_token"].(string); ok && strings.TrimSpace(v) != "" {
 			hasToken = true
 		}
-		if !hasToken {
+		if !hasToken && !a.feedbackSelfTarget(repoVal) {
 			writeCode(w, http.StatusBadRequest, "feedback_token_required", "feedback access token is required")
 			return
 		}

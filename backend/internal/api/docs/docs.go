@@ -1643,7 +1643,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "使用管理员配置的仓库地址与令牌，在对应仓库创建 Issue（GitHub / Gitea 兼容 API）。登录用户会附带身份信息。",
+                "description": "使用管理员配置的仓库地址与令牌，在对应仓库创建 Issue；若目标指向本实例仓库则直接创建本地 Issue（无需令牌）。登录用户会附带身份信息。",
                 "consumes": [
                     "application/json"
                 ],

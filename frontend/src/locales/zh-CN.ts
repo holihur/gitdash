@@ -22,7 +22,7 @@ export const zhCN: Messages = {
   feedback: {
     button: "反馈",
     title: "发送反馈",
-    hint: "告诉我们哪里出了问题、缺少什么或哪里不好用。你的反馈会以 issue 形式提交到我们的追踪仓库。",
+    hint: "告诉我们哪里出了问题、缺少什么或哪里不好用。支持 Markdown。你的反馈会以 issue 形式提交到我们的追踪仓库。",
     placeholder: "请描述你的反馈…",
     submit: "提交",
     sending: "提交中…",
@@ -1036,11 +1036,12 @@ export const zhCN: Messages = {
     ipBanRemoved: "已解封 {cidr}",
     ipBanFailed: "请求失败",
     feedbackTitle: "用户反馈",
-    feedbackHint: "默认关闭。开启后网页右下角会出现浮动按钮，用户提交的内容会以 issue 形式创建到下方配置的仓库（兼容 GitHub 或 Gitea/Forgejo API）。",
+    feedbackHint: "默认关闭。开启后网页右下角会出现浮动按钮，用户提交的内容会以 issue 形式创建到下方配置的仓库。地址填本实例自己的仓库地址并留空令牌即可直接在本地创建 issue；否则需要兼容 GitHub 或 Gitea/Forgejo API 的仓库与访问令牌。",
     feedbackEnable: "开启反馈",
     feedbackRepo: "Issue 仓库地址",
-    feedbackRepoPlaceholder: "https://github.com/owner/repo 或 https://host/owner/repo/issues",
+    feedbackRepoPlaceholder: "https://github.com/owner/repo 或 http://本实例/owner/repo",
     feedbackToken: "访问令牌",
+    feedbackTokenSelf: "本实例可留空",
   },
   user: {
     memberSince: "{date} 加入",

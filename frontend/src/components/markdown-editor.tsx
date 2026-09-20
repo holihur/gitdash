@@ -12,6 +12,8 @@ export function MarkdownEditor({
   onChange,
   placeholder,
   rows = 4,
+  maxLength,
+  autoFocus,
   className,
 }: {
   id?: string;
@@ -19,6 +21,8 @@ export function MarkdownEditor({
   onChange: (v: string) => void;
   placeholder?: string;
   rows?: number;
+  maxLength?: number;
+  autoFocus?: boolean;
   className?: string;
 }) {
   const { t } = useI18n();
@@ -50,6 +54,8 @@ export function MarkdownEditor({
         <Textarea
           id={id}
           rows={rows}
+          maxLength={maxLength}
+          autoFocus={autoFocus}
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}

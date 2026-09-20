@@ -843,6 +843,7 @@ export const ko: DeepPartial<Messages> = {
     feedbackRepo: "이슈 저장소 URL",
     feedbackRepoPlaceholder: "https://github.com/owner/repo 또는 https://host/owner/repo/issues",
     feedbackToken: "액세스 토큰",
+    feedbackTokenSelf: "이 인스턴스에서는 선택 사항",
   },
   user: {
     memberSince: "{date} 가입",

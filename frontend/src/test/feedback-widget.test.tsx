@@ -62,4 +62,33 @@ describe("FeedbackWidget", () => {
     });
     expect(await screen.findByText(/Feedback submitted as issue #7/)).toBeInTheDocument();
   });
+
+  it("支持 Markdown 预览，并以原文提交", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init });
+        if (init?.method === "POST") return jsonRes({ url: "/repo/oxc/oxc/issues/3", number: 3 }, 201);
+        return jsonRes({ enabled: true });
+      }),
+    );
+    renderWidget();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Feedback" }));
+    const textarea = await screen.findByPlaceholderText("Describe your feedback…");
+    await userEvent.type(textarea, "**bold** text");
+
+    // 切换到预览：Markdown 被渲染为 HTML。
+    await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+    const strong = await screen.findByText("bold");
+    expect(strong.tagName).toBe("STRONG");
+
+    // 提交的仍是 Markdown 原文，而不是渲染后的 HTML。
+    await userEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() => {
+      const post = calls.find((c) => c.init?.method === "POST");
+      expect(JSON.parse(String(post!.init!.body))).toMatchObject({ body: "**bold** text" });
+    });
+  });
 });

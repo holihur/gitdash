@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { MarkdownEditor } from "@/components/markdown-editor";
 
 /**
  * 全局反馈组件：管理员启用后，在页面右下角显示浮动按钮，
@@ -75,9 +75,10 @@ export function FeedbackWidget() {
             <DialogTitle>{t("feedback.title")}</DialogTitle>
             <DialogDescription>{t("feedback.hint")}</DialogDescription>
           </DialogHeader>
-          <Textarea
+          <MarkdownEditor
+            id="feedback-content"
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={setContent}
             placeholder={t("feedback.placeholder")}
             rows={6}
             maxLength={8000}

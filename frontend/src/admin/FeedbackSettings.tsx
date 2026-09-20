@@ -25,6 +25,17 @@ export function FeedbackSettings({ settings, onChange }: { settings: Settings | 
     }
   }, [settings]);
 
+  const isSelfTarget = (() => {
+    // 目标指向本实例仓库时无需访问令牌：优先用服务端判定，其次按输入地址的 host 即时判断。
+    if (settings?.feedback_local) return true;
+    try {
+      return new URL(repo).hostname === window.location.hostname;
+    } catch {
+      return false;
+    }
+  })();
+  const tokenReady = !!token || !!settings?.feedback_has_token || isSelfTarget;
+
   const save = async () => {
     setBusy(true);
     setMsg("");
@@ -77,6 +88,7 @@ export function FeedbackSettings({ settings, onChange }: { settings: Settings | 
           <Label htmlFor="feedback-token">
             {t("admin.feedbackToken")}
             {settings?.feedback_has_token && `（${t("admin.secretSet")}）`}
+            {isSelfTarget && `（${t("admin.feedbackTokenSelf")}）`}
           </Label>
           <Input
             id="feedback-token"
@@ -90,7 +102,7 @@ export function FeedbackSettings({ settings, onChange }: { settings: Settings | 
         <div>
           <Button
             onClick={save}
-            disabled={busy || (enabled && (!repo || (!token && !settings?.feedback_has_token)))}
+            disabled={busy || (enabled && (!repo || !tokenReady))}
           >
             {t("admin.save")}
           </Button>
