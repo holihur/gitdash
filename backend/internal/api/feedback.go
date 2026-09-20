@@ -21,6 +21,8 @@ const (
 	feedbackMaxSubmissions = 10
 	feedbackWindow         = 15 * time.Minute
 	feedbackHTTPTimeout    = 15 * time.Second
+	// feedbackLabelName 是本地反馈 issue 自动附带的标签。
+	feedbackLabelName = "feedback"
 )
 
 // feedbackSettings 返回管理员配置的反馈开关、目标仓库地址与访问令牌。
@@ -180,7 +182,7 @@ func (a *API) submitFeedback(w http.ResponseWriter, r *http.Request) {
 		if author == "" {
 			author = owner
 		}
-		issue, created := a.newIssue(w, owner, repo, author, title, body)
+		issue, created := a.newIssue(w, owner, repo, author, title, body, feedbackLabelName)
 		if !created {
 			return
 		}

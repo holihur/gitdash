@@ -233,6 +233,15 @@ func TestFeedbackSelfTarget(t *testing.T) {
 	if !strings.Contains(issues[0].Body, "https://gitdash.example/repo/a/b") {
 		t.Fatalf("local issue body missing page url: %q", issues[0].Body)
 	}
+
+	// 自动打上 feedback 标签。
+	issueLabels, err := st.IssueLabels("oxc", "oxc", []int64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issueLabels[1]) != 1 || issueLabels[1][0].Name != "feedback" {
+		t.Fatalf("stored labels = %+v, want one feedback label", issueLabels[1])
+	}
 }
 
 // TestAdminFeedbackSelfTarget 管理员把反馈指向本实例仓库时无需填写访问令牌。

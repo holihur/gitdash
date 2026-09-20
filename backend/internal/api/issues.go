@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"net/http"
 	"regexp"
@@ -90,7 +92,10 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 
 // newIssue 校验并创建 issue（校验/权限失败时已写入响应），推送通知与 webhook 后返回
 // 组装好的 issue。createIssue 与入站 webhook 共用此逻辑。
-func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body string) (map[string]any, bool) {
+//
+// 可选的 labelNames 会在创建后自动附到 issue 上（标签不存在时按需创建），
+// 目前用于把反馈 issue 打上 "feedback" 标签。
+func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body string, labelNames ...string) (map[string]any, bool) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		writeCode(w, http.StatusBadRequest, "title_required", "title is required")
@@ -118,8 +123,72 @@ func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body s
 		internalError(w, err)
 		return nil, false
 	}
+	if len(labelNames) > 0 {
+		if err := a.attachIssueLabels(owner, name, issue.Number, labelNames...); err != nil {
+			// 打标签失败不影响 issue 本身；记录日志便于排查。
+			logx.Warnf("attach issue labels %s/%s#%d: %v", owner, name, issue.Number, err)
+		}
+	}
 	a.notify(owner, name, "issue", "opened", author, issue.Number, issue.Title, "")
 	return a.enrichIssues(owner, name, []store.Issue{issue})[0], true
+}
+
+// attachIssueLabels 把标签附加到指定 issue（仅用于新建的 issue）：标签不存在时自动创建。
+// 供内部调用（如反馈 issue 自动打标）使用。
+func (a *API) attachIssueLabels(owner, repo string, number int64, names ...string) error {
+	labels, err := a.store.ListLabels(owner, repo)
+	if err != nil {
+		return err
+	}
+	byName := make(map[string]int64, len(labels))
+	for _, l := range labels {
+		byName[strings.ToLower(l.Name)] = l.ID
+	}
+	ids := make([]int64, 0, len(names))
+	for _, n := range names {
+		name := strings.TrimSpace(n)
+		if name == "" {
+			continue
+		}
+		id, ok := byName[strings.ToLower(name)]
+		if !ok {
+			created, err := a.store.CreateLabel(owner, repo, name, issueLabelColor(name))
+			switch {
+			case err == nil:
+				id = created.ID
+			case errors.Is(err, store.ErrExists):
+				// 并发下已被创建：重查一次。
+				labels, err = a.store.ListLabels(owner, repo)
+				if err != nil {
+					return err
+				}
+				for _, l := range labels {
+					if strings.EqualFold(l.Name, name) {
+						id, ok = l.ID, true
+						break
+					}
+				}
+				if !ok {
+					return fmt.Errorf("label %q not found after create", name)
+				}
+			default:
+				return err
+			}
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return a.store.SetIssueLabels(owner, repo, number, ids)
+}
+
+// issueLabelColor 返回内部自动创建标签时使用的颜色。
+func issueLabelColor(name string) string {
+	if strings.EqualFold(name, "feedback") {
+		return "fbca04"
+	}
+	return "ededed"
 }
 
 // getIssue 获取单个 issue（含标签 / 里程碑），供 issue 详情页使用。
