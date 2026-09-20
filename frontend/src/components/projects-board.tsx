@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, GanttChartSquare, KanbanSquare, Layers, List, Pencil, SquarePlus, X } from "lucide-react";
+import { ArrowLeft, GanttChartSquare, KanbanSquare, Layers, List, Pencil, Plus, SquarePlus, X } from "lucide-react";
 import { api, type Project, type ProjectBoard, type ProjectCard } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
@@ -109,14 +109,15 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
   };
 
   // 新建卡片：由对话框提交名称 + Markdown 详情（或关联 issue）。
+  // 目标列/泳道由对话框选择（看板单元格会预选该格，列表 / 甘特视图用默认首列首泳道）。
   const createCard = async (draft: CardDraft) => {
-    if (!addTarget) return;
+    if (!draft.column_id) return;
     if (!draft.issue_number && !draft.title.trim()) return;
     setBusy(true);
     try {
       await api.createCard(owner, name, project.id, {
-        column_id: addTarget.columnId,
-        swimlane_id: addTarget.swimlaneId,
+        column_id: draft.column_id,
+        swimlane_id: draft.swimlane_id,
         issue_number: draft.issue_number || undefined,
         title: draft.title.trim() || undefined,
         body: draft.body || undefined,
@@ -287,6 +288,18 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
 
       {canWrite && (
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            disabled={busy || columns.length === 0}
+            onClick={() =>
+              setAddTarget({ columnId: columns[0]?.id ?? 0, swimlaneId: lanes[0]?.id ?? UNGROUPED })
+            }
+          >
+            <Plus className="h-4 w-4" />
+            {t("projects.addCard")}
+          </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={() => { setNewColumn(""); setColumnDialogOpen(true); }}>
             <SquarePlus className="h-4 w-4" />
             {t("projects.addColumn")}
@@ -358,6 +371,8 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
         open={editCard !== null}
         mode="edit"
         card={editCard}
+        columns={columns}
+        swimlanes={lanes}
         busy={busy}
         onClose={() => setEditCard(null)}
         onSubmit={(d) => editCard && void saveCard(editCard, d)}
@@ -366,6 +381,9 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
       <ProjectCardDialog
         open={addTarget !== null}
         mode="create"
+        columns={columns}
+        swimlanes={lanes}
+        defaultTarget={addTarget}
         busy={busy}
         onClose={() => setAddTarget(null)}
         onSubmit={(d) => void createCard(d)}

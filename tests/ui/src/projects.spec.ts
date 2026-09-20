@@ -61,6 +61,16 @@ test.describe("@happy 项目看板", () => {
     await waitToastsGone(page);
     await expect(page.getByText("First card")).toBeVisible();
 
+    // 列表视图也能新建卡片（全局 Add card + 选择列/泳道）
+    await page.getByRole("button", { name: "List" }).click();
+    await page.getByRole("button", { name: "Add card" }).click();
+    const listDlg = page.getByRole("dialog");
+    await listDlg.locator("#card-title").fill("List card");
+    await listDlg.getByRole("button", { name: "Add card" }).click();
+    await expect(toast(page)).toContainText("Card created");
+    await waitToastsGone(page);
+    await expect(page.getByText("List card")).toBeVisible();
+
     // 重命名项目（PATCH /projects/{}）
     await waitToastsGone(page);
     await page.getByTitle("Rename project").click();
