@@ -186,7 +186,7 @@ function BoardCard({
     >
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0 flex-1">
-          {card.issue_number != null ? (
+          {card.issue_number ? (
             <>
               <p className="truncate">{card.issue_title || `#${card.issue_number}`}</p>
               <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">

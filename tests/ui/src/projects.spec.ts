@@ -57,6 +57,10 @@ test.describe("@happy 项目看板", () => {
     await cardDlg.getByRole("button", { name: "Add card" }).click();
     await expect(toast(page)).toContainText("Card created");
 
+    // 卡片必须出现在看板上（回归：文本卡片曾被当成 issue #0 渲染，标题不显示）
+    await waitToastsGone(page);
+    await expect(page.getByText("First card")).toBeVisible();
+
     // 重命名项目（PATCH /projects/{}）
     await waitToastsGone(page);
     await page.getByTitle("Rename project").click();
