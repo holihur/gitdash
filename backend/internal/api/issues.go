@@ -122,6 +122,41 @@ func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body s
 	return a.enrichIssues(owner, name, []store.Issue{issue})[0], true
 }
 
+// getIssue 获取单个 issue（含标签 / 里程碑），供 issue 详情页使用。
+//
+//	@Summary     获取 Issue
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者（owner 路由时）"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Success     200 {object} store.Issue
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number} [get]
+//	@Router      /repos/{name}/issues/{number} [get]
+func (a *API) getIssue(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	number, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || number < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
+		return
+	}
+	issue, err := a.store.GetIssue(owner, name, number)
+	if errors.Is(err, store.ErrNotFound) {
+		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
+		return
+	}
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
+}
+
 // updateIssue 编辑 issue（标题 / 正文 / 状态，字段均可选）。
 //
 //	@Summary     编辑 Issue

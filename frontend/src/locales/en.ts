@@ -477,6 +477,8 @@ export const en = {
     openedOn: "opened by {author} · {date}",
     closedOn: "closed by {author} · {date}",
     noBody: "No description provided.",
+    backToList: "Back to issues",
+    notFound: "Issue not found",
     loadFailed: "Failed to load issues: {error}",
     labels: "Labels",
     milestones: "Milestones",

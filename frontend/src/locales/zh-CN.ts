@@ -475,6 +475,8 @@ export const zhCN: Messages = {
     openedOn: "{author} 于 {date} 提出",
     closedOn: "{author} 于 {date} 关闭",
     noBody: "没有提供描述。",
+    backToList: "返回 Issue 列表",
+    notFound: "Issue 不存在",
     loadFailed: "加载失败：{error}",
     labels: "标签",
     milestones: "里程碑",

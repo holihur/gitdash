@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Flag, MessageSquare, Plus, Search, Tag } from "lucide-react";
-import { api, type ByokKey, type Issue, type Label, type Milestone } from "@/lib/api";
+import { api, type Issue, type Label, type Milestone } from "@/lib/api";
 import { useQueryState } from "@/lib/query-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,16 +9,14 @@ import Pagination from "@/components/ui/pagination";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import ListSkeleton from "@/components/list-skeleton";
-import ConfirmDialog from "@/components/confirm-dialog";
 import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
-import { CreateIssueDialog, EditIssueDialog, CopilotLaunchDialog } from "@/components/issues/dialogs";
-import { IssueItem, type IssueDraft } from "@/components/issues/issue-item";
+import { CreateIssueDialog } from "@/components/issues/dialogs";
+import { IssueItem } from "@/components/issues/issue-item";
 import { IssueFilters } from "@/components/issues/issue-filters";
 
 export default function RepoIssues({ owner, name, role }: { owner: string; name: string; role?: "owner" | "read" | "write" }) {
   const { t, to } = useI18n();
-  const navigate = useNavigate();
   const canWrite = role === "owner" || role === "write";
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issueTotal, setIssueTotal] = useState(0);
@@ -46,10 +43,6 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
-  const [drafts, setDrafts] = useState<Record<number, IssueDraft>>({});
-  const [savingMeta, setSavingMeta] = useState<number | null>(null);
 
   // 管理对话框
   const [labelsOpen, setLabelsOpen] = useState(false);
@@ -60,56 +53,6 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [creating, setCreating] = useState(false);
-
-  // 编辑 / 删除 issue
-  const [editTarget, setEditTarget] = useState<Issue | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editBody, setEditBody] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Issue | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // 用 Copilot 修复 issue
-  const [copilotTarget, setCopilotTarget] = useState<Issue | null>(null);
-  const [byokKeys, setByokKeys] = useState<ByokKey[] | null>(null);
-  const [copilotByokId, setCopilotByokId] = useState(0);
-  const [copilotNote, setCopilotNote] = useState("");
-  const [copilotBusy, setCopilotBusy] = useState(false);
-
-  const openCopilot = async (issue: Issue) => {
-    setCopilotTarget(issue);
-    setCopilotNote("");
-    if (byokKeys === null) {
-      try {
-        const keys = await api.listByok();
-        setByokKeys(keys);
-        setCopilotByokId(keys[0]?.id ?? 0);
-      } catch {
-        setByokKeys([]);
-      }
-    } else {
-      setCopilotByokId(byokKeys[0]?.id ?? 0);
-    }
-  };
-
-  const launchCopilot = async () => {
-    if (!copilotTarget || !copilotByokId) return;
-    setCopilotBusy(true);
-    try {
-      const session = await api.createCopilot(owner, name, {
-        byok_id: copilotByokId,
-        issue_number: copilotTarget.number,
-        prompt: copilotNote.trim(),
-      });
-      toast.success(t("copilot.launch"));
-      setCopilotTarget(null);
-      navigate(`/repo/${owner}/${name}/copilot?copilot=${session.id}`);
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setCopilotBusy(false);
-    }
-  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -162,141 +105,6 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
       toast.error(apiErrorMsg(to, e));
     } finally {
       setCreating(false);
-    }
-  };
-
-  const setState = async (issue: Issue, state: "open" | "closed") => {
-    setBusyIds((s) => new Set(s).add(issue.id));
-    try {
-      await api.setIssueState(owner, name, issue.number, state);
-      toast.success(
-        state === "closed"
-          ? t("issues.stateClosed", { number: issue.number })
-          : t("issues.stateOpen", { number: issue.number }),
-      );
-      load();
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setBusyIds((s) => {
-        const n = new Set(s);
-        n.delete(issue.id);
-        return n;
-      });
-    }
-  };
-
-  const openEdit = (issue: Issue) => {
-    setEditTarget(issue);
-    setEditTitle(issue.title);
-    setEditBody(issue.body);
-  };
-
-  const saveEdit = async () => {
-    if (!editTarget || !editTitle.trim()) return;
-    const patch: { title?: string; body?: string } = {};
-    if (editTitle.trim() !== editTarget.title) patch.title = editTitle.trim();
-    if (editBody !== editTarget.body) patch.body = editBody;
-    if (Object.keys(patch).length === 0) {
-      setEditTarget(null);
-      return;
-    }
-    setSavingEdit(true);
-    try {
-      await api.updateIssue(owner, name, editTarget.number, patch);
-      toast.success(t("issues.edited", { number: editTarget.number }));
-      setEditTarget(null);
-      load();
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
-  const togglePin = async (issue: Issue) => {
-    setBusyIds((s) => new Set(s).add(issue.id));
-    try {
-      await api.updateIssue(owner, name, issue.number, { pinned: !issue.pinned });
-      toast.success(
-        issue.pinned
-          ? t("issues.unpinned", { number: issue.number })
-          : t("issues.pinnedMsg", { number: issue.number }),
-      );
-      load();
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setBusyIds((s) => {
-        const n = new Set(s);
-        n.delete(issue.id);
-        return n;
-      });
-    }
-  };
-
-  const removeIssue = async (issue: Issue) => {
-    setDeleting(true);
-    try {
-      await api.deleteIssue(owner, name, issue.number);
-      toast.success(t("issues.deleted", { number: issue.number }));
-      setDeleteTarget(null);
-      if (expanded === issue.number) setExpanded(null);
-      load();
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const toggleExpand = (issue: Issue) => {
-    const next = expanded === issue.number ? null : issue.number;
-    setExpanded(next);
-    if (next !== null && !drafts[issue.number]) {
-      setDrafts((d) => ({
-        ...d,
-        [issue.number]: {
-          labels: (issue.labels ?? []).map((l) => l.id),
-          milestone: issue.milestone?.id ?? 0,
-        },
-      }));
-    }
-  };
-
-  const toggleDraftLabel = (num: number, id: number) => {
-    setDrafts((d) => {
-      const cur = d[num] ?? { labels: [], milestone: 0 };
-      const has = cur.labels.includes(id);
-      return {
-        ...d,
-        [num]: {
-          ...cur,
-          labels: has ? cur.labels.filter((x) => x !== id) : [...cur.labels, id],
-        },
-      };
-    });
-  };
-
-  const setDraftMilestone = (num: number, id: number) => {
-    setDrafts((d) => ({
-      ...d,
-      [num]: { ...(d[num] ?? { labels: [], milestone: 0 }), milestone: id },
-    }));
-  };
-
-  const saveMeta = async (issue: Issue) => {
-    const draft = drafts[issue.number] ?? { labels: [], milestone: 0 };
-    setSavingMeta(issue.number);
-    try {
-      await api.setIssueLabels(owner, name, issue.number, draft.labels);
-      await api.setIssueMilestone(owner, name, issue.number, draft.milestone);
-      toast.success(t("issues.metaSaved", { number: issue.number }));
-      load();
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setSavingMeta(null);
     }
   };
 
@@ -413,41 +221,16 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
 
       {!loading && shown.length > 0 && (
         <div className="divide-y divide-border overflow-hidden rounded-lg border bg-card">
-          {shown.map((issue) => {
-            const busy = busyIds.has(issue.id);
-            const openDetail = expanded === issue.number;
-            const issueLabels = issue.labels ?? [];
-            const draft = drafts[issue.number] ?? { labels: [], milestone: 0 };
-            const metaChanged =
-              draft.labels.length !== issueLabels.length ||
-              draft.labels.some((id) => !issueLabels.some((l) => l.id === id)) ||
-              (issue.milestone?.id ?? 0) !== draft.milestone;
-            return (
-              <IssueItem
-                key={issue.id}
-                issue={issue}
-                openDetail={openDetail}
-                busy={busy}
-                draft={draft}
-                labels={labels}
-                milestones={milestones}
-                canWrite={canWrite}
-                savingMeta={savingMeta === issue.number}
-                metaChanged={metaChanged}
-                owner={owner}
-                name={name}
-                onToggleExpand={() => toggleExpand(issue)}
-                onToggleState={() => setState(issue, issue.state === "open" ? "closed" : "open")}
-                onTogglePin={() => togglePin(issue)}
-                onEdit={() => openEdit(issue)}
-                onFixWithCopilot={() => openCopilot(issue)}
-                onDelete={() => setDeleteTarget(issue)}
-                onToggleLabel={(id) => toggleDraftLabel(issue.number, id)}
-                onSetMilestone={(id) => setDraftMilestone(issue.number, id)}
-                onSaveMeta={() => saveMeta(issue)}
-              />
-            );
-          })}
+          {shown.map((issue) => (
+            <IssueItem
+              key={issue.id}
+              issue={issue}
+              owner={owner}
+              name={name}
+              canWrite={canWrite}
+              onChanged={load}
+            />
+          ))}
         </div>
       )}
 
@@ -460,41 +243,6 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
           onPageSizeChange={setPageSize}
         />
       )}
-
-      <EditIssueDialog
-        open={editTarget !== null}
-        number={editTarget?.number ?? 0}
-        title={editTitle}
-        onTitleChange={setEditTitle}
-        body={editBody}
-        onBodyChange={setEditBody}
-        busy={savingEdit}
-        onSubmit={saveEdit}
-        onCancel={() => setEditTarget(null)}
-      />
-
-      <CopilotLaunchDialog
-        open={copilotTarget !== null}
-        number={copilotTarget?.number ?? 0}
-        byokKeys={byokKeys}
-        byokId={copilotByokId}
-        onByokChange={setCopilotByokId}
-        note={copilotNote}
-        onNoteChange={setCopilotNote}
-        busy={copilotBusy}
-        onSubmit={launchCopilot}
-        onCancel={() => setCopilotTarget(null)}
-      />
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title={t("issues.deleteConfirmTitle")}
-        description={t("issues.deleteConfirmDesc", { number: deleteTarget?.number ?? 0 })}
-        confirmText={t("common.delete")}
-        busy={deleting}
-        onConfirm={() => deleteTarget && removeIssue(deleteTarget)}
-      />
 
       <LabelsManager
         open={labelsOpen}

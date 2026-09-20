@@ -12,6 +12,8 @@ export interface RepoRouting {
   blameParam: boolean;
   urlRef: string;
   lineParam: number | null;
+  /** issues tab 下的 issue 编号（0 = 列表页） */
+  issueNumber: number;
   setParams: (patch: Record<string, string | null>) => void;
 }
 
@@ -35,6 +37,7 @@ export function useRepoRouting(): RepoRouting {
   const blameParam = route.tab === "code" && route.kind === "blame";
   const urlRef = searchParams.get("ref") ?? "";
   const lineParam = Number(searchParams.get("line")) || null;
+  const issueNumber = route.issueNumber;
 
   // 兼容既有 `setParams` 语义（CodeTab / tab 切换均调用），把变更翻译为路径化导航。
   const setParams = useCallback(
@@ -103,5 +106,5 @@ export function useRepoRouting(): RepoRouting {
     navigate(`${pathname}${qs ? `?${qs}` : ""}`, { replace: true });
   }, [searchParams, navigate, owner, name]);
 
-  return { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, setParams };
+  return { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, issueNumber, setParams };
 }

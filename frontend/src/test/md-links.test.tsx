@@ -10,7 +10,7 @@ import {
   rewriteMarkdownHtml,
   slugifyHeading,
 } from "@/lib/md-links";
-import { buildRepoPath, parseRepoRoute } from "@/lib/repo-url";
+import { buildRepoPath, buildIssuePath, parseRepoRoute } from "@/lib/repo-url";
 
 describe("slugifyHeading", () => {
   it("按 GitHub 规则生成锚点 slug", () => {
@@ -82,24 +82,40 @@ describe("buildRepoHref", () => {
 
 describe("repo-url 路径化路由", () => {
   it("解析 tree / blob / blame / tab 路径", () => {
-    expect(parseRepoRoute("")).toEqual({ tab: "code", kind: "tree", path: "" });
+    expect(parseRepoRoute("")).toEqual({ tab: "code", kind: "tree", path: "", issueNumber: 0 });
     expect(parseRepoRoute("tree/docs/sub")).toEqual({
       tab: "code",
       kind: "tree",
       path: "docs/sub",
+      issueNumber: 0,
     });
     expect(parseRepoRoute("blob/docs/projects.md")).toEqual({
       tab: "code",
       kind: "blob",
       path: "docs/projects.md",
+      issueNumber: 0,
     });
     expect(parseRepoRoute("blame/README.md")).toEqual({
       tab: "code",
       kind: "blame",
       path: "README.md",
+      issueNumber: 0,
     });
-    expect(parseRepoRoute("issues")).toEqual({ tab: "issues", kind: "tree", path: "" });
-    expect(parseRepoRoute("commits")).toEqual({ tab: "commits", kind: "tree", path: "" });
+    expect(parseRepoRoute("issues")).toEqual({ tab: "issues", kind: "tree", path: "", issueNumber: 0 });
+    expect(parseRepoRoute("commits")).toEqual({ tab: "commits", kind: "tree", path: "", issueNumber: 0 });
+  });
+
+  it("解析 issue 详情路径与编号", () => {
+    expect(parseRepoRoute("issues/42")).toEqual({
+      tab: "issues",
+      kind: "tree",
+      path: "",
+      issueNumber: 42,
+    });
+    // 非法编号回退列表页
+    expect(parseRepoRoute("issues/abc").issueNumber).toBe(0);
+    expect(parseRepoRoute("issues/0").issueNumber).toBe(0);
+    expect(buildIssuePath("alice", "demo", 42)).toBe("/repo/alice/demo/issues/42");
   });
 
   it("构造仓库路径并编码文件名", () => {

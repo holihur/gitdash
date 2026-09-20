@@ -35,6 +35,8 @@ export interface RepoRoute {
   kind: RepoCodeKind;
   /** 相对仓库根的路径（无前导 / 尾随斜杠）；非 code tab 为空串 */
   path: string;
+  /** issues tab 下指向的 issue 编号；0 表示列表页 */
+  issueNumber: number;
 }
 
 const encodePath = (p: string): string =>
@@ -44,21 +46,37 @@ const encodePath = (p: string): string =>
     .map(encodeURIComponent)
     .join("/");
 
+// 解析 issue 详情路径里的编号：仅接受正整数，其余归为列表页。
+const parseIssueNumber = (s: string): number => {
+  const n = Number(s);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+};
+
 /** 解析 `/repo/:owner/:name` 之后的 splat 部分（React Router 已解码）。 */
 export function parseRepoRoute(splat: string | undefined): RepoRoute {
   const rest = (splat ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
-  if (!rest) return { tab: "code", kind: "tree", path: "" };
+  if (!rest) return { tab: "code", kind: "tree", path: "", issueNumber: 0 };
   const slash = rest.indexOf("/");
   const head = slash < 0 ? rest : rest.slice(0, slash);
   const tail = slash < 0 ? "" : rest.slice(slash + 1);
-  if (head === "tree") return { tab: "code", kind: "tree", path: tail };
-  if (head === "blob") return { tab: "code", kind: "blob", path: tail };
-  if (head === "blame") return { tab: "code", kind: "blame", path: tail };
+  if (head === "tree") return { tab: "code", kind: "tree", path: tail, issueNumber: 0 };
+  if (head === "blob") return { tab: "code", kind: "blob", path: tail, issueNumber: 0 };
+  if (head === "blame") return { tab: "code", kind: "blame", path: tail, issueNumber: 0 };
   if (head !== "code" && (REPO_TABS as readonly string[]).includes(head)) {
-    return { tab: head as RepoTab, kind: "tree", path: "" };
+    return {
+      tab: head as RepoTab,
+      kind: "tree",
+      path: "",
+      issueNumber: head === "issues" ? parseIssueNumber(tail) : 0,
+    };
   }
   // 未知路径：回退代码根目录
-  return { tab: "code", kind: "tree", path: "" };
+  return { tab: "code", kind: "tree", path: "", issueNumber: 0 };
+}
+
+/** 构造 issue 详情页路径：/repo/:owner/:name/issues/<number> */
+export function buildIssuePath(owner: string, name: string, number: number): string {
+  return `${buildRepoPath(owner, name, { tab: "issues" })}/${number}`;
 }
 
 /**

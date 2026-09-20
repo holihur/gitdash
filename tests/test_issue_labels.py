@@ -32,17 +32,21 @@ def test_labels_crud_and_assign(lm_env):
     an, c, repo = lm_env
     c.post(_p(an, repo) + "/issues", json={"title": "issue1"}, expect=201)
 
-    l1 = c.post(_p(an, repo) + "/labels", json={"name": "bug", "color": "d73a4a"}, expect=201).json()
-    l2 = c.post(_p(an, repo) + "/labels", json={"name": "docs"}, expect=201).json()
+    # 新仓库已预置默认标签（含 bug）。
+    seeded = c.get(_p(an, repo) + "/labels", expect=200).json()
+    assert len(seeded) > 0
+    bug = next(l for l in seeded if l["name"] == "bug")
+
+    l2 = c.post(_p(an, repo) + "/labels", json={"name": "regression"}, expect=201).json()
     labels = c.get(_p(an, repo) + "/labels", expect=200).json()
-    assert len(labels) == 2
+    assert len(labels) == len(seeded) + 1
 
     # 校验错误
-    c.post(_p(an, repo) + "/labels", json={"name": "bug"}, expect=409)
+    c.post(_p(an, repo) + "/labels", json={"name": "bug"}, expect=409)  # 与默认标签同名
     c.post(_p(an, repo) + "/labels", json={"name": "x", "color": "red"}, expect=400)
 
     # 打/换/清标签
-    r = c.post(_p(an, repo) + "/issues/1/labels", json={"label_ids": [l1["id"], l2["id"]]}, expect=200).json()
+    r = c.post(_p(an, repo) + "/issues/1/labels", json={"label_ids": [bug["id"], l2["id"]]}, expect=200).json()
     assert len(r["labels"]) == 2
     issues = c.get(_p(an, repo) + "/issues", expect=200).json()
     assert len(issues[0]["labels"]) == 2
@@ -51,9 +55,9 @@ def test_labels_crud_and_assign(lm_env):
     c.post(_p(an, repo) + "/issues/99/labels", json={"label_ids": []}, expect=404)
 
     # 改名/删除
-    c.patch(_p(an, repo) + f"/labels/{l1['id']}", json={"name": "bugfix"}, expect=200)
-    c.delete(_p(an, repo) + f"/labels/{l1['id']}", expect=204)
-    c.delete(_p(an, repo) + f"/labels/{l1['id']}", expect=404)
+    c.patch(_p(an, repo) + f"/labels/{bug['id']}", json={"name": "bugfix"}, expect=200)
+    c.delete(_p(an, repo) + f"/labels/{bug['id']}", expect=204)
+    c.delete(_p(an, repo) + f"/labels/{bug['id']}", expect=404)
 
 
 def test_milestones_crud_and_assign(lm_env):

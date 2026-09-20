@@ -143,6 +143,29 @@ def test_issue_requires_auth(anon, repo_factory):
     anon.patch(f"/repos/{repo}/issues/1", json={"state": "closed"}, expect=401)
 
 
+def test_issue_get_single(repo_factory):
+    """单个 issue 详情：含标签/里程碑，简写与 owner 限定路由 + 404/400。"""
+    repo, client = repo_factory()
+    it = client.post(
+        f"/repos/{repo}/issues", json={"title": "read me", "body": "the body"}, expect=201
+    ).json()
+    n = it["number"]
+
+    got = client.get(f"/repos/{repo}/issues/{n}", expect=200).json()
+    assert got["number"] == n
+    assert got["title"] == "read me"
+    assert got["body"] == "the body"
+    assert got["labels"] == []
+    assert got["milestone"] is None
+
+    me = client.get("/me", expect=200).json()["username"]
+    got2 = client.get(f"/users/{me}/repos/{repo}/issues/{n}", expect=200).json()
+    assert got2["number"] == n
+
+    assert client.get(f"/repos/{repo}/issues/9999").status_code == 404
+    assert client.get(f"/repos/{repo}/issues/0").status_code == 400
+
+
 def uuid4hex() -> str:
     import uuid
 

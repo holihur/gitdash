@@ -32,7 +32,7 @@ export default function RepoView() {
   const locale = dateLocale(lang);
   const navigate = useNavigate();
 
-  const { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, setParams } =
+  const { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, issueNumber, setParams } =
     useRepoRouting();
 
   const {
@@ -314,7 +314,7 @@ export default function RepoView() {
 
         <TabsContent value="issues">
           <Suspense fallback={<TabFallback />}>
-            <IssuesTab owner={owner} name={name} role={repo?.role} />
+            <IssuesTab owner={owner} name={name} role={repo?.role} issueNumber={issueNumber} />
           </Suspense>
         </TabsContent>
 

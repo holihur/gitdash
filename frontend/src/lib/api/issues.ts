@@ -19,6 +19,8 @@ export const issuesApi = {
     const qs = params.toString();
     return reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${qs ? `?${qs}` : ""}`);
   },
+  getIssue: (owner: string, name: string, number: number) =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`),
   createIssue: (owner: string, name: string, title: string, body: string) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues`, {
       method: "POST",
