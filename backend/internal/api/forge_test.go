@@ -10,20 +10,6 @@ import (
 	"testing"
 )
 
-// forgeTestServer 起一个按路径分发的 mock forge API。
-func forgeTestServer(t *testing.T, routes map[string]func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h, ok := routes[r.URL.Path]; ok {
-			h(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
-}
-
 func writeJSONTest(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)

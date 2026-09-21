@@ -434,8 +434,8 @@ type importRow struct {
 	Repo       string `gorm:"primaryKey;size:255"`
 	SourceURL  string `gorm:"not null"`
 	Credential string `gorm:"not null;default:''"` // 加密的 HTTPS 账号凭据（"user:token"），OAuth 账号导入用
-	Status     string `gorm:"not null;default:''"`   // queued/running/synced/failed；空 = 旧数据已导入
-	Error      string `gorm:"not null;default:''"`   // 最近一次失败原因
+	Status     string `gorm:"not null;default:''"` // queued/running/synced/failed；空 = 旧数据已导入
+	Error      string `gorm:"not null;default:''"` // 最近一次失败原因
 	CreatedAt  string `gorm:"not null"`
 }
 

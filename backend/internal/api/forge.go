@@ -169,7 +169,7 @@ func forgeExchangeToken(ctx context.Context, cfg forgeConfig, code, redirect str
 	if err != nil {
 		return forgeToken{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return forgeToken{}, fmt.Errorf("%s token exchange failed: %d %s", cfg.Name, resp.StatusCode, strings.TrimSpace(string(raw)))
@@ -205,7 +205,7 @@ func forgeGetJSON(ctx context.Context, rawURL, token string, out any) (int, erro
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return resp.StatusCode, fmt.Errorf("%s api error: %d %s", rawURL, resp.StatusCode, strings.TrimSpace(string(body)))

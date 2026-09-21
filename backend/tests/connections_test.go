@@ -68,7 +68,7 @@ func (c *connClient) do(method, path string, body string) (int, []byte, http.Hea
 	if err != nil {
 		c.t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, raw, resp.Header
 }
@@ -285,7 +285,7 @@ func TestInstanceDocsURL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		var m map[string]any
 		_ = json.NewDecoder(res.Body).Decode(&m)
 		s, _ := m["docs_url"].(string)
