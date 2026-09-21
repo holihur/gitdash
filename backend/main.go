@@ -17,6 +17,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"gitdash/backend/internal/api"
+	"gitdash/backend/internal/authz"
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/grpcserver"
@@ -65,6 +66,14 @@ func spoolWrite(dir string, ev webhooks.Event) {
 func run() {
 	logx.Setup()
 	defer logx.Close()
+
+	// 仅 SSH 网关角色：不开数据库、不启 HTTP API，所有鉴权通过授权面 gRPC 完成。
+	// 未设置 GITDASH_ROLE/GITDASH_SSH_ONLY 时保持原有 all-in-one 行为不变。
+	if sshGatewayMode() {
+		runSSHGateway()
+		return
+	}
+
 	dataDir := getenv("GITDASH_DATA", "./data")
 	httpAddr := getenv("GITDASH_HTTP_ADDR", ":8080")
 	sshAddr := getenv("GITDASH_SSH_ADDR", ":2222")
@@ -173,13 +182,22 @@ func run() {
 	}()
 
 	// 授权面 gRPC（默认关闭）：仅当显式设置 GITDASH_GRPC_ADDR 时启动，
-	// 供后续独立的 SSH 网关调用；不影响现有进程内 SSH 的任何行为。
+	// 供独立的 SSH 网关（GITDASH_ROLE=ssh）通过 gRPC 调用；不影响现有进程内 SSH 的任何行为。
 	if grpcAddr != "" {
 		grpcToken := os.Getenv("GITDASH_GRPC_TOKEN")
+		grpcCert := strings.TrimSpace(os.Getenv("GITDASH_GRPC_TLS_CERT"))
+		grpcKey := strings.TrimSpace(os.Getenv("GITDASH_GRPC_TLS_KEY"))
 		go func() {
-			logx.Infof("gitdash grpc authz listening on %s", grpcAddr)
-			if err := grpcserver.Serve(grpcAddr, grpcToken, st); err != nil {
-				logx.Fatalf("grpc authz server: %v", err)
+			useTLS := grpcCert != "" && grpcKey != ""
+			logx.Infof("gitdash grpc authz listening on %s (tls=%v)", grpcAddr, useTLS)
+			var gerr error
+			if useTLS {
+				gerr = grpcserver.ServeTLS(grpcAddr, grpcToken, grpcCert, grpcKey, st)
+			} else {
+				gerr = grpcserver.Serve(grpcAddr, grpcToken, st)
+			}
+			if gerr != nil {
+				logx.Fatalf("grpc authz server: %v", gerr)
 			}
 		}()
 	}
@@ -381,11 +399,78 @@ func preReceiveHook(owner, repo string) error {
 		// 目录初始化失败放行：保护逻辑故障不应阻断 push（fail-open）
 		return nil //nolint:nilerr // intentional fail-open
 	}
+
+	// 分机部署：分支保护规则也走授权面，SSH 机无需数据库访问。
+	if sshGatewayMode() {
+		az, closeAZ, err := dialAuthorizer()
+		if err != nil {
+			logx.Infof("pre-receive: dial authorization plane: %v (allow)", err)
+			return nil //nolint:nilerr // intentional fail-open
+		}
+		defer closeAZ()
+		return gitsvc.CheckBranchProtectionWithAuthorizer(context.Background(), az, owner, repo, refs)
+	}
+
 	dbPath := os.Getenv("GITDASH_DB")
 	if dbPath == "" {
 		dbPath = filepath.Join(dataDir, "gitdash.db")
 	}
 	return gitsvc.CheckBranchProtection(dbPath, owner, repo, refs)
+}
+
+// sshGatewayMode 报告当前进程是否以“仅 SSH 网关”角色运行。
+// 该模式下不打开数据库、不启动 HTTP API，全部鉴权走授权面 gRPC；
+// 未显式开启时保持原有 all-in-one（API + 进程内 SSH）行为。
+func sshGatewayMode() bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("GITDASH_ROLE")), "ssh") {
+		return true
+	}
+	return getenv("GITDASH_SSH_ONLY", "") == "1"
+}
+
+// dialAuthorizer 连接配置的授权面（GITDASH_GRPC_ADDR/TOKEN[/_CA/_SERVER_NAME]），
+// 返回授权器与关闭函数。
+func dialAuthorizer() (*authz.RemoteAuthorizer, func(), error) {
+	conn, az, err := authz.Dial(authz.DialOptions{
+		Addr:       os.Getenv("GITDASH_GRPC_ADDR"),
+		Token:      os.Getenv("GITDASH_GRPC_TOKEN"),
+		CAFile:     os.Getenv("GITDASH_GRPC_CA"),
+		ServerName: os.Getenv("GITDASH_GRPC_SERVER_NAME"),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return az, func() { _ = conn.Close() }, nil
+}
+
+// runSSHGateway 以“仅 SSH”角色运行：不打开数据库、不启动 HTTP API，
+// 鉴权全部通过授权面 gRPC 完成，从而支持 API 与 SSH 部署在不同机器
+// （需共享 GITDASH_DATA 仓库目录与 spool，或使用共享存储）。
+func runSSHGateway() {
+	dataDir := getenv("GITDASH_DATA", "./data")
+	sshAddr := getenv("GITDASH_SSH_ADDR", ":2222")
+	grpcAddr := strings.TrimSpace(os.Getenv("GITDASH_GRPC_ADDR"))
+	if grpcAddr == "" || strings.TrimSpace(os.Getenv("GITDASH_GRPC_TOKEN")) == "" {
+		logx.Fatalf("ssh gateway mode requires GITDASH_GRPC_ADDR and GITDASH_GRPC_TOKEN (authorization plane)")
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		logx.Fatalf("create data dir: %v", err)
+	}
+	if err := gitsvc.Init(dataDir); err != nil {
+		logx.Fatalf("init git service: %v", err)
+	}
+	if err := gitsvc.EnsureHooks(); err != nil {
+		logx.Infof("ensure hooks: %v", err)
+	}
+	az, closeAZ, err := dialAuthorizer()
+	if err != nil {
+		logx.Fatalf("dial authorization plane: %v", err)
+	}
+	defer closeAZ()
+	logx.Infof("gitdash ssh gateway: ssh on %s | authz %s | repos %s", sshAddr, grpcAddr, gitsvc.ReposDir())
+	if err := sshserver.ServeWithAuthorizer(sshAddr, az, gitsvc.ReposDir(), dataDir); err != nil {
+		logx.Fatalf("ssh gateway: %v", err)
+	}
 }
 
 // postReceiveHook 由 post-receive hook 以 `gitdash post-receive owner repo` 调用，

@@ -30,6 +30,10 @@ service AuthzService {
   // CanWrite 报告用户对仓库是否有写权限（push）。
   // 语义等价于 store.CanWrite（已包含仓库封禁判断）。
   rpc CanWrite(CanWriteRequest) returns (CanWriteResponse);
+
+  // BranchProtection 返回指定分支的保护规则，供独立 SSH 机上的 pre-receive
+  // hook 校验 push（避免分机部署时仍需访问数据库）。无规则时 protected=false。
+  rpc BranchProtection(BranchProtectionRequest) returns (BranchProtectionResponse);
 }
 
 // AuthorizePublicKeyRequest 待鉴权的 SSH 公钥。
@@ -83,4 +87,20 @@ message CanWriteRequest {
 // CanWriteResponse 写权限结果。
 message CanWriteResponse {
   bool allowed = 1;
+}
+
+// BranchProtectionRequest 分支保护规则查询。
+message BranchProtectionRequest {
+  string owner = 1;
+  string repo = 2;
+  string branch = 3;
+}
+
+// BranchProtectionResponse 分支保护规则。
+// protected=false 表示该分支无保护规则（调用方应放行）。
+// 强推（force push）的祖先判断需本地仓库，由 hook 在拿到规则后自行完成。
+message BranchProtectionResponse {
+  bool protected = 1;
+  bool block_deletion = 2;
+  bool block_force_push = 3;
 }

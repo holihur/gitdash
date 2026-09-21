@@ -33,6 +33,7 @@ const (
 	AuthzService_IsIPBanned_FullMethodName         = "/gitdash.authz.v1.AuthzService/IsIPBanned"
 	AuthzService_CanRead_FullMethodName            = "/gitdash.authz.v1.AuthzService/CanRead"
 	AuthzService_CanWrite_FullMethodName           = "/gitdash.authz.v1.AuthzService/CanWrite"
+	AuthzService_BranchProtection_FullMethodName   = "/gitdash.authz.v1.AuthzService/BranchProtection"
 )
 
 // AuthzServiceClient is the client API for AuthzService service.
@@ -53,6 +54,9 @@ type AuthzServiceClient interface {
 	// CanWrite 报告用户对仓库是否有写权限（push）。
 	// 语义等价于 store.CanWrite（已包含仓库封禁判断）。
 	CanWrite(ctx context.Context, in *CanWriteRequest, opts ...grpc.CallOption) (*CanWriteResponse, error)
+	// BranchProtection 返回指定分支的保护规则，供独立 SSH 机上的 pre-receive
+	// hook 校验 push（避免分机部署时仍需访问数据库）。无规则时 protected=false。
+	BranchProtection(ctx context.Context, in *BranchProtectionRequest, opts ...grpc.CallOption) (*BranchProtectionResponse, error)
 }
 
 type authzServiceClient struct {
@@ -103,6 +107,16 @@ func (c *authzServiceClient) CanWrite(ctx context.Context, in *CanWriteRequest, 
 	return out, nil
 }
 
+func (c *authzServiceClient) BranchProtection(ctx context.Context, in *BranchProtectionRequest, opts ...grpc.CallOption) (*BranchProtectionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BranchProtectionResponse)
+	err := c.cc.Invoke(ctx, AuthzService_BranchProtection_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthzServiceServer is the server API for AuthzService service.
 // All implementations must embed UnimplementedAuthzServiceServer
 // for forward compatibility.
@@ -121,6 +135,9 @@ type AuthzServiceServer interface {
 	// CanWrite 报告用户对仓库是否有写权限（push）。
 	// 语义等价于 store.CanWrite（已包含仓库封禁判断）。
 	CanWrite(context.Context, *CanWriteRequest) (*CanWriteResponse, error)
+	// BranchProtection 返回指定分支的保护规则，供独立 SSH 机上的 pre-receive
+	// hook 校验 push（避免分机部署时仍需访问数据库）。无规则时 protected=false。
+	BranchProtection(context.Context, *BranchProtectionRequest) (*BranchProtectionResponse, error)
 	mustEmbedUnimplementedAuthzServiceServer()
 }
 
@@ -142,6 +159,9 @@ func (UnimplementedAuthzServiceServer) CanRead(context.Context, *CanReadRequest)
 }
 func (UnimplementedAuthzServiceServer) CanWrite(context.Context, *CanWriteRequest) (*CanWriteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CanWrite not implemented")
+}
+func (UnimplementedAuthzServiceServer) BranchProtection(context.Context, *BranchProtectionRequest) (*BranchProtectionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BranchProtection not implemented")
 }
 func (UnimplementedAuthzServiceServer) mustEmbedUnimplementedAuthzServiceServer() {}
 func (UnimplementedAuthzServiceServer) testEmbeddedByValue()                      {}
@@ -236,6 +256,24 @@ func _AuthzService_CanWrite_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthzService_BranchProtection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BranchProtectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthzServiceServer).BranchProtection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthzService_BranchProtection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthzServiceServer).BranchProtection(ctx, req.(*BranchProtectionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthzService_ServiceDesc is the grpc.ServiceDesc for AuthzService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -258,6 +296,10 @@ var AuthzService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CanWrite",
 			Handler:    _AuthzService_CanWrite_Handler,
+		},
+		{
+			MethodName: "BranchProtection",
+			Handler:    _AuthzService_BranchProtection_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

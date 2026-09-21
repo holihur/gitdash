@@ -1,7 +1,7 @@
 package sshserver
 
 import (
-	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
@@ -19,6 +19,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
+	"gitdash/backend/internal/authz"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
@@ -34,24 +35,36 @@ var gitCommands = map[string]string{
 }
 
 type Server struct {
-	st       *store.Store
+	authz    authz.Authorizer
 	reposDir string
 	config   *ssh.ServerConfig
 }
 
-// NewServer 创建 SSH git 服务（供 main 与测试使用）。
+// NewServer 创建 SSH git 服务（进程内直连数据库，供 main 与测试使用）。
 func NewServer(st *store.Store, reposDir, dataDir string) (*Server, error) {
+	return NewServerWithAuthorizer(authz.NewStore(st), reposDir, dataDir)
+}
+
+// NewServerWithAuthorizer 用任意授权器创建 SSH git 服务：
+// 传入 authz.NewStore(st) 即同机直连数据库；传入 authz.RemoteAuthorizer
+// 则可通过授权面 gRPC 在独立机器上运行。
+func NewServerWithAuthorizer(az authz.Authorizer, reposDir, dataDir string) (*Server, error) {
 	signer, err := loadOrGenerateHostKey(filepath.Join(dataDir, "ssh_host_ed25519_key"))
 	if err != nil {
 		return nil, fmt.Errorf("host key: %w", err)
 	}
-	cfg := buildConfig(st)
+	cfg := buildConfig(az)
 	cfg.AddHostKey(signer)
-	return &Server{st: st, reposDir: reposDir, config: cfg}, nil
+	return &Server{authz: az, reposDir: reposDir, config: cfg}, nil
 }
 
 func Serve(addr string, st *store.Store, reposDir, dataDir string) error {
-	s, err := NewServer(st, reposDir, dataDir)
+	return ServeWithAuthorizer(addr, authz.NewStore(st), reposDir, dataDir)
+}
+
+// ServeWithAuthorizer 用给定授权器在 addr 上提供 SSH git 服务（阻塞）。
+func ServeWithAuthorizer(addr string, az authz.Authorizer, reposDir, dataDir string) error {
+	s, err := NewServerWithAuthorizer(az, reposDir, dataDir)
 	if err != nil {
 		return err
 	}
@@ -77,40 +90,39 @@ func (s *Server) ServeOn(ln net.Listener) error {
 	}
 }
 
-func buildConfig(st *store.Store) *ssh.ServerConfig {
+func buildConfig(az authz.Authorizer) *ssh.ServerConfig {
 	return &ssh.ServerConfig{
 		ServerVersion: "SSH-2.0-gitdash",
 		PublicKeyCallback: func(meta ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			keys, err := st.PublicKeys()
+			username, ok, reason, err := az.AuthorizePublicKey(context.Background(), key.Type(), key.Marshal())
 			if err != nil {
-				return nil, err
+				logx.Infof("ssh: authorize key for %s: %v", meta.User(), err)
+				return nil, fmt.Errorf("authorization unavailable")
 			}
-			for _, ka := range keys {
-				parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(ka.Line))
-				if err != nil {
-					continue
-				}
-				if parsed.Type() == key.Type() && bytes.Equal(parsed.Marshal(), key.Marshal()) {
-					if st.IsUserBanned(ka.Username) {
-						logx.Infof("ssh: rejected banned user %q (key %s)", ka.Username, ssh.FingerprintSHA256(key))
-						return nil, fmt.Errorf("account is banned")
-					}
-					fp := ssh.FingerprintSHA256(key)
-					logx.Infof("ssh: %s authenticated as user %q with key %s", meta.User(), ka.Username, fp)
-					return &ssh.Permissions{Extensions: map[string]string{"username": ka.Username}}, nil
-				}
+			if !ok {
+				logx.Infof("ssh: rejected %s, %s (%s)", meta.User(), reason, ssh.FingerprintSHA256(key))
+				return nil, fmt.Errorf("%s", reason)
 			}
-			logx.Infof("ssh: rejected %s, unknown key %s", meta.User(), ssh.FingerprintSHA256(key))
-			return nil, fmt.Errorf("unknown public key")
+			logx.Infof("ssh: %s authenticated as user %q with key %s", meta.User(), username, ssh.FingerprintSHA256(key))
+			return &ssh.Permissions{Extensions: map[string]string{"username": username}}, nil
 		},
 	}
 }
 
 func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
-	if host, _, err := net.SplitHostPort(conn.RemoteAddr().String()); err == nil && s.st.IsIPBanned(host) {
-		logx.Infof("ssh: rejected blacklisted ip %s", host)
-		_ = conn.Close()
-		return
+	if host, _, err := net.SplitHostPort(conn.RemoteAddr().String()); err == nil {
+		banned, berr := s.authz.IsIPBanned(context.Background(), host)
+		if berr != nil {
+			// 授权面不可用：失败关闭，避免误放行黑名单来源。
+			logx.Infof("ssh: ip ban check failed for %s: %v", host, berr)
+			_ = conn.Close()
+			return
+		}
+		if banned {
+			logx.Infof("ssh: rejected blacklisted ip %s", host)
+			_ = conn.Close()
+			return
+		}
 	}
 	sconn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
@@ -202,13 +214,27 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 	}
 	// 权限：push（receive-pack）需 write，clone/fetch/archive 需 read；所有者恒有全部权限
 	if sub == "receive-pack" {
-		if !s.st.CanWrite(owner, name, username) {
+		allowed, err := s.authz.CanWrite(context.Background(), owner, name, username)
+		if err != nil {
+			logx.Infof("ssh: CanWrite(%s/%s, %s): %v", owner, name, username, err)
+			deny("authorization unavailable")
+			return
+		}
+		if !allowed {
 			deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
 			return
 		}
-	} else if !s.st.CanRead(owner, name, username) {
-		deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
-		return
+	} else {
+		allowed, err := s.authz.CanRead(context.Background(), owner, name, username)
+		if err != nil {
+			logx.Infof("ssh: CanRead(%s/%s, %s): %v", owner, name, username, err)
+			deny("authorization unavailable")
+			return
+		}
+		if !allowed {
+			deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
+			return
+		}
 	}
 
 	repoPath := filepath.Join(s.reposDir, owner, name+".git")

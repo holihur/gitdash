@@ -453,6 +453,130 @@ func (x *CanWriteResponse) GetAllowed() bool {
 	return false
 }
 
+// BranchProtectionRequest 分支保护规则查询。
+type BranchProtectionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Owner         string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Repo          string                 `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"`
+	Branch        string                 `protobuf:"bytes,3,opt,name=branch,proto3" json:"branch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BranchProtectionRequest) Reset() {
+	*x = BranchProtectionRequest{}
+	mi := &file_authz_v1_authz_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BranchProtectionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BranchProtectionRequest) ProtoMessage() {}
+
+func (x *BranchProtectionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_authz_v1_authz_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BranchProtectionRequest.ProtoReflect.Descriptor instead.
+func (*BranchProtectionRequest) Descriptor() ([]byte, []int) {
+	return file_authz_v1_authz_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *BranchProtectionRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *BranchProtectionRequest) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *BranchProtectionRequest) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
+}
+
+// BranchProtectionResponse 分支保护规则。
+// protected=false 表示该分支无保护规则（调用方应放行）。
+// 强推（force push）的祖先判断需本地仓库，由 hook 在拿到规则后自行完成。
+type BranchProtectionResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Protected      bool                   `protobuf:"varint,1,opt,name=protected,proto3" json:"protected,omitempty"`
+	BlockDeletion  bool                   `protobuf:"varint,2,opt,name=block_deletion,json=blockDeletion,proto3" json:"block_deletion,omitempty"`
+	BlockForcePush bool                   `protobuf:"varint,3,opt,name=block_force_push,json=blockForcePush,proto3" json:"block_force_push,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BranchProtectionResponse) Reset() {
+	*x = BranchProtectionResponse{}
+	mi := &file_authz_v1_authz_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BranchProtectionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BranchProtectionResponse) ProtoMessage() {}
+
+func (x *BranchProtectionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_authz_v1_authz_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BranchProtectionResponse.ProtoReflect.Descriptor instead.
+func (*BranchProtectionResponse) Descriptor() ([]byte, []int) {
+	return file_authz_v1_authz_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *BranchProtectionResponse) GetProtected() bool {
+	if x != nil {
+		return x.Protected
+	}
+	return false
+}
+
+func (x *BranchProtectionResponse) GetBlockDeletion() bool {
+	if x != nil {
+		return x.BlockDeletion
+	}
+	return false
+}
+
+func (x *BranchProtectionResponse) GetBlockForcePush() bool {
+	if x != nil {
+		return x.BlockForcePush
+	}
+	return false
+}
+
 var File_authz_v1_authz_proto protoreflect.FileDescriptor
 
 const file_authz_v1_authz_proto_rawDesc = "" +
@@ -482,13 +606,22 @@ const file_authz_v1_authz_proto_rawDesc = "" +
 	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\",\n" +
 	"\x10CanWriteResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed2\xfb\x02\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"[\n" +
+	"\x17BranchProtectionRequest\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
+	"\x06branch\x18\x03 \x01(\tR\x06branch\"\x89\x01\n" +
+	"\x18BranchProtectionResponse\x12\x1c\n" +
+	"\tprotected\x18\x01 \x01(\bR\tprotected\x12%\n" +
+	"\x0eblock_deletion\x18\x02 \x01(\bR\rblockDeletion\x12(\n" +
+	"\x10block_force_push\x18\x03 \x01(\bR\x0eblockForcePush2\xe6\x03\n" +
 	"\fAuthzService\x12o\n" +
 	"\x12AuthorizePublicKey\x12+.gitdash.authz.v1.AuthorizePublicKeyRequest\x1a,.gitdash.authz.v1.AuthorizePublicKeyResponse\x12W\n" +
 	"\n" +
 	"IsIPBanned\x12#.gitdash.authz.v1.IsIPBannedRequest\x1a$.gitdash.authz.v1.IsIPBannedResponse\x12N\n" +
 	"\aCanRead\x12 .gitdash.authz.v1.CanReadRequest\x1a!.gitdash.authz.v1.CanReadResponse\x12Q\n" +
-	"\bCanWrite\x12!.gitdash.authz.v1.CanWriteRequest\x1a\".gitdash.authz.v1.CanWriteResponseB5Z3gitdash/backend/internal/grpcserver/authzv1;authzv1b\x06proto3"
+	"\bCanWrite\x12!.gitdash.authz.v1.CanWriteRequest\x1a\".gitdash.authz.v1.CanWriteResponse\x12i\n" +
+	"\x10BranchProtection\x12).gitdash.authz.v1.BranchProtectionRequest\x1a*.gitdash.authz.v1.BranchProtectionResponseB5Z3gitdash/backend/internal/grpcserver/authzv1;authzv1b\x06proto3"
 
 var (
 	file_authz_v1_authz_proto_rawDescOnce sync.Once
@@ -502,7 +635,7 @@ func file_authz_v1_authz_proto_rawDescGZIP() []byte {
 	return file_authz_v1_authz_proto_rawDescData
 }
 
-var file_authz_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_authz_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_authz_v1_authz_proto_goTypes = []any{
 	(*AuthorizePublicKeyRequest)(nil),  // 0: gitdash.authz.v1.AuthorizePublicKeyRequest
 	(*AuthorizePublicKeyResponse)(nil), // 1: gitdash.authz.v1.AuthorizePublicKeyResponse
@@ -512,18 +645,22 @@ var file_authz_v1_authz_proto_goTypes = []any{
 	(*CanReadResponse)(nil),            // 5: gitdash.authz.v1.CanReadResponse
 	(*CanWriteRequest)(nil),            // 6: gitdash.authz.v1.CanWriteRequest
 	(*CanWriteResponse)(nil),           // 7: gitdash.authz.v1.CanWriteResponse
+	(*BranchProtectionRequest)(nil),    // 8: gitdash.authz.v1.BranchProtectionRequest
+	(*BranchProtectionResponse)(nil),   // 9: gitdash.authz.v1.BranchProtectionResponse
 }
 var file_authz_v1_authz_proto_depIdxs = []int32{
 	0, // 0: gitdash.authz.v1.AuthzService.AuthorizePublicKey:input_type -> gitdash.authz.v1.AuthorizePublicKeyRequest
 	2, // 1: gitdash.authz.v1.AuthzService.IsIPBanned:input_type -> gitdash.authz.v1.IsIPBannedRequest
 	4, // 2: gitdash.authz.v1.AuthzService.CanRead:input_type -> gitdash.authz.v1.CanReadRequest
 	6, // 3: gitdash.authz.v1.AuthzService.CanWrite:input_type -> gitdash.authz.v1.CanWriteRequest
-	1, // 4: gitdash.authz.v1.AuthzService.AuthorizePublicKey:output_type -> gitdash.authz.v1.AuthorizePublicKeyResponse
-	3, // 5: gitdash.authz.v1.AuthzService.IsIPBanned:output_type -> gitdash.authz.v1.IsIPBannedResponse
-	5, // 6: gitdash.authz.v1.AuthzService.CanRead:output_type -> gitdash.authz.v1.CanReadResponse
-	7, // 7: gitdash.authz.v1.AuthzService.CanWrite:output_type -> gitdash.authz.v1.CanWriteResponse
-	4, // [4:8] is the sub-list for method output_type
-	0, // [0:4] is the sub-list for method input_type
+	8, // 4: gitdash.authz.v1.AuthzService.BranchProtection:input_type -> gitdash.authz.v1.BranchProtectionRequest
+	1, // 5: gitdash.authz.v1.AuthzService.AuthorizePublicKey:output_type -> gitdash.authz.v1.AuthorizePublicKeyResponse
+	3, // 6: gitdash.authz.v1.AuthzService.IsIPBanned:output_type -> gitdash.authz.v1.IsIPBannedResponse
+	5, // 7: gitdash.authz.v1.AuthzService.CanRead:output_type -> gitdash.authz.v1.CanReadResponse
+	7, // 8: gitdash.authz.v1.AuthzService.CanWrite:output_type -> gitdash.authz.v1.CanWriteResponse
+	9, // 9: gitdash.authz.v1.AuthzService.BranchProtection:output_type -> gitdash.authz.v1.BranchProtectionResponse
+	5, // [5:10] is the sub-list for method output_type
+	0, // [0:5] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -540,7 +677,7 @@ func file_authz_v1_authz_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_authz_v1_authz_proto_rawDesc), len(file_authz_v1_authz_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

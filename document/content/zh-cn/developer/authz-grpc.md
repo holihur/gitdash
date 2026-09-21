@@ -1,33 +1,34 @@
 ---
 title: "授权面 gRPC（AuthzService）"
 weight: 1
-summary: "把 SSH 鉴权收敛为 gRPC 服务，供未来的独立 SSH 网关调用。"
+summary: "把 SSH 鉴权收敛为 gRPC 服务，支持独立 SSH 网关与分机部署。"
 ---
 
-`AuthzService` 是 Gitdash 的**授权面（control plane）**：把当前 SSH 服务在进程内直接调用的鉴权逻辑，收敛成一组稳定的一元 gRPC 接口，供后续**独立的 SSH 网关**通过 gRPC 调用。
+`AuthzService` 是 Gitdash 的**授权面（control plane）**：把 SSH 服务在进程内直接调用的鉴权逻辑，收敛成一组稳定的一元 gRPC 接口。默认的 all-in-one 部署仍走进程内调用；设置 `GITDASH_ROLE=ssh` 后，同一二进制可作为**独立 SSH 网关**运行，鉴权全部经本服务完成。
 
-它只做「决策」，不接触仓库数据，也**不改变现有进程内 SSH / API / hook 的任何行为**。
+它只做「决策」，不接触仓库数据。
 
 ## 定位与现状
 
 ```
-        （未来）独立 SSH 网关
-                │  gRPC: AuthorizePublicKey / IsIPBanned / CanRead / CanWrite
-                ▼
+                （可选）独立 SSH 网关
+  GITDASH_ROLE=ssh │  gRPC: AuthorizePublicKey / IsIPBanned / CanRead / CanWrite / BranchProtection
+                   ▼
         ┌───────────────────┐
         │  gitdash 主进程    │
         │  AuthzService      │  ← 本页描述的授权面
         │  + store（唯一权威）│
         └───────────────────┘
                 ▲
-                │ 进程内直接调用（现状，未改动）
+                │ all-in-one：进程内直接调用（默认，行为不变）
         ┌───────┴───────┐
         │ internal/sshserver │
         └───────────────┘
 ```
 
-- **现状（第一阶段）**：授权面是**纯新增的旁路服务**，默认关闭，还没有任何消费者。现有 `internal/sshserver` 仍然直接调 `store`，行为逐字节不变。
-- **目标**：契约先冻结；后续拆出独立 `gitdash-ssh` 时，只需「换 client + 移进程」，不再重新设计授权。
+- **默认（all-in-one）**：`internal/sshserver` 通过 `authz.StoreAuthorizer` 直接读 store，行为与拆分前一致；未设置 `GITDASH_ROLE=ssh` 时不启用网关模式。
+- **分机部署**：设置 `GITDASH_ROLE=ssh`（或 `GITDASH_SSH_ONLY=1`）后，同一二进制以「仅 SSH 网关」角色运行，**不打开数据库、不启动 HTTP API**，全部鉴权经授权面 gRPC 完成。
+- SSH 侧只依赖 `authz.Authorizer` 抽象，本地（store）/ 远端（gRPC）可无缝切换。
 
 ## 启用与配置
 
@@ -44,7 +45,45 @@ GITDASH_GRPC_TOKEN=$(head -c 32 /dev/urandom | base64) \
 ./gitdash serve
 ```
 
-> 说明：地址不强制 loopback，由部署方按需选择；对外暴露时应置于私网或加 mTLS（见「安全模型 / Roadmap」）。
+> 说明：地址不强制 loopback，由部署方按需选择；对外暴露时应置于私网或启用 TLS（见下）。
+
+## 分机部署（SSH 网关）
+
+让 API 与 SSH 跑在不同机器上：API 端开启授权面，SSH 端以网关角色启动。
+
+API 端（主进程，权威数据源）：
+
+```bash
+GITDASH_GRPC_ADDR=0.0.0.0:9090 \
+GITDASH_GRPC_TOKEN=$(head -c 32 /dev/urandom | base64) \
+GITDASH_GRPC_TLS_CERT=/etc/gitdash/grpc.crt \
+GITDASH_GRPC_TLS_KEY=/etc/gitdash/grpc.key \
+./gitdash serve
+```
+
+SSH 网关端（仅 SSH，无数据库）：
+
+```bash
+GITDASH_ROLE=ssh \
+GITDASH_DATA=/shared/gitdash-data \       # 与 API 共享仓库目录与 spool（共享存储）
+GITDASH_SSH_ADDR=:2222 \
+GITDASH_GRPC_ADDR=api.internal:9090 \
+GITDASH_GRPC_TOKEN=<同 API 端令牌> \
+GITDASH_GRPC_CA=/etc/gitdash/grpc-ca.crt \  # 启用 TLS 时提供 CA
+./gitdash serve
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `GITDASH_ROLE` | 空 | 设为 `ssh` 进入「仅 SSH 网关」模式；不设则 all-in-one |
+| `GITDASH_SSH_ONLY` | 空 | 设为 `1` 等价于 `GITDASH_ROLE=ssh`（兼容旧约定） |
+| `GITDASH_GRPC_ADDR` | 空 | 网关端必填：授权面地址 |
+| `GITDASH_GRPC_TOKEN` | 空 | 网关端必填：与 API 端一致的服务令牌 |
+| `GITDASH_GRPC_CA` | 空 | 可选：设置后网关端启用 TLS 并用该 CA 校验服务端证书 |
+| `GITDASH_GRPC_SERVER_NAME` | 空 | 可选：TLS SNI / 服务端证书主机名 |
+| `GITDASH_GRPC_TLS_CERT` / `GITDASH_GRPC_TLS_KEY` | 空 | API 端可选：两者同时设置则授权面启用 TLS |
+
+> 部署要求：SSH 机需能访问仓库目录（共享存储/NFS）；`post-receive` 写出的 push 事件 spool 由 API 端调度器消费；分支保护规则经授权面获取，SSH 机无需数据库连接。
 
 ## 服务契约
 
@@ -56,6 +95,7 @@ Proto：`backend/proto/authz/v1/authz.proto`，包 `gitdash.authz.v1`，服务 `
 | `IsIPBanned` | `{ip}` → `{banned}` | 等价 `store.IsIPBanned`（管理员 IP/CIDR 黑名单） |
 | `CanRead` | `{owner, repo, username}` → `{allowed}` | 等价 `store.CanRead`（读 = clone/fetch/archive，已含仓库封禁） |
 | `CanWrite` | `{owner, repo, username}` → `{allowed}` | 等价 `store.CanWrite`（写 = push，已含仓库封禁） |
+| `BranchProtection` | `{owner, repo, branch}` → `{protected, block_deletion, block_force_push}` | 等价 `store.GetBranchProtection`；无规则时 `protected=false`（调用方放行） |
 
 ### AuthorizePublicKey 判定顺序
 
@@ -76,6 +116,7 @@ Proto：`backend/proto/authz/v1/authz.proto`，包 `gitdash.authz.v1`，服务 `
 | `handleConn`：`st.IsIPBanned(host)` | `IsIPBanned` |
 | `runGit`：`st.CanWrite(...)` | `CanWrite` |
 | `runGit`：`st.CanRead(...)` | `CanRead` |
+| `pre-receive` hook：`st.GetBranchProtection(...)` | `BranchProtection` |
 
 ## 安全模型
 
@@ -83,7 +124,8 @@ Proto：`backend/proto/authz/v1/authz.proto`，包 `gitdash.authz.v1`，服务 `
 - **强制服务令牌**：所有一元 RPC 经拦截器校验 `authorization: Bearer <GITDASH_GRPC_TOKEN>`；令牌缺失/不匹配返回 `UNAUTHENTICATED`。比较使用 `crypto/subtle.ConstantTimeCompare`（常数时间）。
 - **无 reflection**：不注册 gRPC reflection，避免暴露接口面；客户端需自带 proto。
 - **入站消息限制**：`MaxRecvMsgSize = 1 MiB`（授权请求都很小）。
-- **不回传敏感数据**：仅返回布尔决策 + 命中的用户名，不回传公钥/规则明细。
+- **不回传敏感数据**：仅返回布尔决策 + 命中的用户名/规则，不回传公钥清单。
+- **传输加固（可选 TLS）**：API 端设置 `GITDASH_GRPC_TLS_CERT/KEY`、网关端设置 `GITDASH_GRPC_CA` 即启用 TLS。跨公网或不可信网络务必开启。
 
 ## 调用示例
 
@@ -153,13 +195,12 @@ cd backend && go test ./tests/blackbox/ -v
 
 ## Roadmap
 
-1. **本阶段（已完成）**：新增默认关闭、带令牌校验的授权面，覆盖现有 SSH 的全部鉴权调用；其他不动。
-2. **独立 SSH 网关**：把 `internal/sshserver` 抽成独立二进制，鉴权改为调用本服务；`git export`/数据面按部署形态选择（共享存储 / 无状态代理）。
-3. **传输加固**：跨机器时改 mTLS + 服务身份，替代共享令牌。
+1. **第一阶段（已完成）**：新增默认关闭、带令牌校验的授权面，覆盖现有 SSH 的全部鉴权调用。
+2. **独立 SSH 网关（已完成）**：`GITDASH_ROLE=ssh` 支持同二进制以仅 SSH 角色运行，鉴权（含分支保护规则）经授权面完成；all-in-one 行为保持不变。
+3. **传输加固（已完成，可选启用）**：跨机器可通过 `GITDASH_GRPC_TLS_CERT/KEY` + `GITDASH_GRPC_CA` 启用 TLS；后续可升级为 mTLS + 服务身份。
 4. **多实例/分区**：配合 `region`/IP 路由做横向扩展（见后续设计文档）。
 
 ## 非目标（本阶段）
 
-- 不拆分 SSH 进程、不改 `internal/sshserver`
-- 不改 API / hook / 前端 / 克隆地址
-- 不引入数据面传输端点
+- 不改变 all-in-one（API + 进程内 SSH）的默认行为
+- 不引入数据面传输端点（仓库目录仍依赖共享存储）

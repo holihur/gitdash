@@ -284,3 +284,43 @@ func TestNewGRPCServerRequiresToken(t *testing.T) {
 		t.Fatal("expected error when token is empty")
 	}
 }
+
+func TestBranchProtection(t *testing.T) {
+	st := newStore(t)
+	if _, err := st.CreateUser("alice", "x"); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, err := st.CreateRepo("alice", "demo", "", true); err != nil {
+		t.Fatalf("create repo: %v", err)
+	}
+	if err := st.SetBranchProtection(&store.BranchProtection{
+		Owner: "alice", Repo: "demo", Branch: "main",
+		BlockDeletion: true, BlockForcePush: true,
+	}); err != nil {
+		t.Fatalf("set protection: %v", err)
+	}
+
+	client, stop := startTestServer(t, st, testToken)
+	defer stop()
+
+	resp, err := client.BranchProtection(authCtx(testToken), &authzv1.BranchProtectionRequest{
+		Owner: "alice", Repo: "demo", Branch: "main",
+	})
+	if err != nil {
+		t.Fatalf("rpc: %v", err)
+	}
+	if !resp.GetProtected() || !resp.GetBlockDeletion() || !resp.GetBlockForcePush() {
+		t.Fatalf("main rule mismatch: %+v", resp)
+	}
+
+	// 无规则的 branch → protected=false，且不报错
+	none, err := client.BranchProtection(authCtx(testToken), &authzv1.BranchProtectionRequest{
+		Owner: "alice", Repo: "demo", Branch: "dev",
+	})
+	if err != nil {
+		t.Fatalf("rpc dev: %v", err)
+	}
+	if none.GetProtected() {
+		t.Fatalf("dev should have no rule: %+v", none)
+	}
+}

@@ -1,12 +1,13 @@
 // Package grpcserver 提供 gitdash 的授权面 gRPC 服务（AuthzService）。
 //
-// 设计目标：把当前 SSH 服务在进程内直接调用的鉴权逻辑收敛为稳定的 RPC 契约，
-// 供后续独立的 SSH 网关通过 gRPC 调用。本服务只做「决策」，不接触仓库数据，
-// 也不改变现有 SSH/API/hook 的任何行为——它默认不启动，需显式配置 GITDASH_GRPC_ADDR。
+// 设计目标：把 SSH 服务的鉴权逻辑收敛为稳定的 RPC 契约。默认 all-in-one 部署下
+// SSH 仍直接读 store；设置 GITDASH_ROLE=ssh 后，独立 SSH 网关通过本服务鉴权。
+// 本服务只做「决策」，不接触仓库数据。默认不启动，需显式配置 GITDASH_GRPC_ADDR。
 //
 // 安全默认：
 //   - 仅在显式设置 GITDASH_GRPC_ADDR 时监听（默认关闭，老部署零影响）；
 //   - 必须提供 GITDASH_GRPC_TOKEN，所有 RPC 经一元拦截器校验 Bearer 令牌；
+//   - 跨机可选用 TLS（GITDASH_GRPC_TLS_CERT/KEY）；
 //   - 不注册 reflection，避免暴露接口面。
 package grpcserver
 
@@ -15,12 +16,14 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -99,22 +102,55 @@ func (s *AuthzServer) CanWrite(_ context.Context, req *authzv1.CanWriteRequest) 
 	}, nil
 }
 
+// BranchProtection 返回指定分支的保护规则（无规则时 protected=false）。
+func (s *AuthzServer) BranchProtection(_ context.Context, req *authzv1.BranchProtectionRequest) (*authzv1.BranchProtectionResponse, error) {
+	prot, err := s.st.GetBranchProtection(req.GetOwner(), req.GetRepo(), req.GetBranch())
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return &authzv1.BranchProtectionResponse{}, nil
+		}
+		return nil, status.Errorf(codes.Internal, "get branch protection: %v", err)
+	}
+	return &authzv1.BranchProtectionResponse{
+		Protected:      true,
+		BlockDeletion:  prot.BlockDeletion,
+		BlockForcePush: prot.BlockForcePush,
+	}, nil
+}
+
 // NewGRPCServer 构造带令牌校验的 gRPC server（未启动监听）。测试可直接复用。
-func NewGRPCServer(st *store.Store, token string) (*grpc.Server, error) {
+// extra 用于追加 ServerOption（如 grpc.Creds 开启 TLS）。
+func NewGRPCServer(st *store.Store, token string, extra ...grpc.ServerOption) (*grpc.Server, error) {
 	if strings.TrimSpace(token) == "" {
 		return nil, errors.New("grpc authz: GITDASH_GRPC_TOKEN must be set")
 	}
-	srv := grpc.NewServer(
+	opts := []grpc.ServerOption{
 		grpc.UnaryInterceptor(tokenAuthInterceptor(token)),
 		grpc.MaxRecvMsgSize(maxRecvMsgSize),
-	)
+	}
+	opts = append(opts, extra...)
+	srv := grpc.NewServer(opts...)
 	authzv1.RegisterAuthzServiceServer(srv, New(st))
 	return srv, nil
 }
 
-// Serve 在 addr 上启动授权面 gRPC 服务（阻塞，直到 listener 关闭或出错）。
+// Serve 在 addr 上启动授权面 gRPC 服务（明文，阻塞，直到 listener 关闭或出错）。
 func Serve(addr, token string, st *store.Store) error {
-	srv, err := NewGRPCServer(st, token)
+	return serve(addr, st, token)
+}
+
+// ServeTLS 在 addr 上启动授权面 gRPC 服务（TLS，阻塞）。
+// 跨机部署时应启用 TLS，避免服务令牌在网络上明文传输。
+func ServeTLS(addr, token, certFile, keyFile string, st *store.Store) error {
+	creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+	if err != nil {
+		return fmt.Errorf("grpc authz tls: %w", err)
+	}
+	return serve(addr, st, token, grpc.Creds(creds))
+}
+
+func serve(addr string, st *store.Store, token string, extra ...grpc.ServerOption) error {
+	srv, err := NewGRPCServer(st, token, extra...)
 	if err != nil {
 		return err
 	}
