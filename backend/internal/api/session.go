@@ -25,6 +25,15 @@ func registrationDisabled() bool {
 	return envx.Bool("GITDASH_DISABLE_REGISTRATION", false)
 }
 
+// registrationDisabledByAdmin 合并管理端开关与环境变量：任一为真即关闭注册。
+// 管理端可在后台关闭自助注册以收敛批量账号滥用（S-03），默认保持开放。
+func (a *API) registrationDisabledByAdmin() bool {
+	if registrationDisabled() {
+		return true
+	}
+	return a.store.GetSetting("registration_disabled") == "1"
+}
+
 // passwordLoginEnabled 账号密码登录是否开放。默认开启；管理端将设置
 // password_login_enabled 置为 "0" 后关闭（此时仅剩 OAuth/OIDC 等登录方式）。
 // 每次读取，管理端保存后立即生效。

@@ -151,6 +151,7 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"swagger_enabled":        a.store.GetSetting("swagger_enabled") != "0",
 		"password_login_enabled": a.store.GetSetting("password_login_enabled") != "0",
 		"version_visible":        a.store.GetSetting("version_visible") != "0",
+		"registration_disabled":  a.store.GetSetting("registration_disabled") == "1",
 		"smtp_enabled":           a.store.GetSetting("smtp_enabled") == "1",
 		"smtp_host":              a.store.GetSetting("smtp_host"),
 		"smtp_port":              a.store.GetSetting("smtp_port"),
@@ -222,6 +223,7 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	setBool("swagger_enabled", in["swagger_enabled"])
 	setBool("password_login_enabled", in["password_login_enabled"])
 	setBool("version_visible", in["version_visible"])
+	setBool("registration_disabled", in["registration_disabled"])
 	writeStr("oidc_name", in["oidc_name"])
 	writeStr("oidc_issuer", in["oidc_issuer"])
 	writeStr("oidc_client_id", in["oidc_client_id"])

@@ -15,6 +15,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
   const [passwordLogin, setPasswordLogin] = useState(true);
   const [swagger, setSwagger] = useState(true);
   const [versionVisible, setVersionVisible] = useState(true);
+  const [registrationOpen, setRegistrationOpen] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -23,6 +24,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
       setPasswordLogin(settings.password_login_enabled !== false);
       setSwagger(settings.swagger_enabled !== false);
       setVersionVisible(settings.version_visible !== false);
+      setRegistrationOpen(settings.registration_disabled !== true);
     }
   }, [settings]);
 
@@ -34,6 +36,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
         password_login_enabled: passwordLogin,
         swagger_enabled: swagger,
         version_visible: versionVisible,
+        registration_disabled: !registrationOpen,
       });
       setMsg(t("admin.saved"));
       onChange();
@@ -76,6 +79,18 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
           <span>
             <span className="font-medium">{t("admin.swaggerEnable")}</span>
             <span className="block text-xs text-muted-foreground">{t("admin.swaggerHint")}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={registrationOpen}
+            onChange={(e) => setRegistrationOpen(e.target.checked)}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="font-medium">{t("admin.registrationOpen")}</span>
+            <span className="block text-xs text-muted-foreground">{t("admin.registrationHint")}</span>
           </span>
         </label>
         <label className="flex items-start gap-3 text-sm">

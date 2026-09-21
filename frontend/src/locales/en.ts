@@ -1108,6 +1108,8 @@ export const en = {
     swaggerHint: "When off, /api/swagger/ and /api/openapi.json return 404 for everyone.",
     versionVisible: "Show version number publicly",
     versionHint: "When off, /api/version and /api/instance no longer return the server version.",
+    registrationOpen: "Allow self-service registration",
+    registrationHint: "When off, /api/auth/register is rejected; admins can still create accounts and invite users. Useful for public instances to curb bulk account abuse.",
   },
   user: {
     memberSince: "Joined {date}",

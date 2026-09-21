@@ -80,7 +80,7 @@ func (a *API) providers(w http.ResponseWriter, r *http.Request) {
 		"oidc":   map[string]any{"enabled": false},
 		// 密码登录开关（管理端可关闭；默认开启）：前端据此隐藏账号密码表单。
 		"password":       map[string]any{"enabled": passwordOn},
-		"register":       map[string]any{"enabled": passwordOn && !registrationDisabled()},
+		"register":       map[string]any{"enabled": passwordOn && !a.registrationDisabledByAdmin()},
 		"password_reset": map[string]any{"enabled": passwordOn && a.emailReady()},
 		// Swagger/OpenAPI 是否对匿名开放（管理端可关闭）。
 		"swagger": map[string]any{"enabled": a.swaggerEnabled()},

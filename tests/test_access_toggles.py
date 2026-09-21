@@ -11,7 +11,7 @@ def _uuid() -> str:
     return uuid.uuid4().hex[:10]
 
 
-def _set_toggles(admin, *, swagger=None, password=None, version=None):
+def _set_toggles(admin, *, swagger=None, password=None, version=None, registration=None):
     body = {}
     if swagger is not None:
         body["swagger_enabled"] = swagger
@@ -19,6 +19,8 @@ def _set_toggles(admin, *, swagger=None, password=None, version=None):
         body["password_login_enabled"] = password
     if version is not None:
         body["version_visible"] = version
+    if registration is not None:
+        body["registration_disabled"] = registration
     if body:
         admin.post("/admin/settings", json=body, expect=200)
 
@@ -28,6 +30,7 @@ def test_admin_settings_exposes_toggles(admin):
     assert isinstance(s["swagger_enabled"], bool)
     assert isinstance(s["password_login_enabled"], bool)
     assert isinstance(s["version_visible"], bool)
+    assert isinstance(s["registration_disabled"], bool)
 
 
 def test_swagger_toggle(admin, anon):
@@ -56,6 +59,26 @@ def test_version_visibility_toggle(admin, anon):
         assert anon.get("/version", expect=200).json()["version"]
     finally:
         _set_toggles(admin, version=orig)
+
+
+def test_registration_toggle(admin, client_factory, anon):
+    orig = admin.get("/admin/settings", expect=200).json()["registration_disabled"]
+    try:
+        _set_toggles(admin, registration=True)
+        assert anon.get("/auth/providers", expect=200).json()["register"]["enabled"] is False
+        client_factory().post(
+            "/auth/register",
+            json={"username": f"reg-{_uuid()}", "password": "test-pass-123456"},
+            expect=403,
+        )
+        _set_toggles(admin, registration=False)
+        client_factory().post(
+            "/auth/register",
+            json={"username": f"reg-{_uuid()}", "password": "test-pass-123456"},
+            expect=201,
+        )
+    finally:
+        _set_toggles(admin, registration=orig)
 
 
 def test_password_login_toggle(admin, client_factory, anon):

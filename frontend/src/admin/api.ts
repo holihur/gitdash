@@ -128,6 +128,8 @@ export interface Settings {
   swagger_enabled: boolean;
   /** 匿名接口是否暴露版本号（默认开启，管理端可关闭）。 */
   version_visible: boolean;
+  /** 是否关闭自助注册（默认 false = 开放注册）。 */
+  registration_disabled: boolean;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {

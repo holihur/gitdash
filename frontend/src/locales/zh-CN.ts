@@ -1105,6 +1105,8 @@ export const zhCN: Messages = {
     swaggerHint: "关闭后，/api/swagger/ 与 /api/openapi.json 对所有人返回 404。",
     versionVisible: "公开显示版本号",
     versionHint: "关闭后，/api/version 与 /api/instance 不再返回服务端版本号。",
+    registrationOpen: "允许自助注册",
+    registrationHint: "关闭后 /api/auth/register 一律拒绝；管理员仍可创建账号。适合公开实例收敛批量注册滥用。",
   },
   user: {
     memberSince: "{date} 加入",

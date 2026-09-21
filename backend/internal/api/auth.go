@@ -29,7 +29,7 @@ import (
 //	@Failure     429 {object} map[string]string
 //	@Router      /auth/register [post]
 func (a *API) register(w http.ResponseWriter, r *http.Request) {
-	if registrationDisabled() {
+	if a.registrationDisabledByAdmin() {
 		writeCode(w, http.StatusForbidden, "registration_disabled", "registration is disabled")
 		return
 	}

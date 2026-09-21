@@ -11,6 +11,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     password_login_enabled: true,
     swagger_enabled: true,
     version_visible: true,
+    registration_disabled: false,
     ...overrides,
   } as Settings;
 }
@@ -49,6 +50,11 @@ describe("AccessSettings", () => {
 
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(body).toEqual({ password_login_enabled: true, swagger_enabled: false, version_visible: true });
+    expect(body).toEqual({
+      password_login_enabled: true,
+      swagger_enabled: false,
+      version_visible: true,
+      registration_disabled: false,
+    });
   });
 });
