@@ -72,7 +72,7 @@ type Backend interface {
 	BlameFile(owner, name, ref, file string) (*Blame, error)
 	RawCommit(owner, name, sha string) ([]byte, error)
 	RawCommits(owner, name string, shas []string) map[string][]byte
-	Commits(owner, name, ref string, limit int, query string) ([]Commit, error)
+	Commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error)
 	LastCommit(owner, name, ref, path string) (*Commit, error)
 	CommitDiff(owner, name, sha string) ([]DiffFile, string, error)
 	DiffStats(owner, name, base, head string) ([]DiffFile, error)
@@ -220,8 +220,8 @@ func RawCommit(owner, name, sha string) ([]byte, error) {
 func RawCommits(owner, name string, shas []string) map[string][]byte {
 	return CurrentBackend().RawCommits(owner, name, shas)
 }
-func Commits(owner, name, ref string, limit int, query string) ([]Commit, error) {
-	return CurrentBackend().Commits(owner, name, ref, limit, query)
+func Commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error) {
+	return CurrentBackend().Commits(owner, name, ref, limit, offset, query)
 }
 func LastCommit(owner, name, ref, path string) (*Commit, error) {
 	return CurrentBackend().LastCommit(owner, name, ref, path)

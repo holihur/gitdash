@@ -80,8 +80,8 @@ func (c *cliBackend) RawCommit(owner, name, sha string) ([]byte, error) {
 func (c *cliBackend) RawCommits(owner, name string, shas []string) map[string][]byte {
 	return rawCommits(owner, name, shas)
 }
-func (c *cliBackend) Commits(owner, name, ref string, limit int, query string) ([]Commit, error) {
-	return commits(owner, name, ref, limit, query)
+func (c *cliBackend) Commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error) {
+	return commits(owner, name, ref, limit, offset, query)
 }
 func (c *cliBackend) LastCommit(owner, name, ref, path string) (*Commit, error) {
 	return lastCommit(owner, name, ref, path)

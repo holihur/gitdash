@@ -173,8 +173,9 @@ func (a *API) blame(w http.ResponseWriter, r *http.Request) {
 //	@Produce     json
 //	@Param       owner path string false "仓库所有者（简写路由时省略）"
 //	@Param       name  path string true  "仓库名"
-//	@Param       ref   query string false "分支/标签/commit"
-//	@Param       limit query int    false "返回条数上限"
+//	@Param       ref    query string false "分支/标签/commit"
+//	@Param       limit  query int    false "返回条数上限（默认 30，最大 100）"
+//	@Param       offset query int    false "跳过条数（用于“加载更多”）"
 //	@Success     200 {array} api.commitResp
 //	@Failure     400 {object} map[string]string
 //	@Security    BearerAuth
@@ -187,11 +188,12 @@ func (a *API) commits(w http.ResponseWriter, r *http.Request) {
 	}
 	ref := a.browseRef(r, owner, name)
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	if gitsvc.IsEmptyRepo(owner, name) {
 		writeJSON(w, http.StatusOK, []commitResp{})
 		return
 	}
-	cs, err := gitsvc.Commits(owner, name, ref, limit, r.URL.Query().Get("q"))
+	cs, err := gitsvc.Commits(owner, name, ref, limit, offset, r.URL.Query().Get("q"))
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return

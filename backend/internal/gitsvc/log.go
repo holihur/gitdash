@@ -78,25 +78,34 @@ type Commit struct {
 // maxCommitScan 带搜索词时最多向后扫描的提交数（避免超大仓库全量遍历）。
 const maxCommitScan = 500
 
-func commits(owner, name, ref string, limit int, query string) ([]Commit, error) {
+func commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error) {
 	if !ValidRef(ref) {
 		return nil, fmt.Errorf("invalid ref %q", ref)
 	}
 	if limit <= 0 || limit > 100 {
 		limit = 30
 	}
+	if offset < 0 {
+		offset = 0
+	}
 	q := strings.TrimSpace(query)
 	scan := limit
+	args := []string{"log", "--date=iso-strict",
+		"--pretty=format:%H%x1f%P%x1f%an%x1f%ad%x1f%D%x1f%s%x1e"}
 	if q != "" {
+		// 搜索需要向后多扫描，再在内存里过滤匹配项。
 		scan = maxCommitScan
+	} else {
+		// 无搜索时用 --skip 直接跳过已加载的提交，避免重复传输。
+		args = append(args, "--skip="+strconv.Itoa(offset))
 	}
-	out, err := gitOut(repoPath(owner, name),
-		"log", "--max-count="+strconv.Itoa(scan), "--date=iso-strict",
-		"--pretty=format:%H%x1f%P%x1f%an%x1f%ad%x1f%D%x1f%s%x1e", ref)
+	args = append(args, "--max-count="+strconv.Itoa(scan), ref)
+	out, err := gitOut(repoPath(owner, name), args...)
 	if err != nil {
 		return nil, err
 	}
 	commits := []Commit{}
+	skipped := 0
 	for _, rec := range strings.Split(strings.TrimSpace(out), "\x1e") {
 		rec = strings.TrimPrefix(rec, "\n")
 		if rec == "" {
@@ -111,6 +120,11 @@ func commits(owner, name, ref string, limit int, query string) ([]Commit, error)
 			Parents: strings.Fields(parts[1]), Refs: splitRefDecorations(parts[4]),
 		}
 		if q != "" && !commitMatches(c, q) {
+			continue
+		}
+		// 搜索路径下 offset 指“跳过前 N 个匹配项”。
+		if q != "" && skipped < offset {
+			skipped++
 			continue
 		}
 		commits = append(commits, c)

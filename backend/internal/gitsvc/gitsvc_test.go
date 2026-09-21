@@ -475,3 +475,53 @@ func TestWriteCommitMoveFolder(t *testing.T) {
 		}
 	}
 }
+
+func TestCommitsPagination(t *testing.T) {
+	dir := t.TempDir()
+	if err := Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "page"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "page"); err != nil {
+		t.Fatal(err)
+	}
+	msgs := []string{"c1", "c2", "c3", "c4", "c5"}
+	paths := []string{"f1.txt", "f2.txt", "f3.txt", "f4.txt", "f5.txt"}
+	for i, m := range msgs {
+		if _, err := WriteCommit("alice", "page", "main", m, "alice",
+			[]FileChange{{Path: paths[i], Action: "create", Content: m}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	all, err := Commits("alice", "page", "main", 100, 0, "")
+	// InitTemplate 会先创建 Initial commit，因此共 6 条。
+	if err != nil || len(all) != 6 {
+		t.Fatalf("all = %+v, %v", all, err)
+	}
+	// 最新提交在前。
+	if all[0].Message != "c5" {
+		t.Fatalf("order = %+v", all)
+	}
+
+	page1, err := Commits("alice", "page", "main", 2, 0, "")
+	if err != nil || len(page1) != 2 || page1[0].Message != "c5" || page1[1].Message != "c4" {
+		t.Fatalf("page1 = %+v, %v", page1, err)
+	}
+	page2, err := Commits("alice", "page", "main", 2, 2, "")
+	if err != nil || len(page2) != 2 || page2[0].Message != "c3" || page2[1].Message != "c2" {
+		t.Fatalf("page2 = %+v, %v", page2, err)
+	}
+	page3, err := Commits("alice", "page", "main", 1, 4, "")
+	if err != nil || len(page3) != 1 || page3[0].Message != "c1" {
+		t.Fatalf("page3 = %+v, %v", page3, err)
+	}
+
+	// 搜索路径下 offset 表示“跳过前 N 个匹配项”：匹配 c5..c1，offset=1 → c4。
+	found, err := Commits("alice", "page", "main", 1, 1, "c")
+	if err != nil || len(found) != 1 || found[0].Message != "c4" {
+		t.Fatalf("search offset = %+v, %v", found, err)
+	}
+}

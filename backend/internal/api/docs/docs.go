@@ -1177,6 +1177,27 @@ const docTemplate = `{
                 ]
             }
         },
+        "/announcement": {
+            "get": {
+                "description": "返回当前启用的全站公告（标题/正文/级别）；未启用或内容为空时 enabled=false。id 为内容指纹，客户端据此判断公告是否已被用户关闭。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "misc"
+                ],
+                "summary": "全站通知",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/auth/forgot-password": {
             "post": {
                 "description": "根据邮箱发送重置链接。无论邮箱是否存在都返回 200（防止账户枚举）；\nSMTP 未配置或邮箱非法时同样返回 200 但不发送。",
@@ -5269,8 +5290,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "返回条数上限",
+                        "description": "返回条数上限（默认 30，最大 100）",
                         "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "跳过条数（用于“加载更多”）",
+                        "name": "offset",
                         "in": "query"
                     }
                 ],
@@ -7387,8 +7414,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "返回条数上限",
+                        "description": "返回条数上限（默认 30，最大 100）",
                         "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "跳过条数（用于“加载更多”）",
+                        "name": "offset",
                         "in": "query"
                     }
                 ],

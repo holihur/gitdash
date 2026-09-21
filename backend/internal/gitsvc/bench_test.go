@@ -39,7 +39,7 @@ func BenchmarkCommits(b *testing.B) {
 	owner, name := benchRepo(b)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := Commits(owner, name, "main", 50, ""); err != nil {
+		if _, err := Commits(owner, name, "main", 50, 0, ""); err != nil {
 			b.Fatal(err)
 		}
 	}

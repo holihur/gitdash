@@ -82,7 +82,7 @@ func TestCLIBackendOperations(t *testing.T) {
 	_, _ = BlameFile("alice", "demo", "main", "README.md")
 	_, _ = RawCommit("alice", "demo", sha)
 	_ = RawCommits("alice", "demo", []string{sha})
-	_, _ = Commits("alice", "demo", "main", 10, "")
+	_, _ = Commits("alice", "demo", "main", 10, 0, "")
 	_, _ = LastCommit("alice", "demo", "main", "")
 	_, _, _ = CommitDiff("alice", "demo", sha)
 	_, _ = DiffStats("alice", "demo", head, "feature")
