@@ -204,6 +204,9 @@ func (a *API) searchCode(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "query_required", "query parameter q is required")
 		return
 	}
+	if tooLong(w, "q", q.Keyword, maxTitleRunes) {
+		return
+	}
 	candidates, truncated, err := a.codeSearchCandidates(me, q.Repo, codeSearchMaxRepos)
 	if err != nil {
 		internalError(w, err)

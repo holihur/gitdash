@@ -107,16 +107,10 @@ func diffStats(owner, name, base, head string) ([]DiffFile, error) {
 }
 
 // DiffPatch 返回 base..head 的统一 diff 文本（截断防滥用）。
+// 用 gitOutLimit 在读取阶段就限制字节数，避免巨量 diff 被完整缓冲进内存。
 func diffPatch(owner, name, base, head string) (string, error) {
-	out, err := gitOut(repoPath(owner, name), "diff", "-U3", base, head)
-	if err != nil {
-		return "", err
-	}
 	const max = 512 * 1024
-	if len(out) > max {
-		out = out[:max] + "\n... (truncated)\n"
-	}
-	return out, nil
+	return gitOutLimit(max, repoPath(owner, name), "diff", "-U3", base, head)
 }
 
 // RawCommit 返回提交对象的原始内容（含 gpgsig 头，供签名校验）。

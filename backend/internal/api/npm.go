@@ -58,8 +58,12 @@ func (a *API) npmPublish(w http.ResponseWriter, r *http.Request) {
 			}
 			if remainder == "" {
 				// PUT 整个 tags 映射
+				body, ok := limitBody(w, r)
+				if !ok {
+					return
+				}
 				var tags map[string]string
-				if err := json.NewDecoder(r.Body).Decode(&tags); err != nil {
+				if err := json.Unmarshal(body, &tags); err != nil {
 					writeCode(w, http.StatusBadRequest, "invalid_tags", "invalid dist-tags body")
 					return
 				}
@@ -70,8 +74,12 @@ func (a *API) npmPublish(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// 单个 tag：body 为 JSON 字符串
+			body, ok := limitBody(w, r)
+			if !ok {
+				return
+			}
 			var ver string
-			if err := json.NewDecoder(r.Body).Decode(&ver); err != nil {
+			if err := json.Unmarshal(body, &ver); err != nil {
 				writeCode(w, http.StatusBadRequest, "invalid_tag", "expected JSON string version")
 				return
 			}

@@ -199,3 +199,26 @@ func TestDockerRegistryBlobCrossNamespaceDenied(t *testing.T) {
 		closeBody(t, r)
 	}
 }
+
+func TestRegistryBlobSizeLimit(t *testing.T) {
+	t.Setenv("GITDASH_MAX_REGISTRY_BLOB_BYTES", "16")
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	m := alice.mustStatus("POST", "/tokens", map[string]any{"name": "docker"}, 201)
+	tok, _ := m["token"].(string)
+	base := env.BaseURL
+
+	resp := registryReq(t, "POST", base+"/v2/alice/demo/blobs/uploads/", "alice", tok, nil, "")
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("upload start = %d", resp.StatusCode)
+	}
+	loc := resp.Header.Get("Location")
+	closeBody(t, resp)
+
+	// 超过 16 字节的 blob 应被拒绝（413）而不是无限写入磁盘。
+	resp = registryReq(t, "PATCH", base+loc, "alice", tok, bytes.NewReader(bytes.Repeat([]byte("x"), 64)), "application/octet-stream")
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized patch = %d, want 413", resp.StatusCode)
+	}
+	closeBody(t, resp)
+}

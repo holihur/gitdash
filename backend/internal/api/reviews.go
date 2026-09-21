@@ -49,6 +49,9 @@ func (a *API) createReview(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_review_state", "state must be approve, request_changes or comment")
 		return
 	}
+	if tooLong(w, "body", in.Body, maxBodyRunes) {
+		return
+	}
 	// commit_sha 缺省取当前 head：用于合并门禁的过期判定（head 前进后旧 approve 失效）
 	commitSHA := in.CommitSHA
 	if commitSHA == "" {

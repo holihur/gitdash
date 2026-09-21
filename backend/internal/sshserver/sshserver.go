@@ -14,8 +14,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -33,6 +35,15 @@ var gitCommands = map[string]string{
 	"git-receive-pack":   "receive-pack",
 	"git-upload-archive": "upload-archive",
 }
+
+const (
+	// sshHandshakeTimeout 限制单连接完成 SSH 握手的时间，防慢速握手占资源。
+	sshHandshakeTimeout = 20 * time.Second
+	// maxSSHConns 并发连接上限，防止大批半开连接耗光 fd/goroutine。
+	maxSSHConns = 512
+	// maxSSHEnvEntries 单会话接受的 env 请求上限，防止内存被无限累积。
+	maxSSHEnvEntries = 32
+)
 
 type Server struct {
 	authz    authz.Authorizer
@@ -77,6 +88,7 @@ func ServeWithAuthorizer(addr string, az authz.Authorizer, reposDir, dataDir str
 
 // ServeOn 在给定 listener 上运行（测试可注入随机端口）。
 func (s *Server) ServeOn(ln net.Listener) error {
+	sem := make(chan struct{}, maxSSHConns)
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -86,7 +98,17 @@ func (s *Server) ServeOn(ln net.Listener) error {
 			logx.Infof("ssh accept: %v", err)
 			continue
 		}
-		go s.handleConn(conn, s.config)
+		select {
+		case sem <- struct{}{}:
+		default:
+			logx.Infof("ssh: too many connections, rejecting %s", conn.RemoteAddr())
+			_ = conn.Close()
+			continue
+		}
+		go func(c net.Conn) {
+			defer func() { <-sem }()
+			s.handleConn(c, s.config)
+		}(conn)
 	}
 }
 
@@ -124,11 +146,14 @@ func (s *Server) handleConn(conn net.Conn, config *ssh.ServerConfig) {
 			return
 		}
 	}
+	_ = conn.SetDeadline(time.Now().Add(sshHandshakeTimeout))
 	sconn, chans, reqs, err := ssh.NewServerConn(conn, config)
 	if err != nil {
 		logx.Infof("ssh handshake from %s: %v", conn.RemoteAddr(), err)
+		_ = conn.Close()
 		return
 	}
+	_ = conn.SetDeadline(time.Time{})
 	defer func() { _ = sconn.Close() }()
 	go ssh.DiscardRequests(reqs)
 
@@ -157,7 +182,9 @@ func (s *Server) handleSession(ch ssh.Channel, requests <-chan *ssh.Request, use
 			// GIT_CONFIG_*、LD_* 等）一律丢弃，避免通过 SSH env 请求向 git 子进程
 			// 注入任意文件写入（GIT_TRACE）或改写配置（GIT_CONFIG_*）。
 			if name, value, ok := parseEnvPayload(req.Payload); ok && allowedSSHEnv(name) {
-				env = append(env, name+"="+value)
+				if len(env) < maxSSHEnvEntries {
+					env = append(env, name+"="+value)
+				}
 			}
 			if req.WantReply {
 				_ = req.Reply(true, nil)
@@ -243,7 +270,15 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 		return
 	}
 
-	cmd := exec.Command("git", sub, repoPath)
+	// 为 receive-pack 显式传入 push 体积上限，覆盖未写入仓库配置的历史仓库。
+	gitArgs := []string{}
+	if sub == "receive-pack" {
+		if lim := gitsvc.MaxPushBytes(); lim > 0 {
+			gitArgs = append(gitArgs, "-c", "receive.maxInputSize="+strconv.FormatInt(lim, 10))
+		}
+	}
+	gitArgs = append(gitArgs, sub, repoPath)
+	cmd := exec.Command("git", gitArgs...)
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Env = append(cmd.Env, "GITDASH_USER="+username) // post-receive hook 记录 pusher
 	cmd.Stderr = ch.Stderr()

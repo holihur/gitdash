@@ -80,6 +80,9 @@ func (a *API) createRelease(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	if tooLong(w, "name", in.Name, maxNameRunes) || tooLong(w, "body", in.Body, maxBodyRunes) {
+		return
+	}
 	in.TagName = strings.TrimSpace(in.TagName)
 	if in.TagName == "" {
 		writeCode(w, http.StatusBadRequest, "tag_required", "tag_name is required")

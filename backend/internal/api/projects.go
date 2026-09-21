@@ -47,6 +47,16 @@ func (a *API) listProjects(w http.ResponseWriter, r *http.Request) {
 //	@Success     201 {object} store.Project
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/projects [post]
+//
+// 看板规模上限：避免单个仓库无限创建项目/列/泳道/卡片，导致列表与看板
+// 接口把全部数据载入内存。
+const (
+	maxProjectsPerRepo     = 20
+	maxColumnsPerProject   = 50
+	maxSwimlanesPerProject = 20
+	maxCardsPerProject     = 1000
+)
+
 func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, true)
 	if !ok {
@@ -57,8 +67,15 @@ func (a *API) createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
+	if tooLong(w, "name", in.Name, maxNameRunes) || tooLong(w, "description", in.Description, maxDescRunes) {
+		return
+	}
 	if in.Name == "" {
 		writeCode(w, http.StatusBadRequest, "project_name_required", "project name is required")
+		return
+	}
+	if ps, err := a.store.ListProjects(owner, name); err == nil && len(ps) >= maxProjectsPerRepo {
+		writeCode(w, http.StatusBadRequest, "too_many_projects", "too many projects (max 20)")
 		return
 	}
 	p, err := a.store.CreateProject(owner, name, in.Name, strings.TrimSpace(in.Description))
@@ -94,6 +111,9 @@ func (a *API) updateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	var in updateProjectReq
 	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if tooLong(w, "name", in.Name, maxNameRunes) || tooLong(w, "description", in.Description, maxDescRunes) {
 		return
 	}
 	p, err := a.store.UpdateProject(owner, name, id, strings.TrimSpace(in.Name), strings.TrimSpace(in.Description))
@@ -269,8 +289,15 @@ func (a *API) createProjectColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
+	if tooLong(w, "name", in.Name, maxNameRunes) {
+		return
+	}
 	if in.Name == "" {
 		writeCode(w, http.StatusBadRequest, "column_name_required", "column name is required")
+		return
+	}
+	if cols, err := a.store.ListProjectColumns(id); err == nil && len(cols) >= maxColumnsPerProject {
+		writeCode(w, http.StatusBadRequest, "too_many_columns", "too many columns (max 50)")
 		return
 	}
 	col, err := a.store.CreateProjectColumn(owner, name, id, in.Name)
@@ -309,6 +336,9 @@ func (a *API) updateProjectColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	var in updateProjectColumnReq
 	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if tooLong(w, "name", in.Name, maxNameRunes) {
 		return
 	}
 	if err := a.store.UpdateProjectColumn(pid, cid, strings.TrimSpace(in.Name), in.Position); err != nil {
@@ -406,8 +436,15 @@ func (a *API) createProjectSwimlane(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
+	if tooLong(w, "name", in.Name, maxNameRunes) {
+		return
+	}
 	if in.Name == "" {
 		writeCode(w, http.StatusBadRequest, "swimlane_name_required", "swimlane name is required")
+		return
+	}
+	if lanes, err := a.store.ListProjectSwimlanes(pid); err == nil && len(lanes) >= maxSwimlanesPerProject {
+		writeCode(w, http.StatusBadRequest, "too_many_swimlanes", "too many swimlanes (max 20)")
 		return
 	}
 	lane, err := a.store.CreateProjectSwimlane(owner, name, pid, in.Name)
@@ -446,6 +483,9 @@ func (a *API) updateProjectSwimlane(w http.ResponseWriter, r *http.Request) {
 	}
 	var in updateProjectSwimlaneReq
 	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if tooLong(w, "name", in.Name, maxNameRunes) {
 		return
 	}
 	if err := a.store.UpdateProjectSwimlane(pid, lid, strings.TrimSpace(in.Name), in.Position); err != nil {
@@ -542,12 +582,19 @@ func (a *API) createProjectCard(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	if tooLong(w, "title", in.Title, maxTitleRunes) || tooLong(w, "note", in.Note, maxBodyRunes) || tooLong(w, "body", in.Body, maxBodyRunes) {
+		return
+	}
 	if in.ColumnID < 1 {
 		writeCode(w, http.StatusBadRequest, "column_required", "column_id is required")
 		return
 	}
 	if in.IssueNumber == 0 && strings.TrimSpace(in.Title) == "" && strings.TrimSpace(in.Note) == "" {
 		writeCode(w, http.StatusBadRequest, "card_content_required", "issue_number, title or note is required")
+		return
+	}
+	if cards, err := a.store.ListProjectCards(pid); err == nil && len(cards) >= maxCardsPerProject {
+		writeCode(w, http.StatusBadRequest, "too_many_cards", "too many cards (max 1000)")
 		return
 	}
 	title := strings.TrimSpace(in.Title)
@@ -600,6 +647,15 @@ func (a *API) updateProjectCard(w http.ResponseWriter, r *http.Request) {
 	}
 	var in updateProjectCardReq
 	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.Title != nil && tooLong(w, "title", *in.Title, maxTitleRunes) {
+		return
+	}
+	if in.Note != nil && tooLong(w, "note", *in.Note, maxBodyRunes) {
+		return
+	}
+	if in.Body != nil && tooLong(w, "body", *in.Body, maxBodyRunes) {
 		return
 	}
 	if in.ColumnID != nil {

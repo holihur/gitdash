@@ -28,6 +28,9 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	if tooLong(w, "display", in.Display, maxNameRunes) || tooLong(w, "bio", in.Bio, maxDescRunes) {
+		return
+	}
 	in.Name = strings.ToLower(strings.TrimSpace(in.Name))
 	if !orgNameRe.MatchString(in.Name) {
 		writeCode(w, http.StatusBadRequest, "username_invalid", "org name must be 2-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
@@ -126,6 +129,12 @@ func (a *API) updateOrg(w http.ResponseWriter, r *http.Request) {
 		Bio     *string `json:"bio"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if in.Display != nil && tooLong(w, "display", *in.Display, maxNameRunes) {
+		return
+	}
+	if in.Bio != nil && tooLong(w, "bio", *in.Bio, maxDescRunes) {
 		return
 	}
 	o, err := a.store.GetOrg(org)

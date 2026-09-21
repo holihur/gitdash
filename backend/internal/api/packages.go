@@ -185,6 +185,9 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 			internalError(w, err)
 			return
 		}
+		limit, offset := pageParams(r)
+		total := len(images)
+		images = pageSlice(images, limit, offset)
 		out := make([]dockerImage, 0, len(images))
 		for _, img := range images {
 			tags, terr := a.store.ListRegistryTags(owner, img)
@@ -194,7 +197,7 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 			}
 			out = append(out, dockerImage{Name: img, Tags: tags})
 		}
-		setTotal(w, len(out))
+		setTotal(w, total)
 		writeJSON(w, http.StatusOK, out)
 		return
 	}

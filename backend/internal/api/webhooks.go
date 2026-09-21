@@ -123,6 +123,9 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_secret", "webhook secret must be at least 16 characters")
 		return
 	}
+	if tooLong(w, "secret", in.Secret, 256) {
+		return
+	}
 	events, ok := normalizeWebhookEvents(in.Events)
 	if !ok {
 		writeCode(w, http.StatusBadRequest, "invalid_event", "unknown event type (see /webhook-events)")

@@ -24,7 +24,59 @@ func createBare(owner, name string) error {
 	}
 	// allow deleting the default branch in a bare repo
 	_, _ = gitOut(path, "config", "receive.denyDeleteCurrent", "ignore")
+	applyReceiveLimits(path)
 	return installPostReceiveHook(path, owner, name)
+}
+
+// applyReceiveLimits 给仓库设置单次 push 的输入上限（receive.maxInputSize），
+// 阻止用超大 packfile 写满磁盘。GITDASH_MAX_PUSH_BYTES 可覆盖，0 = 不限。
+func applyReceiveLimits(path string) {
+	_, _ = gitOut(path, "config", "receive.maxInputSize", strconv.FormatInt(maxPushBytes(), 10))
+}
+
+// MaxPushBytes 返回单次 push 输入上限（字节），0 表示不限。
+// SSH 网关通过 `git -c receive.maxInputSize=` 传入，覆盖历史的未配置仓库。
+func MaxPushBytes() int64 { return maxPushBytes() }
+
+// maxPushBytes 单次 push 输入上限（GITDASH_MAX_PUSH_BYTES，默认 5GiB，0 = 不限）。
+func maxPushBytes() int64 {
+	return envBytes("GITDASH_MAX_PUSH_BYTES", int64(5)<<30)
+}
+
+// maxRepoBytes 导入仓库的体积硬上限（GITDASH_MAX_REPO_BYTES，默认 5GiB，0 = 不限）。
+func maxRepoBytes() int64 {
+	return envBytes("GITDASH_MAX_REPO_BYTES", int64(5)<<30)
+}
+
+func envBytes(key string, def int64) int64 {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return def
+}
+
+// repoSizeBytes 用 git count-objects 估算仓库占用（loose + pack），单位字节。
+func repoSizeBytes(dir string) int64 {
+	out, err := gitOut(dir, "count-objects", "-v")
+	if err != nil {
+		return 0
+	}
+	var total int64
+	for _, ln := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(ln, ":")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(k) {
+		case "size", "size-pack": // 值单位为 KiB
+			if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil {
+				total += n * 1024
+			}
+		}
+	}
+	return total
 }
 
 // installPostReceiveHook 安装 post-receive hook：把每次 push 事件写成一行 JSON
@@ -130,6 +182,7 @@ func forkRepo(sourceOwner, sourceName, targetOwner, targetName string) error {
 	}
 	// mirror clone 不继承源 hooks；重新安装 post-receive 并放开默认分支删除限制
 	_, _ = gitOut(dst, "config", "receive.denyDeleteCurrent", "ignore")
+	applyReceiveLimits(dst)
 	return installPostReceiveHook(dst, targetOwner, targetName)
 }
 
@@ -169,7 +222,14 @@ func importRepo(url, targetOwner, targetName, privateKey, credential string) err
 		_ = os.RemoveAll(dst)
 		return err
 	}
+	if max := maxRepoBytes(); max > 0 {
+		if size := repoSizeBytes(dst); size > max {
+			_ = os.RemoveAll(dst)
+			return fmt.Errorf("repository exceeds size limit")
+		}
+	}
 	_, _ = gitOut(dst, "config", "receive.denyDeleteCurrent", "ignore")
+	applyReceiveLimits(dst)
 	return installPostReceiveHook(dst, targetOwner, targetName)
 }
 

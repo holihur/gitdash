@@ -63,6 +63,9 @@ func (a *API) createKey(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	pub := strings.TrimSpace(in.PublicKey)
+	if tooLong(w, "name", in.Name, maxNameRunes) {
+		return
+	}
 	if in.Name == "" || pub == "" {
 		writeCode(w, http.StatusBadRequest, "key_name_required", "name and public_key are required")
 		return

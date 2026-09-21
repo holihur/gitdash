@@ -96,6 +96,12 @@ func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "title_required", "title is required")
 		return
 	}
+	if tooLong(w, "title", in.Title, maxTitleRunes) {
+		return
+	}
+	if tooLong(w, "body", in.Body, maxBodyRunes) {
+		return
+	}
 	if in.SourceBranch == "" || in.TargetBranch == "" {
 		writeCode(w, http.StatusBadRequest, "branch_not_found", "source and target branches are required")
 		return

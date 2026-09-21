@@ -371,6 +371,10 @@ func (a *API) createCopilot(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "byok_key_empty", "byok key has no api_key")
 		return
 	}
+	if n, err := a.store.CountActiveCopilotSessions(me); err == nil && n >= 10 {
+		writeCode(w, http.StatusTooManyRequests, "too_many_copilots", "too many active copilot sessions")
+		return
+	}
 	session, err := a.store.CreateCopilotSession(owner, name, me, in.ByokID, in.IssueNumber, in.Prompt)
 	if err != nil {
 		internalError(w, err)
@@ -457,6 +461,9 @@ func (a *API) copilotChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 清除 net/http 在请求开始时设置的读超时，避免长连接 WebSocket 被服务器
+	// 的 ReadTimeout 到点截断（coder/websocket 不会重置底层连接 deadline）。
+	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
 	ws, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return

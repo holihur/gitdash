@@ -33,3 +33,16 @@ func Bool(key string, def bool) bool {
 		return def
 	}
 }
+
+// Int64 读取 64 位整型环境变量；空值/非法/负数均回退 def。
+func Int64(key string, def int64) int64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
+}

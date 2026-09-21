@@ -695,7 +695,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	}
 
 	a.routePatterns = mux.Routes()
-	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(routeCoverage(mux))))))
+	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(a.writeThrottle(routeCoverage(mux)))))))
 }
 
 // metricsHandler 暴露 Prometheus 指标。设置 GITDASH_METRICS_TOKEN 后要求
@@ -1032,6 +1032,24 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
 		return err
 	}
 	return nil
+}
+
+// 通用 UGC 字段长度上限（按 Unicode 字符数）。缺少这类上限时，请求体 1MB 的
+// 兜底会允许把超大文本写进数据库并在列表/导出时整体载入内存。
+const (
+	maxTitleRunes = 200
+	maxBodyRunes  = 10000
+	maxNameRunes  = 100
+	maxDescRunes  = 500
+)
+
+// tooLong 校验字段长度；超限时已写入响应，返回 true。
+func tooLong(w http.ResponseWriter, field, s string, max int) bool {
+	if len([]rune(s)) > max {
+		writeCode(w, http.StatusBadRequest, "too_long", field+" too long (max "+strconv.Itoa(max)+" chars)")
+		return true
+	}
+	return false
 }
 
 // ---- repos ----

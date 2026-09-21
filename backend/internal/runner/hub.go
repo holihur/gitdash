@@ -184,6 +184,9 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 清除 net/http 在请求开始时设置的读超时，避免 runner WebSocket 被服务器
+	// ReadTimeout 到点截断。
+	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
 	ws, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return

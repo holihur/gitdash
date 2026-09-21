@@ -602,6 +602,9 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.Color = strings.TrimSpace(strings.TrimPrefix(in.Color, "#"))
+	if tooLong(w, "name", in.Name, 50) {
+		return
+	}
 	if in.Name == "" {
 		in.Name = "" // keep
 	}
@@ -730,6 +733,9 @@ func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Title = strings.TrimSpace(in.Title)
+	if tooLong(w, "title", in.Title, maxTitleRunes) || tooLong(w, "description", in.Description, maxBodyRunes) {
+		return
+	}
 	if in.Title == "" {
 		writeCode(w, http.StatusBadRequest, "milestone_title_required", "milestone title is required")
 		return
@@ -776,6 +782,9 @@ func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 	in.State = strings.TrimSpace(in.State)
 	if in.State != "" && in.State != "open" && in.State != "closed" {
 		writeCode(w, http.StatusBadRequest, "invalid_state", "state must be open or closed")
+		return
+	}
+	if tooLong(w, "title", in.Title, maxTitleRunes) || tooLong(w, "description", in.Description, maxBodyRunes) {
 		return
 	}
 	m, err := a.store.UpdateMilestone(owner, name, id, strings.TrimSpace(in.Title), strings.TrimSpace(in.Description), in.State)

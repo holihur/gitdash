@@ -321,7 +321,14 @@ func run() {
 	// 优雅停机：收到 SIGINT/SIGTERM 后先 drain HTTP 再退出。
 	// 一是保证 in-flight 请求不丢，二是让 go build -cover 的集成覆盖率
 	// 数据（GOCOVERDIR）能正常落盘（被信号硬杀不会 flush）。
-	srv := &http.Server{Addr: httpAddr, Handler: a.Handler(staticDir)}
+	srv := &http.Server{
+		Addr:              httpAddr,
+		Handler:           a.Handler(staticDir),
+		ReadHeaderTimeout: 15 * time.Second, // 防 Slowloris（慢速发送请求头）
+		ReadTimeout:       30 * time.Minute, // 限慢速请求体，同时容纳大文件上传
+		IdleTimeout:       120 * time.Second,
+		// WriteTimeout 留空：WebSocket/SSE 长连接需要，不能设全局写超时。
+	}
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {

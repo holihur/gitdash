@@ -52,6 +52,9 @@ func (a *API) addGPGKey(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "gpg_key_required", "armored public key is required")
 		return
 	}
+	if tooLong(w, "armor", armor, 65536) {
+		return
+	}
 	fp, err := gpgsig.ParseArmoredKey(armor)
 	if err != nil {
 		writeCode(w, http.StatusBadRequest, "gpg_key_invalid", err.Error())

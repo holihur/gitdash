@@ -65,6 +65,9 @@ func (a *API) globalSearch(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "query_required", "query parameter q is required")
 		return
 	}
+	if tooLong(w, "q", q, maxTitleRunes) {
+		return
+	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	repos, err := a.store.SearchRepos(q, limit)
 	if err != nil {

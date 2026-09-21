@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
@@ -80,46 +81,78 @@ const (
 	StatusVerified   = "verified"    // 签名有效且密钥已注册
 )
 
+// parsedKeys 缓存 armor → 解析后的实体列表。GPG 公钥是只读的，而 commits 端点
+// 会对同一批全站密钥在每条 commit 上重复校验；缓存解析结果可把
+// O(提交数 × 密钥数) 的 armored key 解析降为一次性解析。
+var parsedKeys sync.Map // string -> openpgp.EntityList
+
+func parseKeyCached(k *Key) openpgp.EntityList {
+	cacheKey := k.Fingerprint
+	if cacheKey == "" {
+		cacheKey = k.Armor
+	}
+	if v, ok := parsedKeys.Load(cacheKey); ok {
+		return v.(openpgp.EntityList)
+	}
+	el, err := openpgp.ReadArmoredKeyRing(strings.NewReader(k.Armor))
+	if err != nil {
+		// 失败也缓存（nil），避免对坏密钥反复解析。
+		el = nil
+	}
+	parsedKeys.Store(cacheKey, el)
+	return el
+}
+
+// keyMatchesIssuer 判断实体（主钥或任一子钥）是否对应该签名 issuer keyid。
+func keyMatchesIssuer(e *openpgp.Entity, issuer uint64) bool {
+	if e.PrimaryKey != nil && e.PrimaryKey.KeyId == issuer {
+		return true
+	}
+	for _, sk := range e.Subkeys {
+		if sk.PublicKey != nil && sk.PublicKey.KeyId == issuer {
+			return true
+		}
+	}
+	return false
+}
+
 // VerifyCommit 校验提交是否由已注册用户公钥签名。
 // 返回 (注册用户名或 "", 指纹, 状态)；状态见上方常量。
+//
+// 只把签名 issuer keyid 对应的那把公钥放进 trusted 列表：避免在每条 commit 上
+// 对全站密钥逐个做签名尝试，把 CPU 放大从 O(提交数 × 密钥数) 收敛到 O(提交数)。
 func VerifyCommit(raw []byte, keys []Key) (string, string, string) {
 	msg, sigArmor, ok := Split(raw)
 	if !ok {
 		return "", "", StatusUnsigned
 	}
-	trusted := openpgp.EntityList{}
-	for _, k := range keys {
-		el, err := openpgp.ReadArmoredKeyRing(strings.NewReader(k.Armor))
-		if err != nil {
-			continue
-		}
-		trusted = append(trusted, el...)
+	issuer := issuerOf(sigArmor)
+	if issuer == 0 {
+		// 无法从签名中解析 issuer：无法定位密钥，按未注册处理（与原行为一致）。
+		return "", "", StatusUnknownKey
 	}
-	// 签名 issuer keyid 是否对应已注册密钥：用于区分 "已注册密钥但签名无效"
-	// 与 "未注册密钥"。
-	registeredKeyIDs := map[uint64]string{}
-	for _, k := range keys {
-		el, err := openpgp.ReadArmoredKeyRing(strings.NewReader(k.Armor))
-		if err != nil {
-			continue
-		}
-		for _, e := range el {
-			registeredKeyIDs[e.PrimaryKey.KeyId] = k.Username
+
+	var trusted openpgp.EntityList
+	registered := false
+	for i := range keys {
+		for _, e := range parseKeyCached(&keys[i]) {
+			if e.PrimaryKey != nil && keyMatchesIssuer(e, issuer) {
+				trusted = append(trusted, e)
+				registered = true
+			}
 		}
 	}
 	signer, err := openpgp.CheckArmoredDetachedSignature(trusted, bytes.NewReader(msg), strings.NewReader(sigArmor), nil)
 	if err != nil {
-		if issuerOf(sigArmor) != 0 {
-			if _, registered := registeredKeyIDs[issuerOf(sigArmor)]; registered {
-				return "", "", StatusInvalid
-			}
+		if registered {
+			return "", "", StatusInvalid
 		}
 		return "", "", StatusUnknownKey
 	}
 	fp := fingerprintHex(signer.PrimaryKey.Fingerprint)
-	for _, k := range keys {
-		if strings.EqualFold(k.Fingerprint, fp) {
-			return k.Username, fp, StatusVerified
+	for i := range keys {
+		if strings.EqualFold(keys[i].Fingerprint, fp) {
+			return keys[i].Username, fp, StatusVerified
 		}
 	}
 	return "", fp, StatusUnknownKey

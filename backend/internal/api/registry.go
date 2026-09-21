@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
@@ -28,7 +30,15 @@ import (
 const (
 	registryManifestMax = 4 << 20 // manifest 上限 4MB
 	registryUploadTTL   = time.Hour
+	// registryUploadSessionMax 并发上传会话上限，避免临时文件 / inode 被无限占用。
+	registryUploadSessionMax = 256
 )
+
+// registryBlobMax 单个 blob 上传上限（GITDASH_MAX_REGISTRY_BLOB_BYTES，0 = 不限）。
+// 默认 2GiB：足以容纳正常镜像层，又避免磁盘被无限写入。
+func registryBlobMax() int64 {
+	return envx.Int64("GITDASH_MAX_REGISTRY_BLOB_BYTES", 2<<30)
+}
 
 var registryNameRe = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$`)
 
@@ -329,6 +339,14 @@ func (a *API) registryUploadStart(w http.ResponseWriter, r *http.Request, name, 
 	if !ok {
 		return
 	}
+	pruneRegistryUploads()
+	// 限制并发上传会话数：避免大量临时文件 / inode 被占用。
+	sessions := 0
+	registryUploads.Range(func(_, _ any) bool { sessions++; return true })
+	if sessions >= registryUploadSessionMax {
+		writeRegistryError(w, http.StatusTooManyRequests, "TOOMANYREQUESTS", "too many concurrent uploads")
+		return
+	}
 	f, err := os.CreateTemp("", "gitdash-registry-upload-*")
 	if err != nil {
 		internalError(w, err)
@@ -364,6 +382,14 @@ func (a *API) registryUploadChunk(w http.ResponseWriter, r *http.Request, name, 
 
 	switch r.Method {
 	case http.MethodPatch, http.MethodPut:
+		// 限制单会话累计字节，避免无限写入磁盘。
+		if limit := registryBlobMax(); limit > 0 {
+			remaining := limit - sess.size
+			if remaining < 0 {
+				remaining = 0
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, remaining+1)
+		}
 		f, err := os.OpenFile(sess.path, os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
 			internalError(w, err)
@@ -372,6 +398,13 @@ func (a *API) registryUploadChunk(w http.ResponseWriter, r *http.Request, name, 
 		n, copyErr := io.Copy(f, r.Body)
 		closeErr := f.Close()
 		if copyErr != nil {
+			_ = os.Remove(sess.path)
+			registryUploads.Delete(uid)
+			var mbe *http.MaxBytesError
+			if errors.As(copyErr, &mbe) {
+				writeRegistryError(w, http.StatusRequestEntityTooLarge, "BLOB_TOO_LARGE", "blob exceeds size limit")
+				return
+			}
 			writeRegistryError(w, http.StatusBadRequest, "BLOB_UPLOAD_INVALID", copyErr.Error())
 			return
 		}
@@ -380,6 +413,12 @@ func (a *API) registryUploadChunk(w http.ResponseWriter, r *http.Request, name, 
 			return
 		}
 		sess.size += n
+		if limit := registryBlobMax(); limit > 0 && sess.size > limit {
+			_ = os.Remove(sess.path)
+			registryUploads.Delete(uid)
+			writeRegistryError(w, http.StatusRequestEntityTooLarge, "BLOB_TOO_LARGE", "blob exceeds size limit")
+			return
+		}
 
 		if r.Method == http.MethodPatch {
 			w.Header().Set("Location", "/v2/"+name+"/blobs/uploads/"+uid)

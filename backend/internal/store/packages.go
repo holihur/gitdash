@@ -173,7 +173,38 @@ func packageFromRow(row packageRow) Package {
 
 // CreatePackage 新增包文件；同 (owner,type,name,version,filename) 重复返回 ErrExists。
 // 内容写入内容寻址 blob 存储，DB 只保留元数据（sha256 校验和 + blob 路径）。
+// 单个命名空间的包资源硬上限：包数量与总容量（与可配置 Quota 不同，这是防止
+// 磁盘被无限写入的硬上限，避免默认配额为 0（不限）时被滥用）。
+const (
+	MaxPackagesPerOwner       = 10000
+	MaxPackageStoragePerOwner = int64(10) << 30 // 10GiB
+)
+
+// checkPackageQuota 校验命名空间的包数量与总容量，超出返回 *QuotaError
+// （internalError 会据此转成 403 quota_exceeded）。
+func (s *Store) checkPackageQuota(owner string, addSize int64) error {
+	var count int64
+	if err := s.db.Model(&packageRow{}).Where("owner = ?", owner).Count(&count).Error; err != nil {
+		return err
+	}
+	if count >= MaxPackagesPerOwner {
+		return &QuotaError{Scope: "user", Item: "packages", Limit: MaxPackagesPerOwner}
+	}
+	var total int64
+	if err := s.db.Model(&packageRow{}).Where("owner = ?", owner).
+		Select("COALESCE(SUM(size),0)").Scan(&total).Error; err != nil {
+		return err
+	}
+	if total+addSize > MaxPackageStoragePerOwner {
+		return &QuotaError{Scope: "user", Item: "package_storage", Limit: int(MaxPackageStoragePerOwner)}
+	}
+	return nil
+}
+
 func (s *Store) CreatePackage(p *Package, content []byte) error {
+	if err := s.checkPackageQuota(p.Owner, int64(len(content))); err != nil {
+		return err
+	}
 	blobPath, sha, err := storeBlob(content)
 	if err != nil {
 		return err
@@ -214,6 +245,10 @@ func (s *Store) CreatePackageFromFile(p *Package, tmpPath string) error {
 		return err
 	}
 	sha := hex.EncodeToString(h.Sum(nil))
+	if err := s.checkPackageQuota(p.Owner, size); err != nil {
+		_ = os.Remove(tmpPath)
+		return err
+	}
 	blobPath := blobFile(sha)
 	if blobPath != "" {
 		if err := os.MkdirAll(filepath.Dir(blobPath), 0o755); err != nil {

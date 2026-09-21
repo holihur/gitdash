@@ -173,6 +173,9 @@ func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Branch = strings.TrimSpace(in.Branch)
 	in.Message = strings.TrimSpace(in.Message)
+	if tooLong(w, "message", in.Message, maxBodyRunes) {
+		return
+	}
 	if in.Branch == "" {
 		repo, rerr := a.store.GetRepo(owner, name)
 		if rerr != nil {
@@ -271,6 +274,9 @@ func (a *API) revertCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Branch = strings.TrimSpace(in.Branch)
 	in.Message = strings.TrimSpace(in.Message)
+	if tooLong(w, "message", in.Message, maxBodyRunes) {
+		return
+	}
 	if in.Branch == "" {
 		writeCode(w, http.StatusBadRequest, "branch_required", "branch is required")
 		return

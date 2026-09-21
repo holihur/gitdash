@@ -164,6 +164,16 @@ func (s *Store) GetCopilotSession(owner, repo string, id int64) (CopilotSession,
 	return copilotRowToDTO(row), nil
 }
 
+// CountActiveCopilotSessions 统计某用户仍处于 idle/running（未结束）的会话数，
+// 用于限制单用户并发会话，避免无限拉起 agent 运行时。
+func (s *Store) CountActiveCopilotSessions(username string) (int64, error) {
+	var n int64
+	err := s.db.Model(&copilotSessionRow{}).
+		Where("created_by = ? AND status IN ?", username, []string{"idle", "running"}).
+		Count(&n).Error
+	return n, err
+}
+
 // ListCopilotSessions 列出仓库全部会话。
 func (s *Store) ListCopilotSessions(owner, repo string) ([]CopilotSession, error) {
 	var rows []copilotSessionRow

@@ -126,6 +126,10 @@ type ExportRelease struct {
 }
 
 // ExportUserData 汇总 username 的个人数据。用户不存在返回 ErrNotFound。
+// exportMaxRows 单类导出条数上限：用户可创建无限 UGC，导出时若全量载入
+// 内存会 OOM。超出部分截断（导出口径本身是尽力而为）。
+const exportMaxRows = 10000
+
 func (s *Store) ExportUserData(username string) (*UserExport, error) {
 	var u userRow
 	if err := s.db.Where("username = ?", username).First(&u).Error; err != nil {
@@ -143,67 +147,67 @@ func (s *Store) ExportUserData(username string) (*UserExport, error) {
 
 	// 各部分独立查询：单项失败不阻塞整体导出
 	var ssh []sshKeyRow
-	_ = s.db.Where("user_id = ?", u.ID).Find(&ssh).Error
+	_ = s.db.Where("user_id = ?", u.ID).Limit(exportMaxRows).Find(&ssh).Error
 	for _, k := range ssh {
 		out.SSHKeys = append(out.SSHKeys, ExportKey{Name: k.Name, PublicKey: k.PublicKey, Fingerprint: k.Fingerprint, CreatedAt: k.CreatedAt})
 	}
 
 	var gpg []gpgKeyRow
-	_ = s.db.Where("user_id = ?", u.ID).Find(&gpg).Error
+	_ = s.db.Where("user_id = ?", u.ID).Limit(exportMaxRows).Find(&gpg).Error
 	for _, k := range gpg {
 		out.GPGKeys = append(out.GPGKeys, ExportGPGKey{Fingerprint: k.Fingerprint, CreatedAt: k.CreatedAt})
 	}
 
 	var pats []patRow
-	_ = s.db.Where("user_id = ?", u.ID).Find(&pats).Error
+	_ = s.db.Where("user_id = ?", u.ID).Limit(exportMaxRows).Find(&pats).Error
 	for _, p := range pats {
 		out.PATs = append(out.PATs, ExportPAT{Name: p.Name, Scopes: p.Scopes, CIDRs: p.CIDRs, ExpiresAt: p.ExpiresAt, CreatedAt: p.CreatedAt, LastUsedAt: p.LastUsedAt})
 	}
 
 	var repos []repoRow
-	_ = s.db.Where("owner = ?", username).Find(&repos).Error
+	_ = s.db.Where("owner = ?", username).Limit(exportMaxRows).Find(&repos).Error
 	for _, r := range repos {
 		out.Repos = append(out.Repos, ExportRepo{Owner: r.Owner, Name: r.Name, Description: r.Description, Private: r.Private, IsTemplate: r.IsTemplate, CreatedAt: r.CreatedAt})
 	}
 
 	var issues []issueRow
-	_ = s.db.Where("author = ?", username).Find(&issues).Error
+	_ = s.db.Where("author = ?", username).Limit(exportMaxRows).Find(&issues).Error
 	for _, i := range issues {
 		out.Issues = append(out.Issues, ExportIssue{Owner: i.Owner, Repo: i.Repo, Number: i.Number, Title: i.Title, Body: i.Body, State: i.State, CreatedAt: i.CreatedAt})
 	}
 
 	var comments []commentRow
-	_ = s.db.Where("author = ?", username).Find(&comments).Error
+	_ = s.db.Where("author = ?", username).Limit(exportMaxRows).Find(&comments).Error
 	for _, c := range comments {
 		out.Comments = append(out.Comments, ExportComment{Owner: c.Owner, Repo: c.Repo, Kind: c.Kind, Number: c.Number, Body: c.Body, FilePath: c.FilePath, Line: c.Line, LineSide: c.LineSide, CreatedAt: c.CreatedAt})
 	}
 
 	var pulls []pullRequestRow
-	_ = s.db.Where("author = ?", username).Find(&pulls).Error
+	_ = s.db.Where("author = ?", username).Limit(exportMaxRows).Find(&pulls).Error
 	for _, p := range pulls {
 		out.Pulls = append(out.Pulls, ExportPull{Owner: p.Owner, Repo: p.Repo, Number: p.Number, Title: p.Title, Body: p.Body, SourceBranch: p.SourceBranch, TargetBranch: p.TargetBranch, State: p.State, CreatedAt: p.CreatedAt})
 	}
 
 	var reviews []pullReviewRow
-	_ = s.db.Where("reviewer = ?", username).Find(&reviews).Error
+	_ = s.db.Where("reviewer = ?", username).Limit(exportMaxRows).Find(&reviews).Error
 	for _, r := range reviews {
 		out.Reviews = append(out.Reviews, ExportReview{Owner: r.Owner, Repo: r.Repo, Number: r.Number, State: r.State, Body: r.Body, CommitSHA: r.CommitSHA, CreatedAt: r.CreatedAt})
 	}
 
 	var releases []releaseRow
-	_ = s.db.Where("author = ?", username).Find(&releases).Error
+	_ = s.db.Where("author = ?", username).Limit(exportMaxRows).Find(&releases).Error
 	for _, r := range releases {
 		out.Releases = append(out.Releases, ExportRelease{Owner: r.Owner, Repo: r.Repo, TagName: r.TagName, Name: r.Name, Body: r.Body, CreatedAt: r.CreatedAt})
 	}
 
 	var stars []starRow
-	_ = s.db.Where("username = ?", username).Find(&stars).Error
+	_ = s.db.Where("username = ?", username).Limit(exportMaxRows).Find(&stars).Error
 	for _, s2 := range stars {
 		out.Stars = append(out.Stars, RepoRef{Owner: s2.Owner, Name: s2.Repo})
 	}
 
 	var watches []watchRow
-	_ = s.db.Where("username = ?", username).Find(&watches).Error
+	_ = s.db.Where("username = ?", username).Limit(exportMaxRows).Find(&watches).Error
 	for _, w := range watches {
 		out.Watches = append(out.Watches, RepoRef{Owner: w.Owner, Name: w.Repo})
 	}

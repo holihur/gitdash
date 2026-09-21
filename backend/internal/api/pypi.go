@@ -32,6 +32,9 @@ func (a *API) pypiUpload(w http.ResponseWriter, r *http.Request) {
 		pkgForbidden(w)
 		return
 	}
+	// 限制整个 multipart 请求体大小；ParseMultipartForm 的 maxMemory 只控制
+	// 内存阈值，超出部分会落临时磁盘，必须有整体上限避免写满磁盘。
+	r.Body = http.MaxBytesReader(w, r.Body, maxPackageSize+(1<<20))
 	if err := r.ParseMultipartForm(maxPackageSize); err != nil {
 		writeCode(w, http.StatusBadRequest, "invalid_form", err.Error())
 		return
