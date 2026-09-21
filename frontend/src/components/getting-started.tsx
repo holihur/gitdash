@@ -24,16 +24,15 @@ interface Step {
 export function GettingStarted({ hasRepos }: { hasRepos: boolean }) {
   const { t } = useI18n();
   const docs = useDocsUrl();
-  const [dismissed, setDismissed] = useState(false);
-  const [hasKeys, setHasKeys] = useState<boolean | null>(null);
-
-  useEffect(() => {
+  // 直接以 localStorage 初始化，避免首次渲染闪现已关闭的清单。
+  const [dismissed, setDismissed] = useState(() => {
     try {
-      setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
+      return localStorage.getItem(DISMISS_KEY) === "1";
     } catch {
-      /* ignore */
+      return false;
     }
-  }, []);
+  });
+  const [hasKeys, setHasKeys] = useState<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -60,6 +59,8 @@ export function GettingStarted({ hasRepos }: { hasRepos: boolean }) {
   }, []);
 
   if (dismissed) return null;
+  // 已建仓库但公钥状态未知时先不渲染，避免老用户看到清单“闪现后消失”。
+  if (hasRepos && hasKeys === null) return null;
   // 已经建了仓库、也加了公钥 → 视为已完成引导，自动隐藏（避免打扰老用户）。
   if (hasRepos && hasKeys) return null;
 

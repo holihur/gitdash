@@ -30,9 +30,24 @@ import { GettingStarted } from "@/components/getting-started";
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
+/**
+ * 是否已创建（自建的）仓库。注册/建组织时后端会自动创建 <owner>/<owner> 同名 profile 仓库，
+ * 若把它计入，则每个新用户都会被判定为“已建仓库”，引导清单第一步失去意义。
+ * 因此只有当列表里存在非同名仓库时，才视为已完成“创建仓库”这一步。
+ */
+function hasSelfCreatedRepo(items: Repo[], total: number): boolean {
+  if (total > 1) return true;
+  if (total < 1) return false;
+  const only = items[0];
+  if (!only) return false; // 数据缺失时按“仅有 profile 仓库”处理（宁可多提示一次）
+  return only.owner !== only.name;
+}
+
 export default function Repos() {
   const { t, lang, to } = useI18n();
   const [repos, setRepos] = useState<Repo[]>([]);
+  // 是否已完成“创建仓库”引导步骤（会排除自动创建的 profile 同名仓库）。
+  const [hasRepos, setHasRepos] = useState<boolean | null>(null);
   const [repoTotal, setRepoTotal] = useState(0);
   // tab/页码/页大小同步进 URL(?tab/?page/?size)
   const { get, getNum, set } = useQueryState();
@@ -40,6 +55,8 @@ export default function Repos() {
   const setPage = (p: number) => set({ page: p > 1 ? p : null }, { push: true });
   const pageSize = getNum("size", 20);
   const tabRaw = get("tab", "repos");
+  // 记录首次进入时的 tab：若首屏不在“我的仓库”，需要额外拉一次仓库总数来判断是否展示引导。
+  const [initialTab] = useState(tabRaw);
   const tab = (["repos", "starred", "watching"] as const).includes(tabRaw as "repos")
     ? (tabRaw as "repos" | "starred" | "watching")
     : "repos";
@@ -77,6 +94,7 @@ export default function Repos() {
         const mine = await api.listRepos(pageSize, (page - 1) * pageSize);
         setRepos(mine.items);
         setRepoTotal(mine.total);
+        setHasRepos(hasSelfCreatedRepo(mine.items, mine.total));
       } else if (tab === "starred") {
         const r = await api.listStarred(pageSize, (page - 1) * pageSize);
         setStarred(r.items);
@@ -99,6 +117,24 @@ export default function Repos() {
     api.listOrgs().then(setOrgs).catch(() => setOrgs([]));
     api.listTemplateRepos().then(setTemplateRepos).catch(() => setTemplateRepos([]));
   }, [load]);
+
+  // 首屏若直接落在“点赞/关注” tab，load() 不会拉“我的仓库”数量，额外查一次；
+  // 平时（默认 repos tab）由 load() 维护，无需重复请求。
+  useEffect(() => {
+    if (initialTab === "repos") return;
+    let alive = true;
+    api
+      .listRepos(1, 0)
+      .then((r) => {
+        if (alive) setHasRepos(hasSelfCreatedRepo(r.items, r.total));
+      })
+      .catch(() => {
+        if (alive) setHasRepos(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [initialTab]);
 
   const show = tab === "repos" ? repos : tab === "starred" ? starred : watched;
   const isMine = tab === "repos";
@@ -180,7 +216,7 @@ export default function Repos() {
 
   return (
     <div className="space-y-6">
-      {!loading && <GettingStarted hasRepos={repoTotal > 0} />}
+      {hasRepos !== null && <GettingStarted hasRepos={hasRepos} />}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t("repos.title")}</h1>
