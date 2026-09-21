@@ -9,6 +9,7 @@ import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
 import { CommandPalette } from "@/components/command-palette";
 import { UserMenu } from "@/components/header-controls";
 import { FeedbackWidget } from "@/components/feedback-widget";
+import { AnnouncementBanner } from "@/components/announcement-banner";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -109,6 +110,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <AnnouncementBanner />
       {user ? (
         <Shell user={user} onLogout={logout} />
       ) : (

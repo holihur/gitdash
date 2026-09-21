@@ -29,6 +29,9 @@ export const zhCN: Messages = {
     sending: "提交中…",
     submitted: "感谢反馈！已创建 issue #{number}。",
   },
+  announcement: {
+    dismiss: "关闭",
+  },
   nav: {
     repos: "仓库",
     explore: "发现",
@@ -1107,6 +1110,17 @@ export const zhCN: Messages = {
     versionHint: "关闭后，/api/version 与 /api/instance 不再返回服务端版本号。",
     registrationOpen: "允许自助注册",
     registrationHint: "关闭后 /api/auth/register 一律拒绝；管理员仍可创建账号。适合公开实例收敛批量注册滥用。",
+    announcementTitle: "全站通知",
+    announcementHint: "向所有页面（登录页与已登录界面）推送顶部公告条。用户可关闭；修改内容后会重新展示。",
+    announcementEnable: "启用全站通知",
+    announcementEnableHint: "关闭后所有用户都看不到公告条。",
+    announcementLevel: "级别",
+    announcementLevelInfo: "提示",
+    announcementLevelWarning: "警告",
+    announcementLevelCritical: "严重",
+    announcementTitleField: "标题",
+    announcementMessage: "内容",
+    announcementMessageHint: "公告条正文，支持换行。",
   },
   user: {
     memberSince: "{date} 加入",

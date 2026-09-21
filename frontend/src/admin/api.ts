@@ -130,6 +130,11 @@ export interface Settings {
   version_visible: boolean;
   /** 是否关闭自助注册（默认 false = 开放注册）。 */
   registration_disabled: boolean;
+  /** 全站通知（公告条）。 */
+  announcement_enabled: boolean;
+  announcement_level: string;
+  announcement_title: string;
+  announcement_message: string;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {

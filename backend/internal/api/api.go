@@ -250,6 +250,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// auth providers (public) & github oauth
 	mux.HandleFunc("GET /api/auth/providers", a.providers)
 	mux.HandleFunc("GET /api/instance", a.instance)
+	mux.HandleFunc("GET /api/announcement", a.announcement)
 	mux.HandleFunc("GET /api/feedback", a.feedbackConfig)
 	mux.HandleFunc("POST /api/feedback", a.authOptional(a.submitFeedback))
 	mux.HandleFunc("POST /api/me/email/verify", a.auth(a.verifyEmail))

@@ -4,6 +4,7 @@ export * from "./api/core";
 export * from "./api/types";
 
 import { authApi } from "./api/auth";
+import { announcementApi } from "./api/announcement";
 import { reposApi } from "./api/repos";
 import { inboxApi } from "./api/inbox";
 import { issuesApi } from "./api/issues";
@@ -23,6 +24,7 @@ import { connectionsApi } from "./api/connections";
 
 export const api = {
   ...authApi,
+  ...announcementApi,
   ...reposApi,
   ...inboxApi,
   ...issuesApi,

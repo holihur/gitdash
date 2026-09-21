@@ -174,6 +174,11 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"bitbucket_client_id":    a.store.GetSetting("bitbucket_client_id"),
 		"bitbucket_has_secret":   a.store.GetSetting("bitbucket_client_secret") != "",
 		"docs_url":               a.store.GetSetting("docs_url"),
+		// 全站通知（公告条）：管理端配置，登录页与已登录界面均展示。
+		"announcement_enabled": a.store.GetSetting("announcement_enabled") == "1",
+		"announcement_level":   a.store.GetSetting("announcement_level"),
+		"announcement_title":   a.store.GetSetting("announcement_title"),
+		"announcement_message": a.store.GetSetting("announcement_message"),
 	})
 }
 
@@ -281,6 +286,11 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 		_ = a.store.SetSetting("bitbucket_client_secret", strings.TrimSpace(v))
 	}
 	writeStr("docs_url", in["docs_url"])
+	// 全站通知：标题/正文/级别与开关。内容指纹由公开接口计算，无需额外存储。
+	setBool("announcement_enabled", in["announcement_enabled"])
+	writeStr("announcement_level", in["announcement_level"])
+	writeStr("announcement_title", in["announcement_title"])
+	writeStr("announcement_message", in["announcement_message"])
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

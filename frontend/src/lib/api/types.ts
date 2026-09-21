@@ -730,3 +730,13 @@ export interface BatchImportResult {
   imported: string[];
   skipped: Record<string, string>;
 }
+
+/** 全站通知（公告条）：由管理端配置，公开接口返回。 */
+export interface Announcement {
+  enabled: boolean;
+  /** 内容指纹：内容变化时会改变，用于判断用户是否已关闭当前公告。 */
+  id?: string;
+  level?: "info" | "warning" | "critical";
+  title?: string;
+  message?: string;
+}

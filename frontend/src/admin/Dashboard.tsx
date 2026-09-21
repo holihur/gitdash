@@ -7,6 +7,7 @@ import { GithubSettings, GoogleSettings, OidcSettings } from "./OAuthSettings";
 import { BindingSettings } from "./BindingSettings";
 import { AccessSettings } from "./AccessSettings";
 import { DocsSettings } from "./DocsSettings";
+import { AnnouncementSettings } from "./AnnouncementSettings";
 import { SmtpSettings } from "./SmtpSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { PasswordCard } from "./PasswordCard";
@@ -60,6 +61,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
       <OidcSettings settings={settings} onChange={load} />
       <BindingSettings settings={settings} onChange={load} />
       <DocsSettings settings={settings} onChange={load} />
+      <AnnouncementSettings settings={settings} onChange={load} />
       <SmtpSettings settings={settings} onChange={load} />
       <FeedbackSettings settings={settings} onChange={load} />
       <PasswordCard />

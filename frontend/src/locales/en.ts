@@ -27,6 +27,9 @@ export const en = {
     sending: "Submitting…",
     submitted: "Thanks! Feedback submitted as issue #{number}.",
   },
+  announcement: {
+    dismiss: "Dismiss",
+  },
   nav: {
     repos: "Repositories",
     explore: "Explore",
@@ -1110,6 +1113,17 @@ export const en = {
     versionHint: "When off, /api/version and /api/instance no longer return the server version.",
     registrationOpen: "Allow self-service registration",
     registrationHint: "When off, /api/auth/register is rejected; admins can still create accounts and invite users. Useful for public instances to curb bulk account abuse.",
+    announcementTitle: "Site-wide announcement",
+    announcementHint: "Broadcast a banner to every page — the login page and the signed-in UI. Users can dismiss it; editing the content shows it again.",
+    announcementEnable: "Enable announcement",
+    announcementEnableHint: "When off, the banner is hidden for everyone.",
+    announcementLevel: "Level",
+    announcementLevelInfo: "Info",
+    announcementLevelWarning: "Warning",
+    announcementLevelCritical: "Critical",
+    announcementTitleField: "Title",
+    announcementMessage: "Message",
+    announcementMessageHint: "Banner body. Line breaks are preserved.",
   },
   user: {
     memberSince: "Joined {date}",
