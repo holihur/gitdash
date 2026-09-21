@@ -28,6 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        # 仅主分支：仓库尚未启用 Pages 时自动创建站点（deploy-pages 未启用时会 404）。
+        # PR（尤其是 fork）权限只读，跳过以免误失败。
+        if: github.event_name != 'pull_request'
+        with:
+          enablement: true
       - uses: peaceiris/actions-hugo@v3
         with:
           hugo-version: "0.128.0"
