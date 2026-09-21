@@ -18,8 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { MarkdownWithToc } from "@/components/markdown";
-import { cn, formatDate, formatSize } from "@/lib/utils";
+import { cn, formatSize } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 
 export interface ReleasesTabProps {
@@ -237,7 +238,9 @@ export default function ReleasesTab({ owner, name, role }: ReleasesTabProps) {
                   <span className={cn("font-medium", !r.name && "text-muted-foreground")}>
                     {r.name || r.tag_name}
                   </span>
-                  <span className="text-xs text-muted-foreground">{formatDate(r.created_at, locale)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    <RelativeTime iso={r.created_at} locale={locale} />
+                  </span>
                   {canWrite && (
                     <Button
                       size="icon"

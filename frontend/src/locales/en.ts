@@ -40,6 +40,10 @@ export const en = {
     packages: "Packages",
   },
   common: {
+    boundaryTitle: "Something went wrong",
+    boundaryBody:
+      "An unexpected error occurred while rendering this page. Try reloading; if it keeps happening, please report it.",
+    reload: "Reload",
     name: "Name",
     description: "Description",
     create: "Create",
@@ -314,6 +318,8 @@ export const en = {
     reverted: "Reverted as {sha}",
     searchPlaceholder: "Search commits (message, author, or SHA)",
     noMatches: "No commits match your search",
+    loadMore: "Load more",
+    loading: "Loading…",
     graph: "Commit graph",
   },
   repo: {

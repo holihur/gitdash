@@ -9,9 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
-import { formatDate } from "@/lib/utils";
-import { useQueryState } from "@/lib/query-state";
+import { RelativeTime } from "@/components/relative-time";
 import { dateLocale, useI18n } from "@/lib/i18n";
+import { useQueryState } from "@/lib/query-state";
 import { apiErrorMsg } from "@/lib/errors";
 
 export default function Explore() {
@@ -339,7 +339,7 @@ export default function Explore() {
                 )}
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="secondary" className="font-normal">
-                    {formatDate(repo.created_at, dateLocale(lang))}
+                    <RelativeTime iso={repo.created_at} locale={dateLocale(lang)} />
                   </Badge>
                   <Button
                     variant={repo.starred ? "default" : "outline"}

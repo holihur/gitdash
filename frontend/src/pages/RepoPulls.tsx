@@ -72,9 +72,9 @@ export default function RepoPulls({
         api.listPulls(owner, name, undefined, pageSize, (page - 1) * pageSize),
         api.branches(owner, name),
       ]);
-      setPulls(ps.items);
-      setPullTotal(ps.total);
-      setBranches(bs.map((b) => b.name));
+      setPulls(ps.items ?? []);
+      setPullTotal(ps.total ?? 0);
+      setBranches((bs ?? []).map((b) => b.name));
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -425,7 +425,7 @@ export default function RepoPulls({
                 </div>
                 {openDetail && (
                   <div className="space-y-3 border-t bg-muted/20 px-4 py-3">
-                    {pr.body.trim() && <MarkdownView text={pr.body} />}
+                    {(pr.body ?? "").trim() && <MarkdownView text={pr.body ?? ""} />}
                     {pr.state === "merged" && (
                       <p className="text-xs text-muted-foreground">
                         {t("pulls.mergedOn", {

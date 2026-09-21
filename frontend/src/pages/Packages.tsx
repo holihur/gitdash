@@ -32,7 +32,7 @@ import {
 import Pagination from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
@@ -434,7 +434,9 @@ export default function Packages() {
                   <TableCell className="font-mono text-sm">{p.version}</TableCell>
                   <TableCell className="text-sm">{(p.size / 1024).toFixed(1)} KB</TableCell>
                   <TableCell className="text-sm">{p.downloads}</TableCell>
-                  <TableCell className="text-sm">{formatDate(p.created_at, locale)}</TableCell>
+                  <TableCell className="text-sm">
+                    <RelativeTime iso={p.created_at} locale={locale} />
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       {canManage && visibilitySelect(p)}
@@ -483,7 +485,9 @@ export default function Packages() {
                 key={a.id}
                 className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-0.5 text-muted-foreground"
               >
-                <span className="whitespace-nowrap">{formatDate(a.created_at, locale)}</span>
+                <span className="whitespace-nowrap">
+                  <RelativeTime iso={a.created_at} locale={locale} />
+                </span>
                 <span className="whitespace-nowrap font-mono">{a.actor}</span>
                 <span className="whitespace-nowrap font-medium">{a.action}</span>
                 <span className="min-w-0 break-all font-mono">

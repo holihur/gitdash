@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { StatusBadge } from "@/components/pipeline-shared";
 
 interface Props {
@@ -100,7 +101,7 @@ export default function PipelineRunsCard({
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(r.created_at, locale)}
+                        <RelativeTime iso={r.created_at} locale={locale} />
                       </TableCell>
                     </TableRow>
                     {expanded === r.id && (

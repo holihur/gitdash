@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 
 export function AuthorizedSection({ to, locale }: { to: (k: string) => string | undefined; locale: string }) {
@@ -88,10 +88,14 @@ export function AuthorizedSection({ to, locale }: { to: (k: string) => string | 
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {formatDate(auth.created_at, locale)}
+                  <RelativeTime iso={auth.created_at} locale={locale} />
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
-                  {auth.last_used_at ? formatDate(auth.last_used_at, locale) : "—"}
+                  {auth.last_used_at ? (
+                    <RelativeTime iso={auth.last_used_at} locale={locale} />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => setPendingRevoke(auth)}>

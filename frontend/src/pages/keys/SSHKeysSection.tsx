@@ -19,7 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import { type SectionProps } from "./shared";
 
@@ -156,7 +156,7 @@ export function SSHKeysSection({ t, to, locale }: SectionProps) {
                     <Badge variant="secondary">{key.public_key.split(" ")[0]}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(key.created_at, locale)}
+                    <RelativeTime iso={key.created_at} locale={locale} />
                   </TableCell>
                   <TableCell>
                     <Button

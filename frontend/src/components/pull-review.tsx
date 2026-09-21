@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { MergeGateBadges } from "@/components/merge-gate";
 import { MarkdownView } from "@/components/markdown";
 import { MarkdownEditor } from "@/components/markdown-editor";
-import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 
 /** PR review 区块：汇总徽章 + 历史 + 提交 review（需写权限）。 */
@@ -35,8 +35,8 @@ export default function PullReviewSection({
   const load = useCallback(async () => {
     try {
       const r = await api.listPullReviews(owner, name, number);
-      setReviews(r.reviews);
-      setSummary(r.summary);
+      setReviews(r.reviews ?? []);
+      setSummary(r.summary ?? { approvals: 0, request_changes: 0 });
       setGate(r.gate ?? null);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -105,7 +105,7 @@ export default function PullReviewSection({
                   </Badge>
                 )}
                 <span className="text-xs text-muted-foreground">
-                  {formatDate(r.created_at, locale)}
+                  <RelativeTime iso={r.created_at} locale={locale} />
                 </span>
               </div>
               {r.body && <MarkdownView text={r.body} className="mt-1 text-xs leading-5" />}

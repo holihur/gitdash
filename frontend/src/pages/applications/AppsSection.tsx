@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import { SecretDialog } from "./SecretDialog";
 
@@ -197,7 +197,7 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
                     {app.callback_url}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(app.created_at, locale)}
+                    <RelativeTime iso={app.created_at} locale={locale} />
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">

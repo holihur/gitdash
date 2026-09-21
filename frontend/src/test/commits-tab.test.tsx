@@ -65,3 +65,39 @@ describe("CommitsTab revert", () => {
     expect(screen.queryByRole("button", { name: /revert/i })).not.toBeInTheDocument();
   });
 });
+
+describe("CommitsTab pagination", () => {
+  it("加载更多会追加下一页提交", async () => {
+    const user = userEvent.setup();
+    const firstPage = Array.from({ length: 30 }, (_, i) => ({
+      sha: String(i).padStart(40, "0"),
+      author: "alice",
+      date: "2026-01-02T00:00:00Z",
+      message: `page1-${i}`,
+    }));
+    const secondPage = [
+      {
+        sha: "f".repeat(40),
+        author: "alice",
+        date: "2025-01-01T00:00:00Z",
+        message: "older commit",
+      },
+    ];
+    api.commits.mockReset();
+    api.commits.mockResolvedValueOnce(firstPage).mockResolvedValueOnce(secondPage);
+
+    renderTab("read");
+    await waitFor(() => expect(screen.getByText("page1-0")).toBeInTheDocument());
+    expect(api.commits).toHaveBeenLastCalledWith("alice", "demo", "main", undefined, 30, 0);
+
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(screen.getByText("older commit")).toBeInTheDocument());
+    expect(api.commits).toHaveBeenLastCalledWith("alice", "demo", "main", undefined, 30, 30);
+  });
+
+  it("不足一页时不显示加载更多", async () => {
+    renderTab("read");
+    await waitFor(() => expect(screen.getByText("edit file")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+  });
+});

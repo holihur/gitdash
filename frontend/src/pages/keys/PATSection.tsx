@@ -18,7 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { copyText, formatDate } from "@/lib/utils";
+import { copyText } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import { EXPIRY_OPTIONS, SCOPE_LABEL_KEY, expiryRFC3339, type SectionProps } from "./shared";
 
@@ -257,16 +258,22 @@ export function PATSection({ t, to, locale }: SectionProps) {
                       {expired ? (
                         <span className="font-medium text-destructive">{t("pats.expired")}</span>
                       ) : pat.expires_at ? (
-                        <span className="text-muted-foreground">{formatDate(pat.expires_at, locale)}</span>
+                        <span className="text-muted-foreground">
+                          <RelativeTime iso={pat.expires_at} locale={locale} />
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">{t("pats.neverExpires")}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(pat.created_at, locale)}
+                      <RelativeTime iso={pat.created_at} locale={locale} />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {pat.last_used_at ? formatDate(pat.last_used_at, locale) : t("pats.never")}
+                      {pat.last_used_at ? (
+                        <RelativeTime iso={pat.last_used_at} locale={locale} />
+                      ) : (
+                        t("pats.never")
+                      )}
                     </TableCell>
                     <TableCell>
                       <Button

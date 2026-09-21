@@ -17,8 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { StatusBadge } from "@/components/copilot/status-badge";
@@ -204,7 +205,7 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
                   </p>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {t("copilot.createdBy", { user: s.created_by })} · {formatDate(s.created_at, locale)}
+                  {t("copilot.createdBy", { user: s.created_by })} · <RelativeTime iso={s.created_at} locale={locale} />
                 </p>
                 {s.prompt && <p className="mt-1 line-clamp-2 text-xs">{s.prompt}</p>}
                 {s.error && <p className="mt-1 text-xs text-destructive">{s.error}</p>}

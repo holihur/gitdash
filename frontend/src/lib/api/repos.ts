@@ -120,11 +120,13 @@ export const reposApi = {
     req<Blob>(
       `/users/${owner}/repos/${name}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
     ),
-  commits: (owner: string, name: string, ref: string, q?: string) =>
-    req<Commit[]>(
-      `/users/${owner}/repos/${name}/commits?ref=${encodeURIComponent(ref)}` +
-        (q ? `&q=${encodeURIComponent(q)}` : ""),
-    ),
+  commits: (owner: string, name: string, ref: string, q?: string, limit?: number, offset?: number) => {
+    const p = new URLSearchParams({ ref });
+    if (q) p.set("q", q);
+    if (limit != null) p.set("limit", String(limit));
+    if (offset != null) p.set("offset", String(offset));
+    return req<Commit[]>(`/users/${owner}/repos/${name}/commits?${p.toString()}`);
+  },
   blame: (owner: string, name: string, ref: string, path: string) =>
     req<Blame>(
       `/users/${owner}/repos/${name}/blame?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,

@@ -5,8 +5,8 @@ import { api, type IssueComment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { MarkdownView } from "@/components/markdown";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import SplitDiff from "@/components/split-diff";
 import {
@@ -52,7 +52,7 @@ export function PullDiffView({
   const load = useCallback(async () => {
     try {
       const all = await api.listComments(owner, name, number, "pulls");
-      setComments(all.filter((c) => c.file_path && c.line));
+      setComments((all ?? []).filter((c) => c.file_path && c.line));
     } catch {
       /* ignore */
     }
@@ -166,7 +166,7 @@ export function PullDiffView({
                 <div key={c.id} className="text-xs">
                   <span className="font-medium">{c.author}</span>
                   <span className="ml-2 text-muted-foreground">
-                    {formatDate(c.created_at, locale)}
+                    <RelativeTime iso={c.created_at} locale={locale} />
                   </span>
                   <MarkdownView text={c.body} className="mt-0.5 text-xs leading-5" />
                   {suggestion !== null && c.line_side !== "old" && (

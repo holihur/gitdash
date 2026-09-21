@@ -398,6 +398,8 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             }
           />
           <Route path="/login" element={<Navigate to="/" replace />} />
+          {/* 未匹配路径不应渲染空白页（白屏）：回退首页 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />

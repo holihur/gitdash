@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   BadgeCheck,
@@ -25,8 +25,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
 import { buildCommitGraph, laneColor, type CommitGraphRow } from "@/lib/commit-graph";
@@ -43,6 +44,8 @@ export interface CommitsTabProps {
 const GRAPH_COL_W = 14;
 const GRAPH_PAD = 10;
 const GRAPH_ROW_H = 44;
+// 每次加载的提交条数（与后端默认值一致）。
+const PAGE_SIZE = 30;
 
 function CommitGraphCell({ row }: { row: CommitGraphRow }) {
   const x = (lane: number) => GRAPH_PAD + lane * GRAPH_COL_W;
@@ -135,6 +138,9 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
   const [commits, setCommits] = useState<Commit[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const reqId = useRef(0);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [diffSha, setDiffSha] = useState<string | null>(null);
@@ -150,12 +156,22 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
     return () => window.clearTimeout(id);
   }, [query]);
 
+  // 切换分支 / 搜索词 / 撤销后重置为第一页。
   useEffect(() => {
     if (!refName) return;
+    const id = ++reqId.current;
+    setLoadingMore(false);
     api
-      .commits(owner, name, refName, debouncedQuery || undefined)
-      .then(setCommits)
-      .catch((e) => toast.error(apiErrorMsg(to, e)));
+      .commits(owner, name, refName, debouncedQuery || undefined, PAGE_SIZE, 0)
+      .then((cs) => {
+        if (id !== reqId.current) return;
+        setCommits(cs);
+        setHasMore(cs.length === PAGE_SIZE);
+      })
+      .catch((e) => {
+        if (id !== reqId.current) return;
+        toast.error(apiErrorMsg(to, e));
+      });
   }, [owner, name, refName, debouncedQuery, to, reload]);
 
   useEffect(() => {
@@ -190,6 +206,29 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
     }
   };
 
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const id = reqId.current;
+    try {
+      const cs = await api.commits(
+        owner,
+        name,
+        refName,
+        debouncedQuery || undefined,
+        PAGE_SIZE,
+        commits.length,
+      );
+      if (id !== reqId.current) return;
+      setCommits((prev) => [...prev, ...cs]);
+      setHasMore(cs.length === PAGE_SIZE);
+    } catch (e) {
+      if (id === reqId.current) toast.error(apiErrorMsg(to, e));
+    } finally {
+      if (id === reqId.current) setLoadingMore(false);
+    }
+  };
+
   const searching = debouncedQuery !== "";
 
   return (
@@ -216,6 +255,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
           {searching ? t("commits.noMatches") : t("repo.noCommits")}
         </p>
       ) : (
+        <>
         <div className="overflow-x-auto rounded-lg border">
           <Table className="min-w-[720px]">
             <TableHeader>
@@ -297,7 +337,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
                     </TableCell>
                     <TableCell className="text-sm">{c.author}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(c.date, locale)}
+                      <RelativeTime iso={c.date} locale={locale} />
                     </TableCell>
                     {canWrite && (
                       <TableCell className="text-right">
@@ -319,6 +359,14 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
             </TableBody>
           </Table>
         </div>
+        {hasMore && (
+          <div className="mt-3 flex justify-center">
+            <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
+              {loadingMore ? t("commits.loading") : t("commits.loadMore")}
+            </Button>
+          </div>
+        )}
+        </>
       )}
 
       {diffSha && (

@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CommitMessage } from "@/components/commit-message";
-import { cn, formatDate, formatSize } from "@/lib/utils";
+import { cn, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 
 interface Props {
   entries: TreeEntry[];
@@ -121,7 +122,7 @@ export default function TreeListing({
                     </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                    {entry.modified_at ? formatDate(entry.modified_at, locale) : "-"}
+                    {entry.modified_at ? <RelativeTime iso={entry.modified_at} locale={locale} /> : "-"}
                   </TableCell>
                 </TableRow>
               );

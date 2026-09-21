@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { cn, formatDate } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 
 type View = "repos" | "members" | "followers";
 
@@ -419,7 +420,9 @@ function RepoCard({ repo }: { repo: Repo }) {
           {repo.description || t("common.noDescription")}
         </p>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>{formatDate(repo.created_at, locale)}</span>
+          <span>
+            <RelativeTime iso={repo.created_at} locale={locale} />
+          </span>
           {typeof repo.stars === "number" && (
             <span className="flex items-center gap-1">
               <Star className="h-3 w-3" />

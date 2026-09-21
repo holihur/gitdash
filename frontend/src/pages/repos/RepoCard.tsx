@@ -10,8 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 
 interface Props {
   repo: Repo;
@@ -97,7 +97,7 @@ export default function RepoCard({
       <CardContent className="mt-auto space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="font-normal">
-            {formatDate(repo.created_at, locale)}
+            <RelativeTime iso={repo.created_at} locale={locale} />
           </Badge>
           {repo.is_template && (
             <Badge variant="outline" className="font-normal">

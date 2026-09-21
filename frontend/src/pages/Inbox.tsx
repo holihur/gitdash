@@ -20,8 +20,9 @@ import { api, type Notification } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Pagination from "@/components/ui/pagination";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import ListSkeleton from "@/components/list-skeleton";
 
@@ -230,7 +231,7 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
                       {n.kind !== "system" && (
                         <>{t(`inbox.${n.kind}.${n.action}`, { actor: n.actor })} · </>
                       )}
-                      {formatDate(n.created_at, locale)}
+                      <RelativeTime iso={n.created_at} locale={locale} />
                     </span>
                   </span>
                 </button>

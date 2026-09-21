@@ -5,8 +5,8 @@ import { api, type IssueComment } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { MarkdownView } from "@/components/markdown";
 import { MarkdownEditor } from "@/components/markdown-editor";
-import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 
 interface Props {
   owner: string;
@@ -26,7 +26,8 @@ export default function CommentSection({ owner, name, number, kind = "issues" }:
 
   const load = useCallback(async () => {
     try {
-      setComments(await api.listComments(owner, name, number, kind));
+      const list = await api.listComments(owner, name, number, kind);
+      setComments(list ?? []);
     } catch (e) {
       toast.error(to("comments.failed", { error: e instanceof Error ? e.message : String(e) }) ?? String(e));
     } finally {
@@ -87,7 +88,9 @@ export default function CommentSection({ owner, name, number, kind = "issues" }:
             <div key={c.id} className="rounded-lg border bg-background p-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">{c.author}</span>
-                <span className="text-xs text-muted-foreground">{formatDate(c.created_at, locale)}</span>
+                <span className="text-xs text-muted-foreground">
+                  <RelativeTime iso={c.created_at} locale={locale} />
+                </span>
                 {me && c.author === me && (
                   <Button
                     size="icon"

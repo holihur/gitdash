@@ -36,8 +36,8 @@ export function PullDiffView({
       owner={owner}
       name={name}
       number={number}
-      files={diff.files}
-      patch={diff.patch}
+      files={diff.files ?? []}
+      patch={diff.patch ?? ""}
       canWrite={canWrite}
     />
   );
@@ -57,7 +57,7 @@ export function CodeownersBadge({ owner, name, number }: { owner: string; name: 
       alive = false;
     };
   }, [owner, name, number]);
-  if (!status || status.owners.length === 0) return null;
+  if (!status || (status.owners ?? []).length === 0) return null;
   return (
     <Badge
       variant="outline"
@@ -69,8 +69,8 @@ export function CodeownersBadge({ owner, name, number }: { owner: string; name: 
     >
       <Users className="h-3 w-3" />
       {status.satisfied
-        ? t("pulls.codeownersSatisfied", { owners: status.owners.join(", ") })
-        : t("pulls.codeownersMissing", { owners: status.missing.join(", ") })}
+        ? t("pulls.codeownersSatisfied", { owners: (status.owners ?? []).join(", ") })
+        : t("pulls.codeownersMissing", { owners: (status.missing ?? []).join(", ") })}
     </Badge>
   );
 }

@@ -2,8 +2,8 @@ import type { Ref } from "react";
 import { FileText, GitCommitHorizontal } from "lucide-react";
 import type { Blame, Blob, Commit, TreeEntry } from "@/lib/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDate } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { MarkdownWithToc } from "@/components/markdown";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import TreeListing from "@/components/tree-listing";
@@ -88,7 +88,7 @@ export function RepoCodeBody({
             {latestCommit.sha.slice(0, 7)}
           </code>
           <span className="shrink-0 whitespace-nowrap text-muted-foreground">
-            {formatDate(latestCommit.date, locale)}
+            <RelativeTime iso={latestCommit.date} locale={locale} />
           </span>
         </div>
       )}

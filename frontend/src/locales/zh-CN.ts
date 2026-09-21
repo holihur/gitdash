@@ -42,6 +42,9 @@ export const zhCN: Messages = {
     packages: "包仓库",
   },
   common: {
+    boundaryTitle: "页面出错了",
+    boundaryBody: "渲染页面时发生意外错误。请尝试重新加载；若持续出现，请反馈给我们。",
+    reload: "重新加载",
     name: "名称",
     description: "描述",
     create: "创建",
@@ -314,6 +317,8 @@ export const zhCN: Messages = {
     reverted: "已撤销，生成提交 {sha}",
     searchPlaceholder: "搜索提交（提交信息 / 作者 / SHA）",
     noMatches: "没有匹配的提交",
+    loadMore: "加载更多",
+    loading: "加载中…",
     graph: "提交图",
   },
   repo: {

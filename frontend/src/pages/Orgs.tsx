@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import ConfirmDialog from "@/components/confirm-dialog";
-import { formatDate } from "@/lib/utils";
+import { RelativeTime } from "@/components/relative-time";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
@@ -169,7 +169,7 @@ export default function Orgs() {
                     <Badge variant="secondary">{org.role}</Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(org.created_at, locale)}
+                    <RelativeTime iso={org.created_at} locale={locale} />
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     {org.role === "owner" && (

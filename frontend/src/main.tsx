@@ -5,6 +5,7 @@ import "./index.css";
 import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider, detectLang, preloadLang } from "@/lib/i18n";
 import { loadInstanceInfo } from "@/lib/api";
+import ErrorBoundary from "@/components/error-boundary";
 
 // 实例信息（SSH 端口、文档地址）不再阻塞首次渲染：先并行发起请求，docsUrl 在
 // 到达后通过可订阅 store 通知相关组件补渲染，避免首屏空等一个网络往返。
@@ -17,7 +18,9 @@ void preloadLang(detectLang()).finally(() => {
     <React.StrictMode>
       <ThemeProvider>
         <I18nProvider>
-          <App />
+          <ErrorBoundary>
+            <App />
+          </ErrorBoundary>
         </I18nProvider>
       </ThemeProvider>
     </React.StrictMode>,

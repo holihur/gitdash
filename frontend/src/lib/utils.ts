@@ -13,6 +13,50 @@ export function formatDate(iso: string, locale?: string): string {
   }
 }
 
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+// 超过该跨度后不再展示相对时间，直接给出精确日期，避免出现“8 个月前”这类
+// 模糊且无意义的描述。
+const RELATIVE_LIMIT_DAYS = 30;
+
+/**
+ * 人类可读的时间：近期显示“3 分钟前 / 昨天 / 5 天前”，超过 30 天回退到
+ * 本地化的绝对时间。使用 Intl.RelativeTimeFormat，自动适配当前语言。
+ *
+ * `now` 可注入以便测试与定时刷新。
+ */
+export function formatRelativeTime(
+  iso: string,
+  locale?: string,
+  now: number = Date.now(),
+): string {
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) return iso;
+
+  let rtf: Intl.RelativeTimeFormat;
+  try {
+    rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  } catch {
+    return formatDate(iso, locale);
+  }
+
+  const delta = time - now;
+  const abs = Math.abs(delta);
+  if (abs < 45_000) return rtf.format(0, "second");
+
+  const minutes = Math.round(delta / MINUTE_MS);
+  if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+
+  const hours = Math.round(delta / HOUR_MS);
+  if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+
+  const days = Math.round(delta / DAY_MS);
+  if (Math.abs(days) < RELATIVE_LIMIT_DAYS) return rtf.format(days, "day");
+
+  return formatDate(iso, locale);
+}
+
 export function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;

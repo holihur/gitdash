@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { ChevronDown, ChevronRight, Link2, Plus, Trash2 } from "lucide-react";
 import { api, type Webhook, type WebhookDelivery } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
+import { RelativeTime } from "@/components/relative-time";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,8 +24,14 @@ interface Props {
   repo: string;
 }
 
+/** 后端部分时间戳不带时区，补 Z 后按 UTC 解析。 */
+function normalizeIso(iso: string): string {
+  return /[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+}
+
 export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Props) {
-  const { t, to } = useI18n();
+  const { t, to, lang } = useI18n();
+  const locale = dateLocale(lang);
   const [hooks, setHooks] = useState<Webhook[]>([]);
   const [deliveries, setDeliveries] = useState<Record<number, WebhookDelivery[]>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -181,7 +188,7 @@ export default function WebhooksDialog({ open, onOpenChange, owner, repo }: Prop
                               </span>
                             )}
                             <span className="ml-auto shrink-0 text-muted-foreground">
-                              {new Date(d.created_at.endsWith("Z") ? d.created_at : d.created_at + "Z").toLocaleString()}
+                              <RelativeTime iso={normalizeIso(d.created_at)} locale={locale} />
                             </span>
                           </div>
                         ))
