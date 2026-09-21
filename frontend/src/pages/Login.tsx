@@ -369,7 +369,17 @@ export default function Login({ onAuthed }: Props) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
+      <div className="flex items-center justify-end gap-2 px-3 py-2 sm:px-6 sm:py-3">
+        {swaggerEnabled && (
+          <a
+            href="/api/swagger/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {t("login.apiDocs")}
+          </a>
+        )}
         <ThemeToggle />
         <LangToggle />
       </div>
@@ -452,29 +462,16 @@ export default function Login({ onAuthed }: Props) {
               </p>
             )}
             <p className="mt-4 text-center text-xs text-muted-foreground">{t("login.hint")}</p>
-            {(swaggerEnabled || docs) && (
+            {docs && (
               <p className="mt-2 text-center text-xs">
-                {swaggerEnabled && (
-                  <a
-                    href="/api/swagger/"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  >
-                    {t("login.apiDocs")}
-                  </a>
-                )}
-                {swaggerEnabled && docs && <span className="mx-1 text-muted-foreground">·</span>}
-                {docs && (
-                  <a
-                    href={docs}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                  >
-                    {t("login.docs")}
-                  </a>
-                )}
+                <a
+                  href={docs}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  {t("login.docs")}
+                </a>
               </p>
             )}
             {(githubEnabled || googleEnabled || oidc.enabled || providersError) && (
