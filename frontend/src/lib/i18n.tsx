@@ -8,14 +8,6 @@ import {
   type ReactNode,
 } from "react";
 import { en, type DeepPartial, type Messages } from "@/locales/en";
-import { zhCN } from "@/locales/zh-CN";
-import { ja } from "@/locales/ja";
-import { ko } from "@/locales/ko";
-import { fr } from "@/locales/fr";
-import { de } from "@/locales/de";
-import { ru } from "@/locales/ru";
-import { es } from "@/locales/es";
-import { pt } from "@/locales/pt";
 
 export type Lang =
   | "en"
@@ -58,17 +50,38 @@ export function dateLocale(lang: Lang): string {
   return DATE_LOCALES[lang] ?? "en-US";
 }
 
-const MESSAGES: Record<Lang, Messages | DeepPartial<Messages>> = {
-  en,
-  "zh-CN": zhCN,
-  ja,
-  ko,
-  fr,
-  de,
-  ru,
-  es,
-  pt,
+type Msg = Messages | DeepPartial<Messages>;
+
+// 语言包按需加载：只有 en 静态打包（作为缺失 key 的兜底），其余语言在切换/启动时
+// 才下载对应 chunk。此前 9 种语言全部静态打包进首屏公共 chunk（约 500KB 源码），
+// 是首屏体积的最大来源。
+const LOADERS: Record<Lang, () => Promise<Msg>> = {
+  en: async () => en,
+  "zh-CN": () => import("@/locales/zh-CN").then((m) => m.zhCN),
+  ja: () => import("@/locales/ja").then((m) => m.ja),
+  ko: () => import("@/locales/ko").then((m) => m.ko),
+  fr: () => import("@/locales/fr").then((m) => m.fr),
+  de: () => import("@/locales/de").then((m) => m.de),
+  ru: () => import("@/locales/ru").then((m) => m.ru),
+  es: () => import("@/locales/es").then((m) => m.es),
+  pt: () => import("@/locales/pt").then((m) => m.pt),
 };
+
+// 已加载语言包的模块级缓存：跨 Provider 实例/重挂载复用，且首次渲染可同步读取。
+const cache: Partial<Record<Lang, Msg>> = { en };
+
+/**
+ * 预加载指定语言（幂等）。应用启动时先 await 当前语言，避免首帧出现英文兜底文案；
+ * 运行时切换语言也走这里，加载完成后再触发重渲染。
+ */
+export async function preloadLang(lang: Lang): Promise<void> {
+  if (cache[lang]) return;
+  try {
+    cache[lang] = await LOADERS[lang]();
+  } catch {
+    /* 加载失败时保持英文兜底 */
+  }
+}
 
 const STORAGE_KEY = "gitdash-lang";
 
@@ -85,10 +98,10 @@ const BROWSER_LANG: Record<string, Lang> = {
   pt: "pt",
 };
 
-function detectLang(): Lang {
+export function detectLang(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && saved in MESSAGES) return saved as Lang;
+    if (saved && saved in LOADERS) return saved as Lang;
   } catch {
     /* ignore */
   }
@@ -122,6 +135,8 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(detectLang);
+  // 语言包集合快照：动态 import 完成后替换引用，驱动 t/to 重新计算。
+  const [store, setStore] = useState<Partial<Record<Lang, Msg>>>(() => ({ ...cache }));
 
   useEffect(() => {
     try {
@@ -130,30 +145,33 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
     document.documentElement.lang = lang;
+    // 直接挂载 Provider（如管理台 / 测试）时懒加载当前语言。
+    if (!cache[lang]) void preloadLang(lang).then(() => setStore({ ...cache }));
   }, [lang]);
 
-  const setLang = useCallback((l: Lang) => setLangState(l), []);
+  const setLang = useCallback((l: Lang) => {
+    setLangState(l);
+    if (!cache[l]) void preloadLang(l).then(() => setStore({ ...cache }));
+  }, []);
 
   const t = useCallback(
     (key: string, vars?: Record<string, string | number>) => {
-      const template = (resolve(MESSAGES[lang], key) ??
-        resolve(MESSAGES.en, key) ??
-        key) as unknown;
+      const template = (resolve(store[lang], key) ?? resolve(en, key) ?? key) as unknown;
       if (typeof template !== "string") return key;
       if (!vars) return template;
       return template.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
     },
-    [lang],
+    [lang, store],
   );
 
   const to = useCallback(
     (key: string, vars?: Record<string, string | number>) => {
-      const template = (resolve(MESSAGES[lang], key) ?? resolve(MESSAGES.en, key)) as unknown;
+      const template = (resolve(store[lang], key) ?? resolve(en, key)) as unknown;
       if (typeof template !== "string") return undefined;
       if (!vars) return template;
       return template.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
     },
-    [lang],
+    [lang, store],
   );
 
   const value = useMemo(() => ({ lang, setLang, t, to }), [lang, setLang, t, to]);

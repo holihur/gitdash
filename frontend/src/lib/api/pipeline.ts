@@ -20,7 +20,7 @@ export const pipelineApi = {
   listPipelineRuns: (owner: string, name: string) =>
     req<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?limit=50`),
   getPipelineRun: (owner: string, name: string, id: number) =>
-    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`),
+    req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`, {}, { fresh: true }),
   triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string; file?: string; delay?: string } | string) =>
     req<{ runs: PipelineRun[] }>(`/users/${owner}/repos/${name}/pipeline/runs`, {
       method: "POST",

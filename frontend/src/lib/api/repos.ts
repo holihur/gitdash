@@ -92,6 +92,8 @@ export const reposApi = {
   getMirror: (owner: string, name: string) =>
     req<{ url: string; created_at: string; status?: string; error?: string }>(
       `/users/${owner}/repos/${name}/mirror`,
+      {},
+      { fresh: true }, // 同步状态轮询/打开对话框需实时
     ),
   setMirror: (owner: string, name: string, url: string, privateKey?: string) =>
     req<{ url: string; created_at: string; status?: string; error?: string }>(

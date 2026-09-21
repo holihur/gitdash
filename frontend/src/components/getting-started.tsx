@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, CheckCircle2, Circle, FolderGit2, KeyRound, Link2, Rocket, X } from "lucide-react";
 import { api } from "@/lib/api";
-import { docsUrl } from "@/lib/docs";
+import { useDocsUrl } from "@/lib/docs";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ interface Step {
  */
 export function GettingStarted({ hasRepos }: { hasRepos: boolean }) {
   const { t } = useI18n();
+  const docs = useDocsUrl();
   const [dismissed, setDismissed] = useState(false);
   const [hasKeys, setHasKeys] = useState<boolean | null>(null);
 
@@ -62,7 +63,6 @@ export function GettingStarted({ hasRepos }: { hasRepos: boolean }) {
   // 已经建了仓库、也加了公钥 → 视为已完成引导，自动隐藏（避免打扰老用户）。
   if (hasRepos && hasKeys) return null;
 
-  const docs = docsUrl();
   const steps: Step[] = [
     { key: "repo", done: hasRepos, to: "/", icon: <FolderGit2 className="h-4 w-4" /> },
     { key: "ssh", done: hasKeys === true, to: "/keys", icon: <KeyRound className="h-4 w-4" /> },

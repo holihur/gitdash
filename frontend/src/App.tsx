@@ -3,7 +3,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react
 import { Toaster, toast } from "sonner";
 import { Bell, Compass, GitBranch, KeyRound, Loader2, FolderGit2, Building2, Cpu, Package, Search, AppWindow, BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
-import { docsUrl } from "@/lib/docs";
+import { useDocsUrl } from "@/lib/docs";
 import { Button } from "@/components/ui/button";
 import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
 import { CommandPalette } from "@/components/command-palette";
@@ -123,6 +123,7 @@ export default function App() {
 function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const docs = useDocsUrl();
   const [unread, setUnread] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
@@ -234,9 +235,9 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
           </Link>
           <NavOverflow items={navItems} />
           <div className="ml-auto flex items-center gap-1 sm:gap-2">
-            {docsUrl() && (
+            {docs && (
               <Button variant="ghost" size="icon" className="h-9 w-9" title={t("app.docs")} asChild>
-                <a href={docsUrl()} target="_blank" rel="noreferrer">
+                <a href={docs} target="_blank" rel="noreferrer">
                   <BookOpen className="h-4 w-4" />
                 </a>
               </Button>

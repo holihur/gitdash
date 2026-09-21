@@ -72,26 +72,103 @@ export async function send(path: string, opts: RequestInit = {}): Promise<Respon
   return res;
 }
 
-export async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await send(path, opts);
-  if (res.status === 204) return null as T;
-  return res.json();
+// ---- 客户端 JSON 缓存（GET） ----
+//
+// 目标：减少重复请求。相同 GET 在 TTL 内复用结果；并发的相同 GET 共享同一个
+// in-flight Promise（StrictMode 开发模式双调用、同页多组件重复拉取都受益）。
+// 任意写请求会清空缓存（含进行中的请求的结果，用 generation 防止写回旧数据），
+// 避免读到陈旧数据。轮询/手动刷新等需要实时的请求传 { fresh: true } 绕过缓存。
+const JSON_CACHE_TTL_MS = 3000;
+const jsonCache = new Map<string, { at: number; data: unknown }>();
+const inflight = new Map<string, Promise<unknown>>();
+// 每次写请求自增：in-flight 的 GET 只有在 generation 未变时才写回缓存。
+let cacheGeneration = 0;
+
+export interface CacheOptions {
+  /** true 时跳过缓存读取、强制请求并刷新缓存（用于轮询 / 手动刷新） */
+  fresh?: boolean;
+}
+
+function clearJsonCache(): void {
+  jsonCache.clear();
+  cacheGeneration++;
+}
+
+/** 清空客户端 GET 缓存（测试隔离、或需要强制全量刷新时使用）。 */
+export function clearApiCache(): void {
+  clearJsonCache();
+}
+
+function isMutation(opts: RequestInit): boolean {
+  const m = (opts.method ?? "GET").toUpperCase();
+  return m !== "GET" && m !== "HEAD";
+}
+
+async function cachedJson<T>(
+  path: string,
+  cache: CacheOptions | undefined,
+  loader: () => Promise<T>,
+): Promise<T> {
+  if (cache?.fresh) {
+    const gen = cacheGeneration;
+    const data = await loader();
+    if (gen === cacheGeneration) jsonCache.set(path, { at: Date.now(), data });
+    return data;
+  }
+  const hit = jsonCache.get(path);
+  if (hit && Date.now() - hit.at < JSON_CACHE_TTL_MS) return hit.data as T;
+  const pending = inflight.get(path) as Promise<T> | undefined;
+  if (pending) return pending;
+  const gen = cacheGeneration;
+  const p = loader().then((data) => {
+    if (gen === cacheGeneration) jsonCache.set(path, { at: Date.now(), data });
+    return data;
+  });
+  inflight.set(path, p);
+  try {
+    return await p;
+  } finally {
+    inflight.delete(path);
+  }
+}
+
+export async function req<T>(path: string, opts: RequestInit = {}, cache?: CacheOptions): Promise<T> {
+  const load = async (): Promise<T> => {
+    const res = await send(path, opts);
+    if (res.status === 204) return null as T;
+    return res.json();
+  };
+  if (isMutation(opts)) {
+    clearJsonCache();
+    try {
+      return await load();
+    } finally {
+      clearJsonCache();
+    }
+  }
+  return cachedJson(path, cache, load);
 }
 
 /** multipart 上传：不设 Content-Type（由浏览器带 boundary） */
 export async function sendForm<T>(path: string, form: FormData): Promise<T> {
-  const res = await fetch(`/api${path}`, { method: "POST", credentials: "same-origin", body: form });
-  if (!res.ok) {
-    let msg = res.statusText;
-    try {
-      const body = await res.json();
-      if (typeof body?.error === "string") msg = body.error;
-    } catch {
-      /* ignore */
+  // 上传属于写操作：清空 GET 缓存，避免表单变更后读到旧数据。
+  clearJsonCache();
+  try {
+    const res = await fetch(`/api${path}`, { method: "POST", credentials: "same-origin", body: form });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try {
+        const body = await res.json();
+        if (typeof body?.error === "string") msg = body.error;
+      } catch {
+        /* ignore */
+      }
+      throw new ApiError(res.status, msg);
     }
-    throw new ApiError(res.status, msg);
+    return res.json() as Promise<T>;
+  } finally {
+    clearJsonCache();
   }
-  return res.json() as Promise<T>;
 }
 
 // 分页列表请求：数组 JSON + X-Total-Count 响应头
@@ -100,11 +177,26 @@ export interface Paged<T> {
   total: number;
 }
 
-export async function reqPage<T>(path: string, opts: RequestInit = {}): Promise<Paged<T>> {
-  const res = await send(path, opts);
-  const items = (await res.json()) as T;
-  const total = Number(res.headers.get("X-Total-Count") ?? 0);
-  return { items, total: Number.isNaN(total) ? 0 : total };
+export async function reqPage<T>(
+  path: string,
+  opts: RequestInit = {},
+  cache?: CacheOptions,
+): Promise<Paged<T>> {
+  const load = async (): Promise<Paged<T>> => {
+    const res = await send(path, opts);
+    const items = (await res.json()) as T;
+    const total = Number(res.headers.get("X-Total-Count") ?? 0);
+    return { items, total: Number.isNaN(total) ? 0 : total };
+  };
+  if (isMutation(opts)) {
+    clearJsonCache();
+    try {
+      return await load();
+    } finally {
+      clearJsonCache();
+    }
+  }
+  return cachedJson(path, cache, load);
 }
 
 export function pageQuery(limit?: number, offset?: number): string {

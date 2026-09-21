@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { GitBranch, Github, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
-import { docsUrl } from "@/lib/docs";
+import { useDocsUrl } from "@/lib/docs";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { takeReturnPath } from "@/lib/auth-expiry";
@@ -21,6 +21,7 @@ interface Props {
 
 export default function Login({ onAuthed }: Props) {
   const { t, to } = useI18n();
+  const docs = useDocsUrl();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
   const [username, setUsername] = useState("");
@@ -451,7 +452,7 @@ export default function Login({ onAuthed }: Props) {
               </p>
             )}
             <p className="mt-4 text-center text-xs text-muted-foreground">{t("login.hint")}</p>
-            {(swaggerEnabled || docsUrl()) && (
+            {(swaggerEnabled || docs) && (
               <p className="mt-2 text-center text-xs">
                 {swaggerEnabled && (
                   <a
@@ -463,10 +464,10 @@ export default function Login({ onAuthed }: Props) {
                     {t("login.apiDocs")}
                   </a>
                 )}
-                {swaggerEnabled && docsUrl() && <span className="mx-1 text-muted-foreground">·</span>}
-                {docsUrl() && (
+                {swaggerEnabled && docs && <span className="mx-1 text-muted-foreground">·</span>}
+                {docs && (
                   <a
-                    href={docsUrl()}
+                    href={docs}
                     target="_blank"
                     rel="noreferrer"
                     className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
