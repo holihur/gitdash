@@ -25,6 +25,19 @@ func registrationDisabled() bool {
 	return envx.Bool("GITDASH_DISABLE_REGISTRATION", false)
 }
 
+// passwordLoginEnabled 账号密码登录是否开放。默认开启；管理端将设置
+// password_login_enabled 置为 "0" 后关闭（此时仅剩 OAuth/OIDC 等登录方式）。
+// 每次读取，管理端保存后立即生效。
+func (a *API) passwordLoginEnabled() bool {
+	return a.store.GetSetting("password_login_enabled") != "0"
+}
+
+// swaggerEnabled 匿名是否可访问 Swagger UI / OpenAPI 规范。默认开启；管理端将
+// 设置 swagger_enabled 置为 "0" 后关闭（Swagger / openapi.json 一律返回 404）。
+func (a *API) swaggerEnabled() bool {
+	return a.store.GetSetting("swagger_enabled") != "0"
+}
+
 // 限速记录持久化在 store（login_fails 表）：重启与多实例共享同一窗口，
 // 不再有内存 map 的无限增长问题。
 

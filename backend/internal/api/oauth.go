@@ -73,11 +73,17 @@ func (a *API) oauthSettings() (enabled bool, clientID, clientSecret string) {
 //	@Success     200 {object} map[string]any
 //	@Router      /auth/providers [get]
 func (a *API) providers(w http.ResponseWriter, r *http.Request) {
+	passwordOn := a.passwordLoginEnabled()
 	resp := map[string]any{
-		"github":         map[string]any{"enabled": false},
-		"google":         map[string]any{"enabled": false},
-		"oidc":           map[string]any{"enabled": false},
-		"password_reset": map[string]any{"enabled": a.emailReady()},
+		"github": map[string]any{"enabled": false},
+		"google": map[string]any{"enabled": false},
+		"oidc":   map[string]any{"enabled": false},
+		// 密码登录开关（管理端可关闭；默认开启）：前端据此隐藏账号密码表单。
+		"password":       map[string]any{"enabled": passwordOn},
+		"register":       map[string]any{"enabled": passwordOn && !registrationDisabled()},
+		"password_reset": map[string]any{"enabled": passwordOn && a.emailReady()},
+		// Swagger/OpenAPI 是否对匿名开放（管理端可关闭）。
+		"swagger": map[string]any{"enabled": a.swaggerEnabled()},
 	}
 	ghEnabled, ghID, _ := a.oauthSettings()
 	if ghEnabled && ghID != "" {

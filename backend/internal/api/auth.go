@@ -33,6 +33,10 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusForbidden, "registration_disabled", "registration is disabled")
 		return
 	}
+	if !a.passwordLoginEnabled() { // 密码登录关闭时无法激活密码账号，直接拒绝注册
+		writeCode(w, http.StatusForbidden, "password_login_disabled", "password login is disabled")
+		return
+	}
 	var in struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -138,6 +142,10 @@ func passwordIssue(pw string) (string, string) {
 //	@Failure     429 {object} map[string]string
 //	@Router      /auth/login [post]
 func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	if !a.passwordLoginEnabled() {
+		writeCode(w, http.StatusForbidden, "password_login_disabled", "password login is disabled")
+		return
+	}
 	var in struct {
 		Username string `json:"username"`
 		Password string `json:"password"`

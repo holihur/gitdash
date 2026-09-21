@@ -38,6 +38,10 @@ func (a *API) sendPasswordReset(username, email, token, base string) {
 //	@Failure     429 {object} map[string]string
 //	@Router      /auth/forgot-password [post]
 func (a *API) forgotPassword(w http.ResponseWriter, r *http.Request) {
+	if !a.passwordLoginEnabled() {
+		writeCode(w, http.StatusForbidden, "password_login_disabled", "password login is disabled")
+		return
+	}
 	var in struct {
 		Email string `json:"email"`
 	}
@@ -87,6 +91,10 @@ func (a *API) forgotPassword(w http.ResponseWriter, r *http.Request) {
 //	@Failure     429 {object} map[string]string
 //	@Router      /auth/reset-password [post]
 func (a *API) resetPassword(w http.ResponseWriter, r *http.Request) {
+	if !a.passwordLoginEnabled() {
+		writeCode(w, http.StatusForbidden, "password_login_disabled", "password login is disabled")
+		return
+	}
 	var in struct {
 		Token    string `json:"token"`
 		Password string `json:"password"`

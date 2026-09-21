@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/jobs"
 	"gitdash/backend/internal/ssrf"
@@ -45,10 +46,15 @@ func validImportURL(raw string) (string, error) {
 		if err != nil || u.Hostname() == "" {
 			return "", fmt.Errorf("invalid git url")
 		}
-		// git:// 明文且无认证：仅允许回环/内网（本地测试 / 内网 Git 服务器）；
-		// 公网与 link-local 一律拒绝。
-		if !importHostLoopbackOrPrivate(u) {
-			return "", fmt.Errorf("git:// only allowed for loopback/private hosts")
+		// 与 http(s)/ssh 一致的默认语义：公网放行，回环/私网/链路本地/元数据拦截。
+		// 自托管需访问内网 git 服务器时，可显式设 GITDASH_IMPORT_ALLOW_PRIVATE_GIT=1
+		// 放开回环/私网（link-local/元数据仍始终拦截）。
+		blocked := importHostBlocked(u)
+		if blocked && importGitAllowPrivate() && importHostLoopbackOrPrivate(u) {
+			blocked = false
+		}
+		if blocked {
+			return "", fmt.Errorf("blocked host")
 		}
 		return raw, nil
 	default:
@@ -86,6 +92,12 @@ func importHostBlocked(u *url.URL) bool {
 		}
 	}
 	return false
+}
+
+// importGitAllowPrivate 是否允许 git:// 导入访问回环/私网（自托管内网 git 服务器场景）。
+// 默认关闭，避免把服务端当作访问内网的跳板（SSRF）。
+func importGitAllowPrivate() bool {
+	return envx.Bool("GITDASH_IMPORT_ALLOW_PRIVATE_GIT", false)
 }
 
 func importHostLoopbackOrPrivate(u *url.URL) bool {

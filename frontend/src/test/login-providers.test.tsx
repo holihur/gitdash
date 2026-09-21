@@ -58,6 +58,22 @@ describe("Login providers", () => {
     await waitFor(() => expect(screen.getByText("Continue with GitHub")).toBeTruthy());
   });
 
+  it("密码登录关闭时隐藏账号密码表单与 Swagger 入口", async () => {
+    api.authProviders.mockResolvedValue({
+      password: { enabled: false },
+      register: { enabled: false },
+      swagger: { enabled: false },
+      github: { enabled: true },
+    });
+    renderLogin();
+    await waitFor(() => expect(screen.getByText("Continue with GitHub")).toBeTruthy());
+    expect(document.querySelector("#username")).toBeNull();
+    expect(screen.queryByRole("link", { name: /API Docs/ })).toBeNull();
+    expect(
+      screen.getByText("Password sign-in is disabled. Use one of the sign-in methods below."),
+    ).toBeTruthy();
+  });
+
   // 回归 issue #1：providers 请求失败不再静默吞掉，给出提示与重试入口
   it("provider 接口失败时提示并可重试", async () => {
     api.authProviders.mockRejectedValueOnce(new Error("boom"));

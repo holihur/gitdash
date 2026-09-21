@@ -654,15 +654,16 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// Docker / OCI 私有注册表（Distribution spec，统一在 /v2/ 下按路径分派）
 	mux.HandleFunc("/v2/", a.registryAuth(a.registryHandler))
 
-	// swagger（OpenAPI 文档 + 内置 Swagger UI）
+	// swagger（OpenAPI 文档 + 内置 Swagger UI）。默认开启，管理端可关闭（见 swaggerEnabled），
+	// 关闭后一律 404，避免匿名枚举全部端点与请求结构。
 	docs.SwaggerInfo.BasePath = "/api"
 	docs.SwaggerInfo.Host = ""
-	mux.HandleFunc("GET /api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/openapi.json", a.swaggerGate(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(docs.SwaggerInfo.ReadDoc()))
-	})
-	mux.Handle("GET /api/swagger", http.RedirectHandler("/api/swagger/", http.StatusMovedPermanently))
-	mux.Handle("GET /api/swagger/", httpSwagger.WrapHandler)
+	}))
+	mux.Handle("GET /api/swagger", a.swaggerGateHandler(http.RedirectHandler("/api/swagger/", http.StatusMovedPermanently)))
+	mux.Handle("GET /api/swagger/", a.swaggerGateHandler(httpSwagger.WrapHandler))
 
 	// prometheus metrics
 	mux.Handle("GET /metrics", metricsHandler())
@@ -773,6 +774,28 @@ func sameOriginRequest(r *http.Request) bool {
 	return true
 }
 
+// swaggerGate 包裹单个 handler：Swagger 被管理端关闭时返回 404（不暴露路由存在）。
+func (a *API) swaggerGate(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !a.swaggerEnabled() {
+			http.NotFound(w, r)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// swaggerGateHandler 同 swaggerGate，用于 http.Handler 形式的 Swagger 挂载点。
+func (a *API) swaggerGateHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.swaggerEnabled() {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // secureHeaders 基础安全响应头（CSP 允许内联主题脚本，其 sha256 随 index.html 保持同步）。
 // swagger UI 页面自带库生成的内联初始化脚本（内容随配置变化，无法预置 hash），
 // 对其单独放行 'unsafe-inline'（仅限该路径下的同源文档界面）。
@@ -796,6 +819,9 @@ func secureHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		// 关闭未使用的浏览器能力，降低被嵌入/滥用风险（安全评审 §S-08）。
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
 		if r.TLS != nil || forceSecureCookies { // HTTPS（含反代）时启用 HSTS
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}

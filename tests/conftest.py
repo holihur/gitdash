@@ -117,6 +117,9 @@ def _spawn_server(binary: Path, tmpdir: Path):
         GITDASH_LLM_ALLOW_HOSTS="127.0.0.1",
         # 关闭“注册自动建同名仓库”，保持黑盒用例对仓库数量的确定性
         GITDASH_PROFILE_REPO="0",
+        # 导入用例使用本地 git daemon（git://127.0.0.1）：仅放开 git:// 的
+        # 回环/私网（http(s)/ssh 与 webhook 的 SSRF 防护仍按默认拦截内网）。
+        GITDASH_IMPORT_ALLOW_PRIVATE_GIT="1",
         # 邮件回复（reply-by-email）：固定的签名与入站共享密钥，便于用例构造 token
         GITDASH_MAIL_SECRET=os.environ.get("GITDASH_MAIL_SECRET", "test-mail-secret"),
         GITDASH_MAIL_INBOUND_SECRET=os.environ.get(

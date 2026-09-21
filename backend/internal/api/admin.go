@@ -147,28 +147,31 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"oidc_issuer":          a.store.GetSetting("oidc_issuer"),
 		"oidc_client_id":       a.store.GetSetting("oidc_client_id"),
 		"oidc_has_secret":      a.store.GetSetting("oidc_client_secret") != "",
-		"smtp_enabled":         a.store.GetSetting("smtp_enabled") == "1",
-		"smtp_host":            a.store.GetSetting("smtp_host"),
-		"smtp_port":            a.store.GetSetting("smtp_port"),
-		"smtp_user":            a.store.GetSetting("smtp_user"),
-		"smtp_from":            a.store.GetSetting("smtp_from"),
-		"smtp_has_pass":        a.store.GetSetting("smtp_pass") != "",
-		"feedback_enabled":     a.store.GetSetting("feedback_enabled") == "1",
-		"feedback_repo":        a.store.GetSetting("feedback_repo"),
-		"feedback_has_token":   a.store.GetSetting("feedback_token") != "",
-		"feedback_local":       a.feedbackSelfTarget(a.store.GetSetting("feedback_repo")),
-		"gitlab_enabled":       a.store.GetSetting("gitlab_enabled") == "1",
-		"gitlab_client_id":     a.store.GetSetting("gitlab_client_id"),
-		"gitlab_has_secret":    a.store.GetSetting("gitlab_client_secret") != "",
-		"gitlab_base_url":      a.store.GetSetting("gitlab_base_url"),
-		"gitea_enabled":        a.store.GetSetting("gitea_enabled") == "1",
-		"gitea_client_id":      a.store.GetSetting("gitea_client_id"),
-		"gitea_has_secret":     a.store.GetSetting("gitea_client_secret") != "",
-		"gitea_base_url":       a.store.GetSetting("gitea_base_url"),
-		"bitbucket_enabled":    a.store.GetSetting("bitbucket_enabled") == "1",
-		"bitbucket_client_id":  a.store.GetSetting("bitbucket_client_id"),
-		"bitbucket_has_secret": a.store.GetSetting("bitbucket_client_secret") != "",
-		"docs_url":             a.store.GetSetting("docs_url"),
+		// 访问控制开关（默认开启，管理端可关闭）
+		"swagger_enabled":        a.store.GetSetting("swagger_enabled") != "0",
+		"password_login_enabled": a.store.GetSetting("password_login_enabled") != "0",
+		"smtp_enabled":           a.store.GetSetting("smtp_enabled") == "1",
+		"smtp_host":              a.store.GetSetting("smtp_host"),
+		"smtp_port":              a.store.GetSetting("smtp_port"),
+		"smtp_user":              a.store.GetSetting("smtp_user"),
+		"smtp_from":              a.store.GetSetting("smtp_from"),
+		"smtp_has_pass":          a.store.GetSetting("smtp_pass") != "",
+		"feedback_enabled":       a.store.GetSetting("feedback_enabled") == "1",
+		"feedback_repo":          a.store.GetSetting("feedback_repo"),
+		"feedback_has_token":     a.store.GetSetting("feedback_token") != "",
+		"feedback_local":         a.feedbackSelfTarget(a.store.GetSetting("feedback_repo")),
+		"gitlab_enabled":         a.store.GetSetting("gitlab_enabled") == "1",
+		"gitlab_client_id":       a.store.GetSetting("gitlab_client_id"),
+		"gitlab_has_secret":      a.store.GetSetting("gitlab_client_secret") != "",
+		"gitlab_base_url":        a.store.GetSetting("gitlab_base_url"),
+		"gitea_enabled":          a.store.GetSetting("gitea_enabled") == "1",
+		"gitea_client_id":        a.store.GetSetting("gitea_client_id"),
+		"gitea_has_secret":       a.store.GetSetting("gitea_client_secret") != "",
+		"gitea_base_url":         a.store.GetSetting("gitea_base_url"),
+		"bitbucket_enabled":      a.store.GetSetting("bitbucket_enabled") == "1",
+		"bitbucket_client_id":    a.store.GetSetting("bitbucket_client_id"),
+		"bitbucket_has_secret":   a.store.GetSetting("bitbucket_client_secret") != "",
+		"docs_url":               a.store.GetSetting("docs_url"),
 	})
 }
 
@@ -214,6 +217,9 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 		_ = a.store.SetSetting("google_client_secret", strings.TrimSpace(v))
 	}
 	setBool("oidc_enabled", in["oidc_enabled"])
+	// 访问控制开关：仅当请求显式携带字段时更新，避免旧客户端保存其它设置时误重置。
+	setBool("swagger_enabled", in["swagger_enabled"])
+	setBool("password_login_enabled", in["password_login_enabled"])
 	writeStr("oidc_name", in["oidc_name"])
 	writeStr("oidc_issuer", in["oidc_issuer"])
 	writeStr("oidc_client_id", in["oidc_client_id"])

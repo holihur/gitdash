@@ -41,6 +41,12 @@ export const authApi = {
       github?: { enabled?: boolean };
       google?: { enabled?: boolean };
       oidc?: { enabled?: boolean; name?: string };
+      /** 账号密码登录开关（缺省视为开启，兼容旧服务端）。 */
+      password?: { enabled?: boolean };
+      /** 自助注册开关（缺省视为开启）。 */
+      register?: { enabled?: boolean };
+      /** 匿名 Swagger/OpenAPI 开关（缺省视为开启）。 */
+      swagger?: { enabled?: boolean };
       password_reset?: { enabled?: boolean };
     }>("/auth/providers"),
   version: () => req<{ version: string }>("/version"),

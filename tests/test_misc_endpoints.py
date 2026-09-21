@@ -21,6 +21,15 @@ def test_health_live(base_url):
     assert r.status_code == 200 and r.json()["status"] == "ok"
 
 
+def test_security_headers(base_url):
+    r = requests.get(f"{base_url}/api/health/live", timeout=10)
+    assert r.headers.get("X-Content-Type-Options") == "nosniff"
+    assert r.headers.get("X-Frame-Options") == "DENY"
+    assert r.headers.get("Referrer-Policy") == "no-referrer"
+    assert "camera=()" in r.headers.get("Permissions-Policy", "")
+    assert r.headers.get("X-Permitted-Cross-Domain-Policies") == "none"
+
+
 def test_swagger_redirect(base_url):
     r = requests.get(f"{base_url}/api/swagger", timeout=10, allow_redirects=False)
     assert r.status_code == 301

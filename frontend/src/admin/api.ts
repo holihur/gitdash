@@ -122,6 +122,10 @@ export interface Settings {
   bitbucket_client_id: string;
   bitbucket_has_secret: boolean;
   docs_url: string;
+  /** 账号密码登录（默认开启，管理端可关闭）。 */
+  password_login_enabled: boolean;
+  /** 匿名可访问的 Swagger/OpenAPI 文档（默认开启，管理端可关闭）。 */
+  swagger_enabled: boolean;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {

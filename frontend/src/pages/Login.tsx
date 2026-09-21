@@ -44,6 +44,10 @@ export default function Login({ onAuthed }: Props) {
   const [oidc, setOidc] = useState<{ enabled: boolean; name: string }>({ enabled: false, name: "OIDC" });
   const [version, setVersion] = useState("");
   const [providersError, setProvidersError] = useState(false);
+  // 管理端可关闭的登录方式（缺省开启，兼容旧服务端）
+  const [passwordEnabled, setPasswordEnabled] = useState(true);
+  const [registerEnabled, setRegisterEnabled] = useState(true);
+  const [swaggerEnabled, setSwaggerEnabled] = useState(true);
 
   const loadProviders = useCallback(() => {
     setProvidersError(false);
@@ -54,6 +58,9 @@ export default function Login({ onAuthed }: Props) {
         setGoogleEnabled(Boolean(d?.google?.enabled));
         setOidc({ enabled: Boolean(d?.oidc?.enabled), name: d?.oidc?.name || "OIDC" });
         setResetEnabled(Boolean(d?.password_reset?.enabled));
+        setPasswordEnabled(d?.password?.enabled !== false);
+        setRegisterEnabled(d?.register?.enabled !== false);
+        setSwaggerEnabled(d?.swagger?.enabled !== false);
       })
       .catch(() => {
         // 不再静默吞掉：接口异常时给出可见提示与重试入口
@@ -382,72 +389,82 @@ export default function Login({ onAuthed }: Props) {
             <CardDescription>{t("login.subtitle")}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="login">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="login">{t("login.signIn")}</TabsTrigger>
-                <TabsTrigger value="register">{t("login.register")}</TabsTrigger>
-              </TabsList>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submit("login");
-                }}
-              >
-                <TabsContent value="login" className="mt-4 space-y-4">
-                  <CredentialsFields
-                    username={username}
-                    password={password}
-                    setUsername={setUsername}
-                    setPassword={setPassword}
-                  />
-                  <Button type="submit" className="w-full" disabled={busy}>
-                    {t("login.signIn")}
-                  </Button>
-                  {resetEnabled && (
-                    <button
-                      type="button"
-                      className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                      onClick={() => setView("forgot")}
-                    >
-                      {t("login.forgotLink")}
-                    </button>
-                  )}
-                </TabsContent>
-              </form>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submit("register");
-                }}
-              >
-                <TabsContent value="register" className="mt-4 space-y-4">
-                  <CredentialsFields
-                    username={username}
-                    password={password}
-                    setUsername={setUsername}
-                    setPassword={setPassword}
-                    passwordHint={t("login.passwordMin")}
-                  />
-                  <PasswordStrengthMeter password={password} />
-                  <Button type="submit" className="w-full" disabled={busy}>
-                    {t("login.registerAndSignIn")}
-                  </Button>
-                </TabsContent>
-              </form>
-            </Tabs>
+            {passwordEnabled ? (
+              <Tabs defaultValue="login">
+                <TabsList className={registerEnabled ? "grid w-full grid-cols-2" : "grid w-full grid-cols-1"}>
+                  <TabsTrigger value="login">{t("login.signIn")}</TabsTrigger>
+                  {registerEnabled && <TabsTrigger value="register">{t("login.register")}</TabsTrigger>}
+                </TabsList>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submit("login");
+                  }}
+                >
+                  <TabsContent value="login" className="mt-4 space-y-4">
+                    <CredentialsFields
+                      username={username}
+                      password={password}
+                      setUsername={setUsername}
+                      setPassword={setPassword}
+                    />
+                    <Button type="submit" className="w-full" disabled={busy}>
+                      {t("login.signIn")}
+                    </Button>
+                    {resetEnabled && (
+                      <button
+                        type="button"
+                        className="w-full text-center text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        onClick={() => setView("forgot")}
+                      >
+                        {t("login.forgotLink")}
+                      </button>
+                    )}
+                  </TabsContent>
+                </form>
+                {registerEnabled && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      submit("register");
+                    }}
+                  >
+                    <TabsContent value="register" className="mt-4 space-y-4">
+                      <CredentialsFields
+                        username={username}
+                        password={password}
+                        setUsername={setUsername}
+                        setPassword={setPassword}
+                        passwordHint={t("login.passwordMin")}
+                      />
+                      <PasswordStrengthMeter password={password} />
+                      <Button type="submit" className="w-full" disabled={busy}>
+                        {t("login.registerAndSignIn")}
+                      </Button>
+                    </TabsContent>
+                  </form>
+                )}
+              </Tabs>
+            ) : (
+              <p className="rounded-md border border-dashed px-3 py-3 text-center text-sm text-muted-foreground">
+                {t("login.passwordDisabled")}
+              </p>
+            )}
             <p className="mt-4 text-center text-xs text-muted-foreground">{t("login.hint")}</p>
-            <p className="mt-2 text-center text-xs">
-              <a
-                href="/api/swagger/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                {t("login.apiDocs")}
-              </a>
-              {docsUrl() && (
-                <>
-                  <span className="mx-1 text-muted-foreground">·</span>
+            {(swaggerEnabled || docsUrl()) && (
+              <p className="mt-2 text-center text-xs">
+                {swaggerEnabled && (
+                  <a
+                    href="/api/swagger/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    {t("login.apiDocs")}
+                  </a>
+                )}
+                {swaggerEnabled && docsUrl() && <span className="mx-1 text-muted-foreground">·</span>}
+                {docsUrl() && (
                   <a
                     href={docsUrl()}
                     target="_blank"
@@ -456,9 +473,9 @@ export default function Login({ onAuthed }: Props) {
                   >
                     {t("login.docs")}
                   </a>
-                </>
-              )}
-            </p>
+                )}
+              </p>
+            )}
             {(githubEnabled || googleEnabled || oidc.enabled || providersError) && (
               <div className="mt-3 space-y-2">
                 {githubEnabled && (

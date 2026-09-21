@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { adminReq, toastError, type Settings } from "./api";
 import { GithubSettings, GoogleSettings, OidcSettings } from "./OAuthSettings";
 import { BindingSettings } from "./BindingSettings";
+import { AccessSettings } from "./AccessSettings";
 import { DocsSettings } from "./DocsSettings";
 import { SmtpSettings } from "./SmtpSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
@@ -53,6 +54,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
         </Button>
       </div>
 
+      <AccessSettings settings={settings} onChange={load} />
       <GithubSettings settings={settings} onChange={load} />
       <GoogleSettings settings={settings} onChange={load} />
       <OidcSettings settings={settings} onChange={load} />
