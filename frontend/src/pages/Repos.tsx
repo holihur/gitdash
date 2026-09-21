@@ -222,7 +222,7 @@ export default function Repos() {
           <h1 className="text-2xl font-bold">{t("repos.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("repos.subtitle")}</p>
         </div>
-        <div className="flex gap-2 sm:self-start">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:self-start">
           <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
             <Download className="h-4 w-4" />
             {t("imports.import")}
@@ -322,9 +322,15 @@ export default function Repos() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "repos" | "starred" | "watching")}>
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="repos">{t("social.myRepos")}</TabsTrigger>
-          <TabsTrigger value="starred">{t("social.starredRepos")}</TabsTrigger>
-          <TabsTrigger value="watching">{t("social.watchingRepos")}</TabsTrigger>
+          <TabsTrigger value="repos" className="flex-1 text-xs sm:flex-none sm:text-sm">
+            {t("social.myRepos")}
+          </TabsTrigger>
+          <TabsTrigger value="starred" className="flex-1 text-xs sm:flex-none sm:text-sm">
+            {t("social.starredRepos")}
+          </TabsTrigger>
+          <TabsTrigger value="watching" className="flex-1 text-xs sm:flex-none sm:text-sm">
+            {t("social.watchingRepos")}
+          </TabsTrigger>
         </TabsList>
 
         {error && (

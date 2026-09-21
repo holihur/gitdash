@@ -86,7 +86,7 @@ export function AnnouncementBanner() {
           onClick={dismiss}
           title={t("announcement.dismiss")}
           aria-label={t("announcement.dismiss")}
-          className="-mr-1 mt-0.5 rounded p-0.5 text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+          className="-mr-1 -mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
         >
           <X className="h-4 w-4" />
         </button>

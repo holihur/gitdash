@@ -73,15 +73,21 @@ export function GettingStarted({ hasRepos }: { hasRepos: boolean }) {
 
   return (
     <Card className="border-primary/30 bg-primary/5">
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Rocket className="h-4 w-4 text-primary" />
+      <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pb-2">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2 text-base">
+          <Rocket className="h-4 w-4 shrink-0 text-primary" />
           {t("onboarding.title")}
-          <span className="text-xs font-normal text-muted-foreground">
+          <span className="shrink-0 text-xs font-normal text-muted-foreground">
             {t("onboarding.progress", { done: doneCount, total: steps.length })}
           </span>
         </CardTitle>
-        <Button variant="ghost" size="icon" className="h-7 w-7" title={t("onboarding.dismiss")} onClick={dismiss}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          title={t("onboarding.dismiss")}
+          onClick={dismiss}
+        >
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
@@ -89,13 +95,13 @@ export function GettingStarted({ hasRepos }: { hasRepos: boolean }) {
         <p className="text-sm text-muted-foreground">{t("onboarding.hint")}</p>
         <ul className="grid gap-1.5">
           {steps.map((s) => (
-            <li key={s.key} className="flex items-center gap-2 text-sm">
+            <li key={s.key} className="flex items-start gap-2 text-sm">
               {s.done ? (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
               ) : (
-                <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               )}
-              {s.icon}
+              <span className="mt-0.5 shrink-0">{s.icon}</span>
               {s.to ? (
                 <Link to={s.to} className="underline-offset-4 hover:text-primary hover:underline">
                   {t(`onboarding.step.${s.key}`)}
