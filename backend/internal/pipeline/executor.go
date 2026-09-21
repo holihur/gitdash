@@ -149,6 +149,15 @@ func (l *loggingWriter) Write(p []byte) (int, error) {
 func (e *builtinDockerExecutor) Execute(ctx context.Context, job RunJob, cfg *Config, logSink io.Writer, progress func(stepsDone int)) error {
 	owner, repo, sha := job.Owner, job.Repo, job.SHA
 
+	// 运维开关：GITDASH_PIPELINE_EXEC=off 彻底禁用内置执行器（docker 与 host）。
+	if BuiltinExecutorDisabled() {
+		return ErrExecutorDisabled
+	}
+	// 镜像白名单：仅当显式配置 GITDASH_PIPELINE_IMAGES 时生效。
+	if !imageAllowed(cfg.Image) {
+		return fmt.Errorf("%w: %s", ErrImageNotAllowed, cfg.Image)
+	}
+
 	// image 为空 = host 执行（无需 docker）；仅当需要容器时才检查 docker 可用性
 	if cfg.Image != "" {
 		if err := dockerAvailable(); err != nil {

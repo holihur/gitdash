@@ -28,6 +28,10 @@ def test_security_headers(base_url):
     assert r.headers.get("Referrer-Policy") == "no-referrer"
     assert "camera=()" in r.headers.get("Permissions-Policy", "")
     assert r.headers.get("X-Permitted-Cross-Domain-Policies") == "none"
+    csp = r.headers.get("Content-Security-Policy", "")
+    assert "frame-ancestors 'none'" in csp
+    assert "img-src 'self' data: blob: https:;" in csp
+    assert "img-src 'self' data: blob: https: http:" not in csp
 
 
 def test_swagger_redirect(base_url):

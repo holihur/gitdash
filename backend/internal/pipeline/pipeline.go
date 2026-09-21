@@ -42,6 +42,11 @@ var (
 	ErrDockerMissing = errors.New("docker not available")
 	// ErrHostDisabled host（无 Docker）执行未开启：image 留空的流水线被拒绝。
 	ErrHostDisabled = errors.New("host execution is disabled (set GITDASH_PIPELINE_EXEC=host on the server, or register the runner with -exec host)")
+	// ErrExecutorDisabled 内置执行器被显式关闭（GITDASH_PIPELINE_EXEC=off），
+	// 未指定 runs-on 的流水线必须派发给可信 runner。
+	ErrExecutorDisabled = errors.New("built-in pipeline executor is disabled (GITDASH_PIPELINE_EXEC=off)")
+	// ErrImageNotAllowed 镜像不在 GITDASH_PIPELINE_IMAGES 白名单内。
+	ErrImageNotAllowed = errors.New("pipeline image is not in the allowed list (GITDASH_PIPELINE_IMAGES)")
 	// ErrTriggerDisabled 该事件未在 .gitdash.yml 的 on 白名单中（静默跳过）。
 	ErrTriggerDisabled = errors.New("trigger disabled for this event")
 )
@@ -52,6 +57,27 @@ var hostAllowed = false
 
 // HostAllowed 是否允许 host 执行。
 func HostAllowed() bool { return hostAllowed }
+
+// BuiltinExecutorDisabled 内置执行器是否被显式关闭（GITDASH_PIPELINE_EXEC=off）。
+// 关闭后，未指定 runs-on 的流水线将被拒绝，避免服务端直接跑容器（收敛 S-06 暴露面）。
+func BuiltinExecutorDisabled() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_EXEC")), "off")
+}
+
+// imageAllowed 校验镜像是否在 GITDASH_PIPELINE_IMAGES（逗号分隔）白名单内。
+// 未配置白名单时放行全部（保持向后兼容）；host 模式（image 为空）不受限。
+func imageAllowed(image string) bool {
+	list := strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_IMAGES"))
+	if list == "" || image == "" {
+		return true
+	}
+	for _, a := range strings.Split(list, ",") {
+		if strings.TrimSpace(a) == image {
+			return true
+		}
+	}
+	return false
+}
 
 // SetHostAllowed 显式开关 host 执行（agent 命令行 -exec host 使用）。
 func SetHostAllowed(v bool) { hostAllowed = v }

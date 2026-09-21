@@ -14,6 +14,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
   const { t, to } = useI18n();
   const [passwordLogin, setPasswordLogin] = useState(true);
   const [swagger, setSwagger] = useState(true);
+  const [versionVisible, setVersionVisible] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -21,6 +22,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
     if (settings) {
       setPasswordLogin(settings.password_login_enabled !== false);
       setSwagger(settings.swagger_enabled !== false);
+      setVersionVisible(settings.version_visible !== false);
     }
   }, [settings]);
 
@@ -31,6 +33,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
       await adminReq("/settings", {
         password_login_enabled: passwordLogin,
         swagger_enabled: swagger,
+        version_visible: versionVisible,
       });
       setMsg(t("admin.saved"));
       onChange();
@@ -73,6 +76,18 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
           <span>
             <span className="font-medium">{t("admin.swaggerEnable")}</span>
             <span className="block text-xs text-muted-foreground">{t("admin.swaggerHint")}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={versionVisible}
+            onChange={(e) => setVersionVisible(e.target.checked)}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="font-medium">{t("admin.versionVisible")}</span>
+            <span className="block text-xs text-muted-foreground">{t("admin.versionHint")}</span>
           </span>
         </label>
         {msg && <p className="text-sm text-muted-foreground">{msg}</p>}

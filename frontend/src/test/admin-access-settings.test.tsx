@@ -10,6 +10,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
   return {
     password_login_enabled: true,
     swagger_enabled: true,
+    version_visible: true,
     ...overrides,
   } as Settings;
 }
@@ -37,7 +38,7 @@ describe("AccessSettings", () => {
 
   it("保存时提交两个开关", async () => {
     const onChange = vi.fn();
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((_url: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 })),
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -47,7 +48,7 @@ describe("AccessSettings", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(onChange).toHaveBeenCalled());
-    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
-    expect(body).toEqual({ password_login_enabled: true, swagger_enabled: false });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).toEqual({ password_login_enabled: true, swagger_enabled: false, version_visible: true });
   });
 });

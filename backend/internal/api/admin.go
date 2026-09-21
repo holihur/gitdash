@@ -150,6 +150,7 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		// 访问控制开关（默认开启，管理端可关闭）
 		"swagger_enabled":        a.store.GetSetting("swagger_enabled") != "0",
 		"password_login_enabled": a.store.GetSetting("password_login_enabled") != "0",
+		"version_visible":        a.store.GetSetting("version_visible") != "0",
 		"smtp_enabled":           a.store.GetSetting("smtp_enabled") == "1",
 		"smtp_host":              a.store.GetSetting("smtp_host"),
 		"smtp_port":              a.store.GetSetting("smtp_port"),
@@ -220,6 +221,7 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	// 访问控制开关：仅当请求显式携带字段时更新，避免旧客户端保存其它设置时误重置。
 	setBool("swagger_enabled", in["swagger_enabled"])
 	setBool("password_login_enabled", in["password_login_enabled"])
+	setBool("version_visible", in["version_visible"])
 	writeStr("oidc_name", in["oidc_name"])
 	writeStr("oidc_issuer", in["oidc_issuer"])
 	writeStr("oidc_client_id", in["oidc_client_id"])

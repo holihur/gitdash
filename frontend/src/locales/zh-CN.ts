@@ -1103,6 +1103,8 @@ export const zhCN: Messages = {
     passwordLoginHint: "关闭后，密码登录、自助注册与密码重置均会被拒绝。关闭前请先配置好 OAuth/OIDC 登录方式。",
     swaggerEnable: "公开 Swagger / OpenAPI 文档",
     swaggerHint: "关闭后，/api/swagger/ 与 /api/openapi.json 对所有人返回 404。",
+    versionVisible: "公开显示版本号",
+    versionHint: "关闭后，/api/version 与 /api/instance 不再返回服务端版本号。",
   },
   user: {
     memberSince: "{date} 加入",

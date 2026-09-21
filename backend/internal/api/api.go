@@ -225,7 +225,7 @@ func (a *API) SetSSHPort(addr string) {
 //	@Success     200 {object} object
 //	@Router      /instance [get]
 func (a *API) instance(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"version": a.version, "ssh_port": a.sshPort, "docs_url": a.docsURL()})
+	writeJSON(w, http.StatusOK, map[string]any{"version": a.publicVersion(), "ssh_port": a.sshPort, "docs_url": a.docsURL()})
 }
 
 // docsURL 返回文档站地址：环境变量 GITDASH_DOCS_URL 优先，其次管理端设置 docs_url；未配置返回空串。
@@ -683,7 +683,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"version": a.version})
+		writeJSON(w, http.StatusOK, map[string]string{"version": a.publicVersion()})
 	})
 
 	switch {
@@ -802,7 +802,7 @@ func (a *API) swaggerGateHandler(next http.Handler) http.Handler {
 
 const (
 	cspDefault = "default-src 'self'; script-src 'self' 'sha256-3ErQTYhfRUcdQMKUwZWjeUj+0gLQwEdW3gtvOjOALlg=' 'sha256-5N7k7wNTDShVptRxTM9+DDLf2WYyHnUno1d06dT7Cic='; " +
-		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; " +
+		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; " +
 		"font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	cspSwagger = "default-src 'self'; script-src 'self' 'unsafe-inline'; " +
 		"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +

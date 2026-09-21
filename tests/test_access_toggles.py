@@ -11,12 +11,14 @@ def _uuid() -> str:
     return uuid.uuid4().hex[:10]
 
 
-def _set_toggles(admin, *, swagger=None, password=None):
+def _set_toggles(admin, *, swagger=None, password=None, version=None):
     body = {}
     if swagger is not None:
         body["swagger_enabled"] = swagger
     if password is not None:
         body["password_login_enabled"] = password
+    if version is not None:
+        body["version_visible"] = version
     if body:
         admin.post("/admin/settings", json=body, expect=200)
 
@@ -25,6 +27,7 @@ def test_admin_settings_exposes_toggles(admin):
     s = admin.get("/admin/settings", expect=200).json()
     assert isinstance(s["swagger_enabled"], bool)
     assert isinstance(s["password_login_enabled"], bool)
+    assert isinstance(s["version_visible"], bool)
 
 
 def test_swagger_toggle(admin, anon):
@@ -40,6 +43,19 @@ def test_swagger_toggle(admin, anon):
         assert anon.session.get(f"{anon.base}/api/swagger/", timeout=10).status_code == 200
     finally:
         _set_toggles(admin, swagger=orig)
+
+
+def test_version_visibility_toggle(admin, anon):
+    orig = admin.get("/admin/settings", expect=200).json()["version_visible"]
+    try:
+        _set_toggles(admin, version=False)
+        assert anon.get("/version", expect=200).json()["version"] == ""
+        assert anon.get("/instance", expect=200).json()["version"] == ""
+
+        _set_toggles(admin, version=True)
+        assert anon.get("/version", expect=200).json()["version"]
+    finally:
+        _set_toggles(admin, version=orig)
 
 
 def test_password_login_toggle(admin, client_factory, anon):

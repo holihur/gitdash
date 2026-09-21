@@ -1106,6 +1106,8 @@ export const en = {
     passwordLoginHint: "When off, password login, registration and password reset are rejected. Make sure an OAuth/OIDC provider is configured before turning this off.",
     swaggerEnable: "Expose Swagger / OpenAPI docs",
     swaggerHint: "When off, /api/swagger/ and /api/openapi.json return 404 for everyone.",
+    versionVisible: "Show version number publicly",
+    versionHint: "When off, /api/version and /api/instance no longer return the server version.",
   },
   user: {
     memberSince: "Joined {date}",

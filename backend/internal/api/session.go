@@ -38,6 +38,20 @@ func (a *API) swaggerEnabled() bool {
 	return a.store.GetSetting("swagger_enabled") != "0"
 }
 
+// versionVisible 是否在匿名接口（/api/version、/api/instance）暴露版本号。
+// 默认开启；管理端将设置 version_visible 置为 "0" 后隐藏（返回空串）。
+func (a *API) versionVisible() bool {
+	return a.store.GetSetting("version_visible") != "0"
+}
+
+// publicVersion 返回对外暴露的版本号；被隐藏时为空串。
+func (a *API) publicVersion() string {
+	if !a.versionVisible() {
+		return ""
+	}
+	return a.version
+}
+
 // 限速记录持久化在 store（login_fails 表）：重启与多实例共享同一窗口，
 // 不再有内存 map 的无限增长问题。
 

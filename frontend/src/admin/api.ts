@@ -126,6 +126,8 @@ export interface Settings {
   password_login_enabled: boolean;
   /** 匿名可访问的 Swagger/OpenAPI 文档（默认开启，管理端可关闭）。 */
   swagger_enabled: boolean;
+  /** 匿名接口是否暴露版本号（默认开启，管理端可关闭）。 */
+  version_visible: boolean;
 }
 
 export function toastError(to: (k: string, v?: Record<string, string | number>) => string | undefined, e: unknown) {
