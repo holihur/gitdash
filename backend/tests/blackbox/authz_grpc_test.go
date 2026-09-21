@@ -51,21 +51,29 @@ const (
 type server struct {
 	baseURL  string // HTTP API 根
 	grpcAddr string // 授权面 gRPC 地址
+	dataDir  string // 实例数据目录（仓库目录与 spool，供 SSH 网关共享）
+	sshAddr  string // 主进程内置 SSH 地址
 }
 
 // startServer 构建（或复用）二进制并启动独立实例，等待 HTTP 健康后返回。
 func startServer(t *testing.T) *server {
 	t.Helper()
+	return startServerWithBinary(t, buildBinary(t))
+}
+
+// startServerWithBinary 用指定二进制启动实例（供同一用例复用同一二进制）。
+func startServerWithBinary(t *testing.T, bin string) *server {
+	t.Helper()
 	if testing.Short() {
 		t.Skip("blackbox: skipped in -short mode")
 	}
 
-	bin := buildBinary(t)
 	dataDir := t.TempDir()
 	httpPort, sshPort, grpcPort := freePort(t), freePort(t), freePort(t)
 
 	baseURL := "http://127.0.0.1:" + strconv.Itoa(httpPort)
 	grpcAddr := "127.0.0.1:" + strconv.Itoa(grpcPort)
+	sshAddr := "127.0.0.1:" + strconv.Itoa(sshPort)
 
 	cmd := exec.Command(bin, "serve")
 	cmd.Env = append(cleanEnv(),
@@ -73,7 +81,7 @@ func startServer(t *testing.T) *server {
 		"GITDASH_DISABLE_RATE_LIMIT=1",
 		"GITDASH_PROFILE_REPO=0",
 		"GITDASH_HTTP_ADDR=127.0.0.1:"+strconv.Itoa(httpPort),
-		"GITDASH_SSH_ADDR=127.0.0.1:"+strconv.Itoa(sshPort),
+		"GITDASH_SSH_ADDR="+sshAddr,
 		"GITDASH_GRPC_ADDR="+grpcAddr,
 		"GITDASH_GRPC_TOKEN="+grpcToken,
 		"GITDASH_ADMIN_USER="+adminUser,
@@ -110,7 +118,7 @@ func startServer(t *testing.T) *server {
 		if resp, err := http.Get(baseURL + "/api/health"); err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				return &server{baseURL: baseURL, grpcAddr: grpcAddr}
+				return &server{baseURL: baseURL, grpcAddr: grpcAddr, dataDir: dataDir, sshAddr: sshAddr}
 			}
 		}
 		time.Sleep(200 * time.Millisecond)

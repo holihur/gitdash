@@ -30,6 +30,54 @@ summary: "把 SSH 鉴权收敛为 gRPC 服务，支持独立 SSH 网关与分机
 - **分机部署**：设置 `GITDASH_ROLE=ssh`（或 `GITDASH_SSH_ONLY=1`）后，同一二进制以「仅 SSH 网关」角色运行，**不打开数据库、不启动 HTTP API**，全部鉴权经授权面 gRPC 完成。
 - SSH 侧只依赖 `authz.Authorizer` 抽象，本地（store）/ 远端（gRPC）可无缝切换。
 
+## 部署形态
+
+### 形态 A：单机（all-in-one，默认）
+
+HTTP API 与 SSH 在同一进程：SSH 经 `StoreAuthorizer` 直接读库。不设置
+`GITDASH_ROLE` 即为此形态，行为与拆分前一致。
+
+```
+  浏览器 / git CLI
+     │ HTTP :8080        │ SSH :2222
+     ▼                   ▼
+  ┌──────────────────────────────────────────┐
+  │              gitdash 进程                  │
+  │  HTTP API  +  内置 SSH（StoreAuthorizer）  │
+  │  store（SQLite / PostgreSQL）＝ 唯一权威    │
+  └──────────────────────────────────────────┘
+     │
+  GITDASH_DATA/repos（本地磁盘）
+```
+
+### 形态 B：分机（API + SSH 网关）
+
+API 机器持有数据库与授权面；SSH 网关机器不连数据库，鉴权经 gRPC。两台机器
+需共享仓库目录（`GITDASH_DATA/repos`）与其上的 push 事件 spool。
+
+```
+        API / 控制面机器                          SSH 网关机器
+  ┌────────────────────────────┐        ┌────────────────────────────┐
+  │  gitdash serve             │        │  gitdash serve             │
+  │  GITDASH_GRPC_ADDR=:9090   │◄──gRPC─┤  GITDASH_ROLE=ssh          │
+  │                            │ TLS +  │                            │
+  │  ┌──────────────┐          │ Bearer │  ┌──────────────────────┐  │
+  │  │  HTTP API    │          │ token  │  │ sshserver            │  │
+  │  ├──────────────┤          │        │  │ (RemoteAuthorizer)   │  │
+  │  │ 授权面 gRPC   │          │        │  └──────────┬───────────┘  │
+  │  ├──────────────┤          │        │             │              │
+  │  │ store（权威） │          │        │             │ git-upload/  │
+  │  └──────────────┘          │        │             │ receive-pack │
+  └─────────────┬──────────────┘        └─────────────┼──────────────┘
+                │                                     │
+                └────────► 共享存储 GITDASH_DATA/repos ◄────────┘
+                           （NFS / 同一持久卷）
+  浏览器 ──HTTP──► API 机器                    git CLI ──SSH──► 网关机器
+```
+
+> 网关机器只需：SSH 端口、`GITDASH_GRPC_ADDR/TOKEN`、共享的 `GITDASH_DATA`。
+> 它不打开数据库；分支保护规则也经授权面获取。
+
 ## 启用与配置
 
 授权面**默认不启动**。仅当显式设置 `GITDASH_GRPC_ADDR` 时才监听：

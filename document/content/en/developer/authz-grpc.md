@@ -38,6 +38,56 @@ It only makes **decisions**, never touches repository data.
 - The SSH side depends only on the `authz.Authorizer` abstraction, so local (store)
   and remote (gRPC) are interchangeable.
 
+## Deployment topologies
+
+### Topology A: single machine (all-in-one, default)
+
+HTTP API and SSH share one process; SSH uses `StoreAuthorizer` to read the DB
+directly. Leaving `GITDASH_ROLE` unset selects this topology (unchanged behavior).
+
+```
+  browser / git CLI
+     │ HTTP :8080        │ SSH :2222
+     ▼                   ▼
+  ┌──────────────────────────────────────────┐
+  │              gitdash process              │
+  │  HTTP API  +  built-in SSH (StoreAuthorizer)
+  │  store (SQLite / PostgreSQL) = sole authority
+  └──────────────────────────────────────────┘
+     │
+  GITDASH_DATA/repos (local disk)
+```
+
+### Topology B: split (API + SSH gateway)
+
+The API machine holds the database and the authorization plane; the SSH gateway
+machine opens no database and authenticates over gRPC. Both machines must share
+the repository directory (`GITDASH_DATA/repos`) and its push-event spool.
+
+```
+        API / control-plane machine                SSH gateway machine
+  ┌────────────────────────────┐        ┌────────────────────────────┐
+  │  gitdash serve             │        │  gitdash serve             │
+  │  GITDASH_GRPC_ADDR=:9090   │◄──gRPC─┤  GITDASH_ROLE=ssh          │
+  │                            │ TLS +  │                            │
+  │  ┌──────────────┐          │ Bearer │  ┌──────────────────────┐  │
+  │  │  HTTP API    │          │ token  │  │ sshserver            │  │
+  │  ├──────────────┤          │        │  │ (RemoteAuthorizer)   │  │
+  │  │ authz gRPC   │          │        │  └──────────┬───────────┘  │
+  │  ├──────────────┤          │        │             │              │
+  │  │ store (auth) │          │        │             │ git-upload/  │
+  │  └──────────────┘          │        │             │ receive-pack │
+  └─────────────┬──────────────┘        └─────────────┼──────────────┘
+                │                                     │
+                └────────► shared GITDASH_DATA/repos ◄────────┘
+                           (NFS / one persistent volume)
+  browser ──HTTP──► API machine                git CLI ──SSH──► gateway
+```
+
+> The gateway machine needs only: the SSH port, `GITDASH_GRPC_ADDR/TOKEN`, and a
+> shared `GITDASH_DATA`. It opens no database; branch-protection rules are fetched
+> through the plane too.
+
 ## Enabling & configuration
 
 The authorization plane is **off by default**. It only listens when
