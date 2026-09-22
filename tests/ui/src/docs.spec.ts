@@ -4,11 +4,11 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * 文档站（Hugo，document/public）的主题与语言切换黑盒测试。
+ * 文档站（Hugo，docs/public）的主题与语言切换黑盒测试。
  * 独立起一个静态服务，不需要 gitdash 实例；未构建文档时自动跳过。
  */
 
-const PUBLIC_DIR = path.resolve(__dirname, "../../../document/public");
+const PUBLIC_DIR = path.resolve(__dirname, "../../../docs/public");
 const BASE_PATH = "/gitdash";
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -28,7 +28,7 @@ test.beforeAll(async () => {
   try {
     await stat(path.join(PUBLIC_DIR, "index.html"));
   } catch {
-    return; // document/public 未构建
+    return; // docs/public 未构建
   }
   server = http.createServer(async (req, res) => {
     try {
@@ -75,7 +75,7 @@ function themeOf(page: Page) {
 }
 
 test("主题切换：Light / Dark / System 并记住偏好", async ({ page }) => {
-  test.skip(!available, "document/public not built");
+  test.skip(!available, "docs/public not built");
   await page.goto(base + "/");
 
   await page.selectOption("#theme-select", "dark");
@@ -99,7 +99,7 @@ test("主题切换：Light / Dark / System 并记住偏好", async ({ page }) =>
 });
 
 test("语言切换：跳到对应语言且保留当前页面", async ({ page }) => {
-  test.skip(!available, "document/public not built");
+  test.skip(!available, "docs/public not built");
   await page.goto(base + "/getting-started/register/");
 
   await page.selectOption("#lang-select", { label: "中文" });

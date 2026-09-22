@@ -23,7 +23,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR / copilot) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
 - **Admin panel**: admin users, settings (OAuth providers), password management, user/repo/org bans and an IP/CIDR blacklist
 - **User feedback**: admins can enable a floating feedback button (bottom-right); submitted messages are filed as issues in a configured repository via a GitHub/Gitea-compatible API (Admin panel → User feedback)
-- **Onboarding & docs**: a getting-started checklist on the home page, plus a login-page/header entry to an independently deployed multilingual [Hugo documentation site](document/) (English primary, `GITDASH_DOCS_URL` or Admin → Documentation site)
+- **Onboarding & docs**: a getting-started checklist on the home page, plus a login-page/header entry to an independently deployed multilingual [Hugo documentation site](docs/) (English primary, `GITDASH_DOCS_URL` or Admin → Documentation site)
 - **Explore**: discover public repos; repo visibility (public / private) toggle in repo settings; filter by tag and free-text search
 - **Repo settings**: owner-managed default branch (drives the browsed/HEAD branch), issue tracker on/off toggle, visibility and template flags; one-click **`git gc`** (repository maintenance) to pack loose objects and reclaim disk space
 - **Repo tags (topics)**: owner-managed labels per repository (up to 20), shown on repo pages and used to filter/search Explore

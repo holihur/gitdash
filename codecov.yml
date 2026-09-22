@@ -7,7 +7,7 @@ coverage:
     project:
       default:
         # 分阶段目标：最终 80%。达标前 informational（不阻断），
-        # 作为进度信号；Go 单测覆盖率按阶段爬坡（见 document/content/en/developer/coverage.md）。
+        # 作为进度信号；Go 单测覆盖率按阶段爬坡（见 docs/content/en/developer/coverage.md）。
         target: 80%
         threshold: 1%
         informational: true

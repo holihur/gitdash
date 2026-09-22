@@ -66,7 +66,7 @@
     };
     s.onerror = function () {
       loading = false;
-      box.textContent = "搜索索引尚未生成：请先运行 `hugo` 构建，再执行 `pagefind --site document/public`。";
+      box.textContent = "搜索索引尚未生成：请先运行 `hugo` 构建，再执行 `pagefind --site docs/public`。";
     };
     document.head.appendChild(s);
   }

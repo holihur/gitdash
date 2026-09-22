@@ -36,7 +36,7 @@ is stored under the same `gitdash-theme` key the app uses, and `System` follows
 
 ```bash
 # Install Hugo (extended, >= 0.120)
-hugo server -D --source document
+hugo server -D --source docs
 # Open http://localhost:1313/gitdash/
 ```
 
@@ -46,8 +46,8 @@ The site has built-in full-text search powered by [Pagefind](https://pagefind.ap
 The search index is generated at build time and lives in `public/pagefind/`.
 
 ```bash
-hugo --source document --minify
-npx --yes pagefind@1.3.0 --site document/public
+hugo --source docs --minify
+npx --yes pagefind@1.3.0 --site docs/public
 ```
 
 > The header search button loads Pagefind lazily, so a plain `hugo server`
@@ -57,8 +57,8 @@ npx --yes pagefind@1.3.0 --site document/public
 
 ```bash
 make build
-# or: hugo --source document --minify && npx --yes pagefind@1.3.0 --site document/public
-# Output in document/public/
+# or: hugo --source docs --minify && npx --yes pagefind@1.3.0 --site docs/public
+# Output in docs/public/
 ```
 
 ## Deploy
@@ -72,7 +72,7 @@ For a sub-path deployment (such as `https://<user>.github.io/gitdash/`), set
 ## Structure
 
 ```
-document/
+docs/
 ├── hugo.toml          # site config (languages / baseURL / highlight)
 ├── i18n/              # UI strings per language
 ├── content/

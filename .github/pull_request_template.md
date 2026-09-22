@@ -16,8 +16,8 @@
 
 ## Checklist
 
-- [ ] Docs updated (`README.md` / `README.zh-CN.md` / `document/`) where behavior changed
+- [ ] Docs updated (`README.md` / `README.zh-CN.md` / `docs/`) where behavior changed
 - [ ] No secrets / tokens / private keys committed
-- [ ] Works on both SQLite and PostgreSQL (see `document/content/en/self-hosting/database.md`)
+- [ ] Works on both SQLite and PostgreSQL (see `docs/content/en/self-hosting/database.md`)
 - [ ] Backwards compatible (migrations additive, no data loss)
 - [ ] New/changed backend error codes have a frontend `errors.*` entry (contract test covers it)
