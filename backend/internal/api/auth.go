@@ -311,6 +311,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		"notify_email":   ua.NotifyEmail,
 		"email_verified": ua.EmailVerified,
 		"avatar_url":     a.avatarURL(ua.Username),
+		"cover_url":      a.userCoverURL(ua.Username),
 		"bio":            ua.Bio,
 	})
 }

@@ -371,6 +371,7 @@ func (a *API) getOrgProfile(w http.ResponseWriter, r *http.Request) {
 		"repos":        repos,
 		"followers":    followers,
 		"is_following": a.store.IsFollowingOrg(me, org),
+		"cover_url":    a.orgCoverURL(org),
 	})
 }
 

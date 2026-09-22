@@ -4,6 +4,7 @@ import (
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/gpgsig"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -131,6 +132,61 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 	}
 	b.LatestCommit, _ = gitsvc.LastCommit(owner, name, ref, file)
 	writeJSON(w, http.StatusOK, b)
+}
+
+// rawFile 返回文件原始字节，供图片 / PDF 等二进制文件在浏览器内直接预览。
+//
+//	@Summary     原始文件内容
+//	@Description 以正确的 Content-Type 返回文件原始字节（图片 / PDF 等可直接内联查看）。
+//	@Tags        repos
+//	@Produce     application/octet-stream
+//	@Param       owner path string false "仓库所有者（简写路由时省略）"
+//	@Param       name  path string true  "仓库名"
+//	@Param       ref   query string false "分支/标签/commit"
+//	@Param       path  query string true  "文件路径"
+//	@Success     200 {file} binary
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /repos/{name}/raw [get]
+//	@Router      /users/{owner}/repos/{name}/raw [get]
+func (a *API) rawFile(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	ref := a.browseRef(r, owner, name)
+	file := r.URL.Query().Get("path")
+	if gitsvc.IsEmptyRepo(owner, name) {
+		writeNotFound(w, "file")
+		return
+	}
+	data, err := gitsvc.ReadRawFile(owner, name, ref, file)
+	if err != nil {
+		writeNotFound(w, "file")
+		return
+	}
+	// 允许同源 iframe/object 内联预览（PDF），覆盖全局的 DENY / frame-ancestors 'none'。
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
+	w.Header().Set("Content-Type", pagesContentType(file))
+	// 仅图片 / PDF 内联，其余类型强制下载，避免 raw HTML/SVG 直接导航。
+	if isInlinePreviewable(file) {
+		w.Header().Set("Content-Disposition", "inline")
+	} else {
+		w.Header().Set("Content-Disposition", "attachment")
+	}
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	_, _ = w.Write(data)
+}
+
+// isInlinePreviewable 报告文件类型是否可直接在浏览器内联预览。
+func isInlinePreviewable(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".ico", ".svg", ".pdf":
+		return true
+	}
+	return false
 }
 
 // blame 查看文件逐行归属。

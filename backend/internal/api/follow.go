@@ -64,6 +64,7 @@ func (a *API) getUserProfile(w http.ResponseWriter, r *http.Request) {
 		"is_following": username != me && a.store.IsFollowing(me, username),
 		"repos":        repos,
 		"avatar_url":   a.avatarURL(username),
+		"cover_url":    a.userCoverURL(username),
 	})
 }
 

@@ -68,6 +68,14 @@ export const authApi = {
   },
   deleteAvatar: () => req<{ deleted: boolean }>("/me/avatar", { method: "DELETE" }),
 
+  // cover（个人主页顶部横幅）
+  uploadCover: (file: File) => {
+    const form = new FormData();
+    form.append("cover", file);
+    return sendForm<{ cover_url: string }>("/me/cover", form);
+  },
+  deleteCover: () => req<{ deleted: boolean }>("/me/cover", { method: "DELETE" }),
+
 
   // profile
   changePassword: (currentPassword: string, newPassword: string) =>

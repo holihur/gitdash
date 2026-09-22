@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/utils";
 import { EmailSection } from "./profile/EmailSection";
 import { BioSection } from "./profile/BioSection";
 import { AvatarSection } from "./profile/AvatarSection";
+import { CoverSection } from "./profile/CoverSection";
 import { ByokSection } from "./profile/ByokSection";
 import { PasswordSection } from "./profile/PasswordSection";
 import { MFASection } from "./profile/MFASection";
@@ -21,6 +22,7 @@ interface Profile {
   created_at: string;
   mfa_enabled: boolean;
   email_verified?: boolean;
+  cover_url?: string;
 }
 
 export default function ProfilePage() {
@@ -57,6 +59,7 @@ export default function ProfilePage() {
         onChanged={loadProfile}
       />
       <AvatarSection username={profile.username} />
+      <CoverSection coverUrl={profile.cover_url} onChanged={loadProfile} />
       <BioSection />
       <ByokSection />
       <PasswordSection />

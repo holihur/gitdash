@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { CoverBanner } from "@/components/cover-banner";
 import { cn, formatDate } from "@/lib/utils";
 import { RelativeTime } from "@/components/relative-time";
 
@@ -44,6 +45,8 @@ export default function OrgPage() {
   const [editDisplay, setEditDisplay] = useState("");
   const [editBio, setEditBio] = useState("");
   const [saving, setSaving] = useState(false);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverVersion, setCoverVersion] = useState(0);
 
   const isOwner = profile?.role === "owner";
   const isMember = !!profile?.role;
@@ -152,6 +155,36 @@ export default function OrgPage() {
     }
   };
 
+  const uploadCover = async (file: File) => {
+    if (!profile) return;
+    setCoverBusy(true);
+    try {
+      const r = await api.uploadOrgCover(profile.name, file);
+      setProfile({ ...profile, cover_url: r.cover_url });
+      setCoverVersion(Date.now());
+      toast.success(t("cover.updated"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
+  const removeCover = async () => {
+    if (!profile) return;
+    setCoverBusy(true);
+    try {
+      await api.deleteOrgCover(profile.name);
+      setProfile({ ...profile, cover_url: undefined });
+      setCoverVersion(Date.now());
+      toast.success(t("cover.removed"));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
   if (error) {
     return (
       <Card className="border-destructive">
@@ -169,6 +202,14 @@ export default function OrgPage() {
 
   return (
     <div className="space-y-6">
+      <CoverBanner
+        coverUrl={profile.cover_url}
+        version={coverVersion}
+        editable={isOwner}
+        busy={coverBusy}
+        onPick={uploadCover}
+        onRemove={removeCover}
+      />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-muted">
           <Building2 className="h-9 w-9 text-muted-foreground" />

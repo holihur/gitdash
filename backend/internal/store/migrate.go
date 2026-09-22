@@ -78,6 +78,8 @@ func (s *Store) migrate() error {
 		&byokKeyRow{},
 		&copilotSessionRow{},
 		&userAvatarRow{},
+		&userCoverRow{},
+		&orgCoverRow{},
 		&oauthAppRow{},
 		&oauthGrantRow{},
 		&oauthDeviceGrantRow{},

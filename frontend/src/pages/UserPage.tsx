@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import Pagination from "@/components/ui/pagination";
 import { Avatar } from "@/components/avatar";
+import { CoverBanner } from "@/components/cover-banner";
 import { cn, formatDate } from "@/lib/utils";
 import { RelativeTime } from "@/components/relative-time";
 
@@ -101,6 +102,7 @@ export default function UserPage() {
 
   return (
     <div className="space-y-6">
+      <CoverBanner coverUrl={profile.cover_url} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <Avatar username={profile.username} size={80} />
         <div className="min-w-0 flex-1 space-y-1">

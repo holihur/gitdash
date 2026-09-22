@@ -697,6 +697,30 @@ type userAvatarRow struct {
 
 func (userAvatarRow) TableName() string { return "user_avatars" }
 
+// ---- user covers ----
+
+// userCoverRow 用户封面（个人主页顶部横幅）图片（单独表，避免 users 常规查询加载大字段）。
+type userCoverRow struct {
+	Username    string `gorm:"primaryKey;size:255"`
+	ContentType string `gorm:"not null;default:'';size:64"`
+	Data        []byte `gorm:"not null"`
+	UpdatedAt   string `gorm:"not null"`
+}
+
+func (userCoverRow) TableName() string { return "user_covers" }
+
+// ---- org covers ----
+
+// orgCoverRow 组织封面（组织主页顶部横幅）图片（单独表）。
+type orgCoverRow struct {
+	Org         string `gorm:"primaryKey;size:255"`
+	ContentType string `gorm:"not null;default:'';size:64"`
+	Data        []byte `gorm:"not null"`
+	UpdatedAt   string `gorm:"not null"`
+}
+
+func (orgCoverRow) TableName() string { return "org_covers" }
+
 // ---- copilot sessions（嵌入式 agent，工作区为仓库的本地克隆副本）----
 
 // copilotSessionRow 仓库内的一个 AI copilot 会话，绑定到某个 BYOK 密钥。

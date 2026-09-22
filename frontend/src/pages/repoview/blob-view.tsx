@@ -1,6 +1,6 @@
 import type { Ref } from "react";
 import { History, MoreHorizontal, Pencil, TextCursorInput, Trash2 } from "lucide-react";
-import type { Blame, Blob } from "@/lib/api";
+import { api, type Blame, type Blob } from "@/lib/api";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,16 @@ function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
   const lower = base.toLowerCase();
   return /^readme(\.(md|markdown|txt))?$/.test(lower) || /\.(md|markdown)$/.test(lower);
+}
+
+const IMAGE_RE = /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i;
+const PDF_RE = /\.pdf$/i;
+
+/** 按扩展名判断可直接在浏览器内预览的二进制文件类型。 */
+function previewKind(path: string): "image" | "pdf" | "" {
+  if (PDF_RE.test(path)) return "pdf";
+  if (IMAGE_RE.test(path)) return "image";
+  return "";
 }
 
 interface Props {
@@ -54,6 +64,8 @@ export default function BlobView({
   onOpenRepoLink,
 }: Props) {
   const { t } = useI18n();
+  const kind = previewKind(blob.path);
+  const rawUrl = kind ? api.rawFileUrl(owner, name, refName, blob.path) : "";
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -67,20 +79,20 @@ export default function BlobView({
               </Badge>
             )}
           </div>
-          {blob.encoding === "utf-8" && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground"
-                  aria-label={t("common.moreActions")}
-                  title={t("common.moreActions")}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                aria-label={t("common.moreActions")}
+                title={t("common.moreActions")}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {blob.encoding === "utf-8" && (
                 <DropdownMenuCheckboxItem
                   checked={blameParam}
                   onCheckedChange={() => onToggleBlame()}
@@ -88,28 +100,44 @@ export default function BlobView({
                   <History className="h-4 w-4" />
                   {t("repo.blame")}
                 </DropdownMenuCheckboxItem>
+              )}
+              {blob.encoding === "utf-8" && (
                 <DropdownMenuItem onClick={onEdit}>
                   <Pencil className="h-4 w-4" />
                   {t("fops.editFile")}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onRename}>
-                  <TextCursorInput className="h-4 w-4" />
-                  {t("fops.rename")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={onDelete}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {t("fops.deleteFile")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+              )}
+              <DropdownMenuItem onClick={onRename}>
+                <TextCursorInput className="h-4 w-4" />
+                {t("fops.rename")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={onDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+                {t("fops.deleteFile")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent>
-        {blob.encoding === "utf-8" && blameParam ? (
+        {kind === "image" ? (
+          <div className="flex justify-center rounded-md border bg-muted/30 p-4">
+            <img
+              src={rawUrl}
+              alt={blob.path}
+              className="max-h-[70vh] max-w-full object-contain"
+            />
+          </div>
+        ) : kind === "pdf" ? (
+          <iframe
+            src={rawUrl}
+            title={blob.path}
+            className="h-[75vh] w-full rounded-md border bg-background"
+          />
+        ) : blob.encoding === "utf-8" && blameParam ? (
           blame ? (
             <div className="max-h-[70vh] overflow-auto rounded-md border">
               <table className="w-full border-collapse font-mono text-xs">

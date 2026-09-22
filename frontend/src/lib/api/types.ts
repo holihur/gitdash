@@ -7,6 +7,7 @@ export interface User {
   mfa_enabled: boolean;
   email_verified?: boolean;
   avatar_url?: string;
+  cover_url?: string;
   bio?: string;
 }
 
@@ -171,6 +172,7 @@ export interface OrgProfile {
   repos: Repo[];
   followers: number;
   is_following: boolean;
+  cover_url?: string;
 }
 
 export interface OrgFollowState {
@@ -737,6 +739,7 @@ export interface UserProfile {
   /** 可见仓库：本人含私有，他人仅公开 */
   repos: Repo[];
   avatar_url?: string;
+  cover_url?: string;
 }
 
 export interface FollowState {

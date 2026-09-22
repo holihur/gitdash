@@ -154,6 +154,12 @@ export const reposApi = {
     req<Blob>(
       `/users/${owner}/repos/${name}/blob?ref=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}`,
     ),
+  /** 原始文件直链（图片 / PDF 直接查看；供 `<img>` / `<iframe>` 使用）。 */
+  rawFileUrl: (owner: string, name: string, ref: string, path: string) => {
+    const p = new URLSearchParams({ path });
+    if (ref) p.set("ref", ref);
+    return `/api/users/${encodeURIComponent(owner)}/repos/${encodeURIComponent(name)}/raw?${p.toString()}`;
+  },
   commits: (owner: string, name: string, ref: string, q?: string, limit?: number, offset?: number) => {
     const p = new URLSearchParams({ ref });
     if (q) p.set("q", q);
