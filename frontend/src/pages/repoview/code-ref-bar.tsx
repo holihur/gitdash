@@ -81,22 +81,16 @@ export default function CodeRefBar({
               ))}
             </>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={emptyRepo} onClick={() => onCompareOpenChange(true)}>
+            <GitCompare className="shrink-0" />
+            {t("compare.title")}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       <Button variant="ghost" size="sm" className="h-9 w-9 px-0" title={t("refs.manage")} onClick={onOpenRefs}>
         <GitBranchPlus className="h-4 w-4" />
-      </Button>
-
-      <Button
-        variant="outline"
-        size="sm"
-        className="gap-1.5"
-        disabled={emptyRepo}
-        onClick={() => onCompareOpenChange(true)}
-      >
-        <GitCompare className="h-4 w-4" />
-        {t("compare.title")}
       </Button>
 
       <CompareDialog

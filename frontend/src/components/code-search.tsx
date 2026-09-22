@@ -26,12 +26,15 @@ export function CodeSearch({
   name,
   refName,
   setParams,
+  leading,
   actions,
 }: {
   owner: string;
   name: string;
   refName: string;
   setParams: (patch: Record<string, string | null>) => void;
+  /** 与搜索框同行的左侧内容（分支切换、面包屑等） */
+  leading?: ReactNode;
   /** 与搜索框同行的操作按钮（新建文件/文件夹等） */
   actions?: ReactNode;
 }) {
@@ -75,6 +78,7 @@ export function CodeSearch({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
+        {leading}
         <div className="relative min-w-0 flex-1 basis-52">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input

@@ -80,7 +80,7 @@ export default function RepoHeader({
         <Button
           variant="outline"
           size="sm"
-          className="shrink-0 gap-1.5"
+          className="h-8 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3.5 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm sm:[&_svg]:size-4"
           disabled={watchBusy}
           onClick={onToggleWatch}
           title={t("social.watchTitle")}
@@ -92,7 +92,7 @@ export default function RepoHeader({
         <Button
           variant="outline"
           size="sm"
-          className="shrink-0 gap-1.5"
+          className="h-8 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3.5 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm sm:[&_svg]:size-4"
           disabled={starBusy}
           onClick={onToggleStar}
         >
@@ -102,7 +102,7 @@ export default function RepoHeader({
         </Button>
         {typeof repo?.size === "number" && (
           <span
-            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm text-muted-foreground"
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground [&_svg]:size-3.5 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm sm:[&_svg]:size-4"
             title={t("common.size")}
           >
             <HardDrive className="h-4 w-4" />
@@ -110,14 +110,23 @@ export default function RepoHeader({
           </span>
         )}
         {!isOwner && (
-          <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={onFork}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3.5 sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm sm:[&_svg]:size-4"
+            onClick={onFork}
+          >
             <GitFork className="h-4 w-4" />
             <span className="hidden sm:inline">{t("social.fork")}</span>
           </Button>
         )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="shrink-0 gap-2 font-mono text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 px-2 font-mono text-xs [&_svg]:size-3.5 sm:h-9 sm:gap-2 sm:px-3 sm:[&_svg]:size-4"
+            >
               <GitBranch className="h-3.5 w-3.5" />
               SSH
               <MoreVertical className="h-3.5 w-3.5" />

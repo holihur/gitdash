@@ -227,6 +227,25 @@ export default function CodeTab({
     </>
   );
 
+  // 分支切换 / 面包屑与搜索、新建菜单同处一行（分支在左，搜索与新建在右）。
+  const refBar = (
+    <CodeRefBar
+      owner={owner}
+      name={name}
+      refName={refName}
+      branches={branches}
+      tags={tags}
+      emptyRepo={emptyRepo}
+      crumbs={crumbs}
+      hasBlob={blob != null}
+      compareOpen={compareOpen}
+      onCompareOpenChange={setCompareOpen}
+      onSelectRef={(ref) => setParams({ ref, path: null, file: null })}
+      onOpenRefs={openRefs}
+      onOpenDir={openDir}
+    />
+  );
+
   return (
     <div className="space-y-4">
       {!emptyRepo ? (
@@ -235,27 +254,15 @@ export default function CodeTab({
           name={name}
           refName={refName}
           setParams={setParams}
+          leading={refBar}
           actions={toolbarActions}
         />
       ) : (
-        <div className="flex flex-wrap items-center justify-end gap-2">{toolbarActions}</div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {refBar}
+          {toolbarActions}
+        </div>
       )}
-
-      <CodeRefBar
-        owner={owner}
-        name={name}
-        refName={refName}
-        branches={branches}
-        tags={tags}
-        emptyRepo={emptyRepo}
-        crumbs={crumbs}
-        hasBlob={blob != null}
-        compareOpen={compareOpen}
-        onCompareOpenChange={setCompareOpen}
-        onSelectRef={(ref) => setParams({ ref, path: null, file: null })}
-        onOpenRefs={openRefs}
-        onOpenDir={openDir}
-      />
 
       {repo?.languages && repo.languages.length > 0 && (
         <LanguageBar languages={repo.languages} />
