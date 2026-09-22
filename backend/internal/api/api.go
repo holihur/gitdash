@@ -699,6 +699,26 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/packages/maven/{owner}/{rest...}", a.authOptional(a.mavenGet))
 	mux.HandleFunc("HEAD /api/packages/maven/{owner}/{rest...}", a.authOptional(a.mavenGet))
 
+	// 系统包仓库（apt / yum / apk / brew / snap）——发布 + 索引 + 下载
+	for _, typ := range systemPkgTypeList {
+		t := typ
+		mux.HandleFunc("POST /api/packages/"+t+"/{owner}/{repo}/publish", a.auth(func(w http.ResponseWriter, r *http.Request) {
+			a.publishSystemPackage(w, r, t)
+		}))
+	}
+	mux.HandleFunc("GET /api/packages/apt/{owner}/{repo}/dists/{dist}/{component}/{arch}/Packages", a.authOptional(a.aptPackages))
+	mux.HandleFunc("GET /api/packages/apt/{owner}/{repo}/dists/{dist}/{component}/{arch}/Packages.gz", a.authOptional(a.aptPackages))
+	mux.HandleFunc("GET /api/packages/apt/{owner}/{repo}/dists/{dist}/{component}/Release", a.authOptional(a.aptRelease))
+	mux.HandleFunc("GET /api/packages/apt/{owner}/{repo}/pool/{filename}", a.authOptional(a.aptPool))
+	mux.HandleFunc("GET /api/packages/yum/{owner}/{repo}/repodata/{file}", a.authOptional(a.yumRepodata))
+	mux.HandleFunc("GET /api/packages/yum/{owner}/{repo}/{filename}", a.authOptional(a.yumDownload))
+	mux.HandleFunc("GET /api/packages/apk/{owner}/{repo}/{arch}/APKINDEX.tar.gz", a.authOptional(a.apkIndex))
+	mux.HandleFunc("GET /api/packages/apk/{owner}/{repo}/{arch}/{filename}", a.authOptional(a.apkDownload))
+	mux.HandleFunc("GET /api/packages/brew/{owner}/{repo}/api/formula/{name}", a.authOptional(a.brewFormula))
+	mux.HandleFunc("GET /api/packages/brew/{owner}/{repo}/bottles/{filename}", a.authOptional(a.brewBottle))
+	mux.HandleFunc("GET /api/packages/snap/{owner}/{repo}/index.json", a.authOptional(a.snapIndex))
+	mux.HandleFunc("GET /api/packages/snap/{owner}/{repo}/download/{filename}", a.authOptional(a.snapDownload))
+
 	// Docker / OCI 私有注册表（Distribution spec，统一在 /v2/ 下按路径分派）
 	mux.HandleFunc("/v2/", a.registryAuth(a.registryHandler))
 

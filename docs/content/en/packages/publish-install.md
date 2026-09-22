@@ -366,6 +366,32 @@ Supported endpoints: `/v2/` (version/login), blob upload (`POST`/`PATCH`/`PUT` +
 
 ---
 
+## 9. System repositories (apt / yum / apk / brew / snap)
+
+gitdash can also host OS-level repositories. Publishing takes the artifact
+**plus its metadata** (the server generates the native index):
+
+```bash
+curl -u <owner>:<PAT> \
+  -F 'meta={"name":"hello","version":"1.0.0","arch":"amd64"}' \
+  -F file=@hello_1.0.0_amd64.deb \
+  http://<host>/api/packages/apt/<owner>/<repo>/publish
+```
+
+The generated indexes are unsigned, so point the client at the repository with
+signature checking disabled:
+
+- apt: `deb [trusted=yes] http://<host>/api/packages/apt/<owner>/<repo> stable main`
+- yum/dnf: `baseurl=http://<host>/api/packages/yum/<owner>/<repo>` + `gpgcheck=0`
+- apk: `http://<host>/api/packages/apk/<owner>/<repo>` (`--allow-untrusted`)
+- brew: `GET /api/packages/brew/<owner>/<tap>/api/formula/<name>.json`
+- snap: `GET /api/packages/snap/<owner>/<store>/index.json`
+
+Copy-pasteable client configs live in
+[`examples/packages/system/`](https://github.com/holihur/gitdash/tree/main/examples/packages/system).
+
+---
+
 ## Management API
 
 - `GET /api/packages/{owner}` / `GET /api/packages/{owner}/{type}` — list packages with download counts (Bearer session/PAT also works)

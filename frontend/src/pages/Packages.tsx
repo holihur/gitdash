@@ -36,7 +36,21 @@ import { RelativeTime } from "@/components/relative-time";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 
-const PKG_TYPES = ["npm", "composer", "pypi", "rubygems", "go", "cargo", "maven", "docker"] as const;
+const PKG_TYPES = [
+  "npm",
+  "composer",
+  "pypi",
+  "rubygems",
+  "go",
+  "cargo",
+  "maven",
+  "docker",
+  "apt",
+  "yum",
+  "apk",
+  "brew",
+  "snap",
+] as const;
 type PkgType = (typeof PKG_TYPES)[number];
 
 // 首页各仓库卡片的一句话说明（生态语言基本无需翻译）。
@@ -49,6 +63,11 @@ const PKG_LANG: Record<PkgType, string> = {
   cargo: "Rust",
   maven: "Java",
   docker: "Docker / OCI",
+  apt: "Debian / Ubuntu",
+  yum: "RHEL / Fedora",
+  apk: "Alpine",
+  brew: "Homebrew",
+  snap: "Snap",
 };
 
 export default function Packages() {

@@ -1,0 +1,2 @@
+# gitdash apt repository (unsigned; [trusted=yes] disables GPG checks).
+deb [trusted=yes] http://127.0.0.1:8080/api/packages/apt/alice/deb stable main

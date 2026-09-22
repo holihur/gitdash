@@ -1,0 +1,5 @@
+[gitdash]
+name=gitdash alice/rpm
+baseurl=http://127.0.0.1:8080/api/packages/yum/alice/rpm
+enabled=1
+gpgcheck=0

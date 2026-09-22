@@ -41,13 +41,21 @@ publishing examples to http://127.0.0.1:8080 as alice
   ok  go
   ok  rubygems
   ok  maven
+  ok  apt
+  ok  yum
+  ok  apk
+  ok  brew
+  ok  snap
 
-7/7 registries passed
+12/12 registries passed
 ```
 
 Every run publishes a unique `*-<hex>` name so it can be repeated safely. The
 Docker / OCI registry is not covered by the script (it needs a real image
-client); use the example below.
+client); use the example below. The five system repository types
+(`apt` / `yum` / `apk` / `brew` / `snap`) are published with client-supplied
+metadata and verified through their generated indexes — see
+[`system/`](system/) for the native client configuration.
 
 Then pull them back the same way (read side):
 
@@ -55,7 +63,7 @@ Then pull them back the same way (read side):
 export GITDASH_OWNER=alice   # namespace to consume (defaults to GITDASH_USER)
 python3 examples/packages/consume.py
 
-#   7/7 registries consumed
+#   12/12 registries consumed
 ```
 
 ### One command for both layers
@@ -92,6 +100,11 @@ The example projects are buildable with the real package managers. Replace
 | go | [`go/hello/`](go/hello/) | Upload the `<module>@<version>` zip to `http://<host>/api/packages/go/<owner>/<module>/@v/v1.0.0.zip` |
 | rubygems | [`rubygems/hello/`](rubygems/hello/) | `gem build hello.gemspec && gem push hello-1.0.0.gem --host http://<owner>:<PAT>@<host>/api/packages/rubygems/<owner>` |
 | maven | [`maven/hello/`](maven/hello/) | `mvn deploy` (with the `gitdash` server in `~/.m2/settings.xml`) |
+| apt | [`system/`](system/) | `curl -u <owner>:<PAT> -F meta=@meta.json -F file=@pkg.deb http://<host>/api/packages/apt/<owner>/<repo>/publish` |
+| yum | [`system/`](system/) | same `publish` endpoint with `type=yum` (RPM) |
+| apk | [`system/`](system/) | same `publish` endpoint with `type=apk` (Alpine) |
+| brew | [`system/`](system/) | same `publish` endpoint with `type=brew` (bottle) |
+| snap | [`system/`](system/) | same `publish` endpoint with `type=snap` |
 | docker / OCI | [`docker/`](docker/) | `docker build -t hello:1.0 . && docker tag hello:1.0 <host>/<owner>/hello:1.0 && docker push <host>/<owner>/hello:1.0` |
 
 Authenticate the clients with **Basic auth**: your username as the user and a

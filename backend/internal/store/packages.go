@@ -378,6 +378,21 @@ func (s *Store) ListAllPackageNames(owner, typ string) ([]string, error) {
 	return names, err
 }
 
+// ListPackageRepoFiles 列出某个系统仓库（owner+type+repo）下的全部制品行，
+// 供 apt/yum/apk/brew/snap 仓库索引生成使用。
+func (s *Store) ListPackageRepoFiles(owner, typ, repo string) ([]Package, error) {
+	var rows []packageRow
+	if err := s.db.Where("owner = ? AND type = ? AND name = ?", owner, typ, repo).
+		Order("version, filename").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make([]Package, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, packageFromRow(r))
+	}
+	return out, nil
+}
+
 // PackageVisibility 返回该包（owner+type+name）的有效可见性：
 // private | public | anonymous。多行不一致时取最严格（private > public > anonymous）。
 func (s *Store) PackageVisibility(owner, typ, name string) string {

@@ -77,6 +77,16 @@ def install_command(pkg: dict) -> str:
     if t == "maven":
         parts = name.split("/")
         return f"mvn dependency:get -DremoteRepositories=gitdash -Dartifact={'.'.join(parts[:-1])}:{parts[-1]}:{version}"
+    if t == "apt":
+        return f"deb [trusted=yes] {BASE}/api/packages/apt/{owner}/{name} stable main"
+    if t == "yum":
+        return f"[gitdash]\\nbaseurl={BASE}/api/packages/yum/{owner}/{name}\\ngpgcheck=0"
+    if t == "apk":
+        return f"{BASE}/api/packages/apk/{owner}/{name}"
+    if t == "brew":
+        return f"brew tap {owner}/{name}"
+    if t == "snap":
+        return f"curl -LO {BASE}/api/packages/snap/{owner}/{name}/download/{version}"
     return f"{name}@{version}"
 
 
@@ -104,6 +114,24 @@ def consume(pkg: dict) -> str:
         get(f"/api/packages/rubygems/{owner}/gems/{filename}")
     elif t == "maven":
         get(f"/api/packages/maven/{owner}/{name}/{version}/{filename}")
+    elif t == "apt":
+        arch = json.loads(pkg.get("meta") or "{}").get("arch", "amd64")
+        index = get(f"/api/packages/apt/{owner}/{name}/dists/stable/main/binary-{arch}/Packages").decode()
+        get(f"/api/packages/apt/{owner}/{name}/" + re.search(r"Filename: (\S+)", index).group(1))
+    elif t == "yum":
+        get(f"/api/packages/yum/{owner}/{name}/repodata/repomd.xml")
+        get(f"/api/packages/yum/{owner}/{name}/{filename}")
+    elif t == "apk":
+        arch = json.loads(pkg.get("meta") or "{}").get("arch", "x86_64")
+        get(f"/api/packages/apk/{owner}/{name}/{arch}/APKINDEX.tar.gz")
+        get(f"/api/packages/apk/{owner}/{name}/{arch}/{filename}")
+    elif t == "brew":
+        pkg_name = json.loads(pkg.get("meta") or "{}").get("name", name)
+        get(f"/api/packages/brew/{owner}/{name}/api/formula/{pkg_name}.json")
+        get(f"/api/packages/brew/{owner}/{name}/bottles/{filename}")
+    elif t == "snap":
+        get(f"/api/packages/snap/{owner}/{name}/index.json")
+        get(f"/api/packages/snap/{owner}/{name}/download/{filename}")
     else:
         raise RuntimeError(f"unsupported type {t}")
     return install_command(pkg)

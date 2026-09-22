@@ -361,6 +361,31 @@ docker pull your-host:8080/<owner>/hello:1.0
 
 ---
 
+## 9. 系统仓库（apt / yum / apk / brew / snap）
+
+gitdash 也能托管操作系统级仓库。发布时需要同时提交制品与**元数据**（服务端据此
+生成原生索引）：
+
+```bash
+curl -u <owner>:<PAT> \
+  -F 'meta={"name":"hello","version":"1.0.0","arch":"amd64"}' \
+  -F file=@hello_1.0.0_amd64.deb \
+  http://<host>/api/packages/apt/<owner>/<repo>/publish
+```
+
+生成的索引未签名，客户端需关闭签名校验：
+
+- apt：`deb [trusted=yes] http://<host>/api/packages/apt/<owner>/<repo> stable main`
+- yum/dnf：`baseurl=http://<host>/api/packages/yum/<owner>/<repo>` + `gpgcheck=0`
+- apk：`http://<host>/api/packages/apk/<owner>/<repo>`（`--allow-untrusted`）
+- brew：`GET /api/packages/brew/<owner>/<tap>/api/formula/<name>.json`
+- snap：`GET /api/packages/snap/<owner>/<store>/index.json`
+
+可直接复制的客户端配置见
+[`examples/packages/system/`](https://github.com/holihur/gitdash/tree/main/examples/packages/system)。
+
+---
+
 ## 管理 API
 
 - `GET /api/packages/{owner}` / `GET /api/packages/{owner}/{type}` — 列出包（含下载计数；Bearer session/PAT 亦可）

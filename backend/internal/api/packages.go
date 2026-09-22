@@ -123,6 +123,7 @@ func limitBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 var validPkgTypes = map[string]bool{
 	"npm": true, "composer": true, "pypi": true, "rubygems": true,
 	"go": true, "cargo": true, "maven": true, "docker": true,
+	"apt": true, "yum": true, "apk": true, "brew": true, "snap": true,
 }
 
 // dockerImage Packages 页 docker tab 的展示条目：一个镜像名 + 其全部 tag。

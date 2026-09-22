@@ -3,8 +3,9 @@
 
 This is the runnable companion to the example projects in this directory: it
 exercises the whole private package registry (npm / pypi / composer / cargo /
-go / rubygems / maven) over plain HTTP using only the Python standard library,
-so it works even when the native package manager toolchains are not installed.
+go / rubygems / maven, plus the system repositories apt / yum / apk / brew /
+snap) over plain HTTP using only the Python standard library, so it works even
+when the native package manager toolchains are not installed.
 
 It doubles as a manual end-to-end test of a running gitdash instance:
 
@@ -304,9 +305,124 @@ def maven() -> None:
     ok("maven")
 
 
+# ---- system repositories (apt / yum / apk / brew / snap) -------------------
+#
+# 系统仓库的发布采用「客户端提交元数据」方式：multipart 的 meta(JSON) + file，
+# 服务端据此生成原生客户端可用的索引（apt Packages/Release、yum repomd/primary、
+# apk APKINDEX、brew formula、snap index）。正式使用时可在 CI 中解析 .deb/.rpm/
+# .apk 得到这些字段，这里用固定值演示。
+
+
+def _publish_system(typ: str, repo: str, filename: str, content: bytes, meta: dict) -> None:
+    payload, content_type = multipart(
+        {"meta": json.dumps(meta)}, {"file": (filename, content)}
+    )
+    request(
+        "POST",
+        f"/api/packages/{typ}/{USER}/{repo}/publish",
+        payload,
+        {"Content-Type": content_type},
+        201,
+    )
+
+
+def apt() -> None:
+    content = b"!<arch>\nfake-deb"
+    _publish_system(
+        "apt",
+        "deb",
+        "hello_1.0.0_amd64.deb",
+        content,
+        {
+            "name": "hello",
+            "version": "1.0.0",
+            "arch": "amd64",
+            "description": "hello from gitdash",
+            "maintainer": "you@example.com",
+        },
+    )
+    _, index = request(
+        "GET",
+        f"/api/packages/apt/{USER}/deb/dists/stable/main/binary-amd64/Packages",
+        expect=200,
+    )
+    assert b"Package: hello" in index and b"pool/hello_1.0.0_amd64.deb" in index
+    _, got = request(
+        "GET", f"/api/packages/apt/{USER}/deb/pool/hello_1.0.0_amd64.deb", expect=200
+    )
+    assert got == content
+    ok("apt")
+
+
+def yum() -> None:
+    content = b"\xed\xab\xee\xdbfake-rpm"
+    _publish_system(
+        "yum",
+        "rpm",
+        "hello-1.0.0-1.x86_64.rpm",
+        content,
+        {
+            "name": "hello",
+            "version": "1.0.0",
+            "release": "1",
+            "arch": "x86_64",
+            "summary": "hello from gitdash",
+            "license": "MIT",
+        },
+    )
+    _, repomd = request("GET", f"/api/packages/yum/{USER}/rpm/repodata/repomd.xml", expect=200)
+    assert b"primary.xml.gz" in repomd
+    _, got = request(
+        "GET", f"/api/packages/yum/{USER}/rpm/hello-1.0.0-1.x86_64.rpm", expect=200
+    )
+    assert got == content
+    ok("yum")
+
+
+def apk() -> None:
+    content = b"\x1f\x8bfake-apk"
+    _publish_system(
+        "apk",
+        "alpine",
+        "hello-1.0.0-r0.apk",
+        content,
+        {"name": "hello", "version": "1.0.0-r0", "arch": "x86_64", "description": "hello from gitdash"},
+    )
+    _, index = request(
+        "GET", f"/api/packages/apk/{USER}/alpine/x86_64/APKINDEX.tar.gz", expect=200
+    )
+    assert index[:2] == b"\x1f\x8b"
+    ok("apk")
+
+
+def brew() -> None:
+    content = b"\x1f\x8bfake-bottle"
+    _publish_system(
+        "brew",
+        "tap",
+        "hello-1.0.0.bottle.tar.gz",
+        content,
+        {"name": "hello", "version": "1.0.0", "arch": "arm64", "description": "hello from gitdash"},
+    )
+    formula = json_body(f"/api/packages/brew/{USER}/tap/api/formula/hello.json")
+    assert formula["versions"]["stable"] == "1.0.0"
+    ok("brew")
+
+
+def snap() -> None:
+    content = b"hsqsfake-snap"
+    _publish_system(
+        "snap", "store", "hello_1.0.0_amd64.snap", content,
+        {"name": "hello", "version": "1.0.0", "arch": "amd64"},
+    )
+    idx = json_body(f"/api/packages/snap/{USER}/store/index.json")
+    assert idx["snaps"] and idx["snaps"][0]["name"] == "hello"
+    ok("snap")
+
+
 def main() -> int:
     print(f"publishing examples to {BASE} as {USER}")
-    for name, fn in [
+    registries = [
         ("npm", npm),
         ("pypi", pypi),
         ("composer", composer),
@@ -314,13 +430,19 @@ def main() -> int:
         ("go", goproxy),
         ("rubygems", rubygems),
         ("maven", maven),
-    ]:
+        ("apt", apt),
+        ("yum", yum),
+        ("apk", apk),
+        ("brew", brew),
+        ("snap", snap),
+    ]
+    for name, fn in registries:
         try:
             fn()
         except Exception as exc:  # noqa: BLE001 - demo script: report and keep going
             print(f"FAIL  {name}: {exc}", file=sys.stderr)
-    print(f"\n{len(PASSED)}/7 registries passed")
-    return 0 if len(PASSED) == 7 else 1
+    print(f"\n{len(PASSED)}/{len(registries)} registries passed")
+    return 0 if len(PASSED) == len(registries) else 1
 
 
 if __name__ == "__main__":
