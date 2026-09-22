@@ -27,12 +27,7 @@ type repoCommitRuleRow struct {
 
 func (repoCommitRuleRow) TableName() string { return "repo_commit_rules" }
 
-func commitRulesFromRow(r repoCommitRuleRow) RepoCommitRules {
-	return RepoCommitRules{
-		Owner: r.Owner, Repo: r.Repo,
-		NamePattern: r.NamePattern, EmailPattern: r.EmailPattern, CreatedAt: r.CreatedAt,
-	}
-}
+func commitRulesFromRow(r repoCommitRuleRow) RepoCommitRules { return RepoCommitRules(r) }
 
 // GetRepoCommitRules 返回仓库提交身份规则；无规则时 ok=false。
 func (s *Store) GetRepoCommitRules(owner, repo string) (RepoCommitRules, bool, error) {

@@ -19,13 +19,7 @@ const (
 	deployIdentityPrefix = "deploy:"
 )
 
-func deployKeyFromRow(r deployKeyRow) DeployKey {
-	return DeployKey{
-		ID: r.ID, Owner: r.Owner, Repo: r.Repo, Name: r.Name,
-		PublicKey: r.PublicKey, Fingerprint: r.Fingerprint,
-		Permission: r.Permission, CreatedAt: r.CreatedAt,
-	}
-}
+func deployKeyFromRow(r deployKeyRow) DeployKey { return DeployKey(r) }
 
 // DeployIdentity 构造 deploy key 的合成登录身份："deploy:<owner>/<repo>:<rw>"。
 func DeployIdentity(owner, repo string, canWrite bool) string {
