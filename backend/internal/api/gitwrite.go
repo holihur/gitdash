@@ -239,6 +239,7 @@ func (a *API) writeCommit(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "commit_failed", err.Error())
 		return
 	}
+	a.maybeAnalyzeLanguages(owner, name, in.Branch, sha)
 	writeJSON(w, http.StatusCreated, map[string]any{"sha": sha, "branch": in.Branch, "message": in.Message})
 }
 
@@ -293,6 +294,7 @@ func (a *API) revertCommit(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, code, codeStr, msg)
 		return
 	}
+	a.maybeAnalyzeLanguages(owner, name, in.Branch, newSha)
 	writeJSON(w, http.StatusCreated, map[string]any{"sha": newSha, "branch": in.Branch})
 }
 

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"gitdash/backend/internal/jobs"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -152,6 +154,8 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"password_login_enabled": a.store.GetSetting("password_login_enabled") != "0",
 		"version_visible":        a.store.GetSetting("version_visible") != "0",
 		"registration_disabled":  a.store.GetSetting("registration_disabled") == "1",
+		// 代码成分（语言）分析：默认开启，可关闭以省资源。
+		"language_stats_enabled": a.store.GetSetting(jobs.SettingLanguageStats) != "0",
 		"smtp_enabled":           a.store.GetSetting("smtp_enabled") == "1",
 		"smtp_host":              a.store.GetSetting("smtp_host"),
 		"smtp_port":              a.store.GetSetting("smtp_port"),
@@ -229,6 +233,13 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	setBool("password_login_enabled", in["password_login_enabled"])
 	setBool("version_visible", in["version_visible"])
 	setBool("registration_disabled", in["registration_disabled"])
+	// 代码成分分析开关：从关闭变为开启时，异步回填尚未分析的仓库。
+	langBefore := a.store.GetSetting(jobs.SettingLanguageStats) != "0"
+	setBool(jobs.SettingLanguageStats, in[jobs.SettingLanguageStats])
+	langAfter := a.store.GetSetting(jobs.SettingLanguageStats) != "0"
+	if !langBefore && langAfter && a.jobsMgr != nil {
+		a.jobsMgr.BackfillLanguages()
+	}
 	writeStr("oidc_name", in["oidc_name"])
 	writeStr("oidc_issuer", in["oidc_issuer"])
 	writeStr("oidc_client_id", in["oidc_client_id"])

@@ -12,7 +12,6 @@
 package grpcserver
 
 import (
-	"bytes"
 	"context"
 	"crypto/subtle"
 	"errors"
@@ -20,7 +19,6 @@ import (
 	"net"
 	"strings"
 
-	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -46,41 +44,24 @@ func New(st *store.Store) *AuthzServer {
 	return &AuthzServer{st: st}
 }
 
-// AuthorizePublicKey 比对 SSH 公钥并返回其所属用户。
+// AuthorizePublicKey 比对 SSH 公钥并返回登录身份：普通用户返回用户名，
+// 仓库 deploy key 返回合成身份 "deploy:<owner>/<repo>:<rw>"（见 store.DeployIdentity）。
 //
-// 与 sshserver.PublicKeyCallback 语义一致：
-//  1. 遍历已登记公钥，按 (type, wire-blob) 精确匹配（不做模糊/前缀匹配）；
-//  2. 命中后若账号被封禁则拒绝；
+// 与 sshserver.PublicKeyCallback 语义一致，均委派 store.MatchSSHKey：
+//  1. 先按 (type, wire-blob) 匹配用户公钥，命中后校验封禁；
+//  2. 再按指纹匹配仓库 deploy key，命中后校验仓库/属主封禁；
 //  3. 未命中返回 authorized=false。
 //
 // 注意：比对在服务端完成，绝不回传公钥列表，避免授权面成为信息泄漏点。
 func (s *AuthzServer) AuthorizePublicKey(_ context.Context, req *authzv1.AuthorizePublicKeyRequest) (*authzv1.AuthorizePublicKeyResponse, error) {
-	keys, err := s.st.PublicKeys()
+	identity, authorized, reason, err := s.st.MatchSSHKey(req.GetKeyType(), req.GetKeyBlob())
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list public keys: %v", err)
+		return nil, status.Errorf(codes.Internal, "match public key: %v", err)
 	}
-	for _, ka := range keys {
-		parsed, _, _, _, perr := ssh.ParseAuthorizedKey([]byte(ka.Line))
-		if perr != nil {
-			continue
-		}
-		if parsed.Type() == req.GetKeyType() && bytes.Equal(parsed.Marshal(), req.GetKeyBlob()) {
-			if s.st.IsUserBanned(ka.Username) {
-				return &authzv1.AuthorizePublicKeyResponse{
-					Authorized: false,
-					Reason:     "account is banned",
-				}, nil
-			}
-			return &authzv1.AuthorizePublicKeyResponse{
-				Authorized: true,
-				Username:   ka.Username,
-			}, nil
-		}
+	if !authorized {
+		return &authzv1.AuthorizePublicKeyResponse{Authorized: false, Reason: reason}, nil
 	}
-	return &authzv1.AuthorizePublicKeyResponse{
-		Authorized: false,
-		Reason:     "unknown public key",
-	}, nil
+	return &authzv1.AuthorizePublicKeyResponse{Authorized: true, Username: identity}, nil
 }
 
 // IsIPBanned 报告来源 IP 是否命中管理员黑名单（IP/CIDR）。

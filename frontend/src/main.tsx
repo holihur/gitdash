@@ -4,6 +4,7 @@ import App from "./App";
 import "./index.css";
 import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider, detectLang, preloadLang } from "@/lib/i18n";
+import { LanguageColorsProvider } from "@/lib/language-colors";
 import { loadInstanceInfo } from "@/lib/api";
 import ErrorBoundary from "@/components/error-boundary";
 
@@ -18,9 +19,11 @@ void preloadLang(detectLang()).finally(() => {
     <React.StrictMode>
       <ThemeProvider>
         <I18nProvider>
-          <ErrorBoundary>
-            <App />
-          </ErrorBoundary>
+          <LanguageColorsProvider>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </LanguageColorsProvider>
         </I18nProvider>
       </ThemeProvider>
     </React.StrictMode>,

@@ -1,5 +1,5 @@
 import { pageQuery, req, reqPage } from "./core";
-import type { Blame, Blob, Branch, Commit, GlobalSearchResult, PullDiff, Repo, RepoGCResult, Tag, TopicCount, TreeEntry } from "./types";
+import type { Blame, Blob, Branch, Commit, DeployKey, GlobalSearchResult, PullDiff, Repo, RepoCommitRules, RepoGCResult, RepoPages, Tag, TopicCount, TreeEntry } from "./types";
 
 export const reposApi = {
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
@@ -49,6 +49,40 @@ export const reposApi = {
     req<Repo>(`/users/${owner}/repos/${name}/description`, {
       method: "POST",
       body: JSON.stringify({ description }),
+    }),
+  getRepoPages: (owner: string, name: string) =>
+    req<RepoPages>(`/users/${owner}/repos/${name}/pages`),  setRepoPages: (
+    owner: string,
+    name: string,
+    body: { enabled: boolean; branch?: string; dir?: string },
+  ) =>
+    req<RepoPages>(`/users/${owner}/repos/${name}/pages`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  listDeployKeys: (owner: string, name: string) =>
+    req<DeployKey[]>(`/users/${owner}/repos/${name}/deploy-keys`),
+  createDeployKey: (
+    owner: string,
+    name: string,
+    body: { title: string; key: string; read_only: boolean },
+  ) =>
+    req<DeployKey>(`/users/${owner}/repos/${name}/deploy-keys`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteDeployKey: (owner: string, name: string, id: number) =>
+    req<null>(`/users/${owner}/repos/${name}/deploy-keys/${id}`, { method: "DELETE" }),
+  getRepoCommitRules: (owner: string, name: string) =>
+    req<RepoCommitRules>(`/users/${owner}/repos/${name}/commit-rules`),
+  setRepoCommitRules: (
+    owner: string,
+    name: string,
+    body: { name_pattern: string; email_pattern: string },
+  ) =>
+    req<RepoCommitRules>(`/users/${owner}/repos/${name}/commit-rules`, {
+      method: "PUT",
+      body: JSON.stringify(body),
     }),
   listExplore: (limit?: number, offset?: number, filters?: { q?: string; topic?: string }) => {
     const params = new URLSearchParams();

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useI18n } from "@/lib/i18n";
 import { RelativeTime } from "@/components/relative-time";
+import { LanguageBadge } from "@/components/language-bar";
 
 interface Props {
   repo: Repo;
@@ -99,6 +100,11 @@ export default function RepoCard({
           <Badge variant="secondary" className="font-normal">
             <RelativeTime iso={repo.created_at} locale={locale} />
           </Badge>
+          {repo.language && (
+            <Badge variant="secondary" className="font-normal">
+              <LanguageBadge language={repo.language} />
+            </Badge>
+          )}
           {repo.is_template && (
             <Badge variant="outline" className="font-normal">
               {t("repos.templateBadge")}

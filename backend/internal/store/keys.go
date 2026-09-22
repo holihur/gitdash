@@ -1,6 +1,11 @@
 package store
 
-import "gorm.io/gorm"
+import (
+	"bytes"
+
+	"golang.org/x/crypto/ssh"
+	"gorm.io/gorm"
+)
 
 func (s *Store) UserID(username string) (int64, error) {
 	var row userRow
@@ -67,6 +72,51 @@ func (s *Store) PublicKeys() ([]PublicKeyAuth, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// MatchSSHKey 按 (keyType, wire-blob) 匹配用户公钥或仓库 deploy key，返回登录身份：
+//   - 普通用户公钥 → 用户名（封禁账号拒绝）；
+//   - 仓库 deploy key → 合成身份 "deploy:<owner>/<repo>:<rw>"（仓库/属主被封禁拒绝）。
+//
+// reason 供日志；未命中时 authorized=false、reason=unknown public key。
+func (s *Store) MatchSSHKey(keyType string, blob []byte) (identity string, authorized bool, reason string, err error) {
+	keys, err := s.PublicKeys()
+	if err != nil {
+		return "", false, "", err
+	}
+	for _, ka := range keys {
+		parsed, _, _, _, perr := ssh.ParseAuthorizedKey([]byte(ka.Line))
+		if perr != nil {
+			continue
+		}
+		if parsed.Type() == keyType && bytes.Equal(parsed.Marshal(), blob) {
+			if s.IsUserBanned(ka.Username) {
+				return "", false, "account is banned", nil
+			}
+			return ka.Username, true, "", nil
+		}
+	}
+	// deploy key：用指纹做 O(1) 查找
+	if pub, perr := ssh.ParsePublicKey(blob); perr == nil {
+		dk, ok, derr := s.matchDeployKey(ssh.FingerprintSHA256(pub))
+		if derr != nil {
+			return "", false, "", derr
+		}
+		if ok {
+			if s.IsRepoBanned(dk.Owner, dk.Repo) {
+				return "", false, "repository is banned", nil
+			}
+			if s.IsOrg(dk.Owner) {
+				if s.IsOrgBanned(dk.Owner) {
+					return "", false, "organization is banned", nil
+				}
+			} else if s.IsUserBanned(dk.Owner) {
+				return "", false, "account is banned", nil
+			}
+			return DeployIdentity(dk.Owner, dk.Repo, dk.Permission == DeployPermissionWrite), true, "", nil
+		}
+	}
+	return "", false, "unknown public key", nil
 }
 
 func (s *Store) DeleteKey(username string, id int64) error {

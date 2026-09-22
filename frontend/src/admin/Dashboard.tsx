@@ -6,6 +6,7 @@ import { adminReq, toastError, type Settings } from "./api";
 import { GithubSettings, GoogleSettings, OidcSettings } from "./OAuthSettings";
 import { BindingSettings } from "./BindingSettings";
 import { AccessSettings } from "./AccessSettings";
+import { LanguageSettings } from "./LanguageSettings";
 import { DocsSettings } from "./DocsSettings";
 import { AnnouncementSettings } from "./AnnouncementSettings";
 import { SmtpSettings } from "./SmtpSettings";
@@ -56,6 +57,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
       </div>
 
       <AccessSettings settings={settings} onChange={load} />
+      <LanguageSettings />
       <GithubSettings settings={settings} onChange={load} />
       <GoogleSettings settings={settings} onChange={load} />
       <OidcSettings settings={settings} onChange={load} />

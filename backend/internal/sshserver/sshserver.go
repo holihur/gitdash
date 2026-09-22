@@ -230,37 +230,59 @@ func (s *Server) runGit(ch ssh.Channel, env []string, cmdline, username string) 
 		deny(fmt.Sprintf("invalid repository path %q", args[0]))
 		return
 	}
-	owner, name := m[1], m[2]
-	if name == "" {
-		// 单段路径（demo.git）解析为当前登录用户自己的仓库
-		name, owner = owner, username
-	}
-	if !validToken(owner) || !validToken(name) {
-		deny(fmt.Sprintf("invalid repository path %q", args[0]))
-		return
-	}
-	// 权限：push（receive-pack）需 write，clone/fetch/archive 需 read；所有者恒有全部权限
-	if sub == "receive-pack" {
-		allowed, err := s.authz.CanWrite(context.Background(), owner, name, username)
-		if err != nil {
-			logx.Infof("ssh: CanWrite(%s/%s, %s): %v", owner, name, username, err)
-			deny("authorization unavailable")
+	first, second := m[1], m[2]
+	single := second == ""
+
+	var owner, name string
+	// deploy key：身份为合成字符串（store.DeployIdentity），只能访问绑定仓库。
+	if deployOwner, deployRepo, deployWrite, isDeploy := store.ParseDeployIdentity(username); isDeploy {
+		if single {
+			owner, name = deployOwner, first
+		} else {
+			owner, name = first, second
+		}
+		if owner != deployOwner || name != deployRepo {
+			deny(fmt.Sprintf("deploy key is not authorized for %q", args[0]))
 			return
 		}
-		if !allowed {
-			deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
+		if sub == "receive-pack" && !deployWrite {
+			deny("deploy key is read-only")
 			return
 		}
 	} else {
-		allowed, err := s.authz.CanRead(context.Background(), owner, name, username)
-		if err != nil {
-			logx.Infof("ssh: CanRead(%s/%s, %s): %v", owner, name, username, err)
-			deny("authorization unavailable")
+		if single {
+			// 单段路径（demo.git）解析为当前登录用户自己的仓库
+			owner, name = username, first
+		} else {
+			owner, name = first, second
+		}
+		if !validToken(owner) || !validToken(name) {
+			deny(fmt.Sprintf("invalid repository path %q", args[0]))
 			return
 		}
-		if !allowed {
-			deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
-			return
+		// 权限：push（receive-pack）需 write，clone/fetch/archive 需 read；所有者恒有全部权限
+		if sub == "receive-pack" {
+			allowed, err := s.authz.CanWrite(context.Background(), owner, name, username)
+			if err != nil {
+				logx.Infof("ssh: CanWrite(%s/%s, %s): %v", owner, name, username, err)
+				deny("authorization unavailable")
+				return
+			}
+			if !allowed {
+				deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
+				return
+			}
+		} else {
+			allowed, err := s.authz.CanRead(context.Background(), owner, name, username)
+			if err != nil {
+				logx.Infof("ssh: CanRead(%s/%s, %s): %v", owner, name, username, err)
+				deny("authorization unavailable")
+				return
+			}
+			if !allowed {
+				deny(fmt.Sprintf("repository %q not found or not accessible by %q", args[0], username))
+				return
+			}
 		}
 	}
 

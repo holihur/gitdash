@@ -70,6 +70,20 @@ export interface MFAEnroll {
   otpauth_url: string;
 }
 
+export interface RepoPages {
+  enabled: boolean;
+  branch: string;
+  dir: string;
+  url: string;
+}
+
+/** 仓库提交身份校验规则（作者/提交者姓名与邮箱格式）。 */
+export interface RepoCommitRules {
+  enabled: boolean;
+  name_pattern: string;
+  email_pattern: string;
+}
+
 export interface Repo {
   id: number;
   owner: string;
@@ -83,6 +97,10 @@ export interface Repo {
   default_branch?: string;
   /** 是否启用 issue 功能 */
   has_issues?: boolean;
+  /** 静态网站托管（Pages），默认关闭 */
+  pages_enabled?: boolean;
+  pages_branch?: string;
+  pages_dir?: string;
   /** 仅“可访问仓库列表”返回：owner / read / write */
   role?: "owner" | "read" | "write";
   /** star 数量与当前用户是否已 star */
@@ -102,6 +120,17 @@ export interface Repo {
   import_error?: string;
   /** 仓库标签/话题 */
   topics?: string[];
+  /** 主要语言（列表页展示，未分析时为空） */
+  language?: string;
+  /** 语言构成（详情/code 页展示，按占比降序，最多 top5） */
+  languages?: LanguageStat[];
+}
+
+/** 单种语言的字节数与占比（仓库代码成分）。 */
+export interface LanguageStat {
+  language: string;
+  bytes: number;
+  percent: number;
 }
 
 /** `git gc` 执行结果（字节） */
@@ -160,6 +189,18 @@ export interface SSHKey {
   name: string;
   public_key: string;
   fingerprint: string;
+  created_at: string;
+}
+
+/** 仓库部署密钥（deploy key）：只读/读写，仅授权绑定仓库。 */
+export interface DeployKey {
+  id: number;
+  owner: string;
+  repo: string;
+  name: string;
+  public_key: string;
+  fingerprint: string;
+  permission: "read" | "write";
   created_at: string;
 }
 

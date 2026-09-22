@@ -51,6 +51,8 @@ type Backend interface {
 	PushMirror(owner, name, url, privateKey string) error
 	// RepoSize returns the repository disk usage in bytes.
 	RepoSize(owner, name string) (int64, error)
+	// RepoLanguages returns the byte breakdown of tracked blobs by language.
+	RepoLanguages(owner, name, ref string) ([]LanguageStat, error)
 	// GC runs garbage collection and reports the reclaimed bytes.
 	GC(owner, name string) (*GCResult, error)
 
@@ -69,6 +71,7 @@ type Backend interface {
 	Tree(owner, name, ref, dir string) ([]Entry, error)
 	ListDir(owner, name, ref, dir string) ([]string, error)
 	ReadBlob(owner, name, ref, file string) (*Blob, error)
+	ReadRawFile(owner, name, ref, file string) ([]byte, error)
 	BlameFile(owner, name, ref, file string) (*Blame, error)
 	RawCommit(owner, name, sha string) ([]byte, error)
 	RawCommits(owner, name string, shas []string) map[string][]byte
@@ -185,8 +188,14 @@ func PushMirror(owner, name, url, privateKey string) error {
 	return CurrentBackend().PushMirror(owner, name, url, privateKey)
 }
 func RepoSize(owner, name string) (int64, error) { return CurrentBackend().RepoSize(owner, name) }
-func EnsureHooks() error                         { return CurrentBackend().EnsureHooks() }
-func GC(owner, name string) (*GCResult, error)   { return CurrentBackend().GC(owner, name) }
+
+// RepoLanguages returns the byte breakdown of tracked blobs by language.
+func RepoLanguages(owner, name, ref string) ([]LanguageStat, error) {
+	return CurrentBackend().RepoLanguages(owner, name, ref)
+}
+
+func EnsureHooks() error                       { return CurrentBackend().EnsureHooks() }
+func GC(owner, name string) (*GCResult, error) { return CurrentBackend().GC(owner, name) }
 
 func HeadBranch(owner, name string) (string, error) { return CurrentBackend().HeadBranch(owner, name) }
 func Branches(owner, name string) ([]Branch, error) { return CurrentBackend().Branches(owner, name) }
@@ -210,6 +219,11 @@ func ListDir(owner, name, ref, dir string) ([]string, error) {
 }
 func ReadBlob(owner, name, ref, file string) (*Blob, error) {
 	return CurrentBackend().ReadBlob(owner, name, ref, file)
+}
+
+// ReadRawFile 读取仓库文件的原始字节（静态网站托管用）。
+func ReadRawFile(owner, name, ref, file string) ([]byte, error) {
+	return CurrentBackend().ReadRawFile(owner, name, ref, file)
 }
 func BlameFile(owner, name, ref, file string) (*Blame, error) {
 	return CurrentBackend().BlameFile(owner, name, ref, file)

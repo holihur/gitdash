@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FilePlus2, FolderPlus, FolderTree, List, Plus } from "lucide-react";
-import { type Blame, type Blob, type Branch, type Commit, type Tag, type TreeEntry } from "@/lib/api";
+import { type Blame, type Blob, type Branch, type Commit, type Repo, type Tag, type TreeEntry } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,12 +17,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import CodeRefBar from "./code-ref-bar";
 import { CodeSearch } from "@/components/code-search";
 import { RepoCodeBody } from "./repo-code-body";
+import { LanguageBar } from "@/components/language-bar";
 
 
 
 export interface CodeTabProps {
   owner: string;
   name: string;
+  repo: Repo | null;
   refName: string;
   locale: string;
   path: string[];
@@ -53,6 +55,7 @@ export interface CodeTabProps {
 export default function CodeTab({
   owner,
   name,
+  repo,
   refName,
   locale,
   path,
@@ -253,6 +256,10 @@ export default function CodeTab({
         onOpenRefs={openRefs}
         onOpenDir={openDir}
       />
+
+      {repo?.languages && repo.languages.length > 0 && (
+        <LanguageBar languages={repo.languages} />
+      )}
 
       <div
         className={cn(

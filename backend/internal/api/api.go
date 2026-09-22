@@ -209,6 +209,33 @@ func (a *API) enqueueMirror(owner, repo, url, privateKey string) error {
 	return a.jobsMgr.EnqueueMirror(owner, repo, url, privateKey)
 }
 
+// enqueueLanguages 排队一次代码成分分析（队列未配置或功能关闭时静默跳过）。
+// ref 为空时由任务端解析仓库 HEAD。
+func (a *API) enqueueLanguages(owner, repo, ref string) {
+	if a.jobsMgr == nil {
+		return
+	}
+	if err := a.jobsMgr.EnqueueLanguages(owner, repo, ref); err != nil {
+		logx.Infof("languages: enqueue %s/%s: %v", owner, repo, err)
+	}
+}
+
+// maybeAnalyzeLanguages 提交落在默认分支上时异步重算代码成分。
+// 覆盖 web 编辑 / 合并 / 撤销等不经 post-receive hook 的写入路径。
+func (a *API) maybeAnalyzeLanguages(owner, repo, branch, ref string) {
+	if a.jobsMgr == nil || branch == "" {
+		return
+	}
+	def := "main"
+	if r, err := a.store.GetRepo(owner, repo); err == nil && r.DefaultBranch != "" {
+		def = r.DefaultBranch
+	}
+	if branch != def {
+		return
+	}
+	a.enqueueLanguages(owner, repo, ref)
+}
+
 // SetSSHPort 注入 SSH 监听端口（clone 地址展示用）。
 func (a *API) SetSSHPort(addr string) {
 	if _, port, err := net.SplitHostPort(addr); err == nil && port != "" {
@@ -250,6 +277,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// auth providers (public) & github oauth
 	mux.HandleFunc("GET /api/auth/providers", a.providers)
 	mux.HandleFunc("GET /api/instance", a.instance)
+	mux.HandleFunc("GET /api/languages", a.languages)
 	mux.HandleFunc("GET /api/announcement", a.announcement)
 	mux.HandleFunc("GET /api/feedback", a.feedbackConfig)
 	mux.HandleFunc("POST /api/feedback", a.authOptional(a.submitFeedback))
@@ -283,6 +311,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/me", a.adminAuth(a.adminMe))
 	mux.HandleFunc("GET /api/admin/settings", a.adminAuth(a.adminSettings))
 	mux.HandleFunc("POST /api/admin/settings", a.adminAuth(a.adminSaveSettings))
+	mux.HandleFunc("POST /api/admin/language-colors", a.adminAuth(a.adminSaveLanguageColors))
 	mux.HandleFunc("POST /api/admin/password", a.adminAuth(a.adminChangePassword))
 	mux.HandleFunc("POST /api/admin/smtp/test", a.adminAuth(a.adminSMTPTest))
 	mux.HandleFunc("GET /api/admin/quota", a.adminAuth(a.adminGetQuota))
@@ -506,6 +535,16 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/default-branch", a.auth(a.setRepoDefaultBranch))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues-enabled", a.auth(a.setRepoIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/description", a.auth(a.setRepoDescription))
+	// Pages 静态网站托管（仓库级，默认关闭）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pages", a.auth(a.getRepoPages))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/pages", a.auth(a.setRepoPages))
+	// deploy keys（仓库级 SSH 部署密钥）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/deploy-keys", a.auth(a.listDeployKeys))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/deploy-keys", a.auth(a.createDeployKey))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/deploy-keys/{id}", a.auth(a.deleteDeployKey))
+	// 提交身份校验规则（作者/提交者姓名与邮箱格式）
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commit-rules", a.auth(a.getRepoCommitRules))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/commit-rules", a.auth(a.setRepoCommitRules))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/topics", a.auth(a.setRepoTops))
 	mux.HandleFunc("GET /api/topics", a.auth(a.listTopics))
 	mux.HandleFunc("GET /api/templates", a.auth(a.listTemplateRepos))
@@ -686,6 +725,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"version": a.publicVersion()})
 	})
+
+	// 仓库 Pages 静态站点（/pages/{owner}/{repo}/...）：在 SPA 兜底路由之前注册。
+	mux.HandleFunc("/pages/", a.authOptional(a.servePages))
 
 	switch {
 	case staticDir != "":

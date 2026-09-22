@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { KeyRound } from "lucide-react";
+import { BarChart3, KeyRound } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
   const [swagger, setSwagger] = useState(true);
   const [versionVisible, setVersionVisible] = useState(true);
   const [registrationOpen, setRegistrationOpen] = useState(true);
+  const [languageStats, setLanguageStats] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -25,6 +26,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
       setSwagger(settings.swagger_enabled !== false);
       setVersionVisible(settings.version_visible !== false);
       setRegistrationOpen(settings.registration_disabled !== true);
+      setLanguageStats(settings.language_stats_enabled !== false);
     }
   }, [settings]);
 
@@ -37,6 +39,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
         swagger_enabled: swagger,
         version_visible: versionVisible,
         registration_disabled: !registrationOpen,
+        language_stats_enabled: languageStats,
       });
       setMsg(t("admin.saved"));
       onChange();
@@ -103,6 +106,23 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
           <span>
             <span className="font-medium">{t("admin.versionVisible")}</span>
             <span className="block text-xs text-muted-foreground">{t("admin.versionHint")}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={languageStats}
+            onChange={(e) => setLanguageStats(e.target.checked)}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <BarChart3 className="h-3.5 w-3.5" />
+              {t("admin.languageStatsEnable")}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              {t("admin.languageStatsHint")}
+            </span>
           </span>
         </label>
         {msg && <p className="text-sm text-muted-foreground">{msg}</p>}

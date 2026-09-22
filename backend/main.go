@@ -37,6 +37,36 @@ import (
 // -X main.version 注入
 var version = "dev"
 
+// languagePushHandler 在每次默认分支 push 后异步分析仓库代码成分（语言占比）。
+// 仅默认分支影响列表页展示，其它分支/标签 push 不触发；删除引用（零 SHA）跳过。
+// 实际分析由任务队列 worker 执行。
+func languagePushHandler(m *jobs.Manager, st *store.Store) func(webhooks.Event) {
+	return func(ev webhooks.Event) {
+		if ev.Event != "push" || ev.New == "" || ev.Ref == "" {
+			return
+		}
+		if !gitsvc.ValidName(ev.Owner) || !gitsvc.ValidName(ev.Repo) {
+			return
+		}
+		if strings.Trim(ev.New, "0") == "" { // 删除引用：零 SHA
+			return
+		}
+		def := "main"
+		if r, err := st.GetRepo(ev.Owner, ev.Repo); err == nil && r.DefaultBranch != "" {
+			def = r.DefaultBranch
+		}
+		// 记录的默认分支可能因导入等原因与实际 HEAD 不一致，必要时再比对一次。
+		if ev.Ref != "refs/heads/"+def {
+			if hb, err := gitsvc.HeadBranch(ev.Owner, ev.Repo); err != nil || ev.Ref != "refs/heads/"+hb {
+				return
+			}
+		}
+		if err := m.EnqueueLanguages(ev.Owner, ev.Repo, ev.New); err != nil {
+			logx.Infof("languages: enqueue %s/%s: %v", ev.Owner, ev.Repo, err)
+		}
+	}
+}
+
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -281,8 +311,8 @@ func run() {
 	jobsMgr.Start()
 	a.SetJobsManager(jobsMgr)
 
-	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发）
-	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st))
+	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发 + 代码成分分析）
+	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st), languagePushHandler(jobsMgr, st))
 
 	// API 侧事件 spool：issue/pull/评论事件（webhook 投递 + 邮件通知）
 	apiSpool := filepath.Join(dataDir, "webhooks-spool-api")
@@ -301,6 +331,8 @@ func run() {
 	go pipeline.StartDelayedRunner(st, 15*time.Second)
 	// 启动时把残留 queued/running 的导入/镜像任务重新入队（memory 模式重启续跑）
 	jobsMgr.RequeuePending()
+	// 为尚未做过语言分析的仓库补跑（异步、限速）
+	jobsMgr.BackfillLanguages()
 
 	// 孤儿 pipeline run 回收：memory 队列重启后 pending/running 不会再执行，标记 failed；
 	// asynq（redis）模式任务持久化，只回收明显超时（>1h）的残留。

@@ -61,6 +61,8 @@ type Env struct {
 	Store *store.Store
 	// MailCode 返回最近一封邮件中的 6 位验证码（email MFA 用例注入捕获发送器时设置）
 	MailCode func() string
+	// API 是服务端使用的同一 API 实例（用例需要注入 jobs manager 等依赖时使用）。
+	API *api.API
 }
 
 // start 启动 in-process 的 HTTP + SSH 服务（每测一个独立实例）。
@@ -100,7 +102,7 @@ func start(t *testing.T) *Env {
 	go func() { _ = srv.ServeOn(ln) }()
 
 	_, port, _ := net.SplitHostPort(ln.Addr().String())
-	return &Env{t: t, BaseURL: hs.URL, SSHPort: port, ReposDir: gitsvc.ReposDir(), DataDir: dir, APISpool: apiSpool, Store: st}
+	return &Env{t: t, BaseURL: hs.URL, SSHPort: port, ReposDir: gitsvc.ReposDir(), DataDir: dir, APISpool: apiSpool, Store: st, API: a}
 }
 
 // startHTTPOnly 仅启动 HTTP API（无需 SSH 的用例）。

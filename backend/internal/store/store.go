@@ -68,8 +68,12 @@ type Repo struct {
 	// DefaultBranch 仓库默认分支（git HEAD）；旧数据为空时视为 main。
 	DefaultBranch string `json:"default_branch"`
 	// HasIssues 是否启用 issue 功能。
-	HasIssues bool   `json:"has_issues"`
-	CreatedAt string `json:"created_at"`
+	HasIssues bool `json:"has_issues"`
+	// Pages 静态网站托管（默认关闭）。
+	PagesEnabled bool   `json:"pages_enabled"`
+	PagesBranch  string `json:"pages_branch,omitempty"`
+	PagesDir     string `json:"pages_dir,omitempty"`
+	CreatedAt    string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
 	// 展示字段（由 API 层填充，store 查询不扫描）
@@ -86,6 +90,17 @@ type Repo struct {
 	ImportError  string `json:"import_error,omitempty"`
 	// Topics 仓库标签/话题（由 API 层批量填充，store 查询不扫描）
 	Topics []string `json:"topics,omitempty"`
+	// Language 主要语言（列表页展示，由 API 层批量填充）
+	Language string `json:"language,omitempty"`
+	// Languages 语言构成（详情/code 页展示 top N，由 API 层填充）
+	Languages []LanguageStat `json:"languages,omitempty"`
+}
+
+// LanguageStat 单种语言的字节数与占比（仓库代码成分）。
+type LanguageStat struct {
+	Language string  `json:"language"`
+	Bytes    int64   `json:"bytes"`
+	Percent  float64 `json:"percent"`
 }
 
 // Mirror 仓库 push 镜像目标（同步到 GitHub/GitLab 等第三方）。
@@ -104,6 +119,18 @@ type SSHKey struct {
 	Name        string `json:"name"`
 	PublicKey   string `json:"public_key"`
 	Fingerprint string `json:"fingerprint"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// DeployKey 仓库部署密钥（SSH）：只读或读写，仅授权单个仓库。
+type DeployKey struct {
+	ID          int64  `json:"id"`
+	Owner       string `json:"owner"`
+	Repo        string `json:"repo"`
+	Name        string `json:"name"`
+	PublicKey   string `json:"public_key"`
+	Fingerprint string `json:"fingerprint"`
+	Permission  string `json:"permission"` // read | write
 	CreatedAt   string `json:"created_at"`
 }
 

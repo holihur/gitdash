@@ -9,6 +9,9 @@ import { DescriptionCard } from "./settings/DescriptionCard";
 import { TopicsCard } from "./settings/TopicsCard";
 import { DefaultBranchCard } from "./settings/DefaultBranchCard";
 import { IssuesFeatureCard } from "./settings/IssuesFeatureCard";
+import { PagesCard } from "./settings/PagesCard";
+import { DeployKeysCard } from "./settings/DeployKeysCard";
+import { CommitRulesCard } from "./settings/CommitRulesCard";
 import { VisibilityCard } from "./settings/VisibilityCard";
 import { TemplateCard } from "./settings/TemplateCard";
 import { GcCard } from "./settings/GcCard";
@@ -31,6 +34,9 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       <BranchProtectionsCard owner={owner} name={name} />
       {isOwner && <DefaultBranchCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
       {isOwner && <IssuesFeatureCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+      {isOwner && <PagesCard owner={owner} name={name} />}
+      {isOwner && <DeployKeysCard owner={owner} name={name} />}
+      {isOwner && <CommitRulesCard owner={owner} name={name} />}
       {isOwner && <IncomingWebhookCard owner={owner} name={name} />}
       {isOwner && <OutgoingWebhooksCard owner={owner} name={name} />}
       {isOwner && <PipelineCard owner={owner} name={name} />}

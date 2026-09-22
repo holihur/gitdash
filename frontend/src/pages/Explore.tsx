@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import { RelativeTime } from "@/components/relative-time";
+import { LanguageBadge } from "@/components/language-bar";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { useQueryState } from "@/lib/query-state";
 import { apiErrorMsg } from "@/lib/errors";
@@ -341,6 +342,11 @@ export default function Explore() {
                   <Badge variant="secondary" className="font-normal">
                     <RelativeTime iso={repo.created_at} locale={dateLocale(lang)} />
                   </Badge>
+                  {repo.language && (
+                    <Badge variant="secondary" className="font-normal">
+                      <LanguageBadge language={repo.language} />
+                    </Badge>
+                  )}
                   <Button
                     variant={repo.starred ? "default" : "outline"}
                     size="sm"

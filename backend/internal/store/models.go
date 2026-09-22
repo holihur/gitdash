@@ -50,11 +50,37 @@ type repoRow struct {
 	// DefaultBranch 仓库默认分支（git HEAD 指向）；空值按 main 处理。
 	DefaultBranch string `gorm:"not null;default:'main';size:255"`
 	// HasIssues 是否启用 issue 功能（默认开启）；关闭后不可创建/修改 issue。
-	HasIssues bool   `gorm:"not null;default:true"`
-	CreatedAt string `gorm:"not null"`
+	HasIssues bool `gorm:"not null;default:true"`
+	// Pages 静态网站托管（默认关闭）：从指定分支/目录发布静态站点。
+	PagesEnabled bool   `gorm:"not null;default:false"`
+	PagesBranch  string `gorm:"not null;default:'';size:255"`
+	PagesDir     string `gorm:"not null;default:'';size:255"`
+	CreatedAt    string `gorm:"not null"`
 }
 
 func (repoRow) TableName() string { return "repos" }
+
+// repoLanguageRow 仓库代码成分（按语言聚合的字节数）。每次 push 后由异步任务重算并整体替换。
+type repoLanguageRow struct {
+	Owner    string `gorm:"primaryKey;size:255"`
+	Repo     string `gorm:"primaryKey;size:255"`
+	Language string `gorm:"primaryKey;size:64"`
+	Bytes    int64  `gorm:"not null;default:0"`
+}
+
+func (repoLanguageRow) TableName() string { return "repo_languages" }
+
+// repoLanguageMetaRow 记录仓库语言分析的状态。Primary 冗余主要语言便于列表页批量读取；
+// 即使没有任何可识别代码也会写入一行，避免每次启动都重复扫描该仓库。
+type repoLanguageMetaRow struct {
+	Owner     string `gorm:"primaryKey;size:255"`
+	Repo      string `gorm:"primaryKey;size:255"`
+	Primary   string `gorm:"not null;default:'';size:64"`
+	SHA       string `gorm:"not null;default:'';size:64"`
+	UpdatedAt string `gorm:"not null;default:''"`
+}
+
+func (repoLanguageMetaRow) TableName() string { return "repo_language_meta" }
 
 // repoCounterRow 是仓库级单调递增计数器（issue / PR 编号）。
 // 独立于业务表持久化：删除对应记录后编号不回退、不复用（与 GitHub 行为一致）。
@@ -88,6 +114,21 @@ type sshKeyRow struct {
 }
 
 func (sshKeyRow) TableName() string { return "ssh_keys" }
+
+// deployKeyRow 仓库部署密钥。fingerprint 全局唯一：SSH 握手时仅凭指纹定位身份，
+// 同一把钥匙绑定多个仓库会无法区分。
+type deployKeyRow struct {
+	ID          int64  `gorm:"primaryKey;autoIncrement"`
+	Owner       string `gorm:"not null;index:idx_deploy_keys_repo;size:255"`
+	Repo        string `gorm:"not null;index:idx_deploy_keys_repo;size:255"`
+	Name        string `gorm:"not null"`
+	PublicKey   string `gorm:"not null"`
+	Fingerprint string `gorm:"not null;uniqueIndex;size:255"`
+	Permission  string `gorm:"not null;default:'read';size:16"`
+	CreatedAt   string `gorm:"not null"`
+}
+
+func (deployKeyRow) TableName() string { return "deploy_keys" }
 
 type gpgKeyRow struct {
 	ID          int64  `gorm:"primaryKey;autoIncrement"`

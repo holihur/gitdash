@@ -51,6 +51,7 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 	out := append([]store.Repo{}, rows...)
 	a.attachStars(out, me)
 	a.attachTopics(out)
+	a.attachLanguages(out)
 	writeJSON(w, http.StatusOK, map[string]any{"role": label, "repos": out, "total": total})
 }
 
@@ -309,6 +310,7 @@ func (a *API) listTemplateRepos(w http.ResponseWriter, r *http.Request) {
 	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
+	a.attachLanguages(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 
@@ -346,6 +348,7 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 	out := append([]store.Repo{}, repos...)
 	a.attachStars(out, me)
 	a.attachTopics(out)
+	a.attachLanguages(out)
 	writeJSON(w, http.StatusOK, out)
 }
 

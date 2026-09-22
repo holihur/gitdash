@@ -31,6 +31,14 @@ func CheckBranchProtection(dbPath, owner, repo string, refs []PushRef) error {
 		// 库不可用放行：保护逻辑故障不应阻断 push（fail-open）
 		return nil //nolint:nilerr // intentional fail-open
 	}
+	// 提交身份校验（作者/提交者姓名与邮箱格式）；无规则则跳过。
+	if rules, ok, rerr := st.GetRepoCommitRules(owner, repo); rerr == nil && ok {
+		if rule, cerr := CompileCommitIdentityRule(rules.NamePattern, rules.EmailPattern); cerr == nil {
+			if err := CheckCommitIdentity(owner, repo, refs, rule); err != nil {
+				return err
+			}
+		}
+	}
 	for _, p := range refs {
 		if !strings.HasPrefix(p.Ref, "refs/heads/") {
 			continue

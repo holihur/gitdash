@@ -127,6 +127,7 @@ func (a *API) executeMerge(owner, name string, pr store.PullRequest, method, act
 	if err != nil {
 		return store.PullRequest{}, &mergeGateErr{http.StatusInternalServerError, "internal", err.Error(), true}
 	}
+	a.maybeAnalyzeLanguages(owner, name, pr.TargetBranch, headSHA)
 	a.notify(owner, name, "pull", "merged", actor, merged.Number, merged.Title, "")
 	return merged, nil
 }

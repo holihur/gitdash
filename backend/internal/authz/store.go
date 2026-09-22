@@ -1,11 +1,8 @@
 package authz
 
 import (
-	"bytes"
 	"context"
 	"errors"
-
-	"golang.org/x/crypto/ssh"
 
 	"gitdash/backend/internal/store"
 )
@@ -20,25 +17,10 @@ func NewStore(st *store.Store) *StoreAuthorizer {
 	return &StoreAuthorizer{st: st}
 }
 
-// AuthorizePublicKey 遍历已登记公钥，按 (type, wire-blob) 精确匹配，命中后校验封禁。
-func (a *StoreAuthorizer) AuthorizePublicKey(_ context.Context, keyType string, keyBlob []byte) (string, bool, string, error) {
-	keys, err := a.st.PublicKeys()
-	if err != nil {
-		return "", false, "", err
-	}
-	for _, ka := range keys {
-		parsed, _, _, _, perr := ssh.ParseAuthorizedKey([]byte(ka.Line))
-		if perr != nil {
-			continue
-		}
-		if parsed.Type() == keyType && bytes.Equal(parsed.Marshal(), keyBlob) {
-			if a.st.IsUserBanned(ka.Username) {
-				return "", false, "account is banned", nil
-			}
-			return ka.Username, true, "", nil
-		}
-	}
-	return "", false, "unknown public key", nil
+// AuthorizePublicKey 匹配用户公钥或仓库 deploy key，返回登录身份。
+// deploy key 的身份为合成字符串（store.DeployIdentity），SSH 网关据此限制仓库范围。
+func (a *StoreAuthorizer) AuthorizePublicKey(ctx context.Context, keyType string, keyBlob []byte) (string, bool, string, error) {
+	return a.st.MatchSSHKey(keyType, keyBlob)
 }
 
 func (a *StoreAuthorizer) IsIPBanned(_ context.Context, ip string) (bool, error) {

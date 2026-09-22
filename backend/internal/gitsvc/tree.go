@@ -2,6 +2,7 @@ package gitsvc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 	"sort"
@@ -174,6 +175,41 @@ type Blob struct {
 	Content  string `json:"content"`
 	// LatestCommit 该文件最近一次变更的提交（由 API 层填充，可选）
 	LatestCommit *Commit `json:"latest_commit,omitempty"`
+}
+
+// ErrFileNotFound 表示指定 ref 下不存在该路径（Pages 用它区分“回退 index/404”）。
+var ErrFileNotFound = errors.New("file not found")
+
+// maxRawFileBytes 单文件读取上限，避免用超大文件耗尽内存。
+const maxRawFileBytes = 50 << 20 // 50MB
+
+// readRawFile 返回 ref 下指定文件的原始字节（二进制安全），供静态站点托管使用。
+// 路径越界/不存在返回 ErrFileNotFound；文件过大返回错误。
+func readRawFile(owner, name, ref, file string) ([]byte, error) {
+	if !ValidName(owner) || !ValidName(name) || !ValidRef(ref) {
+		return nil, ErrFileNotFound
+	}
+	file, err := CleanPath(file)
+	if err != nil || file == "" {
+		return nil, ErrFileNotFound
+	}
+	path := repoPath(owner, name)
+	obj := ref + ":" + file
+	sizeOut, err := gitOut(path, "cat-file", "-s", obj)
+	if err != nil {
+		return nil, ErrFileNotFound
+	}
+	size, _ := strconv.ParseInt(strings.TrimSpace(sizeOut), 10, 64)
+	if size > maxRawFileBytes {
+		return nil, fmt.Errorf("file too large")
+	}
+	cmd := exec.Command("git", "-C", path, "cat-file", "blob", obj)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return nil, ErrFileNotFound
+	}
+	return stdout.Bytes(), nil
 }
 
 func readBlob(owner, name, ref, file string) (*Blob, error) {

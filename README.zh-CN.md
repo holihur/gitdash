@@ -21,6 +21,7 @@ English | 简体中文
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
 - **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR / copilot），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
+- **代码成分（语言）统计**：每次向默认分支 push（或网页提交）后由异步任务分析仓库语言构成——仓库列表页展示主要语言，Code 页展示占比 top5；按扩展名识别 Go / C / C++ / C# / Java / Python / Rust / TypeScript 等主流语言，并跳过 vendored / 生成文件与文档；管理员可在 **管理面板 → 登录与 API 访问** 中关闭该功能，并在 **管理面板 → 语言配色** 中自定义各语言颜色
 - **管理面板**：管理员账号、设置（OAuth 提供方）、密码管理、用户/仓库/组织封禁与 IP/CIDR 黑名单
 - **用户反馈**：管理员可开启右下角浮动反馈按钮，用户提交的内容通过 GitHub/Gitea 兼容 API 在指定仓库创建 issue（管理面板 → 用户反馈）
 - **上手引导与文档**：首页提供快速上手清单，登录页与页头提供指向独立部署、多语言（英文为主）的 [Hugo 文档站](docs/) 的入口（`GITDASH_DOCS_URL` 或管理面板 → 文档站）

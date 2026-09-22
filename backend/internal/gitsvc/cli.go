@@ -42,7 +42,10 @@ func (c *cliBackend) PushMirror(owner, name, url, privateKey string) error {
 	return pushMirror(owner, name, url, privateKey)
 }
 func (c *cliBackend) RepoSize(owner, name string) (int64, error) { return repoSize(owner, name) }
-func (c *cliBackend) GC(owner, name string) (*GCResult, error)   { return gc(owner, name) }
+func (c *cliBackend) RepoLanguages(owner, name, ref string) ([]LanguageStat, error) {
+	return repoLanguages(owner, name, ref)
+}
+func (c *cliBackend) GC(owner, name string) (*GCResult, error) { return gc(owner, name) }
 
 func (c *cliBackend) HeadBranch(owner, name string) (string, error) {
 	return headBranch(owner, name)
@@ -70,6 +73,9 @@ func (c *cliBackend) ListDir(owner, name, ref, dir string) ([]string, error) {
 }
 func (c *cliBackend) ReadBlob(owner, name, ref, file string) (*Blob, error) {
 	return readBlob(owner, name, ref, file)
+}
+func (c *cliBackend) ReadRawFile(owner, name, ref, file string) ([]byte, error) {
+	return readRawFile(owner, name, ref, file)
 }
 func (c *cliBackend) BlameFile(owner, name, ref, file string) (*Blame, error) {
 	return blameFile(owner, name, ref, file)

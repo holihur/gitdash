@@ -53,6 +53,7 @@ func (a *API) getUserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
+	a.attachLanguages(repos)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"username":     u.Username,
 		"bio":          u.Bio,

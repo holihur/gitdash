@@ -12,6 +12,7 @@ function settings(overrides: Partial<Settings> = {}): Settings {
     swagger_enabled: true,
     version_visible: true,
     registration_disabled: false,
+    language_stats_enabled: true,
     ...overrides,
   } as Settings;
 }
@@ -55,6 +56,7 @@ describe("AccessSettings", () => {
       swagger_enabled: false,
       version_visible: true,
       registration_disabled: false,
+      language_stats_enabled: true,
     });
   });
 });

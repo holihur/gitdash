@@ -138,6 +138,65 @@ const docTemplate = `{
                 ]
             }
         },
+        "/admin/language-colors": {
+            "post": {
+                "description": "以 language -\u003e #RRGGBB 的形式全量替换配色覆盖；空 map 表示全部恢复默认。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "保存语言配色",
+                "parameters": [
+                    {
+                        "description": "colors 映射",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/login": {
             "post": {
                 "consumes": [
@@ -2592,6 +2651,26 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
+            }
+        },
+        "/languages": {
+            "get": {
+                "description": "返回内置支持的语言、每种语言的默认配色，以及管理端配置的颜色覆盖（language -\u003e #RRGGBB）。公开接口。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "misc"
+                ],
+                "summary": "语言列表与配色",
+                "responses": {
+                    "200": {
+                        "description": "languages、defaults 与 colors",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
             }
         },
         "/mail/inbound": {
@@ -7382,6 +7461,105 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/commit-rules": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "读取提交身份规则",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "enabled/name_pattern/email_pattern",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "更新提交身份规则",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "name_pattern/email_pattern",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "enabled/name_pattern/email_pattern",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/commits": {
             "get": {
                 "description": "返回提交列表，含 GPG 验证结果（对已注册公钥）。",
@@ -7956,6 +8134,167 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/deploy-keys": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "列出部署密钥",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.DeployKey"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "新增部署密钥",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "title/key/read_only",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.DeployKey"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/deploy-keys/{id}": {
+            "delete": {
+                "tags": [
+                    "repos"
+                ],
+                "summary": "删除部署密钥",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "部署密钥 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -9685,6 +10024,114 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/pages": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "读取仓库 Pages 配置",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "enabled/branch/dir/url",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "更新仓库 Pages 配置",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "enabled/branch/dir",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "enabled/branch/dir/url",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/patches": {
             "post": {
                 "description": "提交 ` + "`" + `git format-patch` + "`" + ` / ` + "`" + `git send-email` + "`" + ` 风格的 mbox（text/plain）。\n服务端 ` + "`" + `git am --3way` + "`" + ` 到新分支 patches/\u003cts\u003e 后自动开 PR。",
@@ -10396,56 +10843,6 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/store.Project"
                             }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ]
-            },
-            "post": {
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "projects"
-                ],
-                "summary": "创建看板项目",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "仓库所有者",
-                        "name": "owner",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "仓库名",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "名称与描述",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/api.createProjectReq"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/store.Project"
                         }
                     }
                 },
@@ -14652,17 +15049,6 @@ const docTemplate = `{
                 }
             }
         },
-        "api.createProjectReq": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
         "api.createProjectSwimlaneReq": {
             "type": "object",
             "properties": {
@@ -15845,6 +16231,36 @@ const docTemplate = `{
                 }
             }
         },
+        "store.DeployKey": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "permission": {
+                    "description": "read | write",
+                    "type": "string"
+                },
+                "public_key": {
+                    "type": "string"
+                },
+                "repo": {
+                    "type": "string"
+                }
+            }
+        },
         "store.ExportComment": {
             "type": "object",
             "properties": {
@@ -16172,6 +16588,20 @@ const docTemplate = `{
                 },
                 "repo": {
                     "type": "string"
+                }
+            }
+        },
+        "store.LanguageStat": {
+            "type": "object",
+            "properties": {
+                "bytes": {
+                    "type": "integer"
+                },
+                "language": {
+                    "type": "string"
+                },
+                "percent": {
+                    "type": "number"
                 }
             }
         },
@@ -16738,11 +17168,32 @@ const docTemplate = `{
                 "is_template": {
                     "type": "boolean"
                 },
+                "language": {
+                    "description": "Language 主要语言（列表页展示，由 API 层批量填充）",
+                    "type": "string"
+                },
+                "languages": {
+                    "description": "Languages 语言构成（详情/code 页展示 top N，由 API 层填充）",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.LanguageStat"
+                    }
+                },
                 "name": {
                     "type": "string"
                 },
                 "owner": {
                     "type": "string"
+                },
+                "pages_branch": {
+                    "type": "string"
+                },
+                "pages_dir": {
+                    "type": "string"
+                },
+                "pages_enabled": {
+                    "description": "Pages 静态网站托管（默认关闭）。",
+                    "type": "boolean"
                 },
                 "private": {
                     "type": "boolean"

@@ -87,6 +87,7 @@ func (a *API) listWatched(w http.ResponseWriter, r *http.Request) {
 	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
+	a.attachLanguages(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 

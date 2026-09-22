@@ -8,6 +8,8 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
+	"time"
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/logx"
@@ -17,10 +19,14 @@ import (
 
 // 任务类型标识。
 const (
-	KindImport  = "gitdash:import"  // 从远程 URL 镜像导入
-	KindMirror  = "gitdash:mirror"  // push 到镜像目标
-	KindWebhook = "gitdash:webhook" // webhook 投递（异步队列处理）
+	KindImport    = "gitdash:import"    // 从远程 URL 镜像导入
+	KindMirror    = "gitdash:mirror"    // push 到镜像目标
+	KindWebhook   = "gitdash:webhook"   // webhook 投递（异步队列处理）
+	KindLanguages = "gitdash:languages" // 代码成分（语言）分析
 )
+
+// SettingLanguageStats 管理端开关；默认开启（仅显式设为 "0" 时关闭）。
+const SettingLanguageStats = "language_stats_enabled"
 
 // 任务状态（存 DB，GET repo / mirror 可见）。
 const (
@@ -37,6 +43,8 @@ type payload struct {
 	URL        string `json:"url"`
 	PrivateKey string `json:"private_key,omitempty"`
 	Credential string `json:"credential,omitempty"`
+	// Ref 语言分析目标（分支/标签/commit）；其它任务为空。
+	Ref string `json:"ref,omitempty"`
 }
 
 // WebhookPayload webhook 投递任务载荷。
@@ -52,6 +60,8 @@ type Manager struct {
 	st             *store.Store
 	q              queue.Queue
 	webhookHandler func(payload []byte) error
+	// backfilling 保证同一时间只有一个语言回填任务在跑。
+	backfilling atomic.Bool
 }
 
 // New 创建 Manager。q 为 nil 时所有入队返回 queue.ErrQueueFull。
@@ -67,7 +77,7 @@ func (m *Manager) Start() {
 	if m.q == nil {
 		return
 	}
-	m.q.Start(context.Background(), []queue.JobKind{KindImport, KindMirror, KindWebhook}, m.handle)
+	m.q.Start(context.Background(), []queue.JobKind{KindImport, KindMirror, KindWebhook, KindLanguages}, m.handle)
 }
 
 // RequeuePending 启动时把残留的 queued/running 任务重新入队（memory 模式重启续跑）。
@@ -90,6 +100,59 @@ func (m *Manager) RequeuePending() {
 			}
 		}
 	}
+}
+
+// languageEnabled 报告代码成分分析是否开启（默认开启）。
+func (m *Manager) languageEnabled() bool {
+	return m.st != nil && m.st.GetSetting(SettingLanguageStats) != "0"
+}
+
+// EnqueueLanguages 排队一次代码成分分析。功能未开启时静默跳过。
+func (m *Manager) EnqueueLanguages(owner, repo, ref string) error {
+	if !m.languageEnabled() {
+		return nil
+	}
+	if m.q == nil {
+		return queue.ErrQueueFull
+	}
+	p, err := json.Marshal(payload{Owner: owner, Repo: repo, Ref: ref})
+	if err != nil {
+		return err
+	}
+	return m.q.Enqueue(context.Background(), queue.Job{
+		Kind: KindLanguages, ID: KindLanguages + ":" + owner + "/" + repo, Payload: p,
+	})
+}
+
+// BackfillLanguages 为尚无语言记录的仓库排队分析（启动/开启功能时调用）。
+// 功能关闭时直接返回。按 id 游标分批，保证每个仓库只入队一次；队列满时等待重试。
+func (m *Manager) BackfillLanguages() {
+	if !m.languageEnabled() {
+		return
+	}
+	if !m.backfilling.CompareAndSwap(false, true) {
+		return // 已有回填在跑
+	}
+	go func() {
+		defer m.backfilling.Store(false)
+		var cursor int64
+		for {
+			rows, err := m.st.ReposMissingLanguages(cursor, 50)
+			if err != nil || len(rows) == 0 {
+				return
+			}
+			for _, r := range rows {
+				for {
+					if err := m.EnqueueLanguages(r.Owner, r.Repo, r.DefaultBranch); err == nil {
+						break
+					}
+					time.Sleep(time.Second) // 队列满：等待消费者排空后重试
+				}
+				cursor = r.ID
+			}
+			time.Sleep(500 * time.Millisecond) // 限速，避免一次性压满队列
+		}
+	}()
 }
 
 // EnqueueImport 排队一次仓库导入。credential 为可选的 HTTPS 账号凭据（"user:token"）。
@@ -128,6 +191,41 @@ func (m *Manager) EnqueueWebhook(p WebhookPayload) error {
 	return m.q.Enqueue(context.Background(), queue.Job{Kind: KindWebhook, Payload: b})
 }
 
+// analyzeLanguages 计算并落库仓库的代码成分；功能被关闭时跳过。
+func (m *Manager) analyzeLanguages(p payload) {
+	if !m.languageEnabled() {
+		return
+	}
+	ref := p.Ref
+	if ref == "" {
+		if hb, err := gitsvc.HeadBranch(p.Owner, p.Repo); err == nil {
+			ref = hb
+		}
+	}
+	if ref == "" {
+		return
+	}
+	stats, err := gitsvc.RepoLanguages(p.Owner, p.Repo, ref)
+	if err != nil {
+		// 记录的默认分支可能过期（如导入仓库），回退到实际 HEAD 再试一次。
+		if hb, herr := gitsvc.HeadBranch(p.Owner, p.Repo); herr == nil && hb != ref {
+			ref = hb
+			stats, err = gitsvc.RepoLanguages(p.Owner, p.Repo, ref)
+		}
+	}
+	if err != nil {
+		logx.Infof("jobs: languages %s/%s@%s: %v", p.Owner, p.Repo, ref, err)
+		return
+	}
+	out := make([]store.LanguageStat, 0, len(stats))
+	for _, st := range stats {
+		out = append(out, store.LanguageStat{Language: st.Language, Bytes: st.Bytes})
+	}
+	if err := m.st.ReplaceRepoLanguages(p.Owner, p.Repo, ref, out); err != nil {
+		logx.Infof("jobs: languages store %s/%s: %v", p.Owner, p.Repo, err)
+	}
+}
+
 // handle 执行任务并落状态；仓库行已删除（排队期间被删）则直接丢弃。
 func (m *Manager) handle(_ context.Context, j queue.Job) error {
 	// webhook 投递与仓库无关的独立载荷，先分发处理。
@@ -146,6 +244,8 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 		return nil //nolint:nilerr // 仓库已删除（排队期间被删），任务丢弃
 	}
 	switch j.Kind {
+	case KindLanguages:
+		m.analyzeLanguages(p)
 	case KindImport:
 		_ = m.st.SetImportStatus(p.Owner, p.Repo, StatusRunning, "")
 		if err := gitsvc.ImportRepo(p.URL, p.Owner, p.Repo, p.PrivateKey, p.Credential); err != nil {
@@ -154,6 +254,8 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 			return nil
 		}
 		_ = m.st.SetImportStatus(p.Owner, p.Repo, StatusSynced, "")
+		// 导入完成后分析代码成分（ref 为空时按仓库 HEAD 解析）
+		_ = m.EnqueueLanguages(p.Owner, p.Repo, "")
 	case KindMirror:
 		_ = m.st.SetMirrorStatus(p.Owner, p.Repo, StatusRunning, "")
 		if err := gitsvc.PushMirror(p.Owner, p.Repo, p.URL, p.PrivateKey); err != nil {

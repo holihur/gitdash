@@ -30,6 +30,23 @@ func (a *API) attachStars(repos []store.Repo, me string) {
 	}
 }
 
+// attachLanguages 批量填充仓库的主要语言（列表页展示，避免 N+1）。
+func (a *API) attachLanguages(repos []store.Repo) {
+	if len(repos) == 0 {
+		return
+	}
+	pairs := make([][2]string, 0, len(repos))
+	for _, r := range repos {
+		pairs = append(pairs, [2]string{r.Owner, r.Name})
+	}
+	langs := a.store.PrimaryLanguages(pairs)
+	for i := range repos {
+		if l, ok := langs[[2]string{repos[i].Owner, repos[i].Name}]; ok {
+			repos[i].Language = l
+		}
+	}
+}
+
 // listRepos 列出当前用户可访问的仓库。
 //
 //	@Summary     列出可访问仓库
@@ -58,6 +75,7 @@ func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
+	a.attachLanguages(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 
@@ -177,6 +195,10 @@ func (a *API) createRepo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// 含内容的仓库（模版 / README）创建后异步分析代码成分；空仓库等首次 push。
+	if !gitsvc.IsEmptyRepo(owner, in.Name) {
+		a.enqueueLanguages(owner, in.Name, repo.DefaultBranch)
+	}
 	writeJSON(w, http.StatusCreated, repo)
 }
 
@@ -233,6 +255,10 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	if ts, err := a.store.ListRepoTopics(owner, name); err == nil {
 		repo.Topics = ts
+	}
+	// 代码成分：code 页展示 top5（未分析/无代码时为空）
+	if stats, err := a.store.RepoLanguages(owner, name, 5); err == nil {
+		repo.Languages = stats
 	}
 	writeJSON(w, http.StatusOK, repo)
 }

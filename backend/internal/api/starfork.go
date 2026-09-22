@@ -104,6 +104,7 @@ func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
 	setTotal(w, total)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
+	a.attachLanguages(repos)
 	writeJSON(w, http.StatusOK, repos)
 }
 
@@ -185,6 +186,10 @@ func (a *API) forkRepo(w http.ResponseWriter, r *http.Request) {
 	_ = a.store.WatchRepo(me, targetOwner, targetName)
 	repo.Watchers = 1
 	repo.Watching = true
+	// fork 继承了源仓库内容，异步分析代码成分
+	if !gitsvc.IsEmptyRepo(targetOwner, targetName) {
+		a.enqueueLanguages(targetOwner, targetName, repo.DefaultBranch)
+	}
 	a.emitWebhook(webhooks.Event{
 		Event: "fork", Owner: srcOwner, Repo: srcName, Action: "created", Actor: me,
 		Title: targetOwner + "/" + targetName,

@@ -28,6 +28,9 @@ func toRepo(r repoRow) Repo {
 		Banned:        r.Banned,
 		DefaultBranch: def,
 		HasIssues:     r.HasIssues,
+		PagesEnabled:  r.PagesEnabled,
+		PagesBranch:   r.PagesBranch,
+		PagesDir:      r.PagesDir,
 		CreatedAt:     r.CreatedAt,
 	}
 }
@@ -190,6 +193,24 @@ func (s *Store) SetRepoHasIssues(owner, name string, hasIssues bool) error {
 	return nil
 }
 
+// SetRepoPages 更新仓库静态网站托管配置（仅 owner 调用）。
+// branch/dir 为空时分别回退默认分支/仓库根目录。
+func (s *Store) SetRepoPages(owner, name string, enabled bool, branch, dir string) error {
+	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Updates(map[string]any{
+			"pages_enabled": enabled,
+			"pages_branch":  branch,
+			"pages_dir":     dir,
+		})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // SetRepoDescription 修改仓库描述（仅 owner 调用；空字符串表示清空）。
 func (s *Store) SetRepoDescription(owner, name, description string) error {
 	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
@@ -220,6 +241,8 @@ func (s *Store) DeleteRepo(owner, name string) error {
 		}{
 			{&issueRow{}, "owner = ? AND repo = ?"},
 			{&repoCounterRow{}, "owner = ? AND repo = ?"},
+			{&repoLanguageRow{}, "owner = ? AND repo = ?"},
+			{&repoLanguageMetaRow{}, "owner = ? AND repo = ?"},
 			{&repoLabelRow{}, "owner = ? AND repo = ?"},
 			{&milestoneRow{}, "owner = ? AND repo = ?"},
 			{&starRow{}, "owner = ? AND repo = ?"},
@@ -241,6 +264,8 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			{&pipelineRunRow{}, "owner = ? AND repo = ?"},
 			{&repoEnvVarRow{}, "owner = ? AND repo = ?"},
 			{&incomingWebhookRow{}, "owner = ? AND repo = ?"},
+			{&deployKeyRow{}, "owner = ? AND repo = ?"},
+			{&repoCommitRuleRow{}, "owner = ? AND repo = ?"},
 		}
 		for _, d := range deletes {
 			if err := tx.Where(d.cond, owner, name).Delete(d.model).Error; err != nil {

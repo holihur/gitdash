@@ -355,6 +355,7 @@ func (a *API) getOrgProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
+	a.attachLanguages(repos)
 	followers, err := a.store.OrgFollowerCount(org)
 	if err != nil {
 		internalError(w, err)

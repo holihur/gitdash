@@ -278,6 +278,7 @@ export default function RepoView() {
             <CodeTab
               owner={owner}
               name={name}
+              repo={repo}
               refName={ref}
               locale={locale}
               path={path}
