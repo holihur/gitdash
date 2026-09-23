@@ -166,18 +166,22 @@ export default function CodeTab({
   // 搜索结果带行号跳转：滚动到目标行并短暂高亮
   const codeHostRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (lineParam == null || !codeHostRef.current) return;
-    const el = codeHostRef.current.querySelector<HTMLElement>(
-      `.cm-line:nth-of-type(${lineParam})`,
+    const host = codeHostRef.current;
+    if (lineParam == null || !host) return;
+    const el = host.querySelector<HTMLElement>(
+      `.cm-content .cm-line:nth-of-type(${lineParam})`,
     );
-    if (el) {
-      el.scrollIntoView({ block: "center" });
-      el.style.backgroundColor = "rgb(250 204 21 / 0.35)";
-      const t = setTimeout(() => {
-        el.style.backgroundColor = "";
-      }, 2000);
-      return () => clearTimeout(t);
-    }
+    if (!el) return;
+    el.scrollIntoView({ block: "center" });
+    el.style.backgroundColor = "rgb(250 204 21 / 0.35)";
+    const t = setTimeout(() => {
+      el.style.backgroundColor = "";
+    }, 2000);
+    // 切换目标行 / 关闭时清理高亮，避免残留（尤其下一行不存在时）
+    return () => {
+      clearTimeout(t);
+      el.style.backgroundColor = "";
+    };
   }, [lineParam, blob]);
 
   // 搜索框同行的操作区：窄屏的文件树/大纲按钮 + “新建”下拉（文件 / 文件夹）

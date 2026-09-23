@@ -18,6 +18,10 @@ export function IssueFilters({
   milestones,
   filterMilestone,
   onFilterMilestone,
+  filterAssignee,
+  onFilterAssignee,
+  filterSort,
+  onFilterSort,
 }: {
   searchInput: string;
   onSearchInput: (v: string) => void;
@@ -29,6 +33,10 @@ export function IssueFilters({
   milestones: Milestone[];
   filterMilestone: string; // "" | "none" | milestone id
   onFilterMilestone: (v: string) => void;
+  filterAssignee: string; // "" | me | none
+  onFilterAssignee: (v: string) => void;
+  filterSort: string; // "" | newest | oldest | updated | popular
+  onFilterSort: (v: string) => void;
 }) {
   const { t } = useI18n();
 
@@ -77,6 +85,32 @@ export function IssueFilters({
               {m.title}
             </option>
           ))}
+        </select>
+        <select
+          aria-label={t("issues.assigneeFilter")}
+          title={t("issues.assigneeFilter")}
+          value={filterAssignee}
+          onChange={(e) => onFilterAssignee(e.target.value)}
+          className={cn(
+            "h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            filterAssignee !== "" && "border-primary text-foreground",
+          )}
+        >
+          <option value="">{t("issues.assigneeAnyone")}</option>
+          <option value="me">{t("issues.assigneeMe")}</option>
+          <option value="none">{t("issues.assigneeNone")}</option>
+        </select>
+        <select
+          aria-label={t("issues.sort")}
+          title={t("issues.sort")}
+          value={filterSort}
+          onChange={(e) => onFilterSort(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">{t("issues.sortNewest")}</option>
+          <option value="oldest">{t("issues.sortOldest")}</option>
+          <option value="updated">{t("issues.sortUpdated")}</option>
+          <option value="popular">{t("issues.sortPopular")}</option>
         </select>
       </div>
 

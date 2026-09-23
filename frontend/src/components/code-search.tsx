@@ -5,18 +5,26 @@ import { api, type SearchResult } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 
 export function HighlightText({ text, q }: { text: string; q: string }) {
-  if (!q) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  const needle = q.trim().toLowerCase();
+  if (!needle) return <>{text}</>;
+  const haystack = text.toLowerCase();
+  const nodes: ReactNode[] = [];
+  let from = 0;
+  let idx = haystack.indexOf(needle, from);
   if (idx < 0) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, idx)}
-      <mark className="rounded-sm bg-yellow-200/80 text-inherit dark:bg-yellow-500/30">
-        {text.slice(idx, idx + q.length)}
-      </mark>
-      {text.slice(idx + q.length)}
-    </>
-  );
+  let key = 0;
+  while (idx >= 0) {
+    if (idx > from) nodes.push(text.slice(from, idx));
+    nodes.push(
+      <mark key={key++} className="rounded-sm bg-yellow-200/80 text-inherit dark:bg-yellow-500/30">
+        {text.slice(idx, idx + needle.length)}
+      </mark>,
+    );
+    from = idx + needle.length;
+    idx = haystack.indexOf(needle, from);
+  }
+  if (from < text.length) nodes.push(text.slice(from));
+  return <>{nodes}</>;
 }
 
 /** 代码搜索：防抖 300ms，Enter 立即搜索 */
@@ -91,6 +99,7 @@ export function CodeSearch({
               }
             }}
             placeholder={t("search.placeholder")}
+            aria-label={t("search.placeholder")}
             className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>

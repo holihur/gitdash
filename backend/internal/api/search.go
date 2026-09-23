@@ -1,6 +1,8 @@
 package api
 
 import (
+	"errors"
+	"gitdash/backend/internal/codesearch"
 	"gitdash/backend/internal/gitsvc"
 	"net/http"
 	"strconv"
@@ -11,6 +13,7 @@ import (
 //
 //	@Summary     代码搜索
 //	@Description 固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。
+//	@Description 以空格分隔的多个关键词按 AND 语义（命中行需同时包含全部关键词）。
 //	@Tags        repos
 //	@Produce     json
 //	@Param       owner path string false "仓库所有者（简写路由时省略）"
@@ -34,17 +37,36 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	max, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	ref := a.browseRef(r, owner, name)
+	// 只把「显式 ref 查询参数」传给索引做范围校验；未显式指定视为默认分支（Ref 为空）。
+	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
 	if gitsvc.IsEmptyRepo(owner, name) {
-		writeJSON(w, http.StatusOK, []gitsvc.SearchHit{})
+		writeJSON(w, http.StatusOK, []codesearch.Hit{})
 		return
 	}
-	hits, err := gitsvc.Search(owner, name, q, ref, max)
-	if err != nil {
+	// 取仓库 ID：索引侧据此确认索引归属当前仓库（同名重建后旧索引自动失效）。
+	var repoID int64
+	if rp, gerr := a.store.GetRepo(owner, name); gerr == nil {
+		repoID = rp.ID
+	}
+	hits, src, err := a.searchOne(r.Context(), owner, name, q, codesearch.Options{
+		Ref:    ref,
+		Max:    max,
+		Terms:  strings.Fields(q),
+		RepoID: repoID,
+	})
+	switch {
+	case err == nil:
+		w.Header().Set("X-Code-Search", string(src))
+		writeJSON(w, http.StatusOK, hits)
+	case errors.Is(err, codesearch.ErrRefNotIndexed):
+		writeCode(w, http.StatusBadRequest, "ref_not_indexed", "only the default branch is indexed")
+	case errors.Is(err, codesearch.ErrIndexing):
+		// 最终一致：索引构建中，返回空列表并提示调用方可重试。
+		w.Header().Set("X-Code-Search", "indexing")
+		writeJSON(w, http.StatusOK, []codesearch.Hit{})
+	default:
 		writeErr(w, http.StatusBadRequest, err.Error())
-		return
 	}
-	writeJSON(w, http.StatusOK, hits)
 }
 
 // globalSearch 全局搜索（跨仓库）。

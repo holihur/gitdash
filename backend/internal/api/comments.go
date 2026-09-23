@@ -124,7 +124,10 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 		internalError(w, err)
 		return
 	}
-	// 通知关注者（issue/PR 作者与 watcher），不通知评论者本人；评论摘要截断到 200 字符
+	// 评论者自动订阅该会话，并记入时间线。
+	_ = a.store.SubscribeIssue(owner, name, kind, number, me)
+	_ = a.store.AddIssueEvent(owner, name, kind, number, me, "commented", "")
+	// 通知参与者（作者 / 评论者 / 订阅者 / 负责人 / @提及），不通知评论者本人；摘要截断到 200 字符。
 	title := ""
 	if kind == "issue" {
 		if it, e := a.store.GetIssue(owner, name, number); e == nil {
@@ -138,9 +141,68 @@ func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
 		if len(summary) > 200 {
 			summary = summary[:200]
 		}
-		a.notifyMessage(owner, name, kind, "commented", me, number, title, string(summary), messageID)
+		a.notifyMessage(owner, name, kind, "commented", me, number, title, string(summary), store.ExtractMentions(body), messageID)
 	}
 	writeJSON(w, http.StatusCreated, comment)
+}
+
+// updateComment 编辑评论（仅作者本人）。
+//
+//	@Summary     编辑评论
+//	@Tags        comments
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者（owner 路由时）"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "评论 ID"
+//	@Param       body  body map[string]string true "评论正文"
+//	@Success     200 {object} store.Comment
+//	@Failure     403 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/comments/{id} [patch]
+//	@Router      /repos/{name}/comments/{id} [patch]
+func (a *API) updateComment(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
+		return
+	}
+	comment, err := a.store.GetComment(owner, name, id)
+	if err != nil {
+		writeNotFound(w, "comment")
+		return
+	}
+	me := userFrom(r)
+	if comment.Author != me {
+		writeCode(w, http.StatusForbidden, "comment_forbidden", "only the author can edit a comment")
+		return
+	}
+	var in struct {
+		Body string `json:"body"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	body := strings.TrimSpace(in.Body)
+	if body == "" {
+		writeCode(w, http.StatusBadRequest, "body_required", "body is required")
+		return
+	}
+	if len([]rune(body)) > 10000 {
+		writeCode(w, http.StatusBadRequest, "body_too_long", "body too long (max 10000 chars)")
+		return
+	}
+	updated, err := a.store.UpdateComment(owner, name, id, body)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
 }
 
 // deleteComment 删除评论（作者本人或仓库写权限）。

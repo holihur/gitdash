@@ -4,6 +4,7 @@ import { KanbanSquare, Plus, Trash2 } from "lucide-react";
 import { api, type Project } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
+import { useQueryState } from "@/lib/query-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,6 +31,8 @@ export default function ProjectsTab({ owner, name, role }: Props) {
   const canWrite = role === "owner" || role === "write";
   const [items, setItems] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
+  const { getNum, set: setQuery } = useQueryState();
+  const currentId = getNum("p_project", 0);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -47,6 +50,24 @@ export default function ProjectsTab({ owner, name, role }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // 从 URL 恢复打开的项目（刷新 / 分享后可回到同一看板）。
+  useEffect(() => {
+    const p = currentId ? items.find((x) => x.id === currentId) : null;
+    if (p) setCurrent(p);
+    else if (!currentId) setCurrent(null);
+  }, [currentId, items]);
+
+  const openProject = (p: Project) => {
+    setCurrent(p);
+    setQuery({ p_project: p.id, p_view: null }, { push: true });
+  };
+
+  const backToList = () => {
+    setCurrent(null);
+    setQuery({ p_project: null, p_view: null, p_q: null, p_assignee: null, p_label: null, p_state: null }, { push: true });
+    load();
+  };
 
   const add = async () => {
     if (!newName.trim()) return;
@@ -87,7 +108,7 @@ export default function ProjectsTab({ owner, name, role }: Props) {
         name={name}
         project={current}
         role={role}
-        onBack={() => { setCurrent(null); load(); }}
+        onBack={backToList}
         onProjectChanged={(p) => setCurrent(p)}
       />
     );
@@ -154,7 +175,7 @@ export default function ProjectsTab({ owner, name, role }: Props) {
         <div className="divide-y divide-border rounded-lg border">
           {items.map((p) => (
             <div key={p.id} className="flex items-start gap-2 px-3 py-2">
-              <button className="min-w-0 flex-1 text-left" onClick={() => setCurrent(p)}>
+              <button className="min-w-0 flex-1 text-left" onClick={() => openProject(p)}>
                 <p className="truncate font-medium hover:underline">{p.name}</p>
                 {p.description && (
                   <p className="line-clamp-2 text-xs text-muted-foreground">{p.description}</p>

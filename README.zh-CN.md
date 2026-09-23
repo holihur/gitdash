@@ -176,6 +176,13 @@ go run .
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | asynq 队列使用的 Redis 地址 |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |
+| `GITDASH_CODE_SEARCH` | `bleve` | 代码搜索后端：`bleve`（**默认**，嵌入式全文索引位于 `$GITDASH_DATA/code-index`，push 后**增量**异步重建；标识符感知（camelCase/下划线/符号拆分）+ CJK + 智能大小写；仅索引仓库默认分支；**最终一致**——仓库重建中对其搜索返回空并带 `indexing:true`）、`grep`（显式实时 `git grep`，无索引）或 `remote`（委托独立索引 worker） |
+| `GITDASH_SEARCH_URL` | 空 | 远程代码索引服务地址（`GITDASH_CODE_SEARCH=remote` 必填），如 `http://127.0.0.1:8090` |
+| `GITDASH_SEARCH_TOKEN` | 空 | 内部 `/internal/codesearch` 端点的共享 Bearer token（worker 与 API 节点都需配置） |
+| `GITDASH_ROLE=codeindex` | 关 | 以独立索引 worker 运行：消费 `gitdash:codeindex` asynq 队列、持有 Bleve 索引并提供内部检索端点。需 `GITDASH_QUEUE=redis` 且与 API 节点共享 `GITDASH_DATA`/数据库 |
+| `GITDASH_SEARCH_LISTEN` | `127.0.0.1:8090` | 内部检索端点监听地址（仅索引 worker） |
+| `GITDASH_CODE_INDEX_CONCURRENCY` | `1` | 索引重建 worker 并发数（仅索引 worker） |
+| `GITDASH_CODE_INDEX_CONSUME` | `1` | 设为 `0` 表示本节点只生产 `gitdash:codeindex` 任务（redis 模式，由索引 worker 消费） |
 | `GITDASH_PROFILE_REPO` | `1` | 用户 / 组织首次创建时自动创建公开的 `<名称>/<名称>` 仓库（`0` 关闭） |
 | `GITDASH_COPILOT_AGENT_BIN` | gitdash 同目录的 `agent` / PATH | copilot 会话使用的 agent 运行时路径（见 [Copilot 文档](https://holihur.github.io/gitdash/zh-cn/copilot/sessions/)） |
 | `GITDASH_COPILOT_AGENT_URL` | 空 | 使用已在运行的 agent（`http://host:port`），而不是每会话拉起一个 |

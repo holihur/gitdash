@@ -77,6 +77,12 @@ func (c *cliBackend) ReadBlob(owner, name, ref, file string) (*Blob, error) {
 func (c *cliBackend) ReadRawFile(owner, name, ref, file string) ([]byte, error) {
 	return readRawFile(owner, name, ref, file)
 }
+func (c *cliBackend) ListTreeFiles(owner, name, ref string) ([]TreeFile, error) {
+	return listTreeFiles(owner, name, ref)
+}
+func (c *cliBackend) ReadBlobsBatch(owner, name, ref string, paths []string, maxSize int64) (map[string][]byte, error) {
+	return readBlobsBatch(owner, name, ref, paths, maxSize)
+}
 func (c *cliBackend) BlameFile(owner, name, ref, file string) (*Blame, error) {
 	return blameFile(owner, name, ref, file)
 }
@@ -88,6 +94,9 @@ func (c *cliBackend) RawCommits(owner, name string, shas []string) map[string][]
 }
 func (c *cliBackend) Commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error) {
 	return commits(owner, name, ref, limit, offset, query)
+}
+func (c *cliBackend) CommitInfo(owner, name, sha string) (*Commit, error) {
+	return commitInfo(owner, name, sha)
 }
 func (c *cliBackend) LastCommit(owner, name, ref, path string) (*Commit, error) {
 	return lastCommit(owner, name, ref, path)

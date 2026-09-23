@@ -33,8 +33,11 @@ export const projectsApi = {
       method: "PATCH",
       body: JSON.stringify(fields),
     }),
-  deleteColumn: (owner: string, name: string, id: number, cid: number) =>
-    req<null>(`/users/${owner}/repos/${name}/projects/${id}/columns/${cid}`, { method: "DELETE" }),
+  deleteColumn: (owner: string, name: string, id: number, cid: number, moveTo?: number) =>
+    req<null>(
+      `/users/${owner}/repos/${name}/projects/${id}/columns/${cid}${moveTo ? `?move_to=${moveTo}` : ""}`,
+      { method: "DELETE" },
+    ),
 
   // swimlanes
   createSwimlane: (owner: string, name: string, id: number, laneName: string) =>
@@ -66,7 +69,7 @@ export const projectsApi = {
     name: string,
     id: number,
     cardId: number,
-    fields: { column_id?: number; swimlane_id?: number; position?: number; title?: string; body?: string; note?: string; start_date?: string; due_date?: string },
+    fields: { column_id?: number; swimlane_id?: number; position?: number; title?: string; body?: string; note?: string; start_date?: string; due_date?: string; issue_number?: number },
   ) =>
     req<ProjectCard>(`/users/${owner}/repos/${name}/projects/${id}/cards/${cardId}`, {
       method: "PATCH",
@@ -74,4 +77,14 @@ export const projectsApi = {
     }),
   deleteCard: (owner: string, name: string, id: number, cardId: number) =>
     req<null>(`/users/${owner}/repos/${name}/projects/${id}/cards/${cardId}`, { method: "DELETE" }),
+  setCardAssignees: (owner: string, name: string, id: number, cardId: number, assignees: string[]) =>
+    req<null>(`/users/${owner}/repos/${name}/projects/${id}/cards/${cardId}/assignees`, {
+      method: "PUT",
+      body: JSON.stringify({ assignees }),
+    }),
+  setCardLabels: (owner: string, name: string, id: number, cardId: number, labelIds: number[]) =>
+    req<null>(`/users/${owner}/repos/${name}/projects/${id}/cards/${cardId}/labels`, {
+      method: "PUT",
+      body: JSON.stringify({ label_ids: labelIds }),
+    }),
 };

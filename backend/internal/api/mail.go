@@ -9,6 +9,7 @@ import (
 
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/notify"
+	"gitdash/backend/internal/store"
 )
 
 // mailInboundReq 入站邮件管道的请求体（MTA / 邮件服务商 webhook 适配层）。
@@ -220,7 +221,7 @@ func (a *API) inboundMail(w http.ResponseWriter, r *http.Request) {
 	if len(summary) > 200 {
 		summary = summary[:200]
 	}
-	a.notifyMessage(owner, repo, kind, "commented", username, number, title, string(summary), messageID)
+	a.notifyMessage(owner, repo, kind, "commented", username, number, title, string(summary), store.ExtractMentions(body), messageID)
 	logx.Infof("mail: reply comment by %s on %s/%s#%d", username, owner, repo, number)
 	writeJSON(w, http.StatusCreated, comment)
 }

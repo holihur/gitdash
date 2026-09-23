@@ -15,6 +15,31 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/admin/codesearch": {
+            "get": {
+                "description": "返回检索来源计数、索引重建次数/耗时/全量增量、索引仓库与文档规模、待重建仓库数。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "代码搜索指标",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/admin/ip-bans": {
             "get": {
                 "produces": [
@@ -5564,6 +5589,77 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "编辑评论",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "评论正文",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Comment"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/repos/{name}/commits": {
@@ -5781,6 +5877,66 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/store.Issue"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/repos/{name}/issues/counts": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Issue 状态计数",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签 id 或 none",
+                        "name": "label",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "里程碑 id 或 none",
+                        "name": "milestone",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "负责人用户名、me 或 none",
+                        "name": "assignee",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
                         }
                     }
                 },
@@ -6486,7 +6642,7 @@ const docTemplate = `{
         },
         "/repos/{name}/search": {
             "get": {
-                "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。",
+                "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。\n以空格分隔的多个关键词按 AND 语义（命中行需同时包含全部关键词）。",
                 "produces": [
                     "application/json"
                 ],
@@ -7738,6 +7894,84 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "编辑评论",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（owner 路由时）",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "评论正文",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Comment"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/users/{owner}/repos/{name}/commit-rules": {
@@ -7951,6 +8185,63 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/commits/{sha}": {
+            "get": {
+                "description": "返回单个提交的 sha / author / date / message / parents / refs，供 blame 深链跳转。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "提交详情",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "commit SHA",
+                        "name": "sha",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/gitsvc.Commit"
                         }
                     },
                     "400": {
@@ -9290,6 +9581,73 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/issues/counts": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Issue 状态计数",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者（owner 路由时）",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "标签 id 或 none",
+                        "name": "label",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "里程碑 id 或 none",
+                        "name": "milestone",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "负责人用户名、me 或 none",
+                        "name": "assignee",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/issues/{number}": {
             "get": {
                 "produces": [
@@ -9425,6 +9783,66 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/api.updateIssueReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Issue"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues/{number}/assignees": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "设置 Issue 负责人",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Issue 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "负责人用户名列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 ],
@@ -9590,6 +10008,56 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/issues/{number}/events": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Issue 时间线",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Issue 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/store.IssueEvent"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/issues/{number}/labels": {
             "post": {
                 "consumes": [
@@ -9698,6 +10166,104 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/store.Issue"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/issues/{number}/subscribe": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "订阅 Issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Issue 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "取消订阅 Issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Issue 编号",
+                        "name": "number",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "boolean"
+                            }
                         }
                     }
                 },
@@ -11493,6 +12059,128 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/projects/{id}/cards/{card}/assignees": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "设置看板卡片负责人",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "项目 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "卡片 ID",
+                        "name": "card",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "负责人用户名列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/users/{owner}/repos/{name}/projects/{id}/cards/{card}/labels": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "设置看板卡片标签",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "项目 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "卡片 ID",
+                        "name": "card",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "标签 ID 列表",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/projects/{id}/columns": {
             "get": {
                 "produces": [
@@ -11634,6 +12322,12 @@ const docTemplate = `{
                         "name": "cid",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "卡片迁移目标列 ID（省略则一并删除卡片）",
+                        "name": "move_to",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -13681,7 +14375,7 @@ const docTemplate = `{
         },
         "/users/{owner}/repos/{name}/search": {
             "get": {
-                "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。",
+                "description": "固定字符串全文搜索（跳过二进制文件），返回 {path, line, text} 列表。\n以空格分隔的多个关键词按 AND 语义（命中行需同时包含全部关键词）。",
                 "produces": [
                     "application/json"
                 ],
@@ -16149,6 +16843,10 @@ const docTemplate = `{
                 "due_date": {
                     "type": "string"
                 },
+                "issue_number": {
+                    "description": "IssueNumber 更换 / 解除关联的 issue（0 = 解除）；仅文本卡片或 issue 卡片均可。",
+                    "type": "integer"
+                },
                 "note": {
                     "description": "兼容：等价于 title",
                     "type": "string"
@@ -17038,11 +17736,44 @@ const docTemplate = `{
                     "description": "\"open\" | \"closed\"",
                     "type": "string"
                 },
+                "state_reason": {
+                    "description": "StateReason 关闭原因：completed | not_planned（仅 closed 时非空）",
+                    "type": "string"
+                },
                 "title": {
                     "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "store.IssueEvent": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "opened | closed | reopened | edited | labeled | unlabeled | milestoned | demilestoned | pinned | unpinned | assigned | unassigned | commented",
+                    "type": "string"
+                },
+                "actor": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "detail": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "kind": {
+                    "description": "issue | pull",
+                    "type": "string"
+                },
+                "number": {
+                    "description": "宿主编号",
+                    "type": "integer"
                 }
             }
         },
@@ -17340,6 +18071,13 @@ const docTemplate = `{
         "store.ProjectCard": {
             "type": "object",
             "properties": {
+                "assignees": {
+                    "description": "Assignees 负责人用户名；Labels 复用的仓库标签。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "body": {
                     "description": "Markdown 详情",
                     "type": "string"
@@ -17364,6 +18102,12 @@ const docTemplate = `{
                 },
                 "issue_title": {
                     "type": "string"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/store.Label"
+                    }
                 },
                 "note": {
                     "description": "兼容字段：与 title 同步",

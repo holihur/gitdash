@@ -2,13 +2,14 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
-	"gitdash/backend/internal/gitsvc"
+	"gitdash/backend/internal/codesearch"
 	"gitdash/backend/internal/store"
 )
 
@@ -214,16 +215,21 @@ func (a *API) searchCode(w http.ResponseWriter, r *http.Request) {
 	}
 	pathspecs := buildPathspecs(q.Lang, q.Path)
 	word := q.Symbol != ""
+	// 空格分隔的多个关键词按 AND 语义：命中行需同时包含全部关键词。
+	terms := strings.Fields(q.Keyword)
 
 	ctx, cancel := context.WithTimeout(r.Context(), codeSearchTimeout)
 	defer cancel()
 
 	var (
-		mu       sync.Mutex
-		wg       sync.WaitGroup
-		results  = make([]codeSearchHit, 0, codeSearchMaxResults)
-		searched int
-		limitHit bool
+		mu            sync.Mutex
+		wg            sync.WaitGroup
+		results       = make([]codeSearchHit, 0, codeSearchMaxResults)
+		searched      int
+		indexedRepos  int
+		grepRepos     int
+		indexingRepos int
+		limitHit      bool
 	)
 	sem := make(chan struct{}, codeSearchWorkers)
 loop:
@@ -249,14 +255,29 @@ loop:
 		go func(rp store.Repo) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			opts := gitsvc.SearchOpts{Ref: rp.DefaultBranch, Pathspec: pathspecs, Word: word, Max: codeSearchPerRepo}
-			hits, err := gitsvc.SearchWith(ctx, rp.Owner, rp.Name, q.Keyword, opts)
-			if err != nil {
-				return
+			// Ref 留空 = 默认分支（以索引的 ref 为准）；索引只覆盖默认分支，
+			// 这样也能兼容 DB 默认分支名与实际 HEAD 不一致的仓库（如导入仓库）。
+			opts := codesearch.Options{
+				Ref: "", Pathspec: pathspecs, Word: word,
+				Max: codeSearchPerRepo, Terms: terms, RepoID: rp.ID,
 			}
+			hits, src, err := a.searchOne(ctx, rp.Owner, rp.Name, q.Keyword, opts)
 			mu.Lock()
 			defer mu.Unlock()
+			if err != nil {
+				// 索引构建中（最终一致）：该仓库本次无结果，标记 indexing。
+				if errors.Is(err, codesearch.ErrIndexing) {
+					searched++
+					indexingRepos++
+				}
+				return
+			}
 			searched++
+			if src == codesearch.SourceIndex {
+				indexedRepos++
+			} else {
+				grepRepos++
+			}
 			for _, h := range hits {
 				if len(results) >= codeSearchMaxResults {
 					limitHit = true
@@ -286,5 +307,9 @@ loop:
 		"results":        results,
 		"truncated":      truncated || limitHit,
 		"repos_searched": searched,
+		"indexed_repos":  indexedRepos,
+		"grep_repos":     grepRepos,
+		"indexing":       indexingRepos > 0,
+		"indexing_repos": indexingRepos,
 	})
 }

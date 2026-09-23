@@ -19,6 +19,10 @@ func issueToDTO(r issueRow) Issue {
 		v := *r.ClosedAt
 		it.ClosedAt = &v
 	}
+	if r.StateReason != nil {
+		v := *r.StateReason
+		it.StateReason = &v
+	}
 	return it
 }
 
@@ -69,10 +73,18 @@ func (s *Store) ListIssues(owner, repo string, limit, offset int) ([]Issue, erro
 	return issues, nil
 }
 
-// issueQuery 构造仓库 issue 查询（可选关键词、状态与里程碑过滤）。
+// IssueFilter 构造 issue 查询的可选过滤 / 排序条件。
+// Label/Assignee 取值：空 = 不过滤；"none" = 未设置；否则为 id / 用户名。
+type IssueFilter struct {
+	Label    string
+	Assignee string
+	Sort     string // newest（默认）| oldest | updated | popular
+}
+
+// issueQuery 构造仓库 issue 查询（可选关键词、状态、里程碑、标签与负责人过滤）。
 // 关键词命中标题 / 正文 / 作者（大小写不敏感）。
 // milestone 取值："" 不过滤；"none" 仅未指派里程碑；数字字符串按里程碑 id 过滤。
-func (s *Store) issueQuery(owner, repo, q, state, milestone string) *gorm.DB {
+func (s *Store) issueQuery(owner, repo, q, state, milestone string, opts ...IssueFilter) *gorm.DB {
 	query := s.db.Model(&issueRow{}).Where("owner = ? AND repo = ?", owner, repo)
 	if state == "open" || state == "closed" {
 		query = query.Where("state = ?", state)
@@ -95,12 +107,50 @@ func (s *Store) issueQuery(owner, repo, q, state, milestone string) *gorm.DB {
 			query = query.Where("1 = 0")
 		}
 	}
+	if len(opts) > 0 {
+		f := opts[0]
+		switch {
+		case f.Label == "none":
+			query = query.Where("id NOT IN (SELECT issue_id FROM issue_labels)")
+		case f.Label != "":
+			if id, err := strconv.ParseInt(f.Label, 10, 64); err == nil && id > 0 {
+				query = query.Where("id IN (SELECT issue_id FROM issue_labels WHERE label_id = ?)", id)
+			} else {
+				query = query.Where("1 = 0")
+			}
+		}
+		switch {
+		case f.Assignee == "none":
+			query = query.Where("id NOT IN (SELECT issue_id FROM issue_assignees)")
+		case f.Assignee != "":
+			query = query.Where("id IN (SELECT issue_id FROM issue_assignees WHERE username = ?)", f.Assignee)
+		}
+	}
 	return query
 }
 
-// SearchIssuesInRepo 在仓库内搜索 issue（可按状态与里程碑过滤），排序与 ListIssues 一致。
-func (s *Store) SearchIssuesInRepo(owner, repo, q, state, milestone string, limit, offset int) ([]Issue, error) {
-	query := s.issueQuery(owner, repo, q, state, milestone).Order("pinned DESC, state = 'open' DESC, number DESC")
+// issueOrder 根据排序选项返回稳定排序。默认与旧行为一致（置顶 > open > 编号倒序）。
+func issueOrder(sort string) string {
+	base := "pinned DESC, state = 'open' DESC, "
+	switch sort {
+	case "oldest":
+		return base + "number ASC"
+	case "updated":
+		return base + "updated_at DESC, number DESC"
+	case "popular":
+		return base + "(SELECT COUNT(*) FROM issue_comments c WHERE c.owner = issues.owner AND c.repo = issues.repo AND c.kind = 'issue' AND c.number = issues.number) DESC, number DESC"
+	default:
+		return base + "number DESC"
+	}
+}
+
+// SearchIssuesInRepo 在仓库内搜索 issue（可按状态、里程碑、标签、负责人过滤并排序）。
+func (s *Store) SearchIssuesInRepo(owner, repo, q, state, milestone string, limit, offset int, opts ...IssueFilter) ([]Issue, error) {
+	sort := ""
+	if len(opts) > 0 {
+		sort = opts[0].Sort
+	}
+	query := s.issueQuery(owner, repo, q, state, milestone, opts...).Order(issueOrder(sort))
 	if limit > 0 {
 		query = query.Limit(limit).Offset(offset)
 	}
@@ -116,12 +166,25 @@ func (s *Store) SearchIssuesInRepo(owner, repo, q, state, milestone string, limi
 }
 
 // CountSearchIssuesInRepo 与 SearchIssuesInRepo 同过滤条件的总数。
-func (s *Store) CountSearchIssuesInRepo(owner, repo, q, state, milestone string) (int, error) {
+func (s *Store) CountSearchIssuesInRepo(owner, repo, q, state, milestone string, opts ...IssueFilter) (int, error) {
 	var n int64
-	if err := s.issueQuery(owner, repo, q, state, milestone).Count(&n).Error; err != nil {
+	if err := s.issueQuery(owner, repo, q, state, milestone, opts...).Count(&n).Error; err != nil {
 		return 0, err
 	}
 	return int(n), nil
+}
+
+// CountIssueStates 返回同过滤条件下 open / closed 的真实数量（不受分页影响）。
+func (s *Store) CountIssueStates(owner, repo, q, milestone, label, assignee string) (open, closed int, err error) {
+	filter := []IssueFilter{{Label: label, Assignee: assignee}}
+	var o, c int64
+	if err = s.issueQuery(owner, repo, q, "open", milestone, filter...).Count(&o).Error; err != nil {
+		return 0, 0, err
+	}
+	if err = s.issueQuery(owner, repo, q, "closed", milestone, filter...).Count(&c).Error; err != nil {
+		return 0, 0, err
+	}
+	return int(o), int(c), nil
 }
 
 // CountIssues 仓库 issue 总数（与列表口径一致，不含 state 过滤）。
@@ -132,16 +195,32 @@ func (s *Store) CountIssues(owner, repo string) (int, error) {
 }
 
 func (s *Store) SetIssueState(owner, repo string, number int64, state string) (Issue, error) {
+	return s.SetIssueStateWithReason(owner, repo, number, state, "")
+}
+
+// SetIssueStateWithReason 与 SetIssueState 相同，但可同时记录关闭原因
+// （completed | not_planned）；state 为 open 时清空原因。
+func (s *Store) SetIssueStateWithReason(owner, repo string, number int64, state, reason string) (Issue, error) {
 	if state != "open" && state != "closed" {
 		return Issue{}, errors.New("invalid state")
 	}
 	now := now()
-	var closedAt any
+	updates := map[string]any{"state": state, "updated_at": now}
 	if state == "closed" {
-		closedAt = now
+		updates["closed_at"] = now
+		if reason == "not_planned" {
+			updates["state_reason"] = "not_planned"
+		} else if reason == "completed" {
+			updates["state_reason"] = "completed"
+		} else {
+			updates["state_reason"] = "completed"
+		}
+	} else {
+		updates["closed_at"] = nil
+		updates["state_reason"] = nil
 	}
 	res := s.db.Model(&issueRow{}).Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
-		Updates(map[string]any{"state": state, "updated_at": now, "closed_at": closedAt})
+		Updates(updates)
 	if res.Error != nil {
 		return Issue{}, res.Error
 	}

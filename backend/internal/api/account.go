@@ -27,6 +27,9 @@ func (a *API) purgeUserRepoFiles(username string) {
 		if err := gitsvc.Delete(username, rp.Name); err != nil {
 			logx.Infof("delete git repo %s/%s: %v", username, rp.Name, err)
 		}
+		if a.codeIndex != nil {
+			a.codeIndex.Forget(username, rp.Name)
+		}
 		if err := pipeline.DeleteLogs(username, rp.Name); err != nil {
 			logx.Infof("delete pipeline logs %s/%s: %v", username, rp.Name, err)
 		}

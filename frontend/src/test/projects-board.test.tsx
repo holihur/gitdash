@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ProjectBoardView } from "@/components/projects-board-view";
@@ -43,25 +44,33 @@ function textCard(over: Partial<ProjectCard> = {}): ProjectCard {
   };
 }
 
-function renderBoard(cards: ProjectCard[]) {
+function renderBoard(cards: ProjectCard[], columns: ProjectColumn[] = [column], lanes: ProjectSwimlane[] = [lane]) {
   const cardsByCell = new Map([[`${lane.id}:${column.id}`, cards]]);
-  return render(
+  const handlers = {
+    onEditCard: vi.fn(),
+    onDeleteCard: vi.fn(),
+    onDeleteColumn: vi.fn(),
+    onDeleteLane: vi.fn(),
+    onAddCard: vi.fn(),
+    onMoveCard: vi.fn(),
+    onRenameColumn: vi.fn(),
+    onMoveColumn: vi.fn(),
+    onRenameLane: vi.fn(),
+    onMoveLane: vi.fn(),
+  };
+  render(
     <I18nProvider>
       <ProjectBoardView
-        columns={[column]}
-        lanes={[lane]}
+        columns={columns}
+        lanes={lanes}
         cardsByCell={cardsByCell}
         hasUngrouped={false}
         busy={false}
-        onEditCard={() => {}}
-        onDeleteCard={() => {}}
-        onDeleteColumn={() => {}}
-        onDeleteLane={() => {}}
-        onAddCard={() => {}}
-        onMoveCard={() => {}}
+        {...handlers}
       />
     </I18nProvider>,
   );
+  return handlers;
 }
 
 describe("ProjectBoardView 卡片渲染", () => {
@@ -85,5 +94,59 @@ describe("ProjectBoardView 卡片渲染", () => {
     ]);
     expect(screen.getByText("Fix the thing")).toBeInTheDocument();
     expect(screen.getByText("#42")).toBeInTheDocument();
+  });
+});
+
+describe("ProjectBoardView 列 / 泳道管理", () => {
+  it("列操作菜单可重命名并提交", async () => {
+    const user = userEvent.setup();
+    const h = renderBoard([textCard()]);
+
+    await user.click(screen.getByTitle("Column actions"));
+    await user.click(await screen.findByRole("menuitem", { name: /rename column/i }));
+
+    const input = screen.getByDisplayValue("To Do");
+    await user.clear(input);
+    await user.type(input, "Doing{Enter}");
+    expect(h.onRenameColumn).toHaveBeenCalledWith(1, "Doing");
+  });
+
+  it("多列时可左右移动", async () => {
+    const user = userEvent.setup();
+    const columns: ProjectColumn[] = [
+      { id: 1, project_id: 1, name: "To Do", position: 0 },
+      { id: 2, project_id: 1, name: "Done", position: 1 },
+    ];
+    const h = renderBoard([], columns);
+
+    await user.click(screen.getAllByTitle("Column actions")[0]);
+    await user.click(await screen.findByRole("menuitem", { name: /move right/i }));
+    expect(h.onMoveColumn).toHaveBeenCalledWith(1, 1);
+  });
+
+  it("泳道操作菜单可上移 / 删除", async () => {
+    const user = userEvent.setup();
+    const lanes: ProjectSwimlane[] = [
+      { id: 1, project_id: 1, name: "A", position: 0 },
+      { id: 2, project_id: 1, name: "B", position: 1 },
+    ];
+    const h = renderBoard([], [column], lanes);
+
+    await user.click(screen.getAllByTitle("Swimlane actions")[1]);
+    await user.click(await screen.findByRole("menuitem", { name: /move up/i }));
+    expect(h.onMoveLane).toHaveBeenCalledWith(2, -1);
+  });
+
+  it("卡片菜单可移动到其它列（键盘可达）", async () => {
+    const user = userEvent.setup();
+    const columns: ProjectColumn[] = [
+      { id: 1, project_id: 1, name: "To Do", position: 0 },
+      { id: 2, project_id: 1, name: "Done", position: 1 },
+    ];
+    const h = renderBoard([textCard()], columns);
+
+    await user.click(screen.getByTitle("Move card"));
+    await user.click(await screen.findByRole("menuitem", { name: "Done" }));
+    expect(h.onMoveCard).toHaveBeenCalledWith(10, 1, 2, 0);
   });
 });

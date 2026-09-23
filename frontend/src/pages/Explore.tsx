@@ -180,11 +180,14 @@ export default function Explore() {
               ))}
             </div>
           )}
-          {codeResults && codeResults.results.length > 0 && (
+          {codeResults && (codeResults.results.length > 0 || codeResults.indexing) && (
             <div className="space-y-1">
               <p className="text-xs font-medium uppercase text-muted-foreground">
                 {t("explore.sectionCode")}
               </p>
+              {codeResults.indexing && (
+                <p className="px-2 text-xs text-muted-foreground">{t("explore.codeIndexing")}</p>
+              )}
               {codeResults.results.map((r, i) => (
                 <Link
                   key={`${r.owner}/${r.repo}:${r.path}:${r.line}:${i}`}

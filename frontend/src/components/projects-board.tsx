@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, GanttChartSquare, KanbanSquare, Layers, List, Pencil, Plus, SquarePlus, X } from "lucide-react";
-import { api, type Project, type ProjectBoard, type ProjectCard } from "@/lib/api";
+import { ArrowLeft, GanttChartSquare, KanbanSquare, Layers, List, Pencil, Plus, Search, SquarePlus } from "lucide-react";
+import { api, type Issue, type Label, type Project, type ProjectBoard, type ProjectCard } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
+import { useQueryState } from "@/lib/query-state";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ProjectCardDialog, ProjectGanttView, ProjectListView, type CardDraft } from "@/components/projects-views";
@@ -25,22 +27,44 @@ type ProjectView = "board" | "list" | "gantt";
 export default function ProjectsBoard({ owner, name, project, role, onBack, onProjectChanged }: Props) {
   const { t, to } = useI18n();
   const canWrite = role === "owner" || role === "write";
+  const { get, set: setQuery } = useQueryState();
   const [board, setBoard] = useState<ProjectBoard | null>(null);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<ProjectView>("board");
+  // 视图与筛选同步进 URL（刷新 / 分享可恢复）。
+  const viewParam = get("p_view", "");
+  const view: ProjectView = viewParam === "list" || viewParam === "gantt" ? viewParam : "board";
+  const setView = (v: ProjectView) => setQuery({ p_view: v === "board" ? null : v });
   const [editCard, setEditCard] = useState<ProjectCard | null>(null);
 
-  const [editingName, setEditingName] = useState(false);
+  const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [nameInput, setNameInput] = useState(project.name);
+  const [descInput, setDescInput] = useState(project.description);
 
   const [newColumn, setNewColumn] = useState("");
   const [newLane, setNewLane] = useState("");
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [laneDialogOpen, setLaneDialogOpen] = useState(false);
-  const [pendingDeleteColumn, setPendingDeleteColumn] = useState<number | null>(null);
+  const [pendingDeleteColumn, setPendingDeleteColumn] = useState<{ id: number; count: number } | null>(null);
+  const [deleteColumnMoveTo, setDeleteColumnMoveTo] = useState<number>(0);
   const [pendingDeleteLane, setPendingDeleteLane] = useState<number | null>(null);
   // 新建卡片目标单元格（点击单元格内的“添加卡片”后打开对话框）
   const [addTarget, setAddTarget] = useState<{ swimlaneId: number; columnId: number } | null>(null);
+
+  // 卡片编辑所需的仓库元数据（负责人候选、标签、可关联 issue）与当前用户。
+  const [people, setPeople] = useState<string[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [me, setMe] = useState("");
+
+  // 筛选条件（客户端过滤，看板已一次性加载全部卡片）；除文本防抖外均直接写 URL。
+  const [filterText, setFilterText] = useState(() => get("p_q", ""));
+  const filterAssignee = get("p_assignee", "");
+  const filterLabel = get("p_label", "");
+  const filterState = get("p_state", "");
+  useEffect(() => {
+    const id = setTimeout(() => setQuery({ p_q: filterText || null }), 300);
+    return () => clearTimeout(id);
+  }, [filterText, setQuery]);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +78,25 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     load();
   }, [load]);
 
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      api.listLabels(owner, name).catch(() => [] as Label[]),
+      api.listCollabs(owner, name).catch(() => [] as { username: string }[]),
+      api.listIssues(owner, name, 100, 0).catch(() => ({ items: [] as Issue[], total: 0 })),
+      api.me().catch(() => null),
+    ]).then(([ls, cs, is, u]) => {
+      if (!alive) return;
+      setLabels(ls);
+      setPeople(Array.from(new Set([owner, ...cs.map((c) => c.username)])));
+      setIssues(is.items);
+      setMe(u?.username ?? "");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [owner, name]);
+
   const columns = useMemo(
     () => (board?.columns ?? []).slice().sort((a, b) => a.position - b.position),
     [board],
@@ -64,10 +107,29 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
   );
   const cards = useMemo(() => board?.cards ?? [], [board]);
   const hasUngrouped = useMemo(() => cards.some((c) => c.swimlane_id === UNGROUPED), [cards]);
+  // 客户端筛选：文本 / 负责人 / 标签 / issue 状态。
+  const visibleCards = useMemo(() => {
+    const q = filterText.trim().toLowerCase();
+    return cards.filter((c) => {
+      if (filterState && c.issue_state !== filterState) return false;
+      const asg = c.assignees ?? [];
+      if (filterAssignee === "none" && asg.length > 0) return false;
+      if (filterAssignee && filterAssignee !== "none") {
+        const want = filterAssignee === "me" ? me : filterAssignee;
+        if (!want || !asg.includes(want)) return false;
+      }
+      if (filterLabel && !(c.labels ?? []).some((l) => String(l.id) === filterLabel)) return false;
+      if (q) {
+        const hay = `${c.title ?? ""} ${c.body ?? ""} ${c.issue_number ?? ""} ${c.issue_title ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [cards, filterText, filterAssignee, filterLabel, filterState, me]);
   // 预分桶：一次性按 (泳道, 列) 归组并排序，避免每次渲染做 L×C 次全量 filter。
   const cardsByCell = useMemo(() => {
     const grouped = new Map<string, ProjectCard[]>();
-    for (const c of cards) {
+    for (const c of visibleCards) {
       const key = `${c.swimlane_id}:${c.column_id}`;
       const bucket = grouped.get(key);
       if (bucket) bucket.push(c);
@@ -77,7 +139,7 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
       bucket.sort((a, b) => a.position - b.position || a.id - b.id);
     }
     return grouped;
-  }, [cards]);
+  }, [visibleCards]);
 
   const act = async (fn: () => Promise<unknown>, msg?: string) => {
     setBusy(true);
@@ -92,14 +154,17 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     }
   };
 
-  const renameProject = async () => {
+  const saveProject = async () => {
     if (!nameInput.trim()) return;
     setBusy(true);
     try {
-      const p = await api.updateProject(owner, name, project.id, { name: nameInput.trim() });
+      const p = await api.updateProject(owner, name, project.id, {
+        name: nameInput.trim(),
+        description: descInput.trim(),
+      });
       toast.success(t("projects.saved"));
       onProjectChanged(p);
-      setEditingName(false);
+      setEditProjectOpen(false);
       await load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -115,7 +180,7 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     if (!draft.issue_number && !draft.title.trim()) return;
     setBusy(true);
     try {
-      await api.createCard(owner, name, project.id, {
+      const card = await api.createCard(owner, name, project.id, {
         column_id: draft.column_id,
         swimlane_id: draft.swimlane_id,
         issue_number: draft.issue_number || undefined,
@@ -124,6 +189,12 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
         start_date: draft.start_date,
         due_date: draft.due_date,
       });
+      if (draft.assignees.length > 0) {
+        await api.setCardAssignees(owner, name, project.id, card.id, draft.assignees);
+      }
+      if (draft.label_ids.length > 0) {
+        await api.setCardLabels(owner, name, project.id, card.id, draft.label_ids);
+      }
       toast.success(t("projects.cardAdded"));
       setAddTarget(null);
       await load();
@@ -142,11 +213,14 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     setBusy(true);
     try {
       await api.updateCard(owner, name, project.id, card.id, {
-        title: card.issue_number ? undefined : draft.title.trim(),
-        body: card.issue_number ? undefined : draft.body,
+        issue_number: draft.issue_number,
+        title: draft.issue_number ? undefined : draft.title.trim(),
+        body: draft.issue_number ? undefined : draft.body,
         start_date: draft.start_date,
         due_date: draft.due_date,
       });
+      await api.setCardAssignees(owner, name, project.id, card.id, draft.assignees);
+      await api.setCardLabels(owner, name, project.id, card.id, draft.label_ids);
       toast.success(t("projects.cardSaved"));
       setEditCard(null);
       await load();
@@ -171,11 +245,54 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
     setLaneDialogOpen(false);
   };
 
-  const moveCard = (cardId: number, swimlaneId: number, columnId: number) => {
-    const card = cards.find((c) => c.id === cardId);
-    if (!card) return;
+  const moveCard = (cardId: number, swimlaneId: number, columnId: number, position = 0) => {
     void act(
-      () => api.updateCard(owner, name, project.id, cardId, { column_id: columnId, swimlane_id: swimlaneId, position: 0 }),
+      () => api.updateCard(owner, name, project.id, cardId, { column_id: columnId, swimlane_id: swimlaneId, position }),
+    );
+  };
+
+  const renameColumn = (cid: number, colName: string) =>
+    void act(() => api.updateColumn(owner, name, project.id, cid, { name: colName }), "projects.columnRenamed");
+
+  const renameLane = (lid: number, laneName: string) =>
+    void act(() => api.updateSwimlane(owner, name, project.id, lid, { name: laneName }), "projects.swimlaneRenamed");
+
+  // 交换相邻列 / 泳道并重新编号 position（列数很小，逐条 PATCH 足够）。
+  const reorder = (items: { id: number }[], id: number, dir: -1 | 1, patch: (itemId: number, position: number) => Promise<unknown>) => {
+    const i = items.findIndex((x) => x.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= items.length) return;
+    const next = items.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    void act(async () => {
+      for (let k = 0; k < next.length; k++) await patch(next[k].id, k);
+    });
+  };
+
+  const moveColumn = (cid: number, dir: -1 | 1) =>
+    reorder(columns, cid, dir, (itemId, position) =>
+      api.updateColumn(owner, name, project.id, itemId, { position }),
+    );
+
+  const moveLane = (lid: number, dir: -1 | 1) =>
+    reorder(lanes, lid, dir, (itemId, position) =>
+      api.updateSwimlane(owner, name, project.id, itemId, { position }),
+    );
+
+  const askDeleteColumn = (cid: number) => {
+    const others = columns.filter((c) => c.id !== cid);
+    setDeleteColumnMoveTo(others[0]?.id ?? 0);
+    setPendingDeleteColumn({ id: cid, count: cards.filter((c) => c.column_id === cid).length });
+  };
+
+  const confirmDeleteColumn = () => {
+    const p = pendingDeleteColumn;
+    setPendingDeleteColumn(null);
+    if (!p) return;
+    const target = p.count > 0 ? deleteColumnMoveTo : 0;
+    void act(
+      () => api.deleteColumn(owner, name, project.id, p.id, target || undefined),
+      "projects.columnDeleted",
     );
   };
 
@@ -201,30 +318,20 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
           <ArrowLeft className="h-4 w-4" />
           {t("projects.backToList")}
         </Button>
-        {editingName ? (
-          <>
-            <Input
-              className="h-8 w-48"
-              value={nameInput}
-              maxLength={100}
-              onChange={(e) => setNameInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && renameProject()}
-            />
-            <Button size="sm" disabled={busy || !nameInput.trim()} onClick={renameProject}>
-              {t("common.save")}
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setEditingName(false); setNameInput(board.project.name); }}>
-              <X className="h-4 w-4" />
-            </Button>
-          </>
-        ) : (
-          <>
-            <h2 className="text-lg font-semibold">{board.project.name}</h2>
-            <Button size="sm" variant="ghost" className="h-8 w-8" onClick={() => { setEditingName(true); setNameInput(board.project.name); }} title={t("projects.rename")}>
-              <Pencil className="h-4 w-4" />
-            </Button>
-          </>
-        )}
+        <h2 className="text-lg font-semibold">{board.project.name}</h2>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={() => {
+            setNameInput(board.project.name);
+            setDescInput(board.project.description);
+            setEditProjectOpen(true);
+          }}
+          title={t("projects.rename")}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
         <div className="ml-auto flex items-center gap-1 rounded-md border p-0.5">
           {([
             { id: "board", icon: KanbanSquare, label: t("projects.viewBoard") },
@@ -246,11 +353,59 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-48 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            className="pl-8"
+            placeholder={t("projects.filterText")}
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+          />
+        </div>
+        <select
+          aria-label={t("projects.filterAssignee")}
+          title={t("projects.filterAssignee")}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={filterAssignee}
+          onChange={(e) => setQuery({ p_assignee: e.target.value || null })}
+        >
+          <option value="">{t("projects.filterAnyone")}</option>
+          <option value="me">{t("projects.filterMine")}</option>
+          <option value="none">{t("issues.assigneeNone")}</option>
+        </select>
+        <select
+          aria-label={t("projects.filterLabel")}
+          title={t("projects.filterLabel")}
+          className="h-9 max-w-44 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={filterLabel}
+          onChange={(e) => setQuery({ p_label: e.target.value || null })}
+        >
+          <option value="">{t("projects.filterAllLabels")}</option>
+          {labels.map((l) => (
+            <option key={l.id} value={String(l.id)}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={t("projects.filterState")}
+          title={t("projects.filterState")}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={filterState}
+          onChange={(e) => setQuery({ p_state: e.target.value || null })}
+        >
+          <option value="">{t("projects.filterAnyState")}</option>
+          <option value="open">{t("issues.open")}</option>
+          <option value="closed">{t("issues.closed")}</option>
+        </select>
+      </div>
+
       {view === "list" && (
         <ProjectListView
           columns={columns}
           swimlanes={lanes}
-          cards={cards}
+          cards={visibleCards}
           canWrite={canWrite}
           busy={busy}
           onEdit={setEditCard}
@@ -262,7 +417,7 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
         <ProjectGanttView
           columns={columns}
           swimlanes={lanes}
-          cards={cards}
+          cards={visibleCards}
           canWrite={canWrite}
           busy={busy}
           onEdit={setEditCard}
@@ -279,10 +434,14 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
           busy={busy}
           onEditCard={setEditCard}
           onDeleteCard={(c) => void removeCard(c)}
-          onDeleteColumn={setPendingDeleteColumn}
+          onDeleteColumn={askDeleteColumn}
           onDeleteLane={setPendingDeleteLane}
           onAddCard={(swimlaneId, columnId) => setAddTarget({ swimlaneId, columnId })}
           onMoveCard={moveCard}
+          onRenameColumn={renameColumn}
+          onMoveColumn={moveColumn}
+          onRenameLane={renameLane}
+          onMoveLane={moveLane}
         />
       )}
 
@@ -310,6 +469,38 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
           </Button>
         </div>
       )}
+
+      <Dialog open={editProjectOpen} onOpenChange={setEditProjectOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("projects.rename")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium">{t("projects.nameLabel")}</label>
+              <Input
+                autoFocus
+                maxLength={100}
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void saveProject()}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <label className="text-xs font-medium">{t("projects.descriptionLabel")}</label>
+              <Textarea rows={3} value={descInput} onChange={(e) => setDescInput(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditProjectOpen(false)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={() => void saveProject()} disabled={busy || !nameInput.trim()}>
+              {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={columnDialogOpen} onOpenChange={setColumnDialogOpen}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
@@ -373,6 +564,9 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
         card={editCard}
         columns={columns}
         swimlanes={lanes}
+        people={people}
+        labels={labels}
+        issues={issues}
         busy={busy}
         onClose={() => setEditCard(null)}
         onSubmit={(d) => editCard && void saveCard(editCard, d)}
@@ -383,23 +577,62 @@ export default function ProjectsBoard({ owner, name, project, role, onBack, onPr
         mode="create"
         columns={columns}
         swimlanes={lanes}
+        people={people}
+        labels={labels}
+        issues={issues}
         defaultTarget={addTarget}
         busy={busy}
         onClose={() => setAddTarget(null)}
         onSubmit={(d) => void createCard(d)}
       />
 
-      <ConfirmDialog
+      <Dialog
         open={pendingDeleteColumn !== null}
         onOpenChange={(o) => !o && setPendingDeleteColumn(null)}
-        description={t("projects.confirmDeleteColumn")}
-        onConfirm={() => {
-          const cid = pendingDeleteColumn;
-          setPendingDeleteColumn(null);
-          if (cid != null) void act(() => api.deleteColumn(owner, name, project.id, cid), "projects.columnDeleted");
-        }}
-        busy={busy}
-      />
+      >
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("projects.deleteColumn")}</DialogTitle>
+          </DialogHeader>
+          {pendingDeleteColumn && pendingDeleteColumn.count > 0 ? (
+            <div className="grid gap-3">
+              <p className="text-sm text-muted-foreground">
+                {t("projects.deleteColumnWithCards", { count: pendingDeleteColumn.count })}
+              </p>
+              <div className="grid gap-1.5">
+                <label className="text-xs font-medium">{t("projects.moveCardsTo")}</label>
+                <select
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={deleteColumnMoveTo}
+                  onChange={(e) => setDeleteColumnMoveTo(Number(e.target.value))}
+                >
+                  {columns
+                    .filter((c) => c.id !== pendingDeleteColumn.id)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("projects.confirmDeleteColumn")}</p>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingDeleteColumn(null)} disabled={busy}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDeleteColumn}
+              disabled={busy}
+            >
+              {t("common.delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={pendingDeleteLane !== null}
         onOpenChange={(o) => !o && setPendingDeleteLane(null)}

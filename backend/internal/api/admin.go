@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"gitdash/backend/internal/codesearch"
 	"gitdash/backend/internal/jobs"
+	"gitdash/backend/internal/metrics"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -38,6 +40,42 @@ func (a *API) adminAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxUser{}, username)))
 	}
+}
+
+// adminCodeSearch 代码搜索 / 索引运行态指标（聚合，不含仓库维度）。
+//
+//	@Summary     代码搜索指标
+//	@Description 返回检索来源计数、索引重建次数/耗时/全量增量、索引仓库与文档规模、待重建仓库数。
+//	@Tags        admin
+//	@Produce     json
+//	@Success     200 {object} object
+//	@Security    BearerAuth
+//	@Router      /admin/codesearch [get]
+func (a *API) adminCodeSearch(w http.ResponseWriter, r *http.Request) {
+	c := metrics.SnapshotCodeSearch()
+	avg := 0.0
+	if c.IndexRuns > 0 {
+		avg = float64(c.IndexDurMs) / float64(c.IndexRuns)
+	}
+	_, isRemote := a.codeSearch.(*codesearch.Remote)
+	resp := map[string]any{
+		"backend":               codesearch.ModeGrep,
+		"remote":                isRemote,
+		"search_requests":       map[string]any{"index": c.SearchIndex, "grep": c.SearchGrep, "indexing": c.SearchIndexing},
+		"index_runs":            map[string]any{"full": c.IndexFull, "incremental": c.IndexIncr, "ok": c.IndexOK, "error": c.IndexErr},
+		"index_avg_duration_ms": avg,
+		"last_index_at":         c.LastIndexAt,
+		"index":                 map[string]any{"repos": 0, "documents": 0, "dirty": 0},
+	}
+	if sr, ok := a.codeSearch.(codesearch.StatsReporter); ok {
+		st, err := sr.IndexStats(r.Context())
+		if err != nil {
+			resp["index_error"] = err.Error()
+		}
+		resp["backend"] = st.Backend
+		resp["index"] = map[string]any{"repos": st.Repos, "documents": st.Documents, "dirty": st.Dirty}
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // adminLogin 管理端登录（需先启用管理面板）。

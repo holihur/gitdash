@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import ProjectsBoard from "@/components/projects-board";
@@ -25,8 +26,16 @@ vi.mock("@/lib/api", () => {
       deleteCard: vi.fn(),
       createColumn: vi.fn(),
       createSwimlane: vi.fn(),
+      updateColumn: vi.fn(),
+      updateSwimlane: vi.fn(),
       deleteColumn: vi.fn(),
       deleteSwimlane: vi.fn(),
+      setCardAssignees: vi.fn(),
+      setCardLabels: vi.fn(),
+      listLabels: vi.fn().mockResolvedValue([]),
+      listCollabs: vi.fn().mockResolvedValue([]),
+      listIssues: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+      me: vi.fn().mockResolvedValue({ username: "alice" }),
     },
   };
 });
@@ -74,16 +83,18 @@ const board = {
 
 function renderBoard() {
   return render(
-    <I18nProvider>
-      <ProjectsBoard
-        owner="alice"
-        name="demo"
-        project={project}
-        role="owner"
-        onBack={() => {}}
-        onProjectChanged={() => {}}
-      />
-    </I18nProvider>,
+    <MemoryRouter>
+      <I18nProvider>
+        <ProjectsBoard
+          owner="alice"
+          name="demo"
+          project={project}
+          role="owner"
+          onBack={() => {}}
+          onProjectChanged={() => {}}
+        />
+      </I18nProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -128,5 +139,42 @@ describe("ProjectsBoard 从列表 / 甘特视图创建卡片", () => {
     // 默认选中首列 / 首泳道
     expect((within(dialog).getByLabelText("Column") as HTMLSelectElement).value).toBe("11");
     expect((within(dialog).getByLabelText("Swimlane") as HTMLSelectElement).value).toBe("21");
+  });
+});
+
+describe("ProjectsBoard 删除列时迁移卡片", () => {
+  it("有卡片的列删前先选迁移目标", async () => {
+    const user = userEvent.setup();
+    (api.getBoard as Mock).mockResolvedValue({
+      ...board,
+      cards: [
+        {
+          id: 99,
+          project_id: 1,
+          column_id: 11,
+          swimlane_id: 21,
+          issue_number: 0,
+          issue_title: "",
+          issue_state: "",
+          title: "Task",
+          body: "",
+          note: "Task",
+          start_date: "",
+          due_date: "",
+          position: 0,
+          created_at: "2026-01-01T00:00:00Z",
+        },
+      ],
+    });
+    (api.deleteColumn as Mock).mockResolvedValue(null);
+    renderBoard();
+
+    await waitFor(() => expect(screen.getByText("Task")).toBeInTheDocument());
+    await user.click(screen.getAllByTitle("Column actions")[0]);
+    await user.click(await screen.findByRole("menuitem", { name: /delete column/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(api.deleteColumn).toHaveBeenCalledWith("alice", "demo", 1, 11, 12));
   });
 });

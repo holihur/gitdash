@@ -6,6 +6,14 @@ import { api, type ByokKey, type Issue } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { MarkdownEditor } from "@/components/markdown-editor";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { CopilotLaunchDialog, EditIssueDialog } from "@/components/issues/dialogs";
 
@@ -48,15 +56,39 @@ export function IssueActions({
 
   const isOpen = issue.state === "open";
 
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeComment, setCloseComment] = useState("");
+  const [closeReason, setCloseReason] = useState<"completed" | "not_planned">("completed");
+
   const toggleState = async () => {
+    if (isOpen) {
+      setCloseComment("");
+      setCloseReason("completed");
+      setCloseOpen(true);
+      return;
+    }
     setBusy(true);
     try {
-      await api.setIssueState(owner, name, issue.number, isOpen ? "closed" : "open");
-      toast.success(
-        isOpen
-          ? t("issues.stateClosed", { number: issue.number })
-          : t("issues.stateOpen", { number: issue.number }),
-      );
+      await api.setIssueState(owner, name, issue.number, "open");
+      toast.success(t("issues.stateOpen", { number: issue.number }));
+      onChanged();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmClose = async () => {
+    setBusy(true);
+    try {
+      await api.updateIssue(owner, name, issue.number, {
+        state: "closed",
+        comment: closeComment.trim() || undefined,
+        state_reason: closeReason,
+      });
+      toast.success(t("issues.stateClosed", { number: issue.number }));
+      setCloseOpen(false);
       onChanged();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -237,6 +269,41 @@ export function IssueActions({
         busy={deleting}
         onConfirm={remove}
       />
+      <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("issues.closeWithComment")}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <MarkdownEditor
+              rows={3}
+              placeholder={t("issues.closeCommentPlaceholder")}
+              value={closeComment}
+              onChange={setCloseComment}
+            />
+            <div className="grid gap-1.5">
+              <span className="text-sm font-medium">{t("issues.closeReason")}</span>
+              <select
+                aria-label={t("issues.closeReason")}
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value as "completed" | "not_planned")}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="completed">{t("issues.reasonCompleted")}</option>
+                <option value="not_planned">{t("issues.reasonNotPlanned")}</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={confirmClose} disabled={busy} data-testid="confirm-close">
+              {t("issues.close")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

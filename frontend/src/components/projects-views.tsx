@@ -4,6 +4,7 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import LabelChip from "@/components/label-chip";
 import { UNGROUPED, parseDay, today, type ProjectViewProps } from "@/components/project-view-shared";
 
 export type { ProjectViewProps } from "@/components/project-view-shared";
@@ -72,6 +73,18 @@ export function ProjectListView({ columns, swimlanes, cards, canWrite, busy, onE
                       <span className="break-words">{card.title || card.note}</span>
                     )}
                   </div>
+                  {((card.labels?.length ?? 0) > 0 || (card.assignees?.length ?? 0) > 0) && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {(card.labels ?? []).map((l) => (
+                        <LabelChip key={l.id} label={l} />
+                      ))}
+                      {(card.assignees ?? []).map((u) => (
+                        <span key={u} className="text-xs text-muted-foreground">
+                          {u}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{colName(card.column_id)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{laneName(card.swimlane_id)}</td>

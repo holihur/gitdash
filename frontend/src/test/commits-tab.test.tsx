@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { I18nProvider } from "@/lib/i18n";
 import CommitsTab from "@/pages/repoview/commits-tab";
 import { vi, type Mock } from "vitest";
@@ -9,12 +10,13 @@ vi.mock("@/lib/api", () => ({
   api: {
     commits: vi.fn(),
     commitDiff: vi.fn(),
+    commitInfo: vi.fn(),
     revertCommit: vi.fn(),
   },
 }));
 
 const { api } = (await import("@/lib/api")) as unknown as {
-  api: { commits: Mock; commitDiff: Mock; revertCommit: Mock };
+  api: { commits: Mock; commitDiff: Mock; commitInfo: Mock; revertCommit: Mock };
 };
 
 const commits = [
@@ -22,11 +24,13 @@ const commits = [
   { sha: "b".repeat(40), author: "alice", date: "2026-01-01T00:00:00Z", message: "add file" },
 ];
 
-function renderTab(role: string) {
+function renderTab(role: string, initialEntry = "/commits") {
   return render(
-    <I18nProvider>
-      <CommitsTab owner="alice" name="demo" refName="main" emptyRepo={false} role={role} />
-    </I18nProvider>,
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <I18nProvider>
+        <CommitsTab owner="alice" name="demo" refName="main" emptyRepo={false} role={role} />
+      </I18nProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -99,5 +103,50 @@ describe("CommitsTab pagination", () => {
     renderTab("read");
     await waitFor(() => expect(screen.getByText("edit file")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /load more/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("CommitsTab blame deep-link", () => {
+  const sha = "c".repeat(40);
+
+  beforeEach(() => {
+    api.commitInfo.mockResolvedValue({
+      sha,
+      author: "zoe",
+      date: "2026-01-03T00:00:00Z",
+      message: "focused commit message",
+    });
+    api.commitDiff.mockResolvedValue({
+      files: [{ path: "x.ts", status: "M", insertions: 1, deletions: 0 }],
+      patch: "",
+      base_sha: "",
+      head_sha: sha,
+    });
+  });
+
+  it("?commit= 自动展开并展示提交元数据", async () => {
+    renderTab("read", `/commits?commit=${sha}`);
+
+    await waitFor(() => expect(api.commitInfo).toHaveBeenCalledWith("alice", "demo", sha));
+    expect(api.commitDiff).toHaveBeenCalledWith("alice", "demo", sha);
+    expect(await screen.findByText("focused commit message")).toBeInTheDocument();
+    expect(screen.getByText("zoe")).toBeInTheDocument();
+  });
+
+  it("关闭按钮收起聚焦的提交", async () => {
+    const user = userEvent.setup();
+    renderTab("read", `/commits?commit=${sha}`);
+
+    await screen.findByText("focused commit message");
+    await user.click(screen.getByRole("button", { name: /close/i }));
+    await waitFor(() =>
+      expect(screen.queryByText("focused commit message")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("无 commit 参数时不请求单提交接口", async () => {
+    renderTab("read");
+    await waitFor(() => expect(screen.getByText("edit file")).toBeInTheDocument());
+    expect(api.commitInfo).not.toHaveBeenCalled();
   });
 });

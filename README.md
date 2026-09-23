@@ -176,6 +176,13 @@ Environment variables (all optional):
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
+| `GITDASH_CODE_SEARCH` | `bleve` | Code search backend: `bleve` (**default**, embedded full-text index under `$GITDASH_DATA/code-index`, rebuilt asynchronously and **incrementally** after pushes; identifier-aware (camelCase/underscore/symbol split) + CJK + smart-case; only each repo's default branch is indexed; **eventually consistent**—while a repo is being indexed a search returns no rows for it and `indexing:true`), `grep` (explicit live `git grep`, no index), or `remote` (delegate to a dedicated index worker via `GITDASH_SEARCH_URL`) |
+| `GITDASH_SEARCH_URL` | empty | Base URL of a remote code-index service (required by `GITDASH_CODE_SEARCH=remote`), e.g. `http://127.0.0.1:8090` |
+| `GITDASH_SEARCH_TOKEN` | empty | Shared bearer token for the internal `/internal/codesearch` endpoint (set on both the worker and the API node) |
+| `GITDASH_ROLE=codeindex` | off | Run a dedicated index worker: consume the `gitdash:codeindex` asynq queue, own the Bleve index, and serve the internal search endpoint. Requires `GITDASH_QUEUE=redis` and shared `GITDASH_DATA`/DB with the API node |
+| `GITDASH_SEARCH_LISTEN` | `127.0.0.1:8090` | Internal search endpoint listen address (index worker only) |
+| `GITDASH_CODE_INDEX_CONCURRENCY` | `1` | Index rebuild worker concurrency (index worker only) |
+| `GITDASH_CODE_INDEX_CONSUME` | `1` | Set to `0` so this node only produces `gitdash:codeindex` tasks (redis mode; the index worker consumes them) |
 | `GITDASH_PROFILE_REPO` | `1` | Auto-create a public `<name>/<name>` repo when an account or organization is first created (`0` disables) |
 | `GITDASH_COPILOT_AGENT_BIN` | `agent` next to gitdash / in PATH | Path to the agent runtime for copilot sessions (see the [copilot docs](https://holihur.github.io/gitdash/copilot/sessions/)) |
 | `GITDASH_COPILOT_AGENT_URL` | empty | Use an already-running agent (`http://host:port`) instead of spawning one per session |

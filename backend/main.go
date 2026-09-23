@@ -18,6 +18,7 @@ import (
 
 	"gitdash/backend/internal/api"
 	"gitdash/backend/internal/authz"
+	"gitdash/backend/internal/codesearch"
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/grpcserver"
@@ -37,6 +38,22 @@ import (
 // -X main.version 注入
 var version = "dev"
 
+// isDefaultBranchPush 报告 push 事件是否针对仓库的默认分支。记录的默认分支可能
+// 因导入等原因与实际 HEAD 不一致，必要时回退到实际 HEAD 再比对一次。
+func isDefaultBranchPush(st *store.Store, ev webhooks.Event) bool {
+	def := "main"
+	if r, err := st.GetRepo(ev.Owner, ev.Repo); err == nil && r.DefaultBranch != "" {
+		def = r.DefaultBranch
+	}
+	if ev.Ref == "refs/heads/"+def {
+		return true
+	}
+	if hb, err := gitsvc.HeadBranch(ev.Owner, ev.Repo); err == nil && hb != "" {
+		return ev.Ref == "refs/heads/"+hb
+	}
+	return false
+}
+
 // languagePushHandler 在每次默认分支 push 后异步分析仓库代码成分（语言占比）。
 // 仅默认分支影响列表页展示，其它分支/标签 push 不触发；删除引用（零 SHA）跳过。
 // 实际分析由任务队列 worker 执行。
@@ -51,20 +68,195 @@ func languagePushHandler(m *jobs.Manager, st *store.Store) func(webhooks.Event) 
 		if strings.Trim(ev.New, "0") == "" { // 删除引用：零 SHA
 			return
 		}
-		def := "main"
-		if r, err := st.GetRepo(ev.Owner, ev.Repo); err == nil && r.DefaultBranch != "" {
-			def = r.DefaultBranch
-		}
-		// 记录的默认分支可能因导入等原因与实际 HEAD 不一致，必要时再比对一次。
-		if ev.Ref != "refs/heads/"+def {
-			if hb, err := gitsvc.HeadBranch(ev.Owner, ev.Repo); err != nil || ev.Ref != "refs/heads/"+hb {
-				return
-			}
+		if !isDefaultBranchPush(st, ev) {
+			return
 		}
 		if err := m.EnqueueLanguages(ev.Owner, ev.Repo, ev.New); err != nil {
 			logx.Infof("languages: enqueue %s/%s: %v", ev.Owner, ev.Repo, err)
 		}
 	}
+}
+
+// codeIndexPushHandler 在默认分支 push 后异步重建仓库的代码搜索索引。
+// 与探索页全局代码搜索一致，只索引默认分支；其它分支/标签与删除引用跳过。
+func codeIndexPushHandler(m *jobs.Manager, st *store.Store) func(webhooks.Event) {
+	return func(ev webhooks.Event) {
+		if ev.Event != "push" || ev.New == "" || ev.Ref == "" {
+			return
+		}
+		if !gitsvc.ValidName(ev.Owner) || !gitsvc.ValidName(ev.Repo) {
+			return
+		}
+		if strings.Trim(ev.New, "0") == "" { // 删除引用：零 SHA
+			return
+		}
+		if !strings.HasPrefix(ev.Ref, "refs/heads/") || !isDefaultBranchPush(st, ev) {
+			return
+		}
+		if err := m.EnqueueCodeIndex(ev.Owner, ev.Repo, strings.TrimPrefix(ev.Ref, "refs/heads/")); err != nil {
+			logx.Infof("codeindex: enqueue %s/%s: %v", ev.Owner, ev.Repo, err)
+		}
+	}
+}
+
+// codeIndexWorkerMode 报告当前进程是否以“独立代码索引 worker”角色运行。
+// 该角色只消费 gitdash:codeindex 队列、持有索引，并对外提供内部检索端点；
+// 不启动 HTTP API/SSH/流水线，便于与 API 节点分开部署。
+func codeIndexWorkerMode() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("GITDASH_ROLE")), "codeindex")
+}
+
+// setupCodeSearch 按 GITDASH_CODE_SEARCH 构造搜索实现（默认 bleve）：
+//   - bleve（默认）：本机嵌入式索引（返回本地索引器，供 jobs 消费）；
+//   - grep：实时 git grep（关闭索引）；
+//   - remote：调用独立索引服务（GITDASH_SEARCH_URL），本机不打开索引。
+//
+// 返回 (搜索实现, 本地索引器或 nil, 是否远程模式, 关闭函数, 配置错误)。
+// 索引打开失败会记录日志并回退 grep（不阻断启动）；仅 remote 缺少必填配置才返回错误。
+func setupCodeSearch(dataDir string) (codesearch.Searcher, jobs.CodeIndexer, bool, func(), error) {
+	mode := strings.ToLower(strings.TrimSpace(getenv("GITDASH_CODE_SEARCH", codesearch.DefaultMode)))
+	if mode == "remote" {
+		url := strings.TrimSpace(os.Getenv("GITDASH_SEARCH_URL"))
+		if url == "" {
+			return nil, nil, false, func() {}, fmt.Errorf("GITDASH_CODE_SEARCH=remote requires GITDASH_SEARCH_URL")
+		}
+		r := codesearch.NewRemote(url, os.Getenv("GITDASH_SEARCH_TOKEN"), codesearch.NewGrep())
+		return r, nil, true, func() {}, nil
+	}
+	svc, err := codesearch.NewService(mode, filepath.Join(dataDir, codesearch.IndexSubDir))
+	closeFn := func() { _ = svc.Close() }
+	if err != nil {
+		// 打开索引失败：NewService 已返回可用的 grep-only 实现，记录并继续（不阻断启动）。
+		logx.Infof("code search: %v (falling back to git grep)", err)
+		return svc, nil, false, closeFn, nil
+	}
+	var idx jobs.CodeIndexer
+	if svc.IndexingEnabled() {
+		idx = svc
+	}
+	return svc, idx, false, closeFn, nil
+}
+
+// codeIndexConsume 报告本节点是否消费代码索引任务：
+// 远程/grep 模式不消费；本地索引 + 进程内队列必须消费；本地索引 + redis 默认消费，
+// 可用 GITDASH_CODE_INDEX_CONSUME=0 关闭（需保证没有别的进程同时打开同一索引目录）。
+func codeIndexConsume(remote bool, hasLocalIndexer bool, queueMode string) bool {
+	if remote || !hasLocalIndexer {
+		return false
+	}
+	if queueMode != "redis" && queueMode != "asynq" {
+		return true
+	}
+	if strings.TrimSpace(os.Getenv("GITDASH_CODE_INDEX_CONSUME")) == "0" {
+		return false
+	}
+	return true
+}
+
+// codeIndexReconciler 周期性与数据库对账，清理已删除仓库的陈旧索引（远程模式下
+// API 节点不持有索引，删除事件无法直接 Forget，靠此对账回收）。
+type codeIndexReconciler interface {
+	KnownRepos() []string
+	Forget(owner, name string)
+}
+
+func reconcileCodeIndexLoop(idx codeIndexReconciler, st *store.Store) {
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for range t.C {
+			for _, key := range idx.KnownRepos() {
+				owner, name, ok := strings.Cut(key, "/")
+				if !ok {
+					continue
+				}
+				if _, err := st.GetRepo(owner, name); err != nil {
+					idx.Forget(owner, name)
+					logx.Infof("codeindex: pruned deleted repo %s", key)
+				}
+			}
+		}
+	}()
+}
+
+// runCodeIndexWorker 以独立 worker 角色运行：消费 asynq 的 gitdash:codeindex 队列，
+// 持有并更新嵌入式索引，同时通过内部 HTTP 端点对外提供检索（供 API 节点远程调用）。
+func runCodeIndexWorker() {
+	dataDir := getenv("GITDASH_DATA", "./data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		logx.Fatalf("create data dir: %v", err)
+	}
+	if err := gitsvc.Init(dataDir); err != nil {
+		logx.Fatalf("init git service: %v", err)
+	}
+	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
+	if queueMode != "redis" && queueMode != "asynq" {
+		logx.Fatalf("codeindex worker requires GITDASH_QUEUE=redis (got %q)", queueMode)
+	}
+	dbDSN := os.Getenv("GITDASH_DB")
+	var st *store.Store
+	var err error
+	if dbDSN != "" {
+		st, err = store.OpenDSN(dbDSN)
+	} else {
+		st, err = store.Open(filepath.Join(dataDir, "gitdash.db"))
+	}
+	if err != nil {
+		logx.Fatalf("open store: %v", err)
+	}
+	svc, csErr := codesearch.NewService(codesearch.ModeBleve, filepath.Join(dataDir, codesearch.IndexSubDir))
+	if csErr != nil {
+		logx.Fatalf("code search index: %v", csErr)
+	}
+	defer func() { _ = svc.Close() }()
+
+	redisAddr := getenv("GITDASH_REDIS_ADDR", "127.0.0.1:6379")
+	redisDB, _ := strconv.Atoi(getenv("GITDASH_REDIS_DB", "0"))
+	password := os.Getenv("GITDASH_REDIS_PASSWORD")
+	conc, _ := strconv.Atoi(getenv("GITDASH_CODE_INDEX_CONCURRENCY", "1"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := jobs.New(st, queue.NewAsynq(redisAddr, password, redisDB, conc))
+	m.SetCodeIndexer(svc)
+	m.SetConsumeKinds(jobs.KindCodeIndex)
+	m.StartContext(ctx)
+	m.BackfillCodeIndex()
+	reconcileCodeIndexLoop(svc, st)
+	go func() {
+		t := time.NewTicker(30 * time.Minute)
+		defer t.Stop()
+		for range t.C {
+			m.BackfillCodeIndex()
+		}
+	}()
+
+	listen := strings.TrimSpace(os.Getenv("GITDASH_SEARCH_LISTEN"))
+	if listen == "" {
+		listen = "127.0.0.1:8090"
+	}
+	srv := &http.Server{
+		Addr:              listen,
+		Handler:           codesearch.NewSearchServer(svc, os.Getenv("GITDASH_SEARCH_TOKEN")).Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	go func() {
+		logx.Infof("gitdash code-index worker: repos %s | index %s | search %s | redis %s db %d",
+			gitsvc.ReposDir(), filepath.Join(dataDir, codesearch.IndexSubDir), listen, redisAddr, redisDB)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logx.Fatalf("code-index search server: %v", err)
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+	shutdownCtx, c := context.WithTimeout(context.Background(), 10*time.Second)
+	defer c()
+	_ = srv.Shutdown(shutdownCtx)
+	cancel()
 }
 
 func getenv(key, def string) string {
@@ -101,6 +293,11 @@ func run() {
 	// 未设置 GITDASH_ROLE/GITDASH_SSH_ONLY 时保持原有 all-in-one 行为不变。
 	if sshGatewayMode() {
 		runSSHGateway()
+		return
+	}
+	// 独立代码索引 worker 角色：只消费索引任务并持有索引，不启 API/SSH。
+	if codeIndexWorkerMode() {
+		runCodeIndexWorker()
 		return
 	}
 
@@ -268,7 +465,16 @@ func run() {
 		}
 	}
 
+	// 代码搜索：bleve（默认，本机索引）/ grep（关闭索引）/ remote（独立索引服务）。
+	// 打开索引失败时自动回退 grep；remote 缺少 URL 时直接致命退出（配置错误）。
+	codeSearch, codeIndexer, codeSearchRemote, closeSearch, csErr := setupCodeSearch(dataDir)
+	if csErr != nil {
+		logx.Fatalf("code search: %v", csErr)
+	}
+	defer closeSearch()
+
 	a := api.New(st, version)
+	a.SetCodeSearch(codeSearch)
 	a.SetSSHPort(sshAddr)
 	copilotMgr := copilot.NewManager(st)
 	copilotMgr.SetPullHook(a.CopilotPullOpened)
@@ -308,11 +514,21 @@ func run() {
 	jobsMgr := jobs.New(st, jobsQueue)
 	dispatcher := webhooks.New(st, jobsMgr)
 	jobsMgr.SetWebhookHandler(dispatcher.HandleJob)
+	if codeIndexer != nil {
+		jobsMgr.SetCodeIndexer(codeIndexer)
+	} else if codeSearchRemote {
+		// 远程索引：本节点只生产 gitdash:codeindex 任务，由索引 worker 消费。
+		jobsMgr.EnableCodeIndex(true)
+	}
+	if !codeIndexConsume(codeSearchRemote, codeIndexer != nil, queueMode) {
+		jobsMgr.SetConsumeKinds(jobs.KindImport, jobs.KindMirror, jobs.KindWebhook, jobs.KindLanguages)
+	}
 	jobsMgr.Start()
 	a.SetJobsManager(jobsMgr)
 
-	// webhook 调度：消费 post-receive spool 中的 push 事件（webhook 投递 + 流水线触发 + 代码成分分析）
-	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st), languagePushHandler(jobsMgr, st))
+	// webhook 调度：消费 post-receive spool 中的 push 事件
+	// （webhook 投递 + 流水线触发 + 代码成分分析 + 代码索引重建）
+	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st), languagePushHandler(jobsMgr, st), codeIndexPushHandler(jobsMgr, st))
 
 	// API 侧事件 spool：issue/pull/评论事件（webhook 投递 + 邮件通知）
 	apiSpool := filepath.Join(dataDir, "webhooks-spool-api")
@@ -333,6 +549,37 @@ func run() {
 	jobsMgr.RequeuePending()
 	// 为尚未做过语言分析的仓库补跑（异步、限速）
 	jobsMgr.BackfillLanguages()
+	// 为索引缺失或落后的仓库补建代码搜索索引（未启用索引时为 no-op）
+	jobsMgr.BackfillCodeIndex()
+	// 周期性与数据库对账，清理已删除仓库的陈旧索引。
+	if idx, ok := codeIndexer.(codeIndexReconciler); ok {
+		reconcileCodeIndexLoop(idx, st)
+	}
+	// 安全网：定期（增量）回填缺失/落后的索引，恢复因队列背压丢弃或 HEAD 推进而
+	// 留在「待重建」状态的仓库（未启用索引时为 no-op）。
+	if codeIndexer != nil {
+		go func() {
+			t := time.NewTicker(30 * time.Minute)
+			defer t.Stop()
+			for range t.C {
+				jobsMgr.BackfillCodeIndex()
+			}
+		}()
+	}
+	// 周期性强制段合并，避免频繁重建后索引段数累积拖慢检索（scorch 也会自动合并）。
+	if codeIndexer != nil {
+		if merger, ok := codeIndexer.(interface{ Merge(context.Context) }); ok {
+			go func() {
+				t := time.NewTicker(30 * time.Minute)
+				defer t.Stop()
+				for range t.C {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+					merger.Merge(ctx)
+					cancel()
+				}
+			}()
+		}
+	}
 
 	// 孤儿 pipeline run 回收：memory 队列重启后 pending/running 不会再执行，标记 failed；
 	// asynq（redis）模式任务持久化，只回收明显超时（>1h）的残留。
@@ -519,7 +766,9 @@ func postReceiveHook(owner, repo string) error {
 	if err := gitsvc.Init(dataDir); err != nil {
 		return err
 	}
-	user := os.Getenv("GITDASH_USER")
+	user := os.Getenv("GITDASH_USER") // 代码搜索默认启用（bleve）；grep 模式不需要索引标记。
+	markIndex := strings.ToLower(strings.TrimSpace(os.Getenv("GITDASH_CODE_SEARCH"))) != codesearch.ModeGrep &&
+		strings.ToLower(strings.TrimSpace(os.Getenv("GITDASH_CODE_SEARCH"))) != "off"
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		f := strings.Fields(scanner.Text())
@@ -528,6 +777,12 @@ func postReceiveHook(owner, repo string) error {
 		}
 		if err := gitsvc.WritePushEvent(owner, repo, f[0], f[1], f[2], user); err != nil {
 			return err
+		}
+		// 默认分支 push：同步标记索引待重建，检索侧在重建完成前回退 grep。
+		if markIndex && strings.HasPrefix(f[2], "refs/heads/") {
+			if hb, herr := gitsvc.HeadBranch(owner, repo); herr == nil && f[2] == "refs/heads/"+hb {
+				codesearch.MarkDirty(dataDir, owner, repo)
+			}
 		}
 	}
 	return scanner.Err()

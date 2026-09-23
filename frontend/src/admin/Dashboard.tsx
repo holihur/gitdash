@@ -17,6 +17,7 @@ import { ReposSection } from "./sections/ReposSection";
 import { OrgsSection } from "./sections/OrgsSection";
 import { IPBlacklistSection } from "./sections/IPBlacklistSection";
 import { QuotaSection } from "./sections/QuotaSection";
+import { CodeSearchSection } from "./sections/CodeSearchSection";
 
 export function Dashboard({ user, onLogout }: { user: string; onLogout: () => void }) {
   const { t, to } = useI18n();
@@ -66,6 +67,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
       <AnnouncementSettings settings={settings} onChange={load} />
       <SmtpSettings settings={settings} onChange={load} />
       <FeedbackSettings settings={settings} onChange={load} />
+      <CodeSearchSection />
       <PasswordCard />
       <UsersSection />
       <ReposSection />

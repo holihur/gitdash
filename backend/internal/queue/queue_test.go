@@ -38,6 +38,45 @@ func TestMemoryQueueDelivers(t *testing.T) {
 	}
 }
 
+// 同一非空 ID 在队列中（未被取走）时重复入队应被忽略；不同 ID 正常入队。
+func TestMemoryQueueDedupsByID(t *testing.T) {
+	q := NewMemory(16, 0)
+	if err := q.Enqueue(context.Background(), Job{Kind: "t", ID: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Enqueue(context.Background(), Job{Kind: "t", ID: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.Enqueue(context.Background(), Job{Kind: "t", ID: "y"}); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(q.ch); n != 2 {
+		t.Fatalf("queued = %d, want 2 (duplicate ID must be dropped)", n)
+	}
+}
+
+// 任务被取走后，同一 ID 可再次入队（pending 标记随出队清除）。
+func TestMemoryQueueReenqueueAfterConsume(t *testing.T) {
+	q := NewMemory(4, 1)
+	done := make(chan struct{})
+	var once sync.Once
+	q.Start(context.Background(), nil, func(_ context.Context, _ Job) error {
+		once.Do(func() { close(done) })
+		return nil
+	})
+	if err := q.Enqueue(context.Background(), Job{Kind: "t", ID: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("job not consumed")
+	}
+	if err := q.Enqueue(context.Background(), Job{Kind: "t", ID: "x"}); err != nil {
+		t.Fatalf("re-enqueue after consume: %v", err)
+	}
+}
+
 func TestMemoryQueueFull(t *testing.T) {
 	// 缓冲 1 且不启动工人：第二条入队应报 ErrQueueFull
 	q := NewMemory(1, 0)

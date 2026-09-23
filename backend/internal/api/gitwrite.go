@@ -448,3 +448,34 @@ func (a *API) commitDiff(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"files": files, "patch": patch})
 }
+
+// commitInfo 查看单个提交的元数据。
+//
+//	@Summary     提交详情
+//	@Description 返回单个提交的 sha / author / date / message / parents / refs，供 blame 深链跳转。
+//	@Tags        repos
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       sha   path string true "commit SHA"
+//	@Success     200 {object} gitsvc.Commit
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/commits/{sha} [get]
+func (a *API) commitInfo(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	sha := r.PathValue("sha")
+	if !shaRe.MatchString(sha) {
+		writeCode(w, http.StatusBadRequest, "invalid_sha", "invalid commit sha")
+		return
+	}
+	c, err := gitsvc.CommitInfo(owner, name, sha)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
+}

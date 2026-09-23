@@ -147,6 +147,8 @@ type Issue struct {
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`
 	ClosedAt  *string `json:"closed_at"`
+	// StateReason 关闭原因：completed | not_planned（仅 closed 时非空）
+	StateReason *string `json:"state_reason,omitempty"`
 }
 
 // PullReview PR review 状态（approve | request_changes | comment）。
@@ -322,6 +324,9 @@ type ProjectCard struct {
 	DueDate     string `json:"due_date"`
 	Position    int    `json:"position"`
 	CreatedAt   string `json:"created_at"`
+	// Assignees 负责人用户名；Labels 复用的仓库标签。
+	Assignees []string `json:"assignees"`
+	Labels    []Label  `json:"labels"`
 }
 
 type GPGKey struct {

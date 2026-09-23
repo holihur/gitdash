@@ -137,3 +137,56 @@ def test_projects_permissions(proj_env, user_factory, anon):
     # 未登录 401
     anon.get(base + "/projects", expect=404)  # 默认私有仓库对匿名 404
     anon.post(base + "/projects", json={"name": "x"}, expect=401)
+
+
+def test_project_column_delete_migrates_cards(proj_env):
+    """删除列时可用 move_to 迁移卡片，而不是连同卡片一起删除。"""
+    repo, c = proj_env
+    owner = c.get("/me", expect=200).json()["username"]
+    base = _p(owner, repo)
+    p = c.post(base + "/projects", json={"name": "mig"}, expect=201).json()
+    pid = p["id"]
+    cols = sorted(c.get(base + f"/projects/{pid}/columns", expect=200).json(), key=lambda x: x["position"])
+    c0, c1 = cols[0]["id"], cols[1]["id"]
+    card = c.post(base + f"/projects/{pid}/cards", json={"column_id": c0, "note": "keep me"}, expect=201).json()
+
+    c.delete(base + f"/projects/{pid}/columns/{c0}?move_to={c1}", expect=204)
+    cards = c.get(base + f"/projects/{pid}/cards", expect=200).json()
+    moved = next(x for x in cards if x["id"] == card["id"])
+    assert moved["column_id"] == c1
+
+    # 目标列不存在 -> 404，且列仍在
+    c.delete(base + f"/projects/{pid}/columns/{c1}?move_to=99999", expect=404)
+    assert any(x["id"] == c1 for x in c.get(base + f"/projects/{pid}/columns", expect=200).json())
+
+
+def test_project_card_assignees_labels_relink(proj_env):
+    repo, c = proj_env
+    owner = c.get("/me", expect=200).json()["username"]
+    base = _p(owner, repo)
+    p = c.post(base + "/projects", json={"name": "meta"}, expect=201).json()
+    pid = p["id"]
+    cols = sorted(c.get(base + f"/projects/{pid}/columns", expect=200).json(), key=lambda x: x["position"])
+    card = c.post(base + f"/projects/{pid}/cards", json={"column_id": cols[0]["id"], "note": "task"}, expect=201).json()
+
+    # 负责人
+    c.put(base + f"/projects/{pid}/cards/{card['id']}/assignees", json={"assignees": [owner]}, expect=204)
+    got = next(x for x in c.get(base + f"/projects/{pid}/cards", expect=200).json() if x["id"] == card["id"])
+    assert got["assignees"] == [owner]
+
+    # 标签（默认 bug 标签）；未知标签被忽略
+    labels = c.get(base + "/labels", expect=200).json()
+    bug = next(l for l in labels if l["name"] == "bug")
+    c.put(base + f"/projects/{pid}/cards/{card['id']}/labels", json={"label_ids": [bug["id"], 99999]}, expect=204)
+    got = next(x for x in c.get(base + f"/projects/{pid}/cards", expect=200).json() if x["id"] == card["id"])
+    assert [l["name"] for l in got["labels"]] == ["bug"]
+
+    # 关联 / 更换 issue
+    c.post(base + "/issues", json={"title": "linked one"}, expect=201)
+    relinked = c.patch(base + f"/projects/{pid}/cards/{card['id']}", json={"issue_number": 1}, expect=200).json()
+    assert relinked["issue_number"] == 1 and relinked["issue_title"] == "linked one"
+    # 解除关联
+    unlinked = c.patch(base + f"/projects/{pid}/cards/{card['id']}", json={"issue_number": 0}, expect=200).json()
+    assert unlinked["issue_number"] == 0
+    # 不存在的 issue -> 400
+    c.patch(base + f"/projects/{pid}/cards/{card['id']}", json={"issue_number": 999}, expect=400)

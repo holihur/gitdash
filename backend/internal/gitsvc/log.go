@@ -107,17 +107,9 @@ func commits(owner, name, ref string, limit, offset int, query string) ([]Commit
 	commits := []Commit{}
 	skipped := 0
 	for _, rec := range strings.Split(strings.TrimSpace(out), "\x1e") {
-		rec = strings.TrimPrefix(rec, "\n")
-		if rec == "" {
+		c, ok := parseCommitRecord(rec)
+		if !ok {
 			continue
-		}
-		parts := strings.Split(rec, "\x1f")
-		if len(parts) < 6 {
-			continue
-		}
-		c := Commit{
-			SHA: parts[0], Author: parts[2], Date: parts[3], Message: parts[5],
-			Parents: strings.Fields(parts[1]), Refs: splitRefDecorations(parts[4]),
 		}
 		if q != "" && !commitMatches(c, q) {
 			continue
@@ -133,6 +125,37 @@ func commits(owner, name, ref string, limit, offset int, query string) ([]Commit
 		}
 	}
 	return commits, nil
+}
+
+// parseCommitRecord 解析 `git log --pretty=format:%H%x1f%P%x1f%an%x1f%ad%x1f%D%x1f%s` 的单条记录。
+func parseCommitRecord(rec string) (Commit, bool) {
+	rec = strings.TrimPrefix(rec, "\n")
+	parts := strings.Split(rec, "\x1f")
+	if len(parts) < 6 {
+		return Commit{}, false
+	}
+	return Commit{
+		SHA: parts[0], Author: parts[2], Date: parts[3], Message: parts[5],
+		Parents: strings.Fields(parts[1]), Refs: splitRefDecorations(parts[4]),
+	}, true
+}
+
+// commitInfo 返回单个提交的元数据（sha / author / date / message / parents / refs）。
+// sha 可以是完整 SHA，也可以是可解析的 rev；不存在时返回错误。
+func commitInfo(owner, name, sha string) (*Commit, error) {
+	if !ValidRef(sha) {
+		return nil, fmt.Errorf("invalid ref %q", sha)
+	}
+	out, err := gitOut(repoPath(owner, name), "log", "-1", "--date=iso-strict",
+		"--pretty=format:%H%x1f%P%x1f%an%x1f%ad%x1f%D%x1f%s", sha)
+	if err != nil {
+		return nil, err
+	}
+	c, ok := parseCommitRecord(strings.TrimSpace(out))
+	if !ok {
+		return nil, fmt.Errorf("commit not found: %s", sha)
+	}
+	return &c, nil
 }
 
 // splitRefDecorations 拆分 `git log --pretty=%D` 的引用列表（逗号分隔）。

@@ -62,6 +62,30 @@ def test_shorthand_blame_and_search(repo_env):
     c.get(f"/repos/{repo}/search", expect=400)
 
 
+def test_commit_detail(repo_env):
+    """单个提交元数据（blame 深链的跳转目标）。"""
+    uname, c, repo = repo_env
+    commits = c.get(f"/users/{uname}/repos/{repo}/commits?ref=main", expect=200).json()
+    sha = commits[0]["sha"]
+
+    detail = c.get(f"/users/{uname}/repos/{repo}/commits/{sha}", expect=200).json()
+    assert detail["sha"] == sha
+    assert detail["author"]
+    assert detail["date"]
+    assert detail["message"] == "add hello"
+
+    # 简写路由
+    assert c.get(f"/repos/{repo}/commits/{sha}", expect=200).json()["sha"] == sha
+
+    # 非法 sha → 400 invalid_sha
+    assert (
+        c.get(f"/users/{uname}/repos/{repo}/commits/not-a-sha", expect=400).json()["code"]
+        == "invalid_sha"
+    )
+    # 格式合法但不存在的 sha → 400
+    c.get(f"/users/{uname}/repos/{repo}/commits/{'0' * 40}", expect=400)
+
+
 def test_gc_both_routes(repo_env, user_factory):
     uname, c, repo = repo_env
     res = c.post(f"/repos/{repo}/gc", expect=200).json()

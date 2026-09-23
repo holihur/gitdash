@@ -10,8 +10,17 @@ const milestones: Milestone[] = [
   { id: 2, title: "v2.0", description: "", state: "closed", open_issues: 0, closed_issues: 3 },
 ];
 
-function setup(over: { filterMilestone?: string; onFilterMilestone?: (v: string) => void } = {}) {
+function setup(
+  over: {
+    filterMilestone?: string;
+    onFilterMilestone?: (v: string) => void;
+    onFilterAssignee?: (v: string) => void;
+    onFilterSort?: (v: string) => void;
+  } = {},
+) {
   const onFilterMilestone = over.onFilterMilestone ?? vi.fn();
+  const onFilterAssignee = over.onFilterAssignee ?? vi.fn();
+  const onFilterSort = over.onFilterSort ?? vi.fn();
   render(
     <I18nProvider>
       <IssueFilters
@@ -25,10 +34,14 @@ function setup(over: { filterMilestone?: string; onFilterMilestone?: (v: string)
         milestones={milestones}
         filterMilestone={over.filterMilestone ?? ""}
         onFilterMilestone={onFilterMilestone}
+        filterAssignee=""
+        onFilterAssignee={onFilterAssignee}
+        filterSort=""
+        onFilterSort={onFilterSort}
       />
     </I18nProvider>,
   );
-  return { onFilterMilestone };
+  return { onFilterMilestone, onFilterAssignee, onFilterSort };
 }
 
 describe("IssueFilters milestone filter", () => {
@@ -59,5 +72,22 @@ describe("IssueFilters milestone filter", () => {
   it("按 filterMilestone 受控显示", () => {
     setup({ filterMilestone: "2" });
     expect((screen.getByLabelText("Milestone") as HTMLSelectElement).value).toBe("2");
+  });
+});
+
+describe("IssueFilters assignee & sort", () => {
+  it("选择负责人与排序时回调", async () => {
+    const user = userEvent.setup();
+    const { onFilterAssignee, onFilterSort } = setup();
+
+    await user.selectOptions(screen.getByLabelText("Assignee"), "me");
+    expect(onFilterAssignee).toHaveBeenLastCalledWith("me");
+    await user.selectOptions(screen.getByLabelText("Assignee"), "none");
+    expect(onFilterAssignee).toHaveBeenLastCalledWith("none");
+
+    await user.selectOptions(screen.getByLabelText("Sort"), "oldest");
+    expect(onFilterSort).toHaveBeenLastCalledWith("oldest");
+    await user.selectOptions(screen.getByLabelText("Sort"), "popular");
+    expect(onFilterSort).toHaveBeenLastCalledWith("popular");
   });
 });

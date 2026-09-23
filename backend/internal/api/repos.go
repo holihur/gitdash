@@ -281,6 +281,9 @@ func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = gitsvc.Delete(owner, name)
+	if a.codeIndex != nil {
+		a.codeIndex.Forget(owner, name)
+	}
 	_ = pipeline.DeleteLogs(owner, name)
 	_ = pipeline.DeleteArtifacts(owner, name)
 	w.WriteHeader(http.StatusNoContent)

@@ -103,3 +103,19 @@ export function buildRepoPath(
   const kind = route.kind === "blob" || route.kind === "blame" ? route.kind : "tree";
   return `${base}/${kind}/${encodePath(p)}`;
 }
+
+/**
+ * 构造「聚焦某个提交」的 commits tab URL（供 blame 深链跳转）。
+ * commits tab 会据此自动展开该提交的 diff；ref 一并保留，使列表落在同一分支。
+ */
+export function buildCommitFocusUrl(
+  owner: string,
+  name: string,
+  sha: string,
+  ref?: string,
+): string {
+  const base = buildRepoPath(owner, name, { tab: "commits" });
+  const qs = new URLSearchParams({ commit: sha });
+  if (ref) qs.set("ref", ref);
+  return `${base}?${qs.toString()}`;
+}

@@ -46,6 +46,9 @@ type MemoryQueue struct {
 	workers     int
 	once        sync.Once
 	stopWorkers sync.WaitGroup
+	// pending 记录已入队且尚未被工人取走的 Job.ID，实现接口约定的按 ID 幂等去重。
+	mu      sync.Mutex
+	pending map[string]bool
 }
 
 // NewMemory 创建进程内队列。buf 为缓冲长度，workers 为并发处理数（均 <=0 时取默认值）。
@@ -56,17 +59,41 @@ func NewMemory(buf, workers int) *MemoryQueue {
 	if workers <= 0 {
 		workers = 4
 	}
-	return &MemoryQueue{ch: make(chan Job, buf), workers: workers}
+	return &MemoryQueue{ch: make(chan Job, buf), workers: workers, pending: map[string]bool{}}
 }
 
-// Enqueue 非阻塞入队；缓冲满时返回 ErrQueueFull。
+// Enqueue 非阻塞入队；缓冲满时返回 ErrQueueFull。Job.ID 非空时去重：
+// 同一 ID 在队列中尚未被取走前，重复入队会被忽略（与 asynq 的 TaskID 语义一致）。
 func (m *MemoryQueue) Enqueue(_ context.Context, job Job) error {
+	if job.ID != "" {
+		m.mu.Lock()
+		if m.pending[job.ID] {
+			m.mu.Unlock()
+			return nil
+		}
+		m.pending[job.ID] = true
+		m.mu.Unlock()
+	}
 	select {
 	case m.ch <- job:
 		return nil
 	default:
+		if job.ID != "" {
+			m.mu.Lock()
+			delete(m.pending, job.ID)
+			m.mu.Unlock()
+		}
 		return ErrQueueFull
 	}
+}
+
+func (m *MemoryQueue) takePending(id string) {
+	if id == "" {
+		return
+	}
+	m.mu.Lock()
+	delete(m.pending, id)
+	m.mu.Unlock()
 }
 
 // Start 启动工人池（仅首次调用生效；忽略 kinds）。
@@ -84,6 +111,7 @@ func (m *MemoryQueue) Start(ctx context.Context, _ []JobKind, h Handler) {
 						if !ok {
 							return
 						}
+						m.takePending(job.ID)
 						_ = h(ctx, job)
 					}
 				}

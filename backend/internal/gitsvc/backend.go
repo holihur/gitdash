@@ -72,10 +72,13 @@ type Backend interface {
 	ListDir(owner, name, ref, dir string) ([]string, error)
 	ReadBlob(owner, name, ref, file string) (*Blob, error)
 	ReadRawFile(owner, name, ref, file string) ([]byte, error)
+	ListTreeFiles(owner, name, ref string) ([]TreeFile, error)
+	ReadBlobsBatch(owner, name, ref string, paths []string, maxSize int64) (map[string][]byte, error)
 	BlameFile(owner, name, ref, file string) (*Blame, error)
 	RawCommit(owner, name, sha string) ([]byte, error)
 	RawCommits(owner, name string, shas []string) map[string][]byte
 	Commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error)
+	CommitInfo(owner, name, sha string) (*Commit, error)
 	LastCommit(owner, name, ref, path string) (*Commit, error)
 	CommitDiff(owner, name, sha string) ([]DiffFile, string, error)
 	DiffStats(owner, name, base, head string) ([]DiffFile, error)
@@ -225,6 +228,16 @@ func ReadBlob(owner, name, ref, file string) (*Blob, error) {
 func ReadRawFile(owner, name, ref, file string) ([]byte, error) {
 	return CurrentBackend().ReadRawFile(owner, name, ref, file)
 }
+
+// ListTreeFiles 列出 ref 上全部文件（路径 + 大小），供代码索引遍历。
+func ListTreeFiles(owner, name, ref string) ([]TreeFile, error) {
+	return CurrentBackend().ListTreeFiles(owner, name, ref)
+}
+
+// ReadBlobsBatch 批量读取多个文件内容（单个 git 进程）。
+func ReadBlobsBatch(owner, name, ref string, paths []string, maxSize int64) (map[string][]byte, error) {
+	return CurrentBackend().ReadBlobsBatch(owner, name, ref, paths, maxSize)
+}
 func BlameFile(owner, name, ref, file string) (*Blame, error) {
 	return CurrentBackend().BlameFile(owner, name, ref, file)
 }
@@ -236,6 +249,11 @@ func RawCommits(owner, name string, shas []string) map[string][]byte {
 }
 func Commits(owner, name, ref string, limit, offset int, query string) ([]Commit, error) {
 	return CurrentBackend().Commits(owner, name, ref, limit, offset, query)
+}
+
+// CommitInfo 读取单个提交的元数据。
+func CommitInfo(owner, name, sha string) (*Commit, error) {
+	return CurrentBackend().CommitInfo(owner, name, sha)
 }
 func LastCommit(owner, name, ref, path string) (*Commit, error) {
 	return CurrentBackend().LastCommit(owner, name, ref, path)

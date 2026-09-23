@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 
 import pytest
@@ -27,9 +28,15 @@ def _write(client, owner, repo, path, content, message="add"):
 
 
 def _search(client, expect=200, **params):
+    """搜索并等待索引就绪（索引最终一致，构建中返回 indexing 标志）。"""
     from urllib.parse import urlencode
 
-    return client.get(f"/search/code?{urlencode(params)}", expect=expect).json()
+    deadline = time.time() + 20
+    while True:
+        r = client.get(f"/search/code?{urlencode(params)}", expect=expect).json()
+        if expect != 200 or not isinstance(r, dict) or not r.get("indexing") or time.time() >= deadline:
+            return r
+        time.sleep(0.3)
 
 
 @pytest.fixture(scope="module")
@@ -140,6 +147,39 @@ def test_explicit_params(code_env):
     r = _search(c, q="uniqueAlphaToken", lang="go", path="src")
     assert r["results"]
     assert all(hit["path"].endswith(".go") and hit["path"].startswith("src/") for hit in r["results"])
+
+
+def test_multi_term_and(code_env):
+    alice, c = code_env["alice"]
+    _write(
+        c, alice, code_env["alpha"], "and/multi.txt",
+        "alphaToken betaToken together\n",
+        message="and on one line",
+    )
+    _write(
+        c, alice, code_env["alpha"], "and/split.txt",
+        "alphaToken only\nbetaToken only\n",
+        message="and split across lines",
+    )
+    r = _search(c, q="alphaToken betaToken")
+    assert r["results"], "a line containing both terms should match"
+    assert all("alphaToken" in h["text"] and "betaToken" in h["text"] for h in r["results"])
+    # 行级 AND：关键词分处不同行不算命中
+    assert all(h["path"] != "and/split.txt" for h in r["results"])
+
+
+def test_repo_scoped_search_multi_term_and(code_env):
+    alice, c = code_env["alice"]
+    base = _p(alice, code_env["alpha"], "/search")
+    deadline = time.time() + 20
+    while True:
+        resp = c.get(f"{base}?q=alphaToken%20betaToken&ref=main", expect=200)
+        hits = resp.json()
+        if resp.headers.get("X-Code-Search") != "indexing" or time.time() >= deadline:
+            break
+        time.sleep(0.3)
+    assert hits
+    assert all("alphaToken" in h["text"] and "betaToken" in h["text"] for h in hits)
 
 
 def test_query_required(code_env):

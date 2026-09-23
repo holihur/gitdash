@@ -352,14 +352,15 @@ func (a *API) updateProjectColumn(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// deleteProjectColumn 删除看板列（其卡片一并删除）。
+// deleteProjectColumn 删除看板列（move_to 指定时先把卡片迁移到该列，否则删除其卡片）。
 //
 //	@Summary     删除看板列
 //	@Tags        projects
-//	@Param       owner path string true "仓库所有者"
-//	@Param       name  path string true "仓库名"
-//	@Param       id    path int    true "项目 ID"
-//	@Param       cid   path int    true "列 ID"
+//	@Param       owner   path  string true  "仓库所有者"
+//	@Param       name    path  string true  "仓库名"
+//	@Param       id      path  int    true  "项目 ID"
+//	@Param       cid     path  int    true  "列 ID"
+//	@Param       move_to query int    false "卡片迁移目标列 ID（省略则一并删除卡片）"
 //	@Success     204 {object} nil
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/projects/{id}/columns/{cid} [delete]
@@ -372,7 +373,8 @@ func (a *API) deleteProjectColumn(w http.ResponseWriter, r *http.Request) {
 	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
 		return
 	}
-	if errors.Is(a.store.DeleteProjectColumn(pid, cid), store.ErrNotFound) {
+	moveTo, _ := strconv.ParseInt(r.URL.Query().Get("move_to"), 10, 64)
+	if errors.Is(a.store.DeleteProjectColumn(pid, cid, moveTo), store.ErrNotFound) {
 		writeCode(w, http.StatusNotFound, "column_not_found", "column not found")
 		return
 	}
@@ -711,7 +713,21 @@ func (a *API) updateProjectCard(w http.ResponseWriter, r *http.Request) {
 		}
 		up.DueDate = &v
 	}
-	if up.Title != nil || up.Body != nil || up.StartDate != nil || up.DueDate != nil {
+	if in.IssueNumber != nil {
+		n := *in.IssueNumber
+		if n < 0 {
+			writeCode(w, http.StatusBadRequest, "invalid_issue_number", "issue_number must be >= 0")
+			return
+		}
+		if n > 0 {
+			if _, err := a.store.GetIssue(owner, name, n); err != nil {
+				writeCode(w, http.StatusBadRequest, "issue_not_found", "linked issue not found")
+				return
+			}
+		}
+		up.IssueNumber = &n
+	}
+	if up.Title != nil || up.Body != nil || up.StartDate != nil || up.DueDate != nil || up.IssueNumber != nil {
 		if err := a.store.UpdateProjectCard(pid, cid, up); err != nil {
 			if errors.Is(err, store.ErrNotFound) {
 				writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
@@ -757,6 +773,101 @@ func (a *API) deleteProjectCard(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(a.store.DeleteProjectCard(pid, cid), store.ErrNotFound) {
 		writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setProjectCardAssignees 设置看板卡片负责人。
+//
+//	@Summary     设置看板卡片负责人
+//	@Tags        projects
+//	@Accept      json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "项目 ID"
+//	@Param       card  path int    true "卡片 ID"
+//	@Param       body  body map[string]interface{} true "负责人用户名列表"
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/projects/{id}/cards/{card}/assignees [put]
+func (a *API) setProjectCardAssignees(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	pid, cid, ok2 := projectCardPathIDs(w, r)
+	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
+		return
+	}
+	var in struct {
+		Assignees []string `json:"assignees"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if len(in.Assignees) > 10 {
+		writeCode(w, http.StatusBadRequest, "too_many_assignees", "at most 10 assignees")
+		return
+	}
+	valid := a.store.ExistingUsernames(in.Assignees)
+	if err := a.store.SetProjectCardAssignees(pid, cid, valid); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
+			return
+		}
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setProjectCardLabels 设置看板卡片标签（仅接受本仓库已有的标签）。
+//
+//	@Summary     设置看板卡片标签
+//	@Tags        projects
+//	@Accept      json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       id    path int    true "项目 ID"
+//	@Param       card  path int    true "卡片 ID"
+//	@Param       body  body map[string]interface{} true "标签 ID 列表"
+//	@Success     204 {object} nil
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/projects/{id}/cards/{card}/labels [put]
+func (a *API) setProjectCardLabels(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	pid, cid, ok2 := projectCardPathIDs(w, r)
+	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
+		return
+	}
+	var in struct {
+		LabelIDs []int64 `json:"label_ids"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	wanted := map[int64]bool{}
+	for _, id := range in.LabelIDs {
+		wanted[id] = true
+	}
+	valid := []int64{}
+	if labels, err := a.store.ListLabels(owner, name); err == nil {
+		for _, l := range labels {
+			if wanted[l.ID] {
+				valid = append(valid, l.ID)
+			}
+		}
+	}
+	if err := a.store.SetProjectCardLabels(pid, cid, valid); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
+			return
+		}
+		internalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -849,6 +960,8 @@ type updateProjectCardReq struct {
 	Note       *string `json:"note"` // 兼容：等价于 title
 	StartDate  *string `json:"start_date"`
 	DueDate    *string `json:"due_date"`
+	// IssueNumber 更换 / 解除关联的 issue（0 = 解除）；仅文本卡片或 issue 卡片均可。
+	IssueNumber *int64 `json:"issue_number"`
 }
 
 // validProjectDate 校验空串或 YYYY-MM-DD 格式的日期。

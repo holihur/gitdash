@@ -16,6 +16,7 @@ import { MarkdownView } from "@/components/markdown";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
 import { formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { buildCommitFocusUrl } from "@/lib/repo-url";
 
 function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
@@ -149,7 +150,7 @@ export default function BlobView({
                         <td className="w-40 max-w-40 truncate whitespace-nowrap border-r border-border/50 bg-muted/40 px-2 py-0.5 align-top text-muted-foreground">
                           <a
                             className="block truncate hover:underline"
-                            href={`/repo/${owner}/${name}/commits`}
+                            href={buildCommitFocusUrl(owner, name, l.commit, refName)}
                             title={c ? `${c.author} · ${c.message}` : l.commit}
                           >
                             {c ? c.author : l.commit.slice(0, 7)}

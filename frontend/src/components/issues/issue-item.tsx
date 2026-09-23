@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CheckCircle2, Circle, Flag, Pin } from "lucide-react";
+import { CheckCircle2, Circle, Flag, MessageSquare, Pin, UserRound } from "lucide-react";
 import type { Issue } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
@@ -49,7 +49,7 @@ export function IssueItem({
               {issue.title}
             </span>
           </span>
-          {(issueLabels.length > 0 || issue.milestone) && (
+          {(issueLabels.length > 0 || issue.milestone || (issue.assignees?.length ?? 0) > 0) && (
             <span className="mt-1 flex flex-wrap items-center gap-1">
               {issueLabels.map((l) => (
                 <LabelChip key={l.id} label={l} />
@@ -63,19 +63,37 @@ export function IssueItem({
                   <span className="max-w-40 truncate">{issue.milestone.title}</span>
                 </span>
               )}
+              {(issue.assignees ?? []).map((u) => (
+                <span
+                  key={u}
+                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground"
+                  title={u}
+                >
+                  <UserRound className="h-3 w-3" />
+                  <span className="max-w-40 truncate">{u}</span>
+                </span>
+              ))}
             </span>
           )}
-          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            #{issue.number} ·{" "}
-            {isOpen
-              ? t("issues.openedOn", {
-                  author: issue.author,
-                  date: formatDate(issue.created_at, locale),
-                })
-              : t("issues.closedOn", {
-                  author: issue.author,
-                  date: formatDate(issue.closed_at ?? issue.updated_at, locale),
-                })}
+          <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="truncate">
+              #{issue.number} ·{" "}
+              {isOpen
+                ? t("issues.openedOn", {
+                    author: issue.author,
+                    date: formatDate(issue.created_at, locale),
+                  })
+                : t("issues.closedOn", {
+                    author: issue.author,
+                    date: formatDate(issue.closed_at ?? issue.updated_at, locale),
+                  })}
+            </span>
+            {(issue.comment_count ?? 0) > 0 && (
+              <span className="inline-flex shrink-0 items-center gap-0.5">
+                <MessageSquare className="h-3 w-3" />
+                {issue.comment_count}
+              </span>
+            )}
           </span>
         </span>
       </Link>

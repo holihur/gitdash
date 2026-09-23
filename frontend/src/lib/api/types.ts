@@ -314,9 +314,30 @@ export interface Issue {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  /** 关闭原因（仅 closed）：completed | not_planned */
+  state_reason?: "completed" | "not_planned" | null;
   /** 服务端 enrich：所属标签与里程碑 */
   labels?: Label[];
   milestone?: Milestone | null;
+  /** 服务端 enrich：负责人用户名 */
+  assignees?: string[];
+  /** 服务端 enrich：评论数 */
+  comment_count?: number;
+  /** 详情接口补充：当前用户是否订阅 */
+  subscribed?: boolean;
+  /** 详情接口补充：正文 / 评论中引用的关联 PR */
+  linked_pulls?: PullRequest[];
+}
+
+/** Issue/PR 活动事件（详情页时间线）。 */
+export interface IssueEvent {
+  id: number;
+  kind: "issue" | "pull";
+  number: number;
+  actor: string;
+  action: string;
+  detail?: string;
+  created_at: string;
 }
 
 export interface Label {
@@ -377,6 +398,10 @@ export interface ProjectCard {
   due_date: string;
   position: number;
   created_at: string;
+  /** 负责人用户名 */
+  assignees?: string[];
+  /** 复用的仓库标签 */
+  labels?: Label[];
 }
 
 export interface ProjectBoard {
@@ -466,6 +491,11 @@ export interface CodeSearchResponse {
   results: CodeSearchHit[];
   truncated: boolean;
   repos_searched: number;
+  indexed_repos?: number;
+  grep_repos?: number;
+  /** 部分仓库的索引仍在构建中（最终一致）：这些仓库本次未返回结果。 */
+  indexing?: boolean;
+  indexing_repos?: number;
 }
 
 export interface ReleaseAsset {

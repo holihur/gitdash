@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -145,11 +146,28 @@ func (s *Store) UpdateProjectColumn(projectID, id int64, name string, position *
 	return nil
 }
 
-func (s *Store) DeleteProjectColumn(projectID, id int64) error {
+// DeleteProjectColumn 删除看板列。moveTo > 0 时先把该列卡片迁移到 target 列；
+// 否则删列并删除其卡片。target 列必须属于同一项目。
+func (s *Store) DeleteProjectColumn(projectID, id, moveTo int64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("column_id = ? AND project_id = ?", id, projectID).
-			Delete(&projectCardRow{}).Error; err != nil {
-			return err
+		if moveTo > 0 && moveTo != id {
+			var cnt int64
+			if err := tx.Model(&projectColumnRow{}).Where("id = ? AND project_id = ?", moveTo, projectID).
+				Count(&cnt).Error; err != nil {
+				return err
+			}
+			if cnt == 0 {
+				return ErrNotFound
+			}
+			if err := tx.Model(&projectCardRow{}).Where("column_id = ? AND project_id = ?", id, projectID).
+				Update("column_id", moveTo).Error; err != nil {
+				return err
+			}
+		} else {
+			if err := tx.Where("column_id = ? AND project_id = ?", id, projectID).
+				Delete(&projectCardRow{}).Error; err != nil {
+				return err
+			}
 		}
 		res := tx.Where("id = ? AND project_id = ?", id, projectID).Delete(&projectColumnRow{})
 		if res.Error != nil {
@@ -267,6 +285,47 @@ func (s *Store) ListProjectCards(projectID int64) ([]ProjectCard, error) {
 			StartDate: r.StartDate, DueDate: r.DueDate,
 			Position: r.Position, CreatedAt: r.CreatedAt})
 	}
+	// 卡片负责人与标签（复用仓库标签）。
+	if len(out) > 0 {
+		ids := make([]int64, 0, len(out))
+		for _, c := range out {
+			ids = append(ids, c.ID)
+		}
+		assignees := map[int64][]string{}
+		var arows []struct {
+			CardID   int64
+			Username string
+		}
+		_ = s.db.Table("project_card_assignees").Select("card_id, username").
+			Where("card_id IN ?", ids).Order("username").Scan(&arows).Error
+		for _, r := range arows {
+			assignees[r.CardID] = append(assignees[r.CardID], r.Username)
+		}
+		labels := map[int64][]Label{}
+		var lrows []struct {
+			CardID int64
+			ID     int64
+			Name   string
+			Color  string
+		}
+		_ = s.db.Table("project_card_labels l").
+			Select("l.card_id AS card_id, rl.id AS id, rl.name AS name, rl.color AS color").
+			Joins("JOIN repo_labels rl ON rl.id = l.label_id").
+			Where("l.card_id IN ?", ids).Order("rl.name").Scan(&lrows).Error
+		for _, r := range lrows {
+			labels[r.CardID] = append(labels[r.CardID], Label{ID: r.ID, Name: r.Name, Color: r.Color})
+		}
+		for i := range out {
+			out[i].Assignees = assignees[out[i].ID]
+			if out[i].Assignees == nil {
+				out[i].Assignees = []string{}
+			}
+			out[i].Labels = labels[out[i].ID]
+			if out[i].Labels == nil {
+				out[i].Labels = []Label{}
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -355,11 +414,12 @@ func (s *Store) MoveProjectCard(projectID, cardID, columnID, swimlaneID int64, p
 // ProjectCardUpdate 是卡片的部分更新（nil 字段不修改）。
 // Title 更新时同步 Note（向后兼容）。
 type ProjectCardUpdate struct {
-	Title     *string
-	Body      *string
-	Note      *string
-	StartDate *string
-	DueDate   *string
+	Title       *string
+	Body        *string
+	Note        *string
+	StartDate   *string
+	DueDate     *string
+	IssueNumber *int64
 }
 
 // UpdateProjectCard 更新卡片文本与日程（仅非 nil 字段生效）。
@@ -380,6 +440,9 @@ func (s *Store) UpdateProjectCard(projectID, cardID int64, up ProjectCardUpdate)
 	}
 	if up.DueDate != nil {
 		updates["due_date"] = *up.DueDate
+	}
+	if up.IssueNumber != nil {
+		updates["issue_num"] = *up.IssueNumber
 	}
 	if len(updates) == 0 {
 		return nil
@@ -403,4 +466,65 @@ func (s *Store) DeleteProjectCard(projectID, cardID int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetProjectCardAssignees 全量替换卡片负责人。
+func (s *Store) SetProjectCardAssignees(projectID, cardID int64, usernames []string) error {
+	var cnt int64
+	if err := s.db.Model(&projectCardRow{}).Where("id = ? AND project_id = ?", cardID, projectID).
+		Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	seen := map[string]bool{}
+	rows := make([]projectCardAssigneeRow, 0, len(usernames))
+	for _, u := range usernames {
+		u = strings.TrimSpace(u)
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		rows = append(rows, projectCardAssigneeRow{CardID: cardID, Username: u})
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("card_id = ?", cardID).Delete(&projectCardAssigneeRow{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	})
+}
+
+// SetProjectCardLabels 全量替换卡片标签。
+func (s *Store) SetProjectCardLabels(projectID, cardID int64, labelIDs []int64) error {
+	var cnt int64
+	if err := s.db.Model(&projectCardRow{}).Where("id = ? AND project_id = ?", cardID, projectID).
+		Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt == 0 {
+		return ErrNotFound
+	}
+	seen := map[int64]bool{}
+	rows := make([]projectCardLabelRow, 0, len(labelIDs))
+	for _, id := range labelIDs {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		rows = append(rows, projectCardLabelRow{CardID: cardID, LabelID: id})
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("card_id = ?", cardID).Delete(&projectCardLabelRow{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Create(&rows).Error
+	})
 }

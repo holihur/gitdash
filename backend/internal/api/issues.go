@@ -47,18 +47,75 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	issues, err := a.store.SearchIssuesInRepo(owner, name, q, state, milestone, limit, offset)
+	label := strings.TrimSpace(r.URL.Query().Get("label"))
+	if label != "" && label != "none" {
+		if id, err := strconv.ParseInt(label, 10, 64); err != nil || id <= 0 {
+			writeCode(w, http.StatusBadRequest, "invalid_label", "label must be a label id or 'none'")
+			return
+		}
+	}
+	assignee := strings.TrimSpace(r.URL.Query().Get("assignee"))
+	if assignee == "me" {
+		assignee = userFrom(r)
+		if assignee == "" {
+			assignee = "none"
+		}
+	}
+	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
+	switch sort {
+	case "", "newest", "oldest", "updated", "popular":
+	default:
+		writeCode(w, http.StatusBadRequest, "invalid_sort", "sort must be newest, oldest, updated or popular")
+		return
+	}
+	filter := store.IssueFilter{Label: label, Assignee: assignee, Sort: sort}
+	issues, err := a.store.SearchIssuesInRepo(owner, name, q, state, milestone, limit, offset, filter)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
-	total, err := a.store.CountSearchIssuesInRepo(owner, name, q, state, milestone)
+	total, err := a.store.CountSearchIssuesInRepo(owner, name, q, state, milestone, filter)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
 	setTotal(w, total)
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, issues))
+}
+
+// issueCounts 返回同过滤条件下 open / closed 的真实数量（不受分页影响）。
+//
+//	@Summary     Issue 状态计数
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者（owner 路由时）"
+//	@Param       name  path string true "仓库名"
+//	@Param       q     query string false "关键词"
+//	@Param       label query string false "标签 id 或 none"
+//	@Param       milestone query string false "里程碑 id 或 none"
+//	@Param       assignee query string false "负责人用户名、me 或 none"
+//	@Success     200 {object} map[string]int
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/counts [get]
+//	@Router      /repos/{name}/issues/counts [get]
+func (a *API) issueCounts(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	milestone := strings.TrimSpace(r.URL.Query().Get("milestone"))
+	label := strings.TrimSpace(r.URL.Query().Get("label"))
+	assignee := strings.TrimSpace(r.URL.Query().Get("assignee"))
+	if assignee == "me" {
+		assignee = userFrom(r)
+	}
+	open, closed, err := a.store.CountIssueStates(owner, name, q, milestone, label, assignee)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"open": open, "closed": closed})
 }
 
 // createIssue 创建 issue。
@@ -130,6 +187,9 @@ func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body s
 		}
 	}
 	a.notify(owner, name, "issue", "opened", author, issue.Number, issue.Title, "")
+	// 作者自动订阅，并记入时间线。
+	_ = a.store.SubscribeIssue(owner, name, "issue", issue.Number, author)
+	_ = a.store.AddIssueEvent(owner, name, "issue", issue.Number, author, "opened", "")
 	return a.enrichIssues(owner, name, []store.Issue{issue})[0], true
 }
 
@@ -223,7 +283,40 @@ func (a *API) getIssue(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
+	out := a.enrichIssues(owner, name, []store.Issue{issue})[0]
+	me := userFrom(r)
+	out["subscribed"] = me != "" && a.store.IsSubscribed(owner, name, "issue", number, me)
+	out["linked_pulls"] = a.linkedPulls(owner, name, issue)
+	writeJSON(w, http.StatusOK, out)
+}
+
+var refNumberRe = regexp.MustCompile(`#(\d+)`)
+
+// linkedPulls 从 issue 正文与评论中提取 #number 引用，返回同仓库内对应的 PR。
+func (a *API) linkedPulls(owner, name string, issue store.Issue) []store.PullRequest {
+	nums := map[int64]bool{}
+	collect := func(s string) {
+		for _, m := range refNumberRe.FindAllStringSubmatch(s, -1) {
+			if n, err := strconv.ParseInt(m[1], 10, 64); err == nil && n > 0 {
+				nums[n] = true
+			}
+		}
+	}
+	collect(issue.Body)
+	if cs, err := a.store.ListComments(owner, name, "issue", issue.Number, 0, 0); err == nil {
+		for _, c := range cs {
+			collect(c.Body)
+		}
+	}
+	if len(nums) == 0 {
+		return []store.PullRequest{}
+	}
+	list := make([]int64, 0, len(nums))
+	for n := range nums {
+		list = append(list, n)
+	}
+	prs, _ := a.store.PullsByNumbers(owner, name, list)
+	return prs
 }
 
 // updateIssue 编辑 issue（标题 / 正文 / 状态，字段均可选）。
@@ -252,10 +345,12 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Title  *string `json:"title"`
-		Body   *string `json:"body"`
-		State  *string `json:"state"`
-		Pinned *bool   `json:"pinned"`
+		Title       *string `json:"title"`
+		Body        *string `json:"body"`
+		State       *string `json:"state"`
+		Pinned      *bool   `json:"pinned"`
+		Comment     string  `json:"comment"`      // 可选：关闭/重开时附带评论
+		StateReason string  `json:"state_reason"` // 可选：completed | not_planned
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -299,8 +394,17 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if titlePtr == nil && bodyPtr == nil && state == "" && in.Pinned == nil {
-		writeCode(w, http.StatusBadRequest, "no_changes", "provide title, body, state or pinned")
+	if titlePtr == nil && bodyPtr == nil && state == "" && in.Pinned == nil && strings.TrimSpace(in.Comment) == "" {
+		writeCode(w, http.StatusBadRequest, "no_changes", "provide title, body, state, pinned or comment")
+		return
+	}
+	if in.Comment != "" && len([]rune(in.Comment)) > 10000 {
+		writeCode(w, http.StatusBadRequest, "comment_too_long", "comment too long (max 10000 chars)")
+		return
+	}
+	reason := strings.TrimSpace(in.StateReason)
+	if reason != "" && reason != "completed" && reason != "not_planned" {
+		writeCode(w, http.StatusBadRequest, "invalid_state_reason", "state_reason must be completed or not_planned")
 		return
 	}
 
@@ -310,7 +414,7 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if state != "" && state != issue.State {
-		issue, err = a.store.SetIssueState(owner, name, number, state)
+		issue, err = a.store.SetIssueStateWithReason(owner, name, number, state, reason)
 		if err != nil {
 			internalError(w, err)
 			return
@@ -324,16 +428,39 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 通知：状态变化优先（closed/reopened），否则内容编辑发 edited（重复值不发）。
+	me := userFrom(r)
+	// 通知：状态变化优先（closed/reopened），否则内容编辑发 edited（重复值不发）；同步记入时间线。
 	switch {
 	case prev.State != issue.State:
 		action := "closed"
 		if issue.State == "open" {
 			action = "reopened"
 		}
-		a.notify(owner, name, "issue", action, userFrom(r), issue.Number, issue.Title, "")
+		_ = a.store.AddIssueEvent(owner, name, "issue", number, me, action, "")
+		a.notify(owner, name, "issue", action, me, issue.Number, issue.Title, "")
 	case (titlePtr != nil && *titlePtr != prev.Title) || (bodyPtr != nil && *bodyPtr != prev.Body):
-		a.notify(owner, name, "issue", "edited", userFrom(r), issue.Number, issue.Title, "")
+		_ = a.store.AddIssueEvent(owner, name, "issue", number, me, "edited", "")
+		a.notify(owner, name, "issue", "edited", me, issue.Number, issue.Title, "")
+	}
+	if in.Pinned != nil && *in.Pinned != prev.Pinned {
+		action := "pinned"
+		if !issue.Pinned {
+			action = "unpinned"
+		}
+		_ = a.store.AddIssueEvent(owner, name, "issue", number, me, action, "")
+	}
+	// 关闭/重开时可附带一条评论（「Close with comment」）。
+	if c := strings.TrimSpace(in.Comment); c != "" {
+		if _, e := a.store.CreateComment(owner, name, "issue", number, me, c, nil); e != nil {
+			internalError(w, e)
+			return
+		}
+		_ = a.store.AddIssueEvent(owner, name, "issue", number, me, "commented", "")
+		summary := []rune(c)
+		if len(summary) > 200 {
+			summary = summary[:200]
+		}
+		a.notifyMessage(owner, name, "issue", "commented", me, number, issue.Title, string(summary), store.ExtractMentions(c), "")
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
 }
@@ -373,6 +500,8 @@ func (a *API) enrichIssues(owner, repo string, issues []store.Issue) []map[strin
 	}
 	labels, _ := a.store.IssueLabels(owner, repo, numbers)
 	milestones, _ := a.store.IssueMilestones(owner, repo, numbers)
+	assignees, _ := a.store.IssueAssignees(owner, repo, numbers)
+	commentCounts := a.store.IssueCommentCounts(owner, repo, "issue", numbers)
 	out := make([]map[string]any, 0, len(issues))
 	for _, it := range issues {
 		raw, _ := json.Marshal(it)
@@ -388,6 +517,12 @@ func (a *API) enrichIssues(owner, repo string, issues []store.Issue) []map[strin
 		} else {
 			m["milestone"] = nil
 		}
+		as := assignees[it.Number]
+		if as == nil {
+			as = []string{}
+		}
+		m["assignees"] = as
+		m["comment_count"] = commentCounts[it.Number]
 		out = append(out, m)
 	}
 	return out
@@ -422,6 +557,7 @@ func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	before, _ := a.store.IssueLabels(owner, name, []int64{n})
 	err = a.store.SetIssueLabels(owner, name, n, in.LabelIDs)
 	if errors.Is(err, store.ErrNotFound) {
 		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
@@ -431,6 +567,8 @@ func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_label", err.Error())
 		return
 	}
+	after, _ := a.store.IssueLabels(owner, name, []int64{n})
+	a.recordLabelDelta(owner, name, n, userFrom(r), before[n], after[n])
 	issue, err := a.store.GetPullIssue(owner, name, n)
 	if err != nil {
 		internalError(w, err)
@@ -468,6 +606,7 @@ func (a *API) setIssueMilestone(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
+	before, _ := a.store.IssueMilestones(owner, name, []int64{n})
 	err = a.store.SetIssueMilestone(owner, name, n, in.MilestoneID)
 	if errors.Is(err, store.ErrNotFound) {
 		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
@@ -477,12 +616,202 @@ func (a *API) setIssueMilestone(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_milestone", err.Error())
 		return
 	}
+	after, _ := a.store.IssueMilestones(owner, name, []int64{n})
+	oldTitle, newTitle := "", ""
+	if m, ok := before[n]; ok {
+		oldTitle = m.Title
+	}
+	if m, ok := after[n]; ok {
+		newTitle = m.Title
+	}
+	if oldTitle != newTitle {
+		action, detail := "milestoned", newTitle
+		if newTitle == "" {
+			action, detail = "demilestoned", oldTitle
+		}
+		_ = a.store.AddIssueEvent(owner, name, "issue", n, userFrom(r), action, detail)
+	}
 	issue, err := a.store.GetPullIssue(owner, name, n)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
+}
+
+// recordLabelDelta 对比标签前后差异，写入 labeled / unlabeled 时间线事件。
+func (a *API) recordLabelDelta(owner, name string, number int64, actor string, before, after []store.Label) {
+	prev := map[int64]string{}
+	for _, l := range before {
+		prev[l.ID] = l.Name
+	}
+	next := map[int64]string{}
+	for _, l := range after {
+		next[l.ID] = l.Name
+	}
+	for id, lname := range next {
+		if _, ok := prev[id]; !ok {
+			_ = a.store.AddIssueEvent(owner, name, "issue", number, actor, "labeled", lname)
+		}
+	}
+	for id, lname := range prev {
+		if _, ok := next[id]; !ok {
+			_ = a.store.AddIssueEvent(owner, name, "issue", number, actor, "unlabeled", lname)
+		}
+	}
+}
+
+// setIssueAssignees 全量设置 issue 负责人（需写权限）。
+//
+//	@Summary     设置 Issue 负责人
+//	@Tags        issues
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Param       body   body map[string]interface{} true "负责人用户名列表"
+//	@Success     200 {object} store.Issue
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number}/assignees [put]
+func (a *API) setIssueAssignees(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	n, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || n < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
+		return
+	}
+	var in struct {
+		Assignees []string `json:"assignees"`
+	}
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	if len(in.Assignees) > 10 {
+		writeCode(w, http.StatusBadRequest, "too_many_assignees", "at most 10 assignees")
+		return
+	}
+	valid := a.store.ExistingUsernames(in.Assignees)
+	before, _ := a.store.IssueAssignees(owner, name, []int64{n})
+	if err := a.store.SetIssueAssignees(owner, name, n, valid); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
+			return
+		}
+		internalError(w, err)
+		return
+	}
+	after, _ := a.store.IssueAssignees(owner, name, []int64{n})
+	prev := map[string]bool{}
+	for _, u := range before[n] {
+		prev[u] = true
+	}
+	next := map[string]bool{}
+	for _, u := range after[n] {
+		next[u] = true
+	}
+	me := userFrom(r)
+	for _, u := range valid {
+		if !prev[u] {
+			_ = a.store.AddIssueEvent(owner, name, "issue", n, me, "assigned", u)
+		}
+	}
+	for _, u := range before[n] {
+		if !next[u] {
+			_ = a.store.AddIssueEvent(owner, name, "issue", n, me, "unassigned", u)
+		}
+	}
+	issue, err := a.store.GetPullIssue(owner, name, n)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a.enrichIssues(owner, name, []store.Issue{issue})[0])
+}
+
+// subscribeIssue 订阅 issue（作者与评论者已自动订阅）。
+//
+//	@Summary     订阅 Issue
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Success     200 {object} map[string]bool
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number}/subscribe [post]
+func (a *API) subscribeIssue(w http.ResponseWriter, r *http.Request) {
+	a.setIssueSubscription(w, r, true)
+}
+
+// unsubscribeIssue 取消订阅 issue。
+//
+//	@Summary     取消订阅 Issue
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Success     200 {object} map[string]bool
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number}/subscribe [delete]
+func (a *API) unsubscribeIssue(w http.ResponseWriter, r *http.Request) {
+	a.setIssueSubscription(w, r, false)
+}
+
+func (a *API) setIssueSubscription(w http.ResponseWriter, r *http.Request, on bool) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	n, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || n < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
+		return
+	}
+	if _, e := a.store.GetIssue(owner, name, n); e != nil {
+		writeNotFound(w, "issue")
+		return
+	}
+	me := userFrom(r)
+	if on {
+		_ = a.store.SubscribeIssue(owner, name, "issue", n, me)
+	} else {
+		_ = a.store.UnsubscribeIssue(owner, name, "issue", n, me)
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"subscribed": on})
+}
+
+// listIssueEvents 列出 issue 的活动时间线。
+//
+//	@Summary     Issue 时间线
+//	@Tags        issues
+//	@Produce     json
+//	@Param       owner  path string true "仓库所有者"
+//	@Param       name   path string true "仓库名"
+//	@Param       number path int    true "Issue 编号"
+//	@Success     200 {array} store.IssueEvent
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/issues/{number}/events [get]
+func (a *API) listIssueEvents(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	n, err := strconv.ParseInt(r.PathValue("number"), 10, 64)
+	if err != nil || n < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
+		return
+	}
+	events, err := a.store.ListIssueEvents(owner, name, "issue", n)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
 }
 
 // listLabels 列出仓库的标签。

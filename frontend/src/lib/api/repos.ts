@@ -173,6 +173,8 @@ export const reposApi = {
     ),
   commitDiff: (owner: string, name: string, sha: string) =>
     req<PullDiff>(`/users/${owner}/repos/${name}/commits/${sha}/diff`),
+  commitInfo: (owner: string, name: string, sha: string) =>
+    req<Commit>(`/users/${owner}/repos/${name}/commits/${sha}`),
   compare: (owner: string, name: string, base: string, head: string) =>
     req<PullDiff & { base: string; head: string }>(
       `/users/${owner}/repos/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`,

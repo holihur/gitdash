@@ -11,5 +11,3 @@ export function CodeBlock({ text, onCopy }: { text: string; onCopy: () => void }
     </div>
   );
 }
-
-/** 高亮命中子串（大小写不敏感，只高亮第一处） */

@@ -105,6 +105,20 @@ func (s *Store) GetComment(owner, repo string, id int64) (Comment, error) {
 	return commentToDTO(r), nil
 }
 
+// UpdateComment 编辑某条评论的正文；不存在返回 ErrNotFound。
+func (s *Store) UpdateComment(owner, repo string, id int64, body string) (Comment, error) {
+	res := s.db.Model(&commentRow{}).
+		Where("owner = ? AND repo = ? AND id = ?", owner, repo, id).
+		Updates(map[string]any{"body": body, "updated_at": now()})
+	if res.Error != nil {
+		return Comment{}, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return Comment{}, ErrNotFound
+	}
+	return s.GetComment(owner, repo, id)
+}
+
 // MarkSuggestionApplied 记录某条评论的 suggestion 已应用（写入提交 SHA）。
 func (s *Store) MarkSuggestionApplied(owner, repo string, id int64, sha string) (Comment, error) {
 	res := s.db.Model(&commentRow{}).

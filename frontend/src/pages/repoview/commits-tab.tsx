@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   BadgeCheck,
@@ -145,6 +146,10 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [diffSha, setDiffSha] = useState<string | null>(null);
   const [diffData, setDiffData] = useState<{ files: DiffFileInfo[]; patch: string } | null>(null);
+  const [focusCommit, setFocusCommit] = useState<Commit | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusSha = searchParams.get("commit") ?? "";
+  const diffCardRef = useRef<HTMLDivElement>(null);
   const [revertSha, setRevertSha] = useState<string | null>(null);
   const [revertBusy, setRevertBusy] = useState(false);
   const [reload, setReload] = useState(0);
@@ -188,6 +193,37 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
       alive = false;
     };
   }, [diffSha, owner, name]);
+
+  // blame 深链（?commit=<sha>）：自动展开该提交并拉取元数据。
+  useEffect(() => {
+    if (!focusSha) {
+      setFocusCommit(null);
+      return;
+    }
+    setDiffSha(focusSha);
+    let alive = true;
+    api
+      .commitInfo(owner, name, focusSha)
+      .then((c) => alive && setFocusCommit(c))
+      .catch(() => alive && setFocusCommit(null));
+    return () => {
+      alive = false;
+    };
+  }, [focusSha, owner, name]);
+
+  // 深层链接的提交加载完成后滚动到 diff 卡片。
+  useEffect(() => {
+    if (focusSha && diffData) diffCardRef.current?.scrollIntoView?.({ block: "start" });
+  }, [focusSha, diffData]);
+
+  // 移除 ?commit= 并收起卡片，回到普通提交列表。
+  const clearFocus = () => {
+    setDiffSha(null);
+    setFocusCommit(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("commit");
+    setSearchParams(next, { replace: true });
+  };
 
   const graphRows = useMemo(() => buildCommitGraph(commits), [commits]);
 
@@ -370,18 +406,42 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
       )}
 
       {diffSha && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="font-mono text-sm">{diffSha.slice(0, 12)}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {diffData ? (
-              <DiffView files={diffData.files} patch={diffData.patch} />
-            ) : (
-              <p className="py-6 text-center text-sm text-muted-foreground">…</p>
-            )}
-          </CardContent>
-        </Card>
+        <div ref={diffCardRef}>
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <CardTitle className="truncate text-sm">
+                    {focusCommit && focusCommit.sha === diffSha
+                      ? focusCommit.message || focusCommit.sha
+                      : diffSha.slice(0, 12)}
+                  </CardTitle>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <code className="rounded bg-muted px-1.5 py-0.5">{diffSha}</code>
+                    {focusCommit && focusCommit.sha === diffSha && (
+                      <>
+                        <span>{focusCommit.author}</span>
+                        <RelativeTime iso={focusCommit.date} locale={locale} />
+                      </>
+                    )}
+                  </p>
+                </div>
+                {focusSha === diffSha && (
+                  <Button variant="ghost" size="sm" onClick={clearFocus}>
+                    {t("commits.closeCommit")}
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {diffData ? (
+                <DiffView files={diffData.files} patch={diffData.patch} />
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">…</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
       <ConfirmDialog
         open={revertSha !== null}

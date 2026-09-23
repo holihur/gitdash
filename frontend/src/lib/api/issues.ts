@@ -1,5 +1,5 @@
 import { req, reqPage } from "./core";
-import type { BranchProtection, CodeownersStatus, Issue, IssueComment, Label, MergeGate, Milestone, PullDiff, PullRequest, PullReview, PullState, ReviewState } from "./types";
+import type { BranchProtection, CodeownersStatus, Issue, IssueComment, IssueEvent, Label, MergeGate, Milestone, PullDiff, PullRequest, PullReview, PullState, ReviewState } from "./types";
 
 export const issuesApi = {
   // issues
@@ -8,7 +8,7 @@ export const issuesApi = {
     name: string,
     limit?: number,
     offset?: number,
-    filters?: { q?: string; state?: string; milestone?: string },
+    filters?: { q?: string; state?: string; milestone?: string; label?: string; assignee?: string; sort?: string },
   ) => {
     const params = new URLSearchParams();
     if (limit) params.set("limit", String(limit));
@@ -16,8 +16,26 @@ export const issuesApi = {
     if (filters?.q) params.set("q", filters.q);
     if (filters?.state) params.set("state", filters.state);
     if (filters?.milestone) params.set("milestone", filters.milestone);
+    if (filters?.label) params.set("label", filters.label);
+    if (filters?.assignee) params.set("assignee", filters.assignee);
+    if (filters?.sort) params.set("sort", filters.sort);
     const qs = params.toString();
     return reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${qs ? `?${qs}` : ""}`);
+  },
+  issueCounts: (
+    owner: string,
+    name: string,
+    filters?: { q?: string; milestone?: string; label?: string; assignee?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.q) params.set("q", filters.q);
+    if (filters?.milestone) params.set("milestone", filters.milestone);
+    if (filters?.label) params.set("label", filters.label);
+    if (filters?.assignee) params.set("assignee", filters.assignee);
+    const qs = params.toString();
+    return req<{ open: number; closed: number }>(
+      `/users/${owner}/repos/${name}/issues/counts${qs ? `?${qs}` : ""}`,
+    );
   },
   getIssue: (owner: string, name: string, number: number) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`),
@@ -35,7 +53,14 @@ export const issuesApi = {
     owner: string,
     name: string,
     number: number,
-    patch: { title?: string; body?: string; state?: "open" | "closed"; pinned?: boolean },
+    patch: {
+      title?: string;
+      body?: string;
+      state?: "open" | "closed";
+      pinned?: boolean;
+      comment?: string;
+      state_reason?: "completed" | "not_planned";
+    },
   ) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`, {
       method: "PATCH",
@@ -71,6 +96,11 @@ export const issuesApi = {
     ),
   deleteComment: (owner: string, name: string, id: number) =>
     req<null>(`/users/${owner}/repos/${name}/comments/${id}`, { method: "DELETE" }),
+  updateComment: (owner: string, name: string, id: number, body: string) =>
+    req<IssueComment>(`/users/${owner}/repos/${name}/comments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ body }),
+    }),
 
 
   // issue labels
@@ -119,6 +149,21 @@ export const issuesApi = {
       method: "POST",
       body: JSON.stringify({ milestone_id: milestoneId }),
     }),
+  setIssueAssignees: (owner: string, name: string, number: number, assignees: string[]) =>
+    req<Issue>(`/users/${owner}/repos/${name}/issues/${number}/assignees`, {
+      method: "PUT",
+      body: JSON.stringify({ assignees }),
+    }),
+  subscribeIssue: (owner: string, name: string, number: number) =>
+    req<{ subscribed: boolean }>(`/users/${owner}/repos/${name}/issues/${number}/subscribe`, {
+      method: "POST",
+    }),
+  unsubscribeIssue: (owner: string, name: string, number: number) =>
+    req<{ subscribed: boolean }>(`/users/${owner}/repos/${name}/issues/${number}/subscribe`, {
+      method: "DELETE",
+    }),
+  listIssueEvents: (owner: string, name: string, number: number) =>
+    req<IssueEvent[]>(`/users/${owner}/repos/${name}/issues/${number}/events`),
 
 
   // 分支保护

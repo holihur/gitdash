@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
-import type { ProjectCard, ProjectColumn, ProjectSwimlane } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import type { Label, ProjectCard, ProjectColumn, ProjectSwimlane } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownView } from "@/components/markdown";
+import LabelChip from "@/components/label-chip";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/** 卡片表单草稿：名称 + Markdown 详情 + 日程 + 目标列/泳道。 */
+/** 可关联的 issue 选项（由上层加载后传入）。 */
+export interface IssueOption {
+  number: number;
+  title: string;
+  state: string;
+}
+
+/** 卡片表单草稿：名称 + Markdown 详情 + 日程 + 目标列/泳道 + 负责人/标签/关联 issue。 */
 export interface CardDraft {
   title: string;
   body: string;
@@ -23,6 +31,8 @@ export interface CardDraft {
   due_date: string;
   column_id: number;
   swimlane_id: number;
+  assignees: string[];
+  label_ids: number[];
 }
 
 const EMPTY: CardDraft = {
@@ -33,6 +43,8 @@ const EMPTY: CardDraft = {
   due_date: "",
   column_id: 0,
   swimlane_id: 0,
+  assignees: [],
+  label_ids: [],
 };
 
 /** 新建卡片的默认落位（看板单元格 / 列表、甘特视图的全局按钮）。 */
@@ -47,6 +59,9 @@ export function ProjectCardDialog({
   card,
   columns,
   swimlanes,
+  people,
+  labels,
+  issues,
   defaultTarget,
   busy,
   onClose,
@@ -58,6 +73,12 @@ export function ProjectCardDialog({
   /** 新建时可选的目标列 / 泳道 */
   columns: ProjectColumn[];
   swimlanes: ProjectSwimlane[];
+  /** 可指派的用户名（owner + 协作者） */
+  people: string[];
+  /** 仓库标签 */
+  labels: Label[];
+  /** 可关联的 issue */
+  issues: IssueOption[];
   /** 新建时默认选中的列 / 泳道 */
   defaultTarget?: CardTarget | null;
   busy: boolean;
@@ -67,6 +88,7 @@ export function ProjectCardDialog({
   const { t } = useI18n();
   const [draft, setDraft] = useState<CardDraft>(EMPTY);
   const [preview, setPreview] = useState(false);
+  const [issueQuery, setIssueQuery] = useState("");
 
   // 打开时按模式重置表单
   useEffect(() => {
@@ -80,6 +102,8 @@ export function ProjectCardDialog({
         due_date: card.due_date ?? "",
         column_id: card.column_id,
         swimlane_id: card.swimlane_id,
+        assignees: card.assignees ?? [],
+        label_ids: (card.labels ?? []).map((l) => l.id),
       });
     } else {
       setDraft({
@@ -89,29 +113,70 @@ export function ProjectCardDialog({
       });
     }
     setPreview(false);
+    setIssueQuery("");
   }, [open, mode, card, defaultTarget, columns, swimlanes]);
 
-  // issue 卡片的名称/详情由 issue 本身承载，只能编辑日程。
-  const isIssue = mode === "edit" && !!card?.issue_number;
+  const hasIssue = draft.issue_number > 0;
   const invalidRange =
     draft.start_date !== "" && draft.due_date !== "" && draft.due_date < draft.start_date;
-  const canSubmit =
-    isIssue ||
-    (draft.column_id > 0 && (draft.title.trim() !== "" || draft.issue_number > 0));
+  const canSubmit = (hasIssue || draft.title.trim() !== "") && (mode === "edit" || draft.column_id > 0);
+
+  const filteredIssues = useMemo(() => {
+    const q = issueQuery.trim().toLowerCase();
+    const list = q
+      ? issues.filter((i) => String(i.number).includes(q) || i.title.toLowerCase().includes(q))
+      : issues;
+    return list.slice(0, 50);
+  }, [issues, issueQuery]);
+
+  const toggleAssignee = (u: string) =>
+    setDraft((d) => ({
+      ...d,
+      assignees: d.assignees.includes(u) ? d.assignees.filter((x) => x !== u) : [...d.assignees, u],
+    }));
+
+  const toggleLabel = (id: number) =>
+    setDraft((d) => ({
+      ...d,
+      label_ids: d.label_ids.includes(id) ? d.label_ids.filter((x) => x !== id) : [...d.label_ids, id],
+    }));
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? t("projects.addCard") : t("projects.editCard")}
-            {isIssue ? ` · #${card?.issue_number}` : ""}
+            {hasIssue ? ` · #${draft.issue_number}` : ""}
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-3">
-          {!isIssue && (
+          <div className="grid gap-1.5">
+            <FieldLabel htmlFor="card-issue-search">{t("projects.cardIssueNumber")}</FieldLabel>
+            <Input
+              id="card-issue-search"
+              placeholder={t("projects.issueSearch")}
+              value={issueQuery}
+              onChange={(e) => setIssueQuery(e.target.value)}
+            />
+            <select
+              aria-label={t("projects.cardIssueNumber")}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={draft.issue_number}
+              onChange={(e) => setDraft({ ...draft, issue_number: Number(e.target.value) || 0 })}
+            >
+              <option value={0}>{t("projects.noIssue")}</option>
+              {filteredIssues.map((i) => (
+                <option key={i.number} value={i.number}>
+                  #{i.number} {i.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {!hasIssue && (
             <div className="grid gap-1.5">
-              <Label htmlFor="card-title">{t("projects.cardName")}</Label>
+              <FieldLabel htmlFor="card-title">{t("projects.cardName")}</FieldLabel>
               <Input
                 id="card-title"
                 maxLength={200}
@@ -121,26 +186,11 @@ export function ProjectCardDialog({
               />
             </div>
           )}
-          {mode === "create" && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="card-issue">{t("projects.cardIssueNumber")}</Label>
-              <Input
-                id="card-issue"
-                inputMode="numeric"
-                className="h-8 w-28"
-                placeholder={t("projects.cardIssueHint")}
-                value={draft.issue_number > 0 ? String(draft.issue_number) : ""}
-                onChange={(e) => {
-                  const n = Number(e.target.value.replace(/[^0-9]/g, ""));
-                  setDraft({ ...draft, issue_number: Number.isFinite(n) ? n : 0 });
-                }}
-              />
-            </div>
-          )}
+
           {mode === "create" && (
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label htmlFor="card-column">{t("projects.colColumn")}</Label>
+                <FieldLabel htmlFor="card-column">{t("projects.colColumn")}</FieldLabel>
                 <select
                   id="card-column"
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -155,7 +205,7 @@ export function ProjectCardDialog({
                 </select>
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="card-swimlane">{t("projects.colSwimlane")}</Label>
+                <FieldLabel htmlFor="card-swimlane">{t("projects.colSwimlane")}</FieldLabel>
                 <select
                   id="card-swimlane"
                   className="h-9 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -172,10 +222,11 @@ export function ProjectCardDialog({
               </div>
             </div>
           )}
-          {!isIssue && (
+
+          {!hasIssue && (
             <div className="grid gap-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="card-body">{t("projects.cardDetails")}</Label>
+                <FieldLabel htmlFor="card-body">{t("projects.cardDetails")}</FieldLabel>
                 <Button
                   type="button"
                   variant="ghost"
@@ -205,9 +256,58 @@ export function ProjectCardDialog({
               )}
             </div>
           )}
+
+          {people.length > 0 && (
+            <div className="grid gap-1.5">
+              <FieldLabel>{t("issues.assignees")}</FieldLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {people.map((u) => {
+                  const on = draft.assignees.includes(u);
+                  return (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => toggleAssignee(u)}
+                      className={
+                        "rounded-full border px-2 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring " +
+                        (on ? "border-primary text-foreground" : "text-muted-foreground opacity-60 hover:opacity-100")
+                      }
+                    >
+                      {u}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {labels.length > 0 && (
+            <div className="grid gap-1.5">
+              <FieldLabel>{t("issues.labels")}</FieldLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map((l) => {
+                  const on = draft.label_ids.includes(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => toggleLabel(l.id)}
+                      className={
+                        "rounded-full outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring " +
+                        (on ? "ring-2 ring-ring ring-offset-1" : "opacity-50 hover:opacity-80")
+                      }
+                    >
+                      <LabelChip label={l} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="card-start">{t("projects.startDate")}</Label>
+              <FieldLabel htmlFor="card-start">{t("projects.startDate")}</FieldLabel>
               <Input
                 id="card-start"
                 type="date"
@@ -216,7 +316,7 @@ export function ProjectCardDialog({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="card-due">{t("projects.dueDate")}</Label>
+              <FieldLabel htmlFor="card-due">{t("projects.dueDate")}</FieldLabel>
               <Input
                 id="card-due"
                 type="date"

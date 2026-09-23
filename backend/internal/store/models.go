@@ -178,9 +178,46 @@ type issueRow struct {
 	UpdatedAt   string `gorm:"not null"`
 	ClosedAt    *string
 	MilestoneID *int64
+	// StateReason 关闭原因：completed | not_planned（仅 closed 时有意义）
+	StateReason *string `gorm:"size:32"`
 }
 
 func (issueRow) TableName() string { return "issues" }
+
+// issueAssigneeRow issue 负责人（多对多；IssueID 关联 issues.id）。
+type issueAssigneeRow struct {
+	IssueID  int64  `gorm:"primaryKey;autoIncrement:false"`
+	Username string `gorm:"primaryKey;size:255"`
+}
+
+func (issueAssigneeRow) TableName() string { return "issue_assignees" }
+
+// issueSubscriberRow 显式订阅某个 issue/PR 的用户（作者与评论者会自动订阅）。
+type issueSubscriberRow struct {
+	Owner     string `gorm:"primaryKey;size:255"`
+	Repo      string `gorm:"primaryKey;size:255"`
+	Kind      string `gorm:"primaryKey;size:8"`
+	Number    int64  `gorm:"primaryKey"`
+	Username  string `gorm:"primaryKey;size:255"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (issueSubscriberRow) TableName() string { return "issue_subscribers" }
+
+// issueEventRow issue/PR 活动事件（详情页时间线）。
+type issueEventRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Owner     string `gorm:"not null;index:idx_issue_events_host,priority:1;size:255"`
+	Repo      string `gorm:"not null;index:idx_issue_events_host,priority:2;size:255"`
+	Kind      string `gorm:"not null;index:idx_issue_events_host,priority:3;size:8"`
+	Number    int64  `gorm:"not null;index:idx_issue_events_host,priority:4"`
+	Actor     string `gorm:"not null;size:255"`
+	Action    string `gorm:"not null;size:32"`
+	Detail    string `gorm:"not null;default:'';size:255"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (issueEventRow) TableName() string { return "issue_events" }
 
 // commentRow issue/PR 评论。kind 区分两种宿主（issue 与 PR 号码各自独立递增）。
 type commentRow struct {
@@ -288,6 +325,22 @@ type projectCardRow struct {
 }
 
 func (projectCardRow) TableName() string { return "project_cards" }
+
+// projectCardAssigneeRow 看板卡片负责人（多对多）。
+type projectCardAssigneeRow struct {
+	CardID   int64  `gorm:"primaryKey;autoIncrement:false"`
+	Username string `gorm:"primaryKey;size:255"`
+}
+
+func (projectCardAssigneeRow) TableName() string { return "project_card_assignees" }
+
+// projectCardLabelRow 看板卡片标签（复用仓库标签）。
+type projectCardLabelRow struct {
+	CardID  int64 `gorm:"primaryKey;autoIncrement:false"`
+	LabelID int64 `gorm:"primaryKey;autoIncrement:false"`
+}
+
+func (projectCardLabelRow) TableName() string { return "project_card_labels" }
 
 // ---- collabs / orgs ----
 

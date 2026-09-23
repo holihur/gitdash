@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CheckCircle2, ChevronLeft, Circle, Pin } from "lucide-react";
-import { api, type Issue, type Label, type Milestone } from "@/lib/api";
+import { Bell, BellOff, CheckCircle2, ChevronLeft, Circle, GitPullRequest, Pin, UserRound } from "lucide-react";
+import { api, type Collab, type Issue, type IssueEvent, type Label, type Milestone } from "@/lib/api";
 import { apiErrorMsg } from "@/lib/errors";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { buildRepoPath } from "@/lib/repo-url";
@@ -42,21 +42,32 @@ export default function IssueDetail({
 
   const [draftLabels, setDraftLabels] = useState<number[]>([]);
   const [draftMilestone, setDraftMilestone] = useState(0);
+  const [draftAssignees, setDraftAssignees] = useState<string[]>([]);
+  const [events, setEvents] = useState<IssueEvent[]>([]);
+  const [collabs, setCollabs] = useState<Collab[]>([]);
+  const [subscribed, setSubscribed] = useState(false);
+  const [savingSub, setSavingSub] = useState(false);
   const [savingMeta, setSavingMeta] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [it, ls, ms] = await Promise.all([
+      const [it, ls, ms, ev, co] = await Promise.all([
         api.getIssue(owner, name, number),
         api.listLabels(owner, name),
         api.listMilestones(owner, name),
+        api.listIssueEvents(owner, name, number).catch(() => [] as IssueEvent[]),
+        api.listCollabs(owner, name).catch(() => [] as Collab[]),
       ]);
       setIssue(it);
       setLabels(ls);
       setMilestones(ms);
+      setEvents(ev);
+      setCollabs(co);
       setDraftLabels((it.labels ?? []).map((l) => l.id));
       setDraftMilestone(it.milestone?.id ?? 0);
+      setDraftAssignees(it.assignees ?? []);
+      setSubscribed(!!it.subscribed);
       setError("");
     } catch (e) {
       setError(apiErrorMsg(to, e));
@@ -74,12 +85,22 @@ export default function IssueDetail({
   const metaChanged = issue
     ? draftLabels.length !== issueLabels.length ||
       draftLabels.some((id) => !issueLabels.some((l) => l.id === id)) ||
-      (issue.milestone?.id ?? 0) !== draftMilestone
+      (issue.milestone?.id ?? 0) !== draftMilestone ||
+      draftAssignees.length !== (issue.assignees ?? []).length ||
+      draftAssignees.some((u) => !(issue.assignees ?? []).includes(u))
     : false;
 
   const toggleDraftLabel = (id: number) => {
     setDraftLabels((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   };
+
+  const toggleDraftAssignee = (u: string) => {
+    setDraftAssignees((cur) => (cur.includes(u) ? cur.filter((x) => x !== u) : [...cur, u]));
+  };
+
+  const assigneeOptions = Array.from(
+    new Set([owner, ...collabs.map((c) => c.username), ...(issue?.assignees ?? [])]),
+  );
 
   const saveMeta = async () => {
     if (!issue) return;
@@ -87,12 +108,28 @@ export default function IssueDetail({
     try {
       await api.setIssueLabels(owner, name, issue.number, draftLabels);
       await api.setIssueMilestone(owner, name, issue.number, draftMilestone);
+      await api.setIssueAssignees(owner, name, issue.number, draftAssignees);
       toast.success(t("issues.metaSaved", { number: issue.number }));
       await load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setSavingMeta(false);
+    }
+  };
+
+  const toggleSubscribe = async () => {
+    if (!issue) return;
+    setSavingSub(true);
+    try {
+      const r = subscribed
+        ? await api.unsubscribeIssue(owner, name, issue.number)
+        : await api.subscribeIssue(owner, name, issue.number);
+      setSubscribed(r.subscribed);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setSavingSub(false);
     }
   };
 
@@ -150,6 +187,13 @@ export default function IssueDetail({
               )}
               {isOpen ? t("issues.open") : t("issues.closed")}
             </Badge>
+            {!isOpen && issue.state_reason && (
+              <span className="text-xs text-muted-foreground">
+                {issue.state_reason === "not_planned"
+                  ? t("issues.reasonNotPlanned")
+                  : t("issues.reasonCompleted")}
+              </span>
+            )}
             <span>
               {isOpen
                 ? t("issues.openedOn", {
@@ -182,7 +226,28 @@ export default function IssueDetail({
               <p className="text-sm text-muted-foreground">{t("issues.noBody")}</p>
             )}
           </div>
-          <CommentSection owner={owner} name={name} number={issue.number} />
+          {(issue.linked_pulls?.length ?? 0) > 0 && (
+            <div className="rounded-lg border bg-card p-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                {t("issues.linkedPulls")}
+              </p>
+              <ul className="space-y-1 text-sm">
+                {(issue.linked_pulls ?? []).map((pr) => (
+                  <li key={pr.number}>
+                    <Link
+                      className="inline-flex items-center gap-1.5 hover:underline"
+                      to={buildRepoPath(owner, name, { tab: "pulls" })}
+                    >
+                      <GitPullRequest className="h-3.5 w-3.5" />
+                      <span className="font-mono">#{pr.number}</span>
+                      <span className="truncate">{pr.title}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <CommentSection owner={owner} name={name} number={issue.number} events={events} />
         </div>
 
         <aside className="self-start">
@@ -235,6 +300,37 @@ export default function IssueDetail({
               </select>
             </div>
 
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                {t("issues.assignees")}
+              </p>
+              {assigneeOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">{t("issues.noAssignees")}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {assigneeOptions.map((u) => {
+                    const selected = draftAssignees.includes(u);
+                    return (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => toggleDraftAssignee(u)}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs outline-none transition-opacity focus-visible:ring-2 focus-visible:ring-ring",
+                          selected
+                            ? "border-primary text-foreground"
+                            : "text-muted-foreground opacity-60 hover:opacity-100",
+                        )}
+                      >
+                        <UserRound className="h-3 w-3" />
+                        {u}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <Button
               size="sm"
               className="w-full"
@@ -242,6 +338,20 @@ export default function IssueDetail({
               onClick={saveMeta}
             >
               {t("issues.saveMeta")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full gap-1.5"
+              disabled={savingSub}
+              onClick={toggleSubscribe}
+            >
+              {subscribed ? (
+                <BellOff className="h-3.5 w-3.5" />
+              ) : (
+                <Bell className="h-3.5 w-3.5" />
+              )}
+              {subscribed ? t("issues.unsubscribe") : t("issues.subscribe")}
             </Button>
           </div>
         </aside>

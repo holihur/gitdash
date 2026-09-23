@@ -101,7 +101,7 @@ def ssh_port(base_url):
 
 # ---- 会话级实例管理 ----
 
-def _spawn_server(binary: Path, tmpdir: Path):
+def _spawn_server(binary: Path, tmpdir: Path, extra_env: dict | None = None, register_ssh: bool = True):
     data_dir = tmpdir / "data"
     http_port, ssh_port = free_port(), free_port()
     env = dict(os.environ)
@@ -134,7 +134,10 @@ def _spawn_server(binary: Path, tmpdir: Path):
     # copilot agent 运行时：允许测试显式指定（否则 gitdash 找同目录的 agent / PATH）
     if os.environ.get("GITDASH_AGENT_BIN"):
         env["GITDASH_COPILOT_AGENT_BIN"] = os.environ["GITDASH_AGENT_BIN"]
-    _SPAWNED_SSH_PORT["port"] = ssh_port
+    if extra_env:
+        env.update(extra_env)
+    if register_ssh:
+        _SPAWNED_SSH_PORT["port"] = ssh_port
     log_path = tmpdir / "server.log"
     log = open(log_path, "wb")
     proc = subprocess.Popen(

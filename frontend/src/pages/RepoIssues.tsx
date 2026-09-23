@@ -26,7 +26,8 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const setPage = (p: number) => set({ i_page: p > 1 ? p : null }, { push: true });
   const pageSize = getNum("i_size", 20);
   const setPageSize = (s: number) => set({ i_size: s === 20 ? null : s, i_page: null });
-  const filterLabel = get("i_label", "") ? Number(get("i_label", "")) : null;
+  const filterLabelRaw = get("i_label", "");
+  const filterLabel = filterLabelRaw ? Number(filterLabelRaw) : null;
   const setFilterLabel = (id: number | null) =>
     set({ i_label: id ?? null, i_page: null }, { push: true });
   // 里程碑过滤："" 全部 | "none" 未指派 | 里程碑 id 字符串
@@ -38,7 +39,13 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const stateFilter = get("i_state", ""); // "" | "open" | "closed"
   const setStateFilter = (s: string) =>
     set({ i_state: s || null, i_page: null }, { push: true });
+  const assigneeFilter = get("i_assignee", "");
+  const setAssigneeFilter = (v: string) =>
+    set({ i_assignee: v || null, i_page: null }, { push: true });
+  const sortFilter = get("i_sort", "");
+  const setSortFilter = (v: string) => set({ i_sort: v || null, i_page: null }, { push: true });
   const [searchInput, setSearchInput] = useState(urlQuery);
+  const [counts, setCounts] = useState<{ open: number; closed: number }>({ open: 0, closed: 0 });
   const [labels, setLabels] = useState<Label[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,26 +64,36 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [is, ls, ms] = await Promise.all([
+      const [is, ls, ms, cnt] = await Promise.all([
         api.listIssues(owner, name, pageSize, (page - 1) * pageSize, {
           q: urlQuery,
           state: stateFilter,
           milestone: milestoneFilter,
+          label: filterLabelRaw || undefined,
+          assignee: assigneeFilter || undefined,
+          sort: sortFilter || undefined,
         }),
         api.listLabels(owner, name),
         api.listMilestones(owner, name),
+        api.issueCounts(owner, name, {
+          q: urlQuery || undefined,
+          milestone: milestoneFilter || undefined,
+          label: filterLabelRaw || undefined,
+          assignee: assigneeFilter || undefined,
+        }),
       ]);
       setIssues(is.items);
       setIssueTotal(is.total);
       setLabels(ls);
       setMilestones(ms);
+      setCounts(cnt);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [owner, name, page, pageSize, urlQuery, stateFilter, milestoneFilter]);
+  }, [owner, name, page, pageSize, urlQuery, stateFilter, milestoneFilter, filterLabelRaw, assigneeFilter, sortFilter]);
 
   useEffect(() => {
     load();
@@ -108,11 +125,8 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
     }
   };
 
-  const openCount = issues.filter((i) => i.state === "open").length;
-  const closedCount = issues.length - openCount;
-  const shown = filterLabel
-    ? issues.filter((i) => (i.labels ?? []).some((l) => l.id === filterLabel))
-    : issues;
+  const openCount = counts.open;
+  const closedCount = counts.closed;
 
   return (
     <div className="space-y-4">
@@ -161,6 +175,10 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         milestones={milestones}
         filterMilestone={milestoneFilter}
         onFilterMilestone={setMilestoneFilter}
+        filterAssignee={assigneeFilter}
+        onFilterAssignee={setAssigneeFilter}
+        filterSort={sortFilter}
+        onFilterSort={setSortFilter}
       />
 
       {error && !loading && (
@@ -173,7 +191,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
 
       {loading && <ListSkeleton rows={5} header={false} />}
 
-      {!loading && !error && issues.length === 0 && urlQuery === "" && stateFilter === "" && milestoneFilter === "" && (
+      {!loading && !error && issues.length === 0 && urlQuery === "" && stateFilter === "" && milestoneFilter === "" && filterLabel === null && assigneeFilter === "" && (
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <MessageSquare className="h-10 w-10 text-muted-foreground" />
@@ -187,7 +205,7 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         </Card>
       )}
 
-      {!loading && !error && issues.length === 0 && filterLabel === null && (urlQuery !== "" || stateFilter !== "" || milestoneFilter !== "") && (
+      {!loading && !error && issues.length === 0 && (urlQuery !== "" || stateFilter !== "" || milestoneFilter !== "" || filterLabel !== null || assigneeFilter !== "") && (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Search className="h-8 w-8 text-muted-foreground" />
@@ -199,6 +217,8 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
                 setSearchInput("");
                 setStateFilter("");
                 setMilestoneFilter("");
+                setFilterLabel(null);
+                setAssigneeFilter("");
               }}
             >
               {t("issues.clearSearch")}
@@ -207,21 +227,9 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
         </Card>
       )}
 
-      {!loading && !error && shown.length === 0 && filterLabel !== null && (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-            <Tag className="h-8 w-8 text-muted-foreground" />
-            <p className="font-medium">{t("issues.noMatch")}</p>
-            <Button variant="outline" size="sm" onClick={() => setFilterLabel(null)}>
-              {t("issues.clearFilter")}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {!loading && shown.length > 0 && (
+      {!loading && !error && issues.length > 0 && (
         <div className="divide-y divide-border overflow-hidden rounded-lg border bg-card">
-          {shown.map((issue) => (
+          {issues.map((issue) => (
             <IssueItem
               key={issue.id}
               issue={issue}

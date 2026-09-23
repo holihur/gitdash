@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"gitdash/backend/internal/api/docs"
+	"gitdash/backend/internal/codesearch"
 	"gitdash/backend/internal/copilot"
 	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/gpgsig"
@@ -96,6 +97,11 @@ type API struct {
 	// jobsMgr 异步任务管理器（导入 / 镜像 / webhook 投递；main 注入）
 	jobsMgr *jobs.Manager
 
+	// codeSearch 代码搜索实现（默认实时 git grep；main 可注入 Bleve 索引实现）
+	codeSearch codesearch.Searcher
+	// codeIndex 代码索引维护（来自 codeSearch 的 Indexer 能力；未启用索引时 nil）
+	codeIndex codesearch.Indexer
+
 	// sshPort SSH 服务端口（clone 地址展示用；main 启动时注入，默认 2222）
 	sshPort string
 
@@ -163,9 +169,23 @@ const (
 
 func New(s *store.Store, version string) *API {
 	return &API{
-		store:   s,
-		version: version,
-		sshPort: "2222",
+		store:      s,
+		version:    version,
+		sshPort:    "2222",
+		codeSearch: codesearch.NewGrep(),
+	}
+}
+
+// SetCodeSearch 注入代码搜索实现。传入的实现若同时满足 Indexer（如
+// codesearch.Service），其索引维护能力会被用于仓库删除时的清理。
+func (a *API) SetCodeSearch(s codesearch.Searcher) {
+	if s == nil {
+		s = codesearch.NewGrep()
+	}
+	a.codeSearch = s
+	a.codeIndex = nil
+	if ix, ok := s.(codesearch.Indexer); ok {
+		a.codeIndex = ix
 	}
 }
 
@@ -192,6 +212,15 @@ func (a *API) emailReady() bool {
 
 // SetJobsManager 注入异步任务管理器（导入 / 镜像 / webhook 投递）。
 func (a *API) SetJobsManager(m *jobs.Manager) { a.jobsMgr = m }
+
+// searchOne 执行单仓库代码检索，并在实现支持时报告实际使用的后端来源。
+func (a *API) searchOne(ctx context.Context, owner, name, query string, opts codesearch.Options) ([]codesearch.Hit, codesearch.Source, error) {
+	if ss, ok := a.codeSearch.(codesearch.SourcedSearcher); ok {
+		return ss.SearchSource(ctx, owner, name, query, opts)
+	}
+	hits, err := a.codeSearch.Search(ctx, owner, name, query, opts)
+	return hits, "", err
+}
 
 // enqueueImport 通过注入的任务队列排队导入；队列未启用时返回错误。
 func (a *API) enqueueImport(owner, repo, url, privateKey, credential string) error {
@@ -309,6 +338,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/admin/login", a.adminLogin)
 	mux.HandleFunc("POST /api/admin/logout", a.adminAuth(a.adminLogout))
 	mux.HandleFunc("GET /api/admin/me", a.adminAuth(a.adminMe))
+	mux.HandleFunc("GET /api/admin/codesearch", a.adminAuth(a.adminCodeSearch))
 	mux.HandleFunc("GET /api/admin/settings", a.adminAuth(a.adminSettings))
 	mux.HandleFunc("POST /api/admin/settings", a.adminAuth(a.adminSaveSettings))
 	mux.HandleFunc("POST /api/admin/language-colors", a.adminAuth(a.adminSaveLanguageColors))
@@ -378,6 +408,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/repos/{name}/raw", a.authOptional(a.rawFile))
 	mux.HandleFunc("GET /api/repos/{name}/blame", a.authOptional(a.blame))
 	mux.HandleFunc("GET /api/repos/{name}/commits", a.authOptional(a.commits))
+	mux.HandleFunc("GET /api/repos/{name}/commits/{sha}", a.authOptional(a.commitInfo))
 	mux.HandleFunc("GET /api/repos/{name}/search", a.authOptional(a.search))
 	mux.HandleFunc("POST /api/repos/{name}/gc", a.auth(a.gcRepo))
 	// repos（owner 限定版：供协作者 / 跨用户访问，owner 显式声明）
@@ -439,16 +470,22 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// issues
 	mux.HandleFunc("GET /api/repos/{name}/issues", a.authOptional(a.listIssues))
 	mux.HandleFunc("POST /api/repos/{name}/issues", a.auth(a.createIssue))
+	mux.HandleFunc("GET /api/repos/{name}/issues/counts", a.authOptional(a.issueCounts))
 	mux.HandleFunc("GET /api/repos/{name}/issues/{number}", a.authOptional(a.getIssue))
 	mux.HandleFunc("PATCH /api/repos/{name}/issues/{number}", a.auth(a.updateIssue))
 	mux.HandleFunc("DELETE /api/repos/{name}/issues/{number}", a.auth(a.deleteIssue))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues", a.authOptional(a.listIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues", a.auth(a.createIssue))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues/counts", a.authOptional(a.issueCounts))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues/{number}", a.authOptional(a.getIssue))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.updateIssue))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/issues/{number}", a.auth(a.deleteIssue))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/issues/{number}/events", a.authOptional(a.listIssueEvents))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/labels", a.auth(a.setIssueLabels))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/milestone", a.auth(a.setIssueMilestone))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/issues/{number}/assignees", a.auth(a.setIssueAssignees))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues/{number}/subscribe", a.auth(a.subscribeIssue))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/issues/{number}/subscribe", a.auth(a.unsubscribeIssue))
 
 	// comments（issue 与 PR 共用，kind 由路由闭包区分）
 	issueList, issueAdd := a.issueOrPullComments("issue")
@@ -461,6 +498,8 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments", a.auth(pullAdd))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pulls/{number}/comments/{id}/apply", a.auth(a.applySuggestion))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/comments/{id}", a.auth(a.deleteComment))
+	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/comments/{id}", a.auth(a.updateComment))
+	mux.HandleFunc("PATCH /api/repos/{name}/comments/{id}", a.auth(a.updateComment))
 
 	// issue labels & milestones
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/labels", a.authOptional(a.listLabels))
@@ -490,8 +529,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/projects/{id}/cards", a.auth(a.createProjectCard))
 	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}", a.auth(a.updateProjectCard))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}", a.auth(a.deleteProjectCard))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}/assignees", a.auth(a.setProjectCardAssignees))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/projects/{id}/cards/{card}/labels", a.auth(a.setProjectCardLabels))
 
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}/diff", a.authOptional(a.commitDiff))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commits/{sha}", a.authOptional(a.commitInfo))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/compare", a.authOptional(a.compareRefs))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits/{sha}/revert", a.auth(a.revertCommit))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/commits", a.auth(a.writeCommit))
