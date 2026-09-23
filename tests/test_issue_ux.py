@@ -87,6 +87,17 @@ def test_label_filter_counts_and_sort(issue_env):
     alice.get(_p(an, repo, "/issues") + "?sort=bogus", expect=400)
 
 
+def test_shorthand_issue_and_comment_routes(issue_env):
+    """简写路由（/repos/{name}/...，owner 由当前用户推导）：计数与评论编辑。"""
+    an, alice, _, _, repo = issue_env
+    _create_issue(alice, an, repo, "sh-1")
+    counts = alice.get(f"/repos/{repo}/issues/counts", expect=200).json()
+    assert counts["open"] == 1
+    c = alice.post(_p(an, repo, "/issues/1/comments"), json={"body": "first"}, expect=201).json()
+    edited = alice.patch(f"/repos/{repo}/comments/{c['id']}", json={"body": "edited"}, expect=200).json()
+    assert edited["body"] == "edited"
+
+
 def test_subscribe_events_close_with_comment(issue_env):
     an, alice, bn, bob, repo = issue_env
     _create_issue(alice, an, repo, "needs work")

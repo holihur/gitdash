@@ -66,6 +66,22 @@ def test_branch_tag_management(repo_env):
     c.get(_r(an, repo) + "/tags", expect=200)
 
 
+def test_ref_note(repo_env):
+    """分支/标签备注：存在性校验 + 设置 / 读取 / 清除。"""
+    an, c, repo = repo_env
+    base = _r(an, repo)
+    c.put(f"{base}/refs/branch/ghost/note", json={"note": "x"}, expect=404)
+    c.put(f"{base}/refs/misc/main/note", json={"note": "x"}, expect=400)
+    got = c.put(f"{base}/refs/branch/main/note", json={"note": "primary"}, expect=200).json()
+    assert got["kind"] == "branch" and got["name"] == "main" and got["note"] == "primary"
+    # 复数写法归一化
+    got = c.put(f"{base}/refs/branches/main/note", json={"note": "p2"}, expect=200).json()
+    assert got["kind"] == "branch"
+    # 空串清除
+    got = c.put(f"{base}/refs/branch/main/note", json={"note": ""}, expect=200).json()
+    assert got["note"] == ""
+
+
 def test_refs_permissions(repo_env, user_factory):
     an, c, repo = repo_env
     # read 协作者可看 tags 不可创建
