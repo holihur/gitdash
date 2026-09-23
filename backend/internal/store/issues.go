@@ -208,11 +208,10 @@ func (s *Store) SetIssueStateWithReason(owner, repo string, number int64, state,
 	updates := map[string]any{"state": state, "updated_at": now}
 	if state == "closed" {
 		updates["closed_at"] = now
-		if reason == "not_planned" {
+		switch reason {
+		case "not_planned":
 			updates["state_reason"] = "not_planned"
-		} else if reason == "completed" {
-			updates["state_reason"] = "completed"
-		} else {
+		default:
 			updates["state_reason"] = "completed"
 		}
 	} else {

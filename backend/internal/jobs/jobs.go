@@ -213,7 +213,7 @@ func (m *Manager) EnqueueCodeIndex(owner, repo, ref string) error {
 	}
 	rp, err := m.st.GetRepo(owner, repo)
 	if err != nil {
-		return nil // 仓库已不存在
+		return nil //nolint:nilerr // 仓库已不存在，丢弃任务
 	}
 	p, err := json.Marshal(payload{Owner: owner, Repo: repo, Ref: ref, RepoID: rp.ID})
 	if err != nil {

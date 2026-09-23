@@ -1,5 +1,6 @@
 """杂项 API 对抗性测试：全局/代码搜索、templates、instance、providers、邮箱验证、分支保护。"""
 
+import time
 import uuid
 
 import pytest
@@ -11,6 +12,16 @@ def _uuid() -> str:
 
 def _r(owner, repo):
     return f"/users/{owner}/repos/{repo}"
+
+
+def _search_wait(client, url, params, timeout=20):
+    """单仓库搜索最终一致：索引构建中（X-Code-Search: indexing）时轮询等待。"""
+    deadline = time.time() + timeout
+    while True:
+        resp = client.get(url, params=params, expect=200)
+        if resp.headers.get("X-Code-Search") != "indexing" or time.time() >= deadline:
+            return resp
+        time.sleep(0.3)
 
 
 # ---- 全局搜索 ----
@@ -55,7 +66,7 @@ def test_code_search(user_factory, anon, client_factory):
         "changes": [{"path": "src/app.ts", "action": "create", "content": "const MAGIC_TOKEN_42 = 1\n"}]},
         expect=201)
 
-    hits = c.get(_r(an, repo) + "/search", params={"q": "MAGIC_TOKEN_42"}, expect=200).json()
+    hits = _search_wait(c, _r(an, repo) + "/search", {"q": "MAGIC_TOKEN_42"}).json()
     assert len(hits) == 1
     assert hits[0]["path"] == "src/app.ts" and hits[0]["line"] == 1 and "MAGIC_TOKEN_42" in hits[0]["text"]
 

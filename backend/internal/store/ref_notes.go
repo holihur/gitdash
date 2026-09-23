@@ -1,6 +1,10 @@
 package store
 
-import "gorm.io/gorm"
+import (
+	"errors"
+
+	"gorm.io/gorm"
+)
 
 // RefNoteKind 备注关联的引用类型。
 type RefNoteKind = string
@@ -36,7 +40,7 @@ func (s *Store) SetRefNote(owner, repo, kind, name, note string) error {
 		if err == nil {
 			return tx.Model(&existing).Update("note", note).Error
 		}
-		if err != gorm.ErrRecordNotFound {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
 		return tx.Create(&refNoteRow{

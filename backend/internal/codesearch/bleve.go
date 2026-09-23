@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -93,7 +94,7 @@ func OpenBleve(dir string) (*Bleve, error) {
 	}
 	idxPath := filepath.Join(dir, indexName)
 	idx, err := bleve.Open(idxPath)
-	if err == bleve.ErrorIndexPathDoesNotExist {
+	if errors.Is(err, bleve.ErrorIndexPathDoesNotExist) {
 		idx, err = bleve.New(idxPath, newIndexMapping())
 	}
 	if err != nil {

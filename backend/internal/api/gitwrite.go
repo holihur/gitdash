@@ -145,9 +145,10 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 	}
 	// 删除引用的同时清理其备注（兼容 kind 传 branches/tags 的单复数写法）。
 	noteKind := kind
-	if noteKind == "branches" {
+	switch noteKind {
+	case "branches":
 		noteKind = "branch"
-	} else if noteKind == "tags" {
+	case "tags":
 		noteKind = "tag"
 	}
 	_ = a.store.DeleteRefNote(owner, name, noteKind, refName)

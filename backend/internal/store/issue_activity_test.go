@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -59,7 +60,7 @@ func TestIssueAssigneesLifecycle(t *testing.T) {
 		t.Fatalf("after replace = %v", got[1])
 	}
 	// 不存在 issue
-	if err := s.SetIssueAssignees("alice", "demo", 99, []string{"bob"}); err != ErrNotFound {
+	if err := s.SetIssueAssignees("alice", "demo", 99, []string{"bob"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
@@ -159,7 +160,7 @@ func TestUpdateComment(t *testing.T) {
 	if updated.Body != "edited" {
 		t.Fatalf("body = %q", updated.Body)
 	}
-	if _, err := s.UpdateComment("alice", "demo", 9999, "x"); err != ErrNotFound {
+	if _, err := s.UpdateComment("alice", "demo", 9999, "x"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }

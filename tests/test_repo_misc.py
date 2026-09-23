@@ -5,6 +5,7 @@ revert、template。
 藏 bug 的盲区。
 """
 
+import time
 import uuid
 
 import pytest
@@ -12,6 +13,16 @@ import pytest
 
 def _uuid() -> str:
     return uuid.uuid4().hex[:10]
+
+
+def _search_wait(client, url, params, timeout=20):
+    """单仓库搜索最终一致：索引构建中（X-Code-Search: indexing）时轮询等待。"""
+    deadline = time.time() + timeout
+    while True:
+        resp = client.get(url, params=params, expect=200)
+        if resp.headers.get("X-Code-Search") != "indexing" or time.time() >= deadline:
+            return resp
+        time.sleep(0.3)
 
 
 @pytest.fixture
@@ -55,7 +66,7 @@ def test_shorthand_blame_and_search(repo_env):
     assert blame["path"] == "hello.txt"
     assert any("hello world" in line["content"] for line in blame["lines"])
 
-    hits = c.get(f"/repos/{repo}/search?q=hello&ref=main", expect=200).json()
+    hits = _search_wait(c, f"/repos/{repo}/search", {"q": "hello", "ref": "main"}).json()
     assert any(h["path"] == "hello.txt" for h in hits)
 
     # 参数校验

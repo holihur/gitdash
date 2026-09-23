@@ -49,17 +49,18 @@ func (b *Bleve) saveManifest(owner, name string, m map[string]string) error {
 	}
 	tmpName := tmp.Name()
 	zw := gzip.NewWriter(tmp)
-	if err := json.NewEncoder(zw).Encode(m); err == nil {
-		err = zw.Close()
+	encErr := json.NewEncoder(zw).Encode(m)
+	if encErr == nil {
+		encErr = zw.Close()
 	} else {
 		_ = zw.Close()
 	}
-	if cerr := tmp.Close(); err == nil {
-		err = cerr
+	if werr := tmp.Close(); encErr == nil {
+		encErr = werr
 	}
-	if err != nil {
+	if encErr != nil {
 		_ = os.Remove(tmpName)
-		return err
+		return encErr
 	}
 	return os.Rename(tmpName, b.manifestPath(owner, name))
 }
