@@ -67,6 +67,25 @@ def _get_bytes(c, path):
     return r.content
 
 
+def _trigger_run(c, username, repo, timeout=90):
+    """触发一次运行；push 自动触发的运行可能占满并发上限，遇 429 等待重试（本用例只验证 cache 语义）。"""
+    import requests as _rq
+
+    path = f"/users/{username}/repos/{repo}/pipeline/runs"
+    deadline = time.time() + timeout
+    while True:
+        r = _rq.post(
+            f"{c.base}/api{path}",
+            headers={"Authorization": f"Bearer {c.token}"},
+            json={},
+            timeout=15,
+        )
+        if r.status_code == 201:
+            return r.json()
+        assert r.status_code == 429 and time.time() < deadline, f"trigger -> {r.status_code}: {r.text}"
+        time.sleep(1)
+
+
 def _wait_terminal(c, owner, repo, run_id, timeout=60):
     p = f"/users/{owner}/repos/{repo}/pipeline/runs/{run_id}"
     deadline = time.time() + timeout
@@ -325,7 +344,7 @@ def test_host_cache_reuse(host_repo):
         "cache:\n  key: demo\n  paths:\n    - .cache\n"
         "steps:\n  - name: work\n    run: |\n      mkdir -p .cache\n      echo cached-value > .cache/data.txt\n",
     )
-    run1 = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run1 = first_run(_trigger_run(c, username, repo))
     run1 = _wait_terminal(c, username, repo, run1["id"])
     assert run1["status"] == "success", run1
     assert "cache: saved" in run1.get("log", ""), run1.get("log")
@@ -339,7 +358,7 @@ def test_host_cache_reuse(host_repo):
         "cache:\n  key: demo\n  paths:\n    - .cache\n"
         "steps:\n  - name: check\n    run: cat .cache/data.txt\n",
     )
-    run2 = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run2 = first_run(_trigger_run(c, username, repo))
     run2 = _wait_terminal(c, username, repo, run2["id"])
     assert run2["status"] == "success", run2
     assert "cache: restored" in run2.get("log", ""), run2.get("log")

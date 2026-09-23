@@ -185,9 +185,10 @@ func (a *API) setRefNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := r.PathValue("kind")
-	if kind == "branches" {
+	switch kind {
+	case "branches":
 		kind = "branch"
-	} else if kind == "tags" {
+	case "tags":
 		kind = "tag"
 	}
 	if kind != "branch" && kind != "tag" {
