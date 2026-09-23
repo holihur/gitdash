@@ -189,7 +189,7 @@ func runCodeIndexWorker() {
 	if err := gitsvc.Init(dataDir); err != nil {
 		logx.Fatalf("init git service: %v", err)
 	}
-	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
+	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "redis"))
 	if queueMode != "redis" && queueMode != "asynq" {
 		logx.Fatalf("codeindex worker requires GITDASH_QUEUE=redis (got %q)", queueMode)
 	}
@@ -487,11 +487,11 @@ func run() {
 	sender := notify.NewStoreSender(st)
 	a.SetEmailSender(sender)
 
-	// 流水线 / 任务队列：memory（默认，进程内 goroutine）或 redis（asynq 持久化队列）
+	// 流水线 / 任务队列：redis（默认，asynq 持久化队列）或 memory（进程内 goroutine，GITDASH_QUEUE=memory）
 	// runner（自托管 CI agent）功能需要 redis（跨实例派发与心跳）
 	var runnerHub *runner.Hub
 	var jobsQueue queue.Queue
-	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "memory"))
+	queueMode := strings.ToLower(getenv("GITDASH_QUEUE", "redis"))
 	if queueMode == "redis" || queueMode == "asynq" {
 		redisAddr := getenv("GITDASH_REDIS_ADDR", "127.0.0.1:6379")
 		redisDB, _ := strconv.Atoi(getenv("GITDASH_REDIS_DB", "0"))

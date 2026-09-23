@@ -27,6 +27,7 @@ const Packages = lazy(() => import("@/pages/Packages"));
 const PackageDetail = lazy(() => import("@/pages/PackageDetail"));
 const Orgs = lazy(() => import("@/pages/Orgs"));
 const OrgPage = lazy(() => import("@/pages/OrgPage"));
+const OrgSettings = lazy(() => import("@/pages/OrgSettings"));
 const ProfilePage = lazy(() => import("@/pages/Profile"));
 const UsersPage = lazy(() => import("@/pages/UserPage"));
 const RunnersPage = lazy(() => import("@/pages/Runners"));
@@ -362,6 +363,14 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             element={
               <Suspense fallback={<PageLoading />}>
                 <Orgs />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/orgs/:org/settings"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <OrgSettings />
               </Suspense>
             }
           />

@@ -172,7 +172,7 @@ go run .
 | `GITDASH_BACKUP_DIR` | 空（关闭） | 在 `serve` 模式启用定时后台备份；归档输出目录 |
 | `GITDASH_BACKUP_INTERVAL` | `24h` | 自动备份间隔（最小 1m） |
 | `GITDASH_BACKUP_KEEP` | `14` | 自动备份保留的最新份数 |
-| `GITDASH_QUEUE` | `memory` | 流水线任务队列：`memory`（进程内 goroutine）或 `redis`/`asynq`（Redis 持久化队列） |
+| `GITDASH_QUEUE` | `redis` | 流水线/任务队列：`redis`/`asynq`（Redis 持久化队列，**默认**）或 `memory`（进程内 goroutine，零外部依赖） |
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | asynq 队列使用的 Redis 地址 |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | 空 / `0` | Redis 密码 / 数据库编号 |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | asynq 队列工人并发数 |

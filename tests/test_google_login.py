@@ -83,6 +83,7 @@ def google_env(tmp_path_factory):
     env = dict(os.environ)
     env.update(
         GITDASH_DATA=str(tmpdir / "data"),
+        GITDASH_QUEUE="memory",
         GITDASH_DISABLE_RATE_LIMIT="1",
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",

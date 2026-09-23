@@ -107,6 +107,8 @@ def _spawn_server(binary: Path, tmpdir: Path, extra_env: dict | None = None, reg
     env = dict(os.environ)
     env.update(
         GITDASH_DATA=str(data_dir),
+        # 应用默认队列已是 redis；黑盒默认实例固定内存队列（redis 路径由专门用例自建 redis 覆盖）
+        GITDASH_QUEUE="memory",
         GITDASH_DISABLE_RATE_LIMIT="1",
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",

@@ -6,7 +6,7 @@ import {
   CalendarDays,
   FolderGit2,
   Package,
-  Pencil,
+  Settings2,
   Star,
   Trash2,
   UserMinus,
@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { CoverBanner } from "@/components/cover-banner";
 import { cn, formatDate } from "@/lib/utils";
@@ -41,12 +40,6 @@ export default function OrgPage() {
   const [newRole, setNewRole] = useState("member");
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [editDisplay, setEditDisplay] = useState("");
-  const [editBio, setEditBio] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [coverBusy, setCoverBusy] = useState(false);
-  const [coverVersion, setCoverVersion] = useState(0);
 
   const isOwner = profile?.role === "owner";
   const isMember = !!profile?.role;
@@ -133,58 +126,6 @@ export default function OrgPage() {
     }
   };
 
-  const startEdit = () => {
-    if (!profile) return;
-    setEditDisplay(profile.display || "");
-    setEditBio(profile.bio || "");
-    setEditing(true);
-  };
-
-  const saveOrg = async () => {
-    if (!profile) return;
-    setSaving(true);
-    try {
-      const o = await api.updateOrg(profile.name, { display: editDisplay, bio: editBio });
-      setProfile({ ...profile, display: o.display, bio: o.bio ?? "" });
-      setEditing(false);
-      toast.success(t("orgs.updated"));
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const uploadCover = async (file: File) => {
-    if (!profile) return;
-    setCoverBusy(true);
-    try {
-      const r = await api.uploadOrgCover(profile.name, file);
-      setProfile({ ...profile, cover_url: r.cover_url });
-      setCoverVersion(Date.now());
-      toast.success(t("cover.updated"));
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setCoverBusy(false);
-    }
-  };
-
-  const removeCover = async () => {
-    if (!profile) return;
-    setCoverBusy(true);
-    try {
-      await api.deleteOrgCover(profile.name);
-      setProfile({ ...profile, cover_url: undefined });
-      setCoverVersion(Date.now());
-      toast.success(t("cover.removed"));
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setCoverBusy(false);
-    }
-  };
-
   if (error) {
     return (
       <Card className="border-destructive">
@@ -202,14 +143,7 @@ export default function OrgPage() {
 
   return (
     <div className="space-y-6">
-      <CoverBanner
-        coverUrl={profile.cover_url}
-        version={coverVersion}
-        editable={isOwner}
-        busy={coverBusy}
-        onPick={uploadCover}
-        onRemove={removeCover}
-      />
+      <CoverBanner coverUrl={profile.cover_url} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-muted">
           <Building2 className="h-9 w-9 text-muted-foreground" />
@@ -238,9 +172,11 @@ export default function OrgPage() {
         </div>
         <div className="flex shrink-0 gap-2 self-start">
           {isOwner && (
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={startEdit} disabled={busy}>
-              <Pencil className="h-4 w-4" />
-              {t("orgs.editOrg")}
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link to={`/orgs/${encodeURIComponent(profile.name)}/settings`}>
+                <Settings2 className="h-4 w-4" />
+                {t("orgs.editOrg")}
+              </Link>
             </Button>
           )}
           {isOwner && (
@@ -281,45 +217,6 @@ export default function OrgPage() {
           </Button>
         </div>
       </div>
-
-      {editing && (
-        <Card>
-          <CardContent className="grid gap-3 pt-6">
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="org-display">
-                {t("orgs.displayLabel")}
-              </label>
-              <Input
-                id="org-display"
-                value={editDisplay}
-                onChange={(e) => setEditDisplay(e.target.value)}
-                placeholder={profile.name}
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="org-bio">
-                {t("orgs.bioLabel")}
-              </label>
-              <Textarea
-                id="org-bio"
-                value={editBio}
-                onChange={(e) => setEditBio(e.target.value)}
-                rows={3}
-                maxLength={500}
-                placeholder={t("orgs.bioPlaceholder")}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditing(false)} disabled={saving}>
-                {t("common.cancel")}
-              </Button>
-              <Button size="sm" onClick={() => void saveOrg()} disabled={saving}>
-                {t("common.save")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="flex flex-wrap gap-1 border-b">
         {tabs.map((tab) => (

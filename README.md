@@ -172,7 +172,7 @@ Environment variables (all optional):
 | `GITDASH_BACKUP_DIR` | empty (off) | Enable scheduled background backups in `serve` mode; output directory for the archives |
 | `GITDASH_BACKUP_INTERVAL` | `24h` | Auto-backup interval (minimum 1m) |
 | `GITDASH_BACKUP_KEEP` | `14` | Number of newest auto-backups to retain |
-| `GITDASH_QUEUE` | `memory` | Pipeline job queue: `memory` (in-process goroutines) or `redis`/`asynq` (durable Redis queue) |
+| `GITDASH_QUEUE` | `redis` | Pipeline/job queue: `redis`/`asynq` (durable Redis queue, **default**) or `memory` (in-process goroutines, no external deps) |
 | `GITDASH_REDIS_ADDR` | `127.0.0.1:6379` | Redis address for the asynq queue |
 | `GITDASH_REDIS_PASSWORD` / `GITDASH_REDIS_DB` | empty / `0` | Redis auth / database index |
 | `GITDASH_QUEUE_CONCURRENCY` | `4` | Worker concurrency for the asynq queue |
@@ -289,7 +289,7 @@ GITDASH_REDIS_ADDR: redis:6379
 - Listen ports / auto-update can be adjusted via `environment` in `docker-compose.yml`.
 - You can also build the image directly: `docker build -t gitdash .`, then run it against your own PostgreSQL + Redis via the `GITDASH_*` variables above.
 
-> To run SQLite + in-process queue instead (single-node, no external deps), drop the `postgres`/`redis` services and unset `GITDASH_DB` / `GITDASH_QUEUE`.
+> To run SQLite + in-process queue instead (single-node, no external deps), drop the `postgres`/`redis` services, unset `GITDASH_DB`, and set `GITDASH_QUEUE=memory`.
 
 ## Backup & Restore
 
