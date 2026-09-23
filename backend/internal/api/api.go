@@ -498,6 +498,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/tags", a.authOptional(a.listTags))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/refs", a.auth(a.createRef))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/refs/{kind}/{refname}", a.auth(a.deleteRef))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/refs/{kind}/{refname}/note", a.auth(a.setRefNote))
 
 	// releases & assets
 	mux.HandleFunc("GET /api/repos/{name}/releases", a.authOptional(a.listReleases))

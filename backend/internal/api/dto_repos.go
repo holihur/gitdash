@@ -43,6 +43,11 @@ type createRefReq struct {
 	From string `json:"from"` // 起点引用，可选，缺省 HEAD
 }
 
+// setRefNoteReq 设置分支/标签备注请求体。
+type setRefNoteReq struct {
+	Note string `json:"note"` // 备注内容，空串表示清除备注
+}
+
 // writeCommitReq 写入提交请求体。
 type writeCommitReq struct {
 	Branch  string              `json:"branch"`  // 目标分支，可选，默认 main

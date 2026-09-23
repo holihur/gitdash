@@ -246,6 +246,7 @@ export interface OAuthAuthorization {
 export interface Branch {
   name: string;
   is_head: boolean;
+  note?: string;
 }
 
 export interface TreeEntry {
@@ -523,6 +524,7 @@ export interface Tag {
   name: string;
   sha: string;
   message: string;
+  note?: string;
 }
 
 export interface PullDiff {

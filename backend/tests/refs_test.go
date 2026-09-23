@@ -67,6 +67,149 @@ func TestBranchAndTagManagement(t *testing.T) {
 	alice.mustFail("DELETE", refsPath("alice", "refs", "/refs/branch/main"), nil, 409)
 }
 
+func TestRefNotes(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "refnotes"}, 201)
+	writeCommit(t, alice, "alice", "refnotes", map[string]any{
+		"message": "first",
+		"changes": []any{map[string]any{"path": "a.txt", "action": "create", "content": "1"}},
+	}, 201)
+	alice.mustStatus("POST", refsPath("alice", "refnotes", "/refs"),
+		map[string]any{"type": "branch", "name": "dev", "from": "main"}, 201)
+	alice.mustStatus("POST", refsPath("alice", "refnotes", "/refs"),
+		map[string]any{"type": "tag", "name": "v1.0", "from": "main"}, 201)
+
+	// 设置分支 / 标签备注
+	m := alice.mustStatus("PUT", refsPath("alice", "refnotes", "/refs/branch/dev/note"),
+		map[string]string{"note": "开发分支"}, 200)
+	if m["note"] != "开发分支" {
+		t.Fatalf("set branch note = %v", m)
+	}
+	alice.mustStatus("PUT", refsPath("alice", "refnotes", "/refs/tag/v1.0/note"),
+		map[string]string{"note": "首个版本"}, 200)
+
+	// 列表返回备注
+	var branches []map[string]any
+	brRaw, brTotal := rawGetPaged(t, alice, "/repos/refnotes/branches")
+	if err := json.Unmarshal([]byte(brRaw), &branches); err != nil {
+		t.Fatalf("branches unmarshal: %v", err)
+	}
+	if brTotal != 2 {
+		t.Fatalf("branches total = %d, want 2", brTotal)
+	}
+	var devNote any
+	for _, b := range branches {
+		if b["name"] == "dev" {
+			devNote = b["note"]
+		}
+	}
+	if devNote != "开发分支" {
+		t.Fatalf("dev note = %v, branches = %s", devNote, brRaw)
+	}
+
+	var tags []map[string]any
+	tagRaw := rawGet(t, alice, refsPath("alice", "refnotes", "/tags"))
+	if err := json.Unmarshal([]byte(tagRaw), &tags); err != nil {
+		t.Fatalf("tags unmarshal: %v", err)
+	}
+	if len(tags) != 1 || tags[0]["note"] != "首个版本" {
+		t.Fatalf("tags = %s", tagRaw)
+	}
+
+	// 清空备注后列表不再返回 note
+	alice.mustStatus("PUT", refsPath("alice", "refnotes", "/refs/branch/dev/note"),
+		map[string]string{"note": ""}, 200)
+	brRaw = rawGet(t, alice, "/repos/refnotes/branches")
+	if strings.Contains(brRaw, "开发分支") {
+		t.Fatalf("note not cleared: %s", brRaw)
+	}
+
+	// 删除标签后备注被清理：重建同名标签不应带回旧备注
+	alice.mustStatus("DELETE", refsPath("alice", "refnotes", "/refs/tag/v1.0"), nil, 204)
+	alice.mustStatus("POST", refsPath("alice", "refnotes", "/refs"),
+		map[string]any{"type": "tag", "name": "v1.0", "from": "main"}, 201)
+	tagRaw = rawGet(t, alice, refsPath("alice", "refnotes", "/tags"))
+	if strings.Contains(tagRaw, "首个版本") {
+		t.Fatalf("deleted tag note leaked: %s", tagRaw)
+	}
+
+	// 无效 kind / 非法备注长度
+	alice.mustFail("PUT", refsPath("alice", "refnotes", "/refs/weird/dev/note"),
+		map[string]string{"note": "x"}, 400)
+}
+
+func TestRefNotesPermissions(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	bob := register(t, env, "bobby", "bob-pass-123456")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "refnotes2"}, 201)
+	writeCommit(t, alice, "alice", "refnotes2", map[string]any{
+		"message": "m",
+		"changes": []any{map[string]any{"path": "a.txt", "action": "create", "content": "1"}},
+	}, 201)
+
+	// 只读协作者不能写备注
+	alice.mustStatus("POST", refsPath("alice", "refnotes2", "/collabs"),
+		map[string]string{"username": "bobby", "permission": "read"}, 200)
+	bob.mustFail("PUT", refsPath("alice", "refnotes2", "/refs/branch/main/note"),
+		map[string]string{"note": "hi"}, 404)
+	// write 协作者可以写备注
+	alice.mustStatus("POST", refsPath("alice", "refnotes2", "/collabs"),
+		map[string]string{"username": "bobby", "permission": "write"}, 200)
+	bob.mustStatus("PUT", refsPath("alice", "refnotes2", "/refs/branch/main/note"),
+		map[string]string{"note": "bob's note"}, 200)
+}
+
+func TestRefsPagination(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "refpage"}, 201)
+	writeCommit(t, alice, "alice", "refpage", map[string]any{
+		"message": "first",
+		"changes": []any{map[string]any{"path": "a.txt", "action": "create", "content": "1"}},
+	}, 201)
+	// main + 3 新分支 + 2 个新标签
+	for _, b := range []string{"b1", "b2", "b3"} {
+		alice.mustStatus("POST", refsPath("alice", "refpage", "/refs"),
+			map[string]any{"type": "branch", "name": b, "from": "main"}, 201)
+	}
+	for _, tg := range []string{"t1", "t2"} {
+		alice.mustStatus("POST", refsPath("alice", "refpage", "/refs"),
+			map[string]any{"type": "tag", "name": tg, "from": "main"}, 201)
+	}
+
+	// branches：total=4，limit=2 返回 2 条
+	body, total := rawGetPaged(t, alice, "/repos/refpage/branches?limit=2&offset=0")
+	if total != 4 {
+		t.Fatalf("branches total = %d, want 4", total)
+	}
+	var branches []map[string]any
+	if err := json.Unmarshal([]byte(body), &branches); err != nil || len(branches) != 2 {
+		t.Fatalf("page 1 = %s err=%v", body, err)
+	}
+	// 第二页
+	body, _ = rawGetPaged(t, alice, "/repos/refpage/branches?limit=2&offset=2")
+	if err := json.Unmarshal([]byte(body), &branches); err != nil || len(branches) != 2 {
+		t.Fatalf("page 2 = %s err=%v", body, err)
+	}
+	// 越界返回空数组
+	body, _ = rawGetPaged(t, alice, "/repos/refpage/branches?limit=2&offset=10")
+	if err := json.Unmarshal([]byte(body), &branches); err != nil || len(branches) != 0 {
+		t.Fatalf("page beyond = %s err=%v", body, err)
+	}
+
+	// tags：total=2，limit=1
+	body, total = rawGetPaged(t, alice, refsPath("alice", "refpage", "/tags")+"?limit=1&offset=0")
+	if total != 2 {
+		t.Fatalf("tags total = %d, want 2", total)
+	}
+	var tags []map[string]any
+	if err := json.Unmarshal([]byte(body), &tags); err != nil || len(tags) != 1 {
+		t.Fatalf("tags page = %s err=%v", body, err)
+	}
+}
+
 func TestRefsPermissions(t *testing.T) {
 	env := start(t)
 	alice := register(t, env, "alice", "alice-pass-123")

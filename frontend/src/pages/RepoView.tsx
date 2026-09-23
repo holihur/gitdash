@@ -363,10 +363,8 @@ export default function RepoView() {
         onClose={() => setRefsOpen(false)}
         owner={owner}
         repo={name}
-        branches={branches.map((b) => b.name)}
-        head={branches.find((b) => b.is_head)?.name ?? branches[0]?.name ?? ""}
-        tags={tags}
         current={ref || branches[0]?.name || "main"}
+        canWrite={repo?.role === "owner" || repo?.role === "write"}
         onRefresh={refreshRefs}
       />
       <ForkDialog

@@ -13040,6 +13040,83 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/refs/{kind}/{refname}/note": {
+            "put": {
+                "description": "note 为空时清除备注；备注与 git refs 分离存储，不影响仓库内容。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "设置引用备注",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "类型：branch 或 tag",
+                        "name": "kind",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "分支/标签名",
+                        "name": "refname",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "note 备注内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRefNoteReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "kind、name 与 note",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/releases": {
             "get": {
                 "produces": [
@@ -15876,6 +15953,15 @@ const docTemplate = `{
                 }
             }
         },
+        "api.setRefNoteReq": {
+            "type": "object",
+            "properties": {
+                "note": {
+                    "description": "备注内容，空串表示清除备注",
+                    "type": "string"
+                }
+            }
+        },
         "api.setRepoDefaultBranchReq": {
             "type": "object",
             "properties": {
@@ -16256,6 +16342,10 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "note": {
+                    "description": "Note 分支备注（由 API 层从数据库合并填充，非 git 数据）。",
+                    "type": "string"
                 }
             }
         },
@@ -16342,6 +16432,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "note": {
+                    "description": "Note 标签备注（由 API 层从数据库合并填充，非 git 数据）。",
                     "type": "string"
                 },
                 "sha": {

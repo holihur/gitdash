@@ -31,10 +31,16 @@ func (a *API) listTags(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	total := len(tags)
+	notes, _ := a.store.RefNotes(owner, name)
+	out := make([]gitsvc.Tag, 0, len(tags))
+	for _, tg := range tags {
+		tg.Note = notes["tag/"+tg.Name]
+		out = append(out, tg)
+	}
+	total := len(out)
 	limit, offset := pageParams(r)
 	setTotal(w, total)
-	writeJSON(w, http.StatusOK, pageSlice(tags, limit, offset))
+	writeJSON(w, http.StatusOK, pageSlice(out, limit, offset))
 }
 
 // createRef 创建分支或标签。
@@ -137,6 +143,14 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_ref_name", err.Error())
 		return
 	}
+	// 删除引用的同时清理其备注（兼容 kind 传 branches/tags 的单复数写法）。
+	noteKind := kind
+	if noteKind == "branches" {
+		noteKind = "branch"
+	} else if noteKind == "tags" {
+		noteKind = "tag"
+	}
+	_ = a.store.DeleteRefNote(owner, name, noteKind, refName)
 	full := "refs/heads/" + refName
 	if kind == "tag" {
 		full = "refs/tags/" + refName
@@ -146,6 +160,62 @@ func (a *API) deleteRef(w http.ResponseWriter, r *http.Request) {
 		Ref: full, Actor: userFrom(r), Title: refName,
 	})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// setRefNote 设置分支/标签备注。
+//
+//	@Summary     设置引用备注
+//	@Description note 为空时清除备注；备注与 git refs 分离存储，不影响仓库内容。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner   path string true "仓库所有者"
+//	@Param       name    path string true "仓库名"
+//	@Param       kind    path string true "类型：branch 或 tag"
+//	@Param       refname path string true "分支/标签名"
+//	@Param       body    body setRefNoteReq true "note 备注内容"
+//	@Success     200 {object} map[string]any "kind、name 与 note"
+//	@Failure     400 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/refs/{kind}/{refname}/note [put]
+func (a *API) setRefNote(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, true)
+	if !ok {
+		return
+	}
+	kind := r.PathValue("kind")
+	if kind == "branches" {
+		kind = "branch"
+	} else if kind == "tags" {
+		kind = "tag"
+	}
+	if kind != "branch" && kind != "tag" {
+		writeCode(w, http.StatusBadRequest, "invalid_ref_kind", "kind must be 'branch' or 'tag'")
+		return
+	}
+	refName := r.PathValue("refname")
+	// 引用必须存在，避免为拼写错误的分支/标签留下孤儿备注。
+	full := "refs/heads/" + refName
+	if kind == "tag" {
+		full = "refs/tags/" + refName
+	}
+	if _, err := gitsvc.RevSHA(owner, name, full); err != nil {
+		writeCode(w, http.StatusNotFound, "ref_not_found", kind+" not found")
+		return
+	}
+	var in setRefNoteReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	in.Note = strings.TrimSpace(in.Note)
+	if tooLong(w, "note", in.Note, maxBodyRunes) {
+		return
+	}
+	if err := a.store.SetRefNote(owner, name, kind, refName, in.Note); err != nil {
+		internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"kind": kind, "name": refName, "note": in.Note})
 }
 
 // writeCommit 写入一次提交。

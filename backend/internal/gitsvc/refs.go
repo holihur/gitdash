@@ -11,6 +11,8 @@ import (
 type Branch struct {
 	Name   string `json:"name"`
 	IsHead bool   `json:"is_head"`
+	// Note 分支备注（由 API 层从数据库合并填充，非 git 数据）。
+	Note string `json:"note,omitempty"`
 }
 
 func headBranch(owner, name string) (string, error) {
@@ -86,6 +88,8 @@ type Tag struct {
 	Name    string `json:"name"`
 	SHA     string `json:"sha"`
 	Message string `json:"message"`
+	// Note 标签备注（由 API 层从数据库合并填充，非 git 数据）。
+	Note string `json:"note,omitempty"`
 }
 
 // Tags 列出标签（附注标签取被指提交）。

@@ -566,6 +566,18 @@ type mergeQueueRow struct {
 
 func (mergeQueueRow) TableName() string { return "merge_queue" }
 
+// refNoteRow 分支/标签备注：以 (owner, repo, kind, name) 为主键，独立于 git refs 存储。
+type refNoteRow struct {
+	Owner     string `gorm:"primaryKey;size:255;column:owner"`
+	Repo      string `gorm:"primaryKey;size:255;column:repo"`
+	Kind      string `gorm:"primaryKey;size:16;column:kind"` // branch | tag
+	Name      string `gorm:"primaryKey;size:255;column:name"`
+	Note      string `gorm:"not null;default:''"`
+	UpdatedAt string `gorm:"not null"`
+}
+
+func (refNoteRow) TableName() string { return "ref_notes" }
+
 // ---- pipelines ----
 
 type pipelineCfgRow struct {

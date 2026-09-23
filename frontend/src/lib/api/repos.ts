@@ -204,6 +204,18 @@ export const reposApi = {
   // branches & tags
   listTags: (owner: string, name: string) =>
     req<Tag[]>(`/users/${owner}/repos/${name}/tags`),
+  /** 分页列出分支（供分支管理 tab 使用）。 */
+  branchesPage: (owner: string, name: string, limit?: number, offset?: number) =>
+    reqPage<Branch[]>(`/users/${owner}/repos/${name}/branches${pageQuery(limit, offset)}`),
+  /** 分页列出标签（供标签管理 tab 使用）。 */
+  tagsPage: (owner: string, name: string, limit?: number, offset?: number) =>
+    reqPage<Tag[]>(`/users/${owner}/repos/${name}/tags${pageQuery(limit, offset)}`),
+  /** 设置分支/标签备注（note 为空清除备注）。 */
+  setRefNote: (owner: string, name: string, kind: "branch" | "tag", refName: string, note: string) =>
+    req<{ kind: string; name: string; note: string }>(
+      `/users/${owner}/repos/${name}/refs/${kind}/${encodeURIComponent(refName)}/note`,
+      { method: "PUT", body: JSON.stringify({ note }) },
+    ),
   createRef: (
     owner: string,
     name: string,

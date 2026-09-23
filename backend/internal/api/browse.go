@@ -44,10 +44,16 @@ func (a *API) branches(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	total := len(bs)
+	notes, _ := a.store.RefNotes(owner, name)
+	out := make([]gitsvc.Branch, 0, len(bs))
+	for _, b := range bs {
+		b.Note = notes["branch/"+b.Name]
+		out = append(out, b)
+	}
+	total := len(out)
 	limit, offset := pageParams(r)
 	setTotal(w, total)
-	writeJSON(w, http.StatusOK, pageSlice(bs, limit, offset))
+	writeJSON(w, http.StatusOK, pageSlice(out, limit, offset))
 }
 
 // tree 列出目录内容。

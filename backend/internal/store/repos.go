@@ -260,6 +260,7 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			{&releaseRow{}, "owner = ? AND repo = ?"},
 			{&releaseAssetRow{}, "owner = ? AND repo = ?"},
 			{&branchProtectionRow{}, "owner = ? AND repo = ?"},
+			{&refNoteRow{}, "owner = ? AND repo = ?"},
 			{&pipelineCfgRow{}, "owner = ? AND repo = ?"},
 			{&pipelineRunRow{}, "owner = ? AND repo = ?"},
 			{&repoEnvVarRow{}, "owner = ? AND repo = ?"},
