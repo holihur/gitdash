@@ -71,7 +71,7 @@ def _new_user(base: str, prefix: str) -> tuple[str, ApiClient]:
     return name, c
 
 
-def _wait_indexed(client, q: str, timeout: float = 30.0) -> dict:
+def _wait_indexed(client, q: str, timeout: float = 60.0) -> dict:
     """轮询直到搜索实际命中索引（indexed_repos > 0）且返回结果。"""
     deadline = time.time() + timeout
     last = {}

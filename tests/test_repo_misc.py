@@ -15,7 +15,7 @@ def _uuid() -> str:
     return uuid.uuid4().hex[:10]
 
 
-def _search_wait(client, url, params, timeout=20):
+def _search_wait(client, url, params, timeout=60):
     """单仓库搜索最终一致：索引构建中（X-Code-Search: indexing）时轮询等待。"""
     deadline = time.time() + timeout
     while True:

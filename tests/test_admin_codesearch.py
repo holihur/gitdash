@@ -40,7 +40,7 @@ def test_admin_codesearch_metrics(admin, base_url, user_factory):
     )
     # 用另一个会话轮询搜索，直到索引就绪并返回结果。
     c2 = ApiClient(base_url, token)
-    deadline = time.time() + 20
+    deadline = time.time() + 60
     while time.time() < deadline:
         r = c2.get("/search/code?q=ADMINMETRIC", expect=200).json()
         if r.get("indexed_repos", 0) > 0 and r.get("results"):

@@ -224,7 +224,7 @@ def test_host_run_success(host_repo):
     c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
     _commit(c, username, repo, ".gitdash.yml", HOST_YAML)
 
-    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = first_run(_trigger_run(c, username, repo))
     assert run["steps_total"] == 2
 
     run = _wait_terminal(c, username, repo, run["id"])
@@ -240,7 +240,7 @@ def test_host_run_step_failure(host_repo):
     c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
     _commit(c, username, repo, ".gitdash.yml", "steps:\n  - name: fail\n    run: echo boom; exit 7\n")
 
-    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = first_run(_trigger_run(c, username, repo))
     run = _wait_terminal(c, username, repo, run["id"])
     assert run["status"] == "failed"
     assert "exit code 7" in (run.get("error") or "")
@@ -277,7 +277,7 @@ def test_host_repo_env_vars_injected(host_repo):
     c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
     _commit(c, username, repo, ".gitdash.yml", "steps:\n  - name: hello\n    run: echo G=$GREETING\n")
 
-    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = first_run(_trigger_run(c, username, repo))
     run = _wait_terminal(c, username, repo, run["id"])
     assert run["status"] == "success", run
     assert "G=repo-level" in run.get("log", ""), run.get("log")
@@ -300,7 +300,7 @@ def test_host_repo_env_dsl_override(host_repo):
         "env:\n  - GREETING=dsl-level\nsteps:\n  - name: hello\n    run: echo G=$GREETING\n",
     )
 
-    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = first_run(_trigger_run(c, username, repo))
     run = _wait_terminal(c, username, repo, run["id"])
     assert run["status"] == "success", run
     assert "G=dsl-level" in run.get("log", ""), run.get("log")
@@ -323,7 +323,7 @@ def test_host_secret_injection_masked(host_repo):
         "secrets:\n  - MY_SECRET\nsteps:\n  - name: show\n    run: echo value=$MY_SECRET\n",
     )
 
-    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = first_run(_trigger_run(c, username, repo))
     run = _wait_terminal(c, username, repo, run["id"])
     assert run["status"] == "success", run
     log = run.get("log", "")
@@ -378,7 +378,7 @@ def test_host_artifacts_download(host_repo):
         "steps:\n  - name: build\n    run: mkdir -p out && echo hello-artifact > out/hello.txt\n",
     )
 
-    run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+    run = first_run(_trigger_run(c, username, repo))
     run = _wait_terminal(c, username, repo, run["id"])
     assert run["status"] == "success", run
     assert run.get("has_artifacts") is True, run
@@ -404,7 +404,7 @@ def test_host_disabled_rejects_no_image(base_url, user_factory):
     try:
         c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
         _commit(c, username, repo, ".gitdash.yml", NO_IMAGE_YAML)
-        run = first_run(c.post(f"/users/{username}/repos/{repo}/pipeline/runs", json={}, expect=201))
+        run = first_run(_trigger_run(c, username, repo))
         run = _wait_terminal(c, username, repo, run["id"], timeout=30)
         assert run["status"] == "failed"
         assert "host execution is disabled" in (run.get("error") or ""), run.get("error")

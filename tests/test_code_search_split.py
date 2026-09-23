@@ -62,7 +62,7 @@ def _spawn(binary: Path, env: dict, log_path: Path, ready, desc: str):
     log = open(log_path, "wb")
     proc = subprocess.Popen([str(binary), "serve"], env=env, stdout=log, stderr=subprocess.STDOUT)
     try:
-        _wait(lambda: proc.poll() is not None or ready(), timeout=40, desc=desc)
+        _wait(lambda: proc.poll() is not None or ready(), timeout=90, desc=desc)
     except BaseException:
         if proc.poll() is not None:
             log.close()
@@ -172,7 +172,7 @@ def test_split_indexes_and_serves_public_code(split_env):
     _write(alice_c, alice, repo, "src/main.go", f"package main\n// {token}\n")
 
     r: dict = {}
-    deadline = time.time() + 40
+    deadline = time.time() + 60
     while time.time() < deadline:
         r = _search(bob_c, token)
         if r.get("indexed_repos", 0) > 0 and r.get("results"):

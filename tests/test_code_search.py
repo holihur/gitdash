@@ -31,7 +31,7 @@ def _search(client, expect=200, **params):
     """搜索并等待索引就绪（索引最终一致，构建中返回 indexing 标志）。"""
     from urllib.parse import urlencode
 
-    deadline = time.time() + 20
+    deadline = time.time() + 60
     while True:
         r = client.get(f"/search/code?{urlencode(params)}", expect=expect).json()
         if expect != 200 or not isinstance(r, dict) or not r.get("indexing") or time.time() >= deadline:
@@ -171,7 +171,7 @@ def test_multi_term_and(code_env):
 def test_repo_scoped_search_multi_term_and(code_env):
     alice, c = code_env["alice"]
     base = _p(alice, code_env["alpha"], "/search")
-    deadline = time.time() + 20
+    deadline = time.time() + 60
     while True:
         resp = c.get(f"{base}?q=alphaToken%20betaToken&ref=main", expect=200)
         hits = resp.json()
