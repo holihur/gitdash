@@ -189,3 +189,54 @@ func TestAccessEntriesMergesSources(t *testing.T) {
 		}
 	}
 }
+
+// 团队授权应同时出现在「可访问仓库」的各个派生查询里：模板列表、代码搜索候选。
+// 回归：accessibleReposSubquery 增加团队分支后，paged.go / search.go 的占位符数量曾失配。
+func TestAccessibleListsCoverTeams(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{"alice", "bob"} {
+		if _, err := s.CreateUser(u, u+"-pass-123456"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreateOrg("acme", "ACME", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRepo("acme", "api", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetRepoTemplate("acme", "api", true); err != nil {
+		t.Fatal(err)
+	}
+	team, _ := s.CreateOrgTeam("acme", "devs")
+	_ = s.AddOrgTeamMember("acme", team.ID, "bob")
+	_ = s.GrantRepoTeam("acme", "api", team.ID, RoleWrite)
+
+	templates, err := s.ListAccessibleTemplateReposPaged("bob", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(templates) != 1 || templates[0].Name != "api" || templates[0].Role != RoleWrite {
+		t.Fatalf("templates via team = %+v", templates)
+	}
+	if n, err := s.CountAccessibleTemplateRepos("bob"); err != nil || n != 1 {
+		t.Fatalf("count templates = %d, err %v", n, err)
+	}
+
+	candidates, err := s.CodeSearchRepos("bob", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range candidates {
+		if r.Owner == "acme" && r.Name == "api" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("code search candidates missing team repo: %+v", candidates)
+	}
+}

@@ -92,9 +92,9 @@ func TestCollabBadInputs(t *testing.T) {
 	alice := register(t, env, "alice", "alice-pass-123")
 	alice.mustStatus("POST", "/repos", map[string]string{"name": "team"}, 201)
 
-	// 非法 permission
+	// 非法 permission（admin 现在是合法角色，改用未知值）
 	alice.mustFail("POST", collabPath("alice", "team", "/collabs"),
-		map[string]string{"username": "bobby", "permission": "admin"}, 400)
+		map[string]string{"username": "bobby", "permission": "superuser"}, 400)
 	// 不存在的用户
 	alice.mustFail("POST", collabPath("alice", "team", "/collabs"),
 		map[string]string{"username": "ghost", "permission": "read"}, 404)

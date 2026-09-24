@@ -439,7 +439,8 @@ func (s *Store) ListAccessibleTemplateReposPaged(username string, limit, offset 
 		JOIN repos r ON r.id = t.id
 		WHERE r.is_template = ?
 		ORDER BY r.owner, r.name`
-	args := []any{username, username, username, false, true, true}
+	// 子查询含 4 个用户名占位（自有 / 组织成员 / 协作者 / 团队），再加 is_template。
+	args := []any{username, username, username, username, false, true, true}
 	if limit > 0 {
 		if offset < 0 {
 			offset = 0
@@ -467,7 +468,7 @@ func (s *Store) CountAccessibleTemplateRepos(username string) (int, error) {
 	var n int64
 	row := s.db.Raw(`SELECT COUNT(*) FROM (`+accessibleReposSubquery+`) t
 		JOIN repos r ON r.id = t.id WHERE r.is_template = ?`,
-		username, username, username, false, true, true).Row()
+		username, username, username, username, false, true, true).Row()
 	if err := row.Scan(&n); err != nil {
 		return 0, err
 	}

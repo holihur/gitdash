@@ -98,7 +98,8 @@ func (s *Store) CodeSearchRepos(username string, max int) ([]Repo, error) {
 		WHERE r.banned = ? AND NOT EXISTS (SELECT 1 FROM orgs o WHERE o.name = r.owner AND o.banned = ?)
 		  AND (r.private = ? OR r.id IN (SELECT t.id FROM (` + accessibleReposSubquery + `) t))
 		ORDER BY r.owner, r.name`
-	args := []any{false, true, false, username, username, username, false, true}
+	// 前置 3 个：r.banned / o.banned / r.private；子查询含 4 个用户名占位；末尾 2 个：子查询内 banned。
+	args := []any{false, true, false, username, username, username, username, false, true}
 	if max > 0 {
 		sql += " LIMIT ?"
 		args = append(args, max)
