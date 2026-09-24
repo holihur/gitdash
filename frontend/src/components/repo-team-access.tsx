@@ -136,12 +136,14 @@ export function RepoTeamAccess({ owner, name }: { owner: string; name: string })
           ) : (
             <div className="divide-y divide-border rounded-md border text-sm">
               {entries.map((e, i) => (
-                <div key={`${e.subject}-${e.source}-${i}`} className="flex items-center gap-2 px-2 py-1.5">
+                <div key={`${e.subject}-${i}`} className="flex items-center gap-2 px-2 py-1.5">
                   <span className="min-w-0 flex-1 truncate font-medium">{e.subject}</span>
                   <Badge variant="outline" className="shrink-0 font-normal">
                     {t(`collabs.${e.role}`)}
                   </Badge>
-                  <span className="shrink-0 text-xs text-muted-foreground">{e.source}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {e.sources.join(" · ")}
+                  </span>
                 </div>
               ))}
             </div>

@@ -38,7 +38,7 @@ beforeEach(() => {
     { id: 1, org: "acme", name: "devs", member_count: 1, created_at: "" },
   ]);
   api.repoTeamGrants.mockResolvedValue([]);
-  api.repoAccess.mockResolvedValue([{ subject: "bob", role: "write", source: "team:devs" }]);
+  api.repoAccess.mockResolvedValue([{ subject: "bob", role: "write", sources: ["team:devs"] }]);
   api.grantRepoTeam.mockResolvedValue(null);
 });
 

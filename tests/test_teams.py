@@ -50,9 +50,11 @@ def test_org_teams_and_repo_grants(user_factory):
         # 权限审计包含团队来源
         entries = owner.get(f"/users/{org}/repos/{repo}/access", expect=200).json()
         assert any(
-            e["subject"] == mn and e["source"] == "team:devs" and e["role"] == "write"
+            e["subject"] == mn and "team:devs" in e["sources"] and e["role"] == "write"
             for e in entries
         )
+        # 审计条目按用户聚合：同一用户只出现一次
+        assert sum(1 for e in entries if e["subject"] == mn) == 1
 
         # 非 admin 不能管理团队授权
         member.put(

@@ -18143,9 +18143,12 @@ const docTemplate = `{
                 "role": {
                     "type": "string"
                 },
-                "source": {
+                "sources": {
                     "description": "owner | org_member | collaborator | team:\u003cname\u003e",
-                    "type": "string"
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "subject": {
                     "type": "string"

@@ -204,11 +204,11 @@ export interface RepoTeamGrant {
   permission: "read" | "triage" | "write" | "maintain" | "admin";
 }
 
-/** 权限审计条目：谁通过什么途径获得什么角色。 */
+/** 权限审计条目：同一用户合并来源，role 为有效（最高）角色。 */
 export interface AccessEntry {
   subject: string;
   role: string;
-  source: string;
+  sources: string[];
 }
 
 export interface SSHKey {

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"sort"
 	"strings"
 
 	"gorm.io/gorm"
@@ -23,11 +24,12 @@ type RepoTeamGrant struct {
 	Permission string `json:"permission"`
 }
 
-// AccessEntry 权限审计条目：谁通过什么途径获得什么角色。
+// AccessEntry 权限审计条目：谁通过哪些途径获得什么有效角色。
+// 同一用户的多条来源会合并到一条，Role 取最高，Sources 保留全部来源。
 type AccessEntry struct {
-	Subject string `json:"subject"`
-	Role    string `json:"role"`
-	Source  string `json:"source"` // owner | org_member | collaborator | team:<name>
+	Subject string   `json:"subject"`
+	Role    string   `json:"role"`
+	Sources []string `json:"sources"` // owner | org_member | collaborator | team:<name>
 }
 
 // roleRankSQL 把角色字符串映射为排序等级（SQL 片段，供 CASE 复用）。
@@ -223,29 +225,54 @@ func (s *Store) RepoTeamRole(owner, repo, username string) string {
 // ---- access audit ----
 
 // AccessEntries 汇总仓库的访问权限：所有者、组织成员默认角色、协作者、团队授权。
+// 按 subject 聚合：Role 为有效（最高）角色，Sources 列出全部来源。
 func (s *Store) AccessEntries(owner, repo string) ([]AccessEntry, error) {
-	out := []AccessEntry{}
+	type acc struct {
+		role    string
+		sources []string
+	}
+	bySubject := map[string]*acc{}
+	add := func(subject, role, source string) {
+		if subject == "" {
+			return
+		}
+		a, ok := bySubject[subject]
+		if !ok {
+			a = &acc{}
+			bySubject[subject] = a
+		}
+		if RoleRank(role) > RoleRank(a.role) {
+			a.role = role
+		}
+		for _, existing := range a.sources {
+			if existing == source {
+				return
+			}
+		}
+		a.sources = append(a.sources, source)
+	}
 	if s.IsOrg(owner) {
-		for _, m := range s.mustOrgMembers(owner) {
+		members := s.mustOrgMembers(owner)
+		for _, m := range members {
 			if m.Role == RoleOwner {
-				out = append(out, AccessEntry{Subject: m.Username, Role: RoleOwner, Source: "owner"})
+				add(m.Username, RoleOwner, "owner")
 			}
 		}
 		role := s.OrgDefaultMemberRole(owner)
-		for _, m := range s.mustOrgMembers(owner) {
+		for _, m := range members {
 			if m.Role != RoleOwner {
-				out = append(out, AccessEntry{Subject: m.Username, Role: role, Source: "org_member"})
+				add(m.Username, role, "org_member")
 			}
 		}
 	} else if owner != "" {
-		out = append(out, AccessEntry{Subject: owner, Role: RoleOwner, Source: "owner"})
+		add(owner, RoleOwner, "owner")
 	}
 	var collabs []collabRow
 	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).Order("username").Find(&collabs).Error; err != nil {
 		return nil, err
 	}
 	for _, c := range collabs {
-		out = append(out, AccessEntry{Subject: c.Username, Role: c.Permission, Source: "collaborator"})
+		add(c.Username, c.Permission, "collaborator")
 	}
 	grants, err := s.RepoTeamGrants(owner, repo)
 	if err != nil {
@@ -254,9 +281,19 @@ func (s *Store) AccessEntries(owner, repo string) ([]AccessEntry, error) {
 	for _, g := range grants {
 		members, _ := s.OrgTeamMembers(g.TeamID)
 		for _, u := range members {
-			out = append(out, AccessEntry{Subject: u, Role: g.Permission, Source: "team:" + g.TeamName})
+			add(u, g.Permission, "team:"+g.TeamName)
 		}
 	}
+	out := make([]AccessEntry, 0, len(bySubject))
+	for subject, a := range bySubject {
+		out = append(out, AccessEntry{Subject: subject, Role: a.role, Sources: a.sources})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if RoleRank(out[i].Role) != RoleRank(out[j].Role) {
+			return RoleRank(out[i].Role) > RoleRank(out[j].Role)
+		}
+		return out[i].Subject < out[j].Subject
+	})
 	return out, nil
 }
 
