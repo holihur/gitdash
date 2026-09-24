@@ -326,7 +326,7 @@ func (s *Store) RepoRole(owner, repo, username string) string {
 		case RoleOwner:
 			return RoleOwner
 		case "member":
-			return RoleWrite
+			return s.OrgDefaultMemberRole(owner)
 		}
 	}
 	if username != "" {
@@ -395,7 +395,15 @@ const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
 			FROM repos WHERE repos.owner = ?
 		UNION ALL
 		SELECT repos.owner AS owner, repos.name AS name,
-			CASE WHEN m.role = 'owner' THEN 6 ELSE 3 END AS role_rank
+			CASE WHEN m.role = 'owner' THEN 6
+				ELSE COALESCE((SELECT CASE o.default_member_role
+					WHEN 'admin' THEN 5
+					WHEN 'maintain' THEN 4
+					WHEN 'write' THEN 3
+					WHEN 'triage' THEN 2
+					WHEN 'read' THEN 1
+					ELSE 3 END FROM orgs o WHERE o.name = repos.owner), 3)
+			END AS role_rank
 			FROM repos JOIN org_members m ON repos.owner = m.org WHERE m.username = ?
 		UNION ALL
 		SELECT repo_collabs.owner AS owner, repo_collabs.repo AS name,

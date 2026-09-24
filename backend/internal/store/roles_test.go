@@ -5,6 +5,55 @@ import (
 	"testing"
 )
 
+func TestOrgDefaultMemberRole(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{"alice", "carol"} {
+		if _, err := s.CreateUser(u, u+"-pass-123456"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreateOrg("acme", "ACME", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRepo("acme", "r", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddOrgMember("acme", "carol", "member"); err != nil {
+		t.Fatal(err)
+	}
+	// 默认成员角色 = write。
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleWrite {
+		t.Fatalf("default member role = %q, want write", got)
+	}
+	// 改为 triage 后，成员仅能管理议题、不能推送。
+	if err := s.SetOrgInfo("acme", "ACME", "", RoleTriage); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.OrgDefaultMemberRole("acme"); got != RoleTriage {
+		t.Fatalf("org default = %q, want triage", got)
+	}
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleTriage {
+		t.Fatalf("member role = %q, want triage", got)
+	}
+	if s.CanWrite("acme", "r", "carol") || !s.CanDo("acme", "r", "carol", RoleTriage) {
+		t.Fatal("triage member capability mismatch")
+	}
+	// 新建的仓库同样适用。
+	if _, err := s.CreateRepo("acme", "r2", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoRole("acme", "r2", "carol"); got != RoleTriage {
+		t.Fatalf("new repo member role = %q, want triage", got)
+	}
+	// owner 不受影响。
+	if got := s.RepoRole("acme", "r", "alice"); got != RoleOwner {
+		t.Fatalf("owner role = %q", got)
+	}
+}
+
 func TestRepoRoles(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {

@@ -18466,6 +18466,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "default_member_role": {
+                    "type": "string"
+                },
                 "display": {
                     "type": "string"
                 },

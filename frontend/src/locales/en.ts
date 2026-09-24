@@ -515,6 +515,8 @@ export const en = {
     settingsTitle: "Organization settings",
     settingsBack: "Back to organization",
     ownerOnly: "Only the organization owner can edit these settings.",
+    defaultMemberRole: "Member default role",
+    defaultMemberRoleHint: "Role granted to organization members on every organization repository.",
     followers: "Followers",
     noFollowers: "No followers yet",
     since: "Created {date}",

@@ -242,12 +242,13 @@ type PipelineCIStatus struct {
 
 // Org 组织（命名空间）：成员可把仓库 owner 设为组织名。
 type Org struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Display   string `json:"display"`
-	Bio       string `json:"bio"`
-	CreatedAt string `json:"created_at"`
-	Banned    bool   `json:"banned"`
+	ID                int64  `json:"id"`
+	Name              string `json:"name"`
+	Display           string `json:"display"`
+	Bio               string `json:"bio"`
+	DefaultMemberRole string `json:"default_member_role"`
+	CreatedAt         string `json:"created_at"`
+	Banned            bool   `json:"banned"`
 }
 
 // OrgMember 组织成员（owner 拥有全部管理权，member 可写组织仓库）

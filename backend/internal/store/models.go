@@ -355,12 +355,14 @@ type collabRow struct {
 func (collabRow) TableName() string { return "repo_collabs" }
 
 type orgRow struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement"`
-	Name      string `gorm:"not null;uniqueIndex;size:255"`
-	Display   string `gorm:"not null;default:''"`
-	Bio       string `gorm:"not null;default:'';size:500"`
-	CreatedAt string `gorm:"not null"`
-	Banned    bool   `gorm:"not null;default:false"`
+	ID      int64  `gorm:"primaryKey;autoIncrement"`
+	Name    string `gorm:"not null;uniqueIndex;size:255"`
+	Display string `gorm:"not null;default:''"`
+	Bio     string `gorm:"not null;default:'';size:500"`
+	// DefaultMemberRole 组织成员在组织仓库中的默认角色（read/triage/write/maintain/admin）。
+	DefaultMemberRole string `gorm:"not null;default:'write';size:16"`
+	CreatedAt         string `gorm:"not null"`
+	Banned            bool   `gorm:"not null;default:false"`
 }
 
 func (orgRow) TableName() string { return "orgs" }

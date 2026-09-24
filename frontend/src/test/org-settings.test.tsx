@@ -34,6 +34,7 @@ const ownerProfile = {
   repos: [],
   followers: 0,
   is_following: false,
+  default_member_role: "write",
 };
 
 function renderPage() {
@@ -70,7 +71,26 @@ describe("OrgSettings", () => {
 
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
-      expect(api.updateOrg).toHaveBeenCalledWith("acme", { display: "ACME Corp", bio: "new bio" }),
+      expect(api.updateOrg).toHaveBeenCalledWith("acme", {
+        display: "ACME Corp",
+        bio: "new bio",
+        default_member_role: "write",
+      }),
+    );
+  });
+
+  it("可设置组织成员默认角色", async () => {
+    const user = userEvent.setup();
+    api.updateOrg.mockResolvedValue({ ...ownerProfile, default_member_role: "read" });
+    renderPage();
+
+    await user.selectOptions(await screen.findByLabelText("Member default role"), "read");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(api.updateOrg).toHaveBeenCalledWith(
+        "acme",
+        expect.objectContaining({ default_member_role: "read" }),
+      ),
     );
   });
 

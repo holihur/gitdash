@@ -22,10 +22,13 @@ func (s *Store) GetOrg(name string) (Org, error) {
 	return Org(row), nil
 }
 
-// SetOrgInfo 更新组织显示名与简介（仅 owner 调用）。
-func (s *Store) SetOrgInfo(name, display, bio string) error {
-	res := s.db.Model(&orgRow{}).Where("name = ?", name).
-		Updates(map[string]any{"display": display, "bio": bio})
+// SetOrgInfo 更新组织显示名、简介与成员默认角色（仅 owner 调用）。
+func (s *Store) SetOrgInfo(name, display, bio, defaultMemberRole string) error {
+	updates := map[string]any{"display": display, "bio": bio}
+	if ValidCollabRole(defaultMemberRole) {
+		updates["default_member_role"] = defaultMemberRole
+	}
+	res := s.db.Model(&orgRow{}).Where("name = ?", name).Updates(updates)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -33,6 +36,18 @@ func (s *Store) SetOrgInfo(name, display, bio string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// OrgDefaultMemberRole 返回组织成员在组织仓库中的默认角色（缺失/无效回退 write）。
+func (s *Store) OrgDefaultMemberRole(org string) string {
+	var row orgRow
+	if err := s.db.Select("default_member_role").Where("name = ?", org).First(&row).Error; err != nil {
+		return RoleWrite
+	}
+	if ValidCollabRole(row.DefaultMemberRole) {
+		return row.DefaultMemberRole
+	}
+	return RoleWrite
 }
 
 func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
@@ -44,7 +59,7 @@ func (s *Store) CreateOrg(name, display, creator string) (Org, error) {
 	if err := s.checkOrgQuota(creator); err != nil {
 		return Org{}, err
 	}
-	o := Org{Name: name, Display: display, CreatedAt: now()}
+	o := Org{Name: name, Display: display, DefaultMemberRole: RoleWrite, CreatedAt: now()}
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		row := orgRow{Name: name, Display: display, CreatedAt: o.CreatedAt}
 		if err := tx.Create(&row).Error; err != nil {

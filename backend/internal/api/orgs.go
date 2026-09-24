@@ -46,7 +46,7 @@ func (a *API) createOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if bio := strings.TrimSpace(in.Bio); bio != "" {
-		_ = a.store.SetOrgInfo(o.Name, o.Display, bio)
+		_ = a.store.SetOrgInfo(o.Name, o.Display, bio, store.RoleWrite)
 		o.Bio = bio
 	}
 	// 组织创建时初始化同名公开仓库（<org>/<org>），创建者自动订阅。
@@ -125,8 +125,9 @@ func (a *API) updateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Display *string `json:"display"`
-		Bio     *string `json:"bio"`
+		Display           *string `json:"display"`
+		Bio               *string `json:"bio"`
+		DefaultMemberRole *string `json:"default_member_role"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -135,6 +136,10 @@ func (a *API) updateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Bio != nil && tooLong(w, "bio", *in.Bio, maxDescRunes) {
+		return
+	}
+	if in.DefaultMemberRole != nil && !store.ValidCollabRole(strings.TrimSpace(*in.DefaultMemberRole)) {
+		writeCode(w, http.StatusBadRequest, "invalid_member_role", "default_member_role must be read/triage/write/maintain/admin")
 		return
 	}
 	o, err := a.store.GetOrg(org)
@@ -149,11 +154,15 @@ func (a *API) updateOrg(w http.ResponseWriter, r *http.Request) {
 	if in.Bio != nil {
 		bio = strings.TrimSpace(*in.Bio)
 	}
-	if err := a.store.SetOrgInfo(org, display, bio); err != nil {
+	memberRole := o.DefaultMemberRole
+	if in.DefaultMemberRole != nil {
+		memberRole = strings.TrimSpace(*in.DefaultMemberRole)
+	}
+	if err := a.store.SetOrgInfo(org, display, bio, memberRole); err != nil {
 		internalError(w, err)
 		return
 	}
-	o.Display, o.Bio = display, bio
+	o.Display, o.Bio, o.DefaultMemberRole = display, bio, memberRole
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -362,16 +371,17 @@ func (a *API) getOrgProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"name":         o.Name,
-		"display":      o.Display,
-		"bio":          o.Bio,
-		"created_at":   o.CreatedAt,
-		"role":         role,
-		"members":      members,
-		"repos":        repos,
-		"followers":    followers,
-		"is_following": a.store.IsFollowingOrg(me, org),
-		"cover_url":    a.orgCoverURL(org),
+		"name":                o.Name,
+		"display":             o.Display,
+		"bio":                 o.Bio,
+		"created_at":          o.CreatedAt,
+		"role":                role,
+		"default_member_role": o.DefaultMemberRole,
+		"members":             members,
+		"repos":               repos,
+		"followers":           followers,
+		"is_following":        a.store.IsFollowingOrg(me, org),
+		"cover_url":           a.orgCoverURL(org),
 	})
 }
 

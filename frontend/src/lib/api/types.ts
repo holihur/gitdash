@@ -173,6 +173,8 @@ export interface OrgProfile {
   followers: number;
   is_following: boolean;
   cover_url?: string;
+  /** 组织成员在组织仓库中的默认角色 */
+  default_member_role?: string;
 }
 
 export interface OrgFollowState {

@@ -49,6 +49,32 @@ def test_invalid_role_rejected(role_env, user_factory):
     )
 
 
+def test_org_member_default_role(user_factory):
+    on, _, owner = user_factory("og")
+    mn, _, member = user_factory("om")
+    org = f"og{_uuid()[:8]}"
+    repo = f"or-{_uuid()[:8]}"
+    owner.post("/orgs", json={"name": org, "display": "Org"}, expect=201)
+    owner.post("/repos", json={"name": repo, "namespace": org, "private": True}, expect=201)
+    owner.post(f"/orgs/{org}/members", json={"username": mn, "role": "member"}, expect=200)
+    try:
+        # 默认成员角色 write：成员可推送。
+        member.post(f"/users/{org}/repos/{repo}/commits", json=_commit_body("o1.txt"), expect=201)
+        # owner 改为 read：成员变只读。
+        owner.patch(f"/orgs/{org}", json={"default_member_role": "read"}, expect=200)
+        member.get(f"/users/{org}/repos/{repo}/tree", expect=200)
+        member.post(f"/users/{org}/repos/{repo}/commits", json=_commit_body("o2.txt"), expect=404)
+        # 非法角色拒绝。
+        owner.patch(f"/orgs/{org}", json={"default_member_role": "owner"}, expect=400)
+        # 非 owner 不能修改。
+        member.patch(f"/orgs/{org}", json={"default_member_role": "write"}, expect=404)
+        # profile 回传该设置。
+        assert owner.get(f"/orgs/{org}/profile", expect=200).json()["default_member_role"] == "read"
+    finally:
+        owner.delete(f"/users/{org}/repos/{repo}", expect=204)
+        owner.delete(f"/orgs/{org}", expect=204)
+
+
 def test_read_role(role_env):
     an, _, repo, users = role_env
     _, c = users["read"]

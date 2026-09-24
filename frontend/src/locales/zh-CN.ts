@@ -512,6 +512,8 @@ export const zhCN: Messages = {
     settingsTitle: "组织设置",
     settingsBack: "返回组织主页",
     ownerOnly: "只有组织所有者可以编辑这些设置。",
+    defaultMemberRole: "成员默认角色",
+    defaultMemberRoleHint: "组织成员在每个组织仓库中的默认角色。",
     updated: "组织信息已更新",
     followers: "粉丝",
     noFollowers: "还没有粉丝",

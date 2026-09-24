@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CoverBanner } from "@/components/cover-banner";
 import { BadgeDisplayPicker } from "@/components/badge-display-picker";
+import { COLLAB_ROLES } from "@/lib/repo-role";
 
 /** 组织设置独立页：编辑显示名 / 简介 / 封面（仅 owner）。 */
 export default function OrgSettings() {
@@ -20,6 +21,7 @@ export default function OrgSettings() {
   const [error, setError] = useState("");
   const [display, setDisplay] = useState("");
   const [bio, setBio] = useState("");
+  const [memberRole, setMemberRole] = useState("write");
   const [saving, setSaving] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverVersion, setCoverVersion] = useState(0);
@@ -31,6 +33,7 @@ export default function OrgSettings() {
       setProfile(p);
       setDisplay(p.display || "");
       setBio(p.bio || "");
+      setMemberRole(p.default_member_role || "write");
     } catch (e) {
       setError(apiErrorMsg(to, e));
     }
@@ -45,7 +48,11 @@ export default function OrgSettings() {
     if (!profile) return;
     setSaving(true);
     try {
-      const o = await api.updateOrg(profile.name, { display, bio });
+      const o = await api.updateOrg(profile.name, {
+        display,
+        bio,
+        default_member_role: memberRole,
+      });
       setProfile({ ...profile, display: o.display, bio: o.bio ?? "" });
       toast.success(t("orgs.updated"));
     } catch (e) {
@@ -158,6 +165,24 @@ export default function OrgSettings() {
               maxLength={500}
               placeholder={t("orgs.bioPlaceholder")}
             />
+          </div>
+          <div className="grid gap-2">
+            <label className="text-sm font-medium" htmlFor="org-settings-member-role">
+              {t("orgs.defaultMemberRole")}
+            </label>
+            <select
+              id="org-settings-member-role"
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={memberRole}
+              onChange={(e) => setMemberRole(e.target.value)}
+            >
+              {COLLAB_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {t(`collabs.${r}`)}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">{t("orgs.defaultMemberRoleHint")}</p>
           </div>
           <div className="flex justify-end gap-2">
             <Button asChild variant="outline" size="sm">

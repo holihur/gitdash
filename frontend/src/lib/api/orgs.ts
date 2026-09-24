@@ -6,8 +6,8 @@ export const orgsApi = {
   listOrgs: () => req<Org[]>("/orgs"),
   createOrg: (name: string, display: string) =>
     req<Org>("/orgs", { method: "POST", body: JSON.stringify({ name, display }) }),
-  /** 修改组织信息（仅 owner）：display / bio。 */
-  updateOrg: (org: string, patch: { display?: string; bio?: string }) =>
+  /** 修改组织信息（仅 owner）：display / bio / default_member_role。 */
+  updateOrg: (org: string, patch: { display?: string; bio?: string; default_member_role?: string }) =>
     req<Org>(`/orgs/${encodeURIComponent(org)}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
