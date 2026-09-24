@@ -10,18 +10,19 @@ vi.mock("@/lib/api", () => ({
 
 const { api } = (await import("@/lib/api")) as unknown as { api: { getBadges: Mock } };
 
-const badge = (id: number, label: string) => ({
+const badge = (id: number, label: string, emoji?: string) => ({
   id,
   slug: label.toLowerCase(),
   label,
   description: `${label} desc`,
+  emoji,
   has_image: false,
   created_at: "2026-01-01T00:00:00Z",
 });
 
 describe("BadgeStrip", () => {
   it("渲染目标挂出的徽章", async () => {
-    api.getBadges.mockResolvedValue([badge(1, "Verified"), badge(2, "Staff")]);
+    api.getBadges.mockResolvedValue([badge(1, "Verified", "🏅"), badge(2, "Staff")]);
     render(
       <I18nProvider>
         <BadgeStrip kind="user" owner="alice" />
@@ -29,6 +30,8 @@ describe("BadgeStrip", () => {
     );
     expect(await screen.findByText("Verified")).toBeInTheDocument();
     expect(screen.getByText("Staff")).toBeInTheDocument();
+    // emoji 兜底在没有图标时展示。
+    expect(screen.getByText("🏅")).toBeInTheDocument();
     expect(api.getBadges).toHaveBeenCalledWith("user", "alice", undefined);
   });
 

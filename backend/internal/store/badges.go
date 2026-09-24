@@ -15,6 +15,7 @@ type Badge struct {
 	Slug           string `json:"slug"`
 	Label          string `json:"label"`
 	Description    string `json:"description"`
+	Emoji          string `json:"emoji,omitempty"`
 	HasImage       bool   `json:"has_image"`
 	ImageUpdatedAt string `json:"image_updated_at,omitempty"`
 	CreatedAt      string `json:"created_at"`
@@ -32,7 +33,7 @@ type BadgeGrant struct {
 
 func badgeToDTO(r badgeRow, hasImage bool, imageUpdatedAt string) Badge {
 	return Badge{
-		ID: r.ID, Slug: r.Slug, Label: r.Label, Description: r.Description,
+		ID: r.ID, Slug: r.Slug, Label: r.Label, Description: r.Description, Emoji: r.Emoji,
 		HasImage: hasImage, ImageUpdatedAt: imageUpdatedAt, CreatedAt: r.CreatedAt,
 	}
 }
@@ -73,6 +74,7 @@ type BadgeUpdate struct {
 	Slug        *string
 	Label       *string
 	Description *string
+	Emoji       *string
 }
 
 // UpdateBadge 更新徽章定义；不存在返回 ErrNotFound，slug 冲突返回 ErrExists。
@@ -86,6 +88,9 @@ func (s *Store) UpdateBadge(id int64, up BadgeUpdate) (Badge, error) {
 	}
 	if up.Description != nil {
 		updates["description"] = *up.Description
+	}
+	if up.Emoji != nil {
+		updates["emoji"] = *up.Emoji
 	}
 	if len(updates) > 0 {
 		res := s.db.Model(&badgeRow{}).Where("id = ?", id).Updates(updates)
@@ -169,6 +174,18 @@ func (s *Store) GetBadgeImage(id int64) (string, []byte, error) {
 		return "", nil, notFoundErr(err)
 	}
 	return row.ContentType, row.Data, nil
+}
+
+// DeleteBadgeImage 删除徽章图标（徽章本身保留）；图标不存在返回 ErrNotFound。
+func (s *Store) DeleteBadgeImage(id int64) error {
+	res := s.db.Where("badge_id = ?", id).Delete(&badgeImageRow{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ---- grants ----

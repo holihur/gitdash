@@ -828,7 +828,9 @@ type badgeRow struct {
 	Slug        string `gorm:"not null;uniqueIndex;size:64"`
 	Label       string `gorm:"not null;size:64"`
 	Description string `gorm:"not null;default:'';size:500"`
-	CreatedAt   string `gorm:"not null"`
+	// Emoji 无图标时的 emoji 兜底（可为空）。
+	Emoji     string `gorm:"not null;default:'';size:32"`
+	CreatedAt string `gorm:"not null"`
 }
 
 func (badgeRow) TableName() string { return "badges" }

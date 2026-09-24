@@ -392,6 +392,8 @@ export interface Badge {
   slug: string;
   label: string;
   description: string;
+  /** 无图标时的 emoji 兜底（可为空） */
+  emoji?: string;
   has_image: boolean;
   image_updated_at?: string;
   created_at: string;

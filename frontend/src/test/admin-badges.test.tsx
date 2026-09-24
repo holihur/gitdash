@@ -57,6 +57,29 @@ describe("BadgesSection", () => {
     expect(form.get("label")).toBe("Staff");
   });
 
+  it("更新 emoji 并移除图标", async () => {
+    adminList.mockResolvedValue({
+      items: [{ ...badge, emoji: "🏅", has_image: true, image_updated_at: "t" }],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText("Verified");
+
+    const emojiInput = screen.getByLabelText("Emoji (fallback when no image)");
+    await user.clear(emojiInput);
+    await user.type(emojiInput, "⭐");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(adminReq).toHaveBeenCalledWith("/badges/1", { emoji: "⭐" }, "PATCH"),
+    );
+
+    await user.click(screen.getByRole("button", { name: /remove image/i }));
+    await waitFor(() =>
+      expect(adminReq).toHaveBeenCalledWith("/badges/1/image", undefined, "DELETE"),
+    );
+  });
+
   it("展开授予记录并授予 / 撤销", async () => {
     const user = userEvent.setup();
     renderSection();

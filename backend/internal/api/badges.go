@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gitdash/backend/internal/store"
 )
@@ -14,6 +15,26 @@ import (
 // 任意徽章可发给任意类型目标。
 
 const maxBadgeImageBytes = 1 << 20 // 1MB
+
+// maxBadgeEmojiRunes emoji 兜底最大码点数（允许组合序列）。
+const maxBadgeEmojiRunes = 8
+
+// normalizeBadgeEmoji 校验并清理 emoji 兜底字段；含控制字符或过长时返回 ok=false。
+func normalizeBadgeEmoji(raw string) (string, bool) {
+	e := strings.TrimSpace(raw)
+	if e == "" {
+		return "", true
+	}
+	if len([]rune(e)) > maxBadgeEmojiRunes {
+		return "", false
+	}
+	for _, r := range e {
+		if unicode.IsControl(r) {
+			return "", false
+		}
+	}
+	return e, true
+}
 
 // readOptionalBadgeImage 解析可选的多部分图片字段；no file 视为“无图”。
 // 返回 (contentType, data, hasImage, ok)；校验失败时已写入响应。
@@ -109,6 +130,7 @@ func (a *API) adminListBadges(w http.ResponseWriter, r *http.Request) {
 //	@Param       slug        formData string false "唯一标识（省略时按 label 生成）"
 //	@Param       label       formData string true  "名称"
 //	@Param       description formData string false "描述（悬停显示）"
+//	@Param       emoji       formData string false "无图标时的 emoji 兜底"
 //	@Param       image       formData file   false "图标（png/jpeg/gif/webp，≤1MB）"
 //	@Success     201 {object} store.Badge
 //	@Security    BearerAuth
@@ -127,6 +149,11 @@ func (a *API) adminCreateBadge(w http.ResponseWriter, r *http.Request) {
 	if slug == "" {
 		slug = slugifyBadge(label)
 	}
+	emoji, ok := normalizeBadgeEmoji(r.FormValue("emoji"))
+	if !ok {
+		writeCode(w, http.StatusBadRequest, "emoji_invalid", "emoji must be at most 8 characters with no control characters")
+		return
+	}
 	b, err := a.store.CreateBadge(slug, label, r.FormValue("description"))
 	if errors.Is(err, store.ErrExists) {
 		writeCode(w, http.StatusConflict, "badge_slug_exists", "badge slug already exists")
@@ -136,13 +163,19 @@ func (a *API) adminCreateBadge(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	if emoji != "" {
+		if _, err := a.store.UpdateBadge(b.ID, store.BadgeUpdate{Emoji: &emoji}); err != nil {
+			internalError(w, err)
+			return
+		}
+	}
 	if hasImage {
 		if err := a.store.SetBadgeImage(b.ID, ct, data); err != nil {
 			internalError(w, err)
 			return
 		}
-		b, _ = a.store.GetBadge(b.ID)
 	}
+	b, _ = a.store.GetBadge(b.ID)
 	writeJSON(w, http.StatusCreated, b)
 }
 
@@ -167,6 +200,7 @@ func (a *API) adminUpdateBadge(w http.ResponseWriter, r *http.Request) {
 		Slug        *string `json:"slug"`
 		Label       *string `json:"label"`
 		Description *string `json:"description"`
+		Emoji       *string `json:"emoji"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
@@ -175,7 +209,15 @@ func (a *API) adminUpdateBadge(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "label_required", "label is required")
 		return
 	}
-	b, err := a.store.UpdateBadge(id, store.BadgeUpdate{Slug: in.Slug, Label: in.Label, Description: in.Description})
+	if in.Emoji != nil {
+		emoji, ok := normalizeBadgeEmoji(*in.Emoji)
+		if !ok {
+			writeCode(w, http.StatusBadRequest, "emoji_invalid", "emoji must be at most 8 characters with no control characters")
+			return
+		}
+		in.Emoji = &emoji
+	}
+	b, err := a.store.UpdateBadge(id, store.BadgeUpdate{Slug: in.Slug, Label: in.Label, Description: in.Description, Emoji: in.Emoji})
 	if errors.Is(err, store.ErrExists) {
 		writeCode(w, http.StatusConflict, "badge_slug_exists", "badge slug already exists")
 		return
@@ -225,6 +267,38 @@ func (a *API) adminSetBadgeImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b, _ := a.store.GetBadge(id)
+	writeJSON(w, http.StatusOK, b)
+}
+
+// adminDeleteBadgeImage 删除徽章图标（保留徽章定义）。
+//
+//	@Summary     管理端删除徽章图标
+//	@Tags        admin
+//	@Produce     json
+//	@Param       id path int true "徽章 ID"
+//	@Success     200 {object} store.Badge
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /admin/badges/{id}/image [delete]
+func (a *API) adminDeleteBadgeImage(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id < 1 {
+		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
+		return
+	}
+	if _, err := a.store.GetBadge(id); err != nil {
+		writeNotFound(w, "badge")
+		return
+	}
+	if err := a.store.DeleteBadgeImage(id); err != nil && !errors.Is(err, store.ErrNotFound) {
+		internalError(w, err)
+		return
+	}
+	b, err := a.store.GetBadge(id)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, b)
 }
 

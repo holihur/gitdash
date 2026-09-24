@@ -369,6 +369,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("PATCH /api/admin/badges/{id}", a.adminAuth(a.adminUpdateBadge))
 	mux.HandleFunc("DELETE /api/admin/badges/{id}", a.adminAuth(a.adminDeleteBadge))
 	mux.HandleFunc("POST /api/admin/badges/{id}/image", a.adminAuth(a.adminSetBadgeImage))
+	mux.HandleFunc("DELETE /api/admin/badges/{id}/image", a.adminAuth(a.adminDeleteBadgeImage))
 	mux.HandleFunc("GET /api/admin/badges/{id}/grants", a.adminAuth(a.adminListBadgeGrants))
 	mux.HandleFunc("POST /api/admin/badges/{id}/grants", a.adminAuth(a.adminGrantBadge))
 	mux.HandleFunc("DELETE /api/admin/badges/{id}/grants", a.adminAuth(a.adminRevokeBadge))

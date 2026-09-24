@@ -55,6 +55,26 @@ func TestBadgeCRUDAndImage(t *testing.T) {
 	if len(list) != 1 || list[0].Label != "Verified Pro" || !list[0].HasImage {
 		t.Fatalf("list = %+v", list)
 	}
+	// emoji 兜底字段与部分更新。
+	emoji := "🏅"
+	got, err = s.UpdateBadge(b.ID, BadgeUpdate{Emoji: &emoji})
+	if err != nil || got.Emoji != emoji {
+		t.Fatalf("emoji update = %+v, %v", got, err)
+	}
+	// 删除图标后定义保留、has_image 变 false，可再次上传。
+	if err := s.DeleteBadgeImage(b.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.GetBadge(b.ID)
+	if err != nil || got.HasImage || got.Emoji != emoji || got.Label != "Verified Pro" {
+		t.Fatalf("badge after image delete = %+v, %v", got, err)
+	}
+	if _, _, err := s.GetBadgeImage(b.ID); err != ErrNotFound {
+		t.Fatalf("image should be gone, got %v", err)
+	}
+	if err := s.DeleteBadgeImage(b.ID); err != ErrNotFound {
+		t.Fatalf("second delete = %v, want ErrNotFound", err)
+	}
 }
 
 func TestBadgeGrantDisplayRevoke(t *testing.T) {

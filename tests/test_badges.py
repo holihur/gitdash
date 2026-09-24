@@ -136,6 +136,22 @@ def test_badge_update_image_and_grants(admin, badge_env):
     assert replaced.status_code == 200, replaced.text
     assert replaced.json()["has_image"] is True
 
+    # emoji 兜底：可创建 / 更新；过期或含控制字符拒绝
+    created = admin.post(
+        "/admin/badges", data={"label": f"Emoji-{_uuid()[:4]}", "emoji": "⭐"}, expect=201
+    ).json()
+    assert created["emoji"] == "⭐"
+    emoji_upd = admin.patch(f"/admin/badges/{b['id']}", json={"emoji": "🏅"}, expect=200).json()
+    assert emoji_upd["emoji"] == "🏅"
+    admin.patch(f"/admin/badges/{b['id']}", json={"emoji": "x" * 9}, expect=400)
+    admin.patch(f"/admin/badges/{b['id']}", json={"emoji": "bad\u0000value"}, expect=400)
+
+    # 删除图标：保留徽章定义与 emoji，且可重复调用
+    dele = admin.request("DELETE", f"/admin/badges/{b['id']}/image", expect=200).json()
+    assert dele["has_image"] is False and dele["emoji"] == "🏅"
+    admin.request("DELETE", f"/admin/badges/{b['id']}/image", expect=200)
+    admin.request("DELETE", "/admin/badges/999999/image", expect=404)
+
     # 授予记录列表
     admin.post(f"/admin/badges/{b['id']}/grants", json={"kind": "user", "owner": uname}, expect=204)
     grants = admin.get(f"/admin/badges/{b['id']}/grants", expect=200).json()

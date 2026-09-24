@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ImageOff, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import type { Badge, BadgeGrant } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { BadgeChip } from "@/components/badge-chip";
 import { adminList, adminReq, adminUpload, toastError } from "../api";
 
-const EMPTY = { label: "", slug: "", description: "" };
+const EMPTY = { label: "", slug: "", description: "", emoji: "" };
 
 /** 管理端徽章：定义（含图标）+ 授予 / 撤销。 */
 export function BadgesSection() {
@@ -18,6 +19,7 @@ export function BadgesSection() {
   const [form, setForm] = useState(EMPTY);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [emojiDraft, setEmojiDraft] = useState<Record<number, string>>({});
   const [grants, setGrants] = useState<Record<number, BadgeGrant[] | undefined>>({});
   const [kind, setKind] = useState<"user" | "repo" | "org">("user");
   const [grantOwner, setGrantOwner] = useState("");
@@ -43,6 +45,7 @@ export function BadgesSection() {
       fd.set("label", form.label.trim());
       if (form.slug.trim()) fd.set("slug", form.slug.trim());
       fd.set("description", form.description);
+      if (form.emoji.trim()) fd.set("emoji", form.emoji.trim());
       if (file) fd.set("image", file);
       await adminUpload<Badge>("/badges", fd);
       setForm(EMPTY);
@@ -59,6 +62,30 @@ export function BadgesSection() {
     try {
       await adminReq(`/badges/${id}`, undefined, "DELETE");
       setGrants((s) => ({ ...s, [id]: undefined }));
+      await load();
+    } catch (e) {
+      toastError(to, e);
+    }
+  };
+
+  const updateEmoji = async (id: number) => {
+    try {
+      await adminReq(`/badges/${id}`, { emoji: (emojiDraft[id] ?? "").trim() }, "PATCH");
+      setEmojiDraft((s) => {
+        const next = { ...s };
+        delete next[id];
+        return next;
+      });
+      await load();
+      toast.success(t("admin.badgeUpdated"));
+    } catch (e) {
+      toastError(to, e);
+    }
+  };
+
+  const removeImage = async (id: number) => {
+    try {
+      await adminReq(`/badges/${id}/image`, undefined, "DELETE");
       await load();
     } catch (e) {
       toastError(to, e);
@@ -132,14 +159,25 @@ export function BadgesSection() {
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="text-sm text-muted-foreground"
-          />
-          <div className="flex items-center justify-end">
-            <Button type="submit" className="gap-1.5" disabled={busy || !form.label.trim()}>
+          <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
+            <Input
+              className="h-9 w-44"
+              maxLength={8}
+              placeholder={t("admin.badgeEmoji")}
+              value={form.emoji}
+              onChange={(e) => setForm({ ...form, emoji: e.target.value })}
+            />
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="text-sm text-muted-foreground"
+            />
+            <Button
+              type="submit"
+              className="ml-auto gap-1.5"
+              disabled={busy || !form.label.trim()}
+            >
               <Plus className="h-4 w-4" />
               {t("admin.badgeCreate")}
             </Button>
@@ -173,6 +211,35 @@ export function BadgesSection() {
                 {b.description && (
                   <p className="mt-1 text-xs text-muted-foreground">{b.description}</p>
                 )}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Input
+                    className="h-8 w-24"
+                    maxLength={8}
+                    placeholder="🏅"
+                    aria-label={t("admin.badgeEmoji")}
+                    value={emojiDraft[b.id] ?? b.emoji ?? ""}
+                    onChange={(e) => setEmojiDraft((s) => ({ ...s, [b.id]: e.target.value }))}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={(emojiDraft[b.id] ?? b.emoji ?? "") === (b.emoji ?? "")}
+                    onClick={() => void updateEmoji(b.id)}
+                  >
+                    {t("common.save")}
+                  </Button>
+                  {b.has_image && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1.5 text-destructive hover:text-destructive"
+                      onClick={() => void removeImage(b.id)}
+                    >
+                      <ImageOff className="h-4 w-4" />
+                      {t("admin.badgeRemoveImage")}
+                    </Button>
+                  )}
+                </div>
 
                 {grants[b.id] !== undefined && (
                   <div className="mt-2 space-y-2 border-t pt-2">

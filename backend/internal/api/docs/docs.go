@@ -73,6 +73,12 @@ const docTemplate = `{
                         "in": "formData"
                     },
                     {
+                        "type": "string",
+                        "description": "无图标时的 emoji 兜底",
+                        "name": "emoji",
+                        "in": "formData"
+                    },
+                    {
                         "type": "file",
                         "description": "图标（png/jpeg/gif/webp，≤1MB）",
                         "name": "image",
@@ -324,6 +330,46 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/store.Badge"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "管理端删除徽章图标",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "徽章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Badge"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 },
@@ -18242,6 +18288,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "emoji": {
                     "type": "string"
                 },
                 "has_image": {
