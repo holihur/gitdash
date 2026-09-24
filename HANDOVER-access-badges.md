@@ -24,7 +24,21 @@ c7f2272 feat(repos): 仓库角色权限系统（read/triage/write/maintain/admin
 d049f90 feat(badges): 系统徽章 + 用户/组织主页 Hero 布局
 ```
 
-> 其后又补了一个 `RepoRole` 修复（下一提交）：组织成员若在某个仓库是**更高角色的协作者/团队成员**，此前会被组织默认角色“吃掉”，现已改为取最高。
+> 其后又补了一个 `RepoRole` 修复（随交接文档一起提交）：组织成员若在某个仓库是**更高角色的协作者/团队成员**，此前会被组织默认角色“吃掉”，现已改为取最高。
+
+### 本轮交接后继续（§8 TODO 收尾）
+
+```
+f88c10b feat(access):  权限审计按用户聚合来源并显示有效角色
+7f213b7 fix(access):   修复团队分支后 accessibleReposSubquery 占位符失配
+005bb36 feat(access):  组织成员角色支持按仓库覆盖
+366c9d9 feat(badges):  移除图标接口 + emoji 兜底
+```
+
+- **修复回归**：`accessibleReposSubquery` 增加团队分支（第 4 个用户名占位）后，`paged.go` 的模板列表与 `search.go` 的代码搜索候选仍只传 3 个用户名，导致 SQL 参数错位（模板列表 `internal_error`、代码搜索候选失真）。已修复并补 store 回归单测 `TestAccessibleListsCoverTeams`。
+- **权限审计**：`AccessEntries` 现在按 `subject` 聚合，`Role` 为有效（最高）角色、`Sources` 列出全部来源；前端一行展示一个人。
+- **按仓库覆盖成员角色**：新增 `repos.member_role`（空=继承组织默认），有效角色仍取 `max(覆盖, 协作者, 团队)`；API `POST .../member-role`（需 admin，仅组织仓库）；仓库设置新增「组织成员角色」卡片。
+- **徽章**：新增 `emoji` 兜底字段与 `DELETE /api/admin/badges/{id}/image`。
 
 ---
 
@@ -97,14 +111,15 @@ task test:go ; task test:frontend ; task test:api
 
 ```
 owner(本人 / 组织 owner)
-  > max( 组织成员默认角色 , 协作者 permission , 团队授权 permission )
+  > max( 组织成员默认角色（仓库可覆盖） , 协作者 permission , 团队授权 permission )
   > 公开仓库 read（任何访问者，含匿名）
   > ""（无权限）
 ```
 
-- 组织默认角色存在 `orgs.default_member_role`。
+- 组织默认角色存在 `orgs.default_member_role`；仓库可用 `repos.member_role`（空=继承）覆盖，仅对该仓库生效。
 - 协作者与团队取最高：`max(collab, team)`。
-- 相关函数：`RoleRank`、`RoleAtLeast`、`ValidCollabRole`、`RepoRole`、`CanDo`、`CanRead`、`CanWrite`。
+- 相关函数：`RoleRank`、`RoleAtLeast`、`ValidCollabRole`、`RepoRole`、`RepoMemberRole`、`CanDo`、`CanRead`、`CanWrite`。
+- ⚠️ 所有派生查询（`accessibleReposSubquery`）都必须与 `RepoRole` 口径一致；该子查询有 **4 个用户名占位**（自有 / 组织成员 / 协作者 / 团队）+ 2 个 banned。新增来源时务必同步 `paged.go`、`search.go` 的实参顺序。
 
 ### 3.3 后端放行
 
@@ -158,10 +173,11 @@ COLLAB_ROLES = ["read","triage","write","maintain","admin"]
 ### 徽章 · 管理端（`adminAuth`）
 ```
 GET    /api/admin/badges
-POST   /api/admin/badges                 # multipart: slug/label/description/image
-PATCH  /api/admin/badges/{id}
+POST   /api/admin/badges                 # multipart: slug/label/description/emoji/image
+PATCH  /api/admin/badges/{id}            # {slug?,label?,description?,emoji?}
 DELETE /api/admin/badges/{id}
 POST   /api/admin/badges/{id}/image      # multipart: image
+DELETE /api/admin/badges/{id}/image      # 移除图标（保留徽章，幂等）
 GET    /api/admin/badges/{id}/grants
 POST   /api/admin/badges/{id}/grants     # {kind, owner, repo}
 DELETE /api/admin/badges/{id}/grants?kind=&owner=&repo=
@@ -188,7 +204,8 @@ DELETE /api/orgs/{org}/teams/{id}/members/{username}
 GET    /api/users/{owner}/repos/{name}/team-grants
 PUT    /api/users/{owner}/repos/{name}/team-grants/{teamId}   # {permission}（需 admin）
 DELETE /api/users/{owner}/repos/{name}/team-grants/{teamId}
-GET    /api/users/{owner}/repos/{name}/access      # 权限审计（需 admin）
+GET    /api/users/{owner}/repos/{name}/access      # 权限审计（需 admin，条目已按用户聚合 sources）
+POST   /api/users/{owner}/repos/{name}/member-role # {role} 组织成员按仓库覆盖（需 admin，仅组织仓库，空=继承）
 ```
 
 ### 组织
@@ -204,13 +221,13 @@ PATCH /api/orgs/{org}   # 新增 default_member_role（read/triage/write/maintai
 | 文件 | 作用 |
 |---|---|
 | `store/roles.go` | 角色常量、等级、`RoleAtLeast`、`ValidCollabRole` |
-| `store/repos.go` | `RepoRole`、`CanDo/CanRead/CanWrite`、`accessibleReposSubquery`（含团队分支）、`getRepo` 角色回传 |
+| `store/repos.go` | `RepoRole`、`RepoMemberRole` / `SetRepoMemberRole`、`CanDo/CanRead/CanWrite`、`accessibleReposSubquery`（含团队分支 + 成员角色覆盖）、`getRepo` 角色回传 |
 | `store/orgs.go` | `SetOrgInfo`（含默认角色）、`OrgDefaultMemberRole`、`OrgRole` |
 | `store/org_teams.go` | 团队/成员/仓库授权 CRUD、`RepoTeamRole`、`AccessEntries` |
-| `store/badges.go` | 徽章 CRUD、授予/展示、批量、图片、目标校验 |
+| `store/badges.go` | 徽章 CRUD、授予/展示、批量、图片（含 `DeleteBadgeImage`）、`emoji` 字段、目标校验 |
 | `store/models.go` / `migrate.go` | 表定义与 AutoMigrate |
 | `api/api.go` | `requireRole` / `requireAccess`、路由注册 |
-| `api/badges.go` | 徽章管理端 + 公开 + 展示 + 批量 |
+| `api/badges.go` | 徽章管理端（含 emoji 校验 / 删图标）+ 公开 + 展示 + 批量 |
 | `api/teams.go` | 团队、团队授权、权限审计 |
 | `api/orgs.go` | 组织资料 / 默认角色 / profile |
 | `api/repos.go` | `getRepo` 返回完整角色 |
@@ -222,12 +239,13 @@ PATCH /api/orgs/{org}   # 新增 default_member_role（read/triage/write/maintai
 | `lib/api/badges.ts` | 徽章 API + 批处理器 + TTL 缓存 + `invalidateBadges` |
 | `lib/api/orgs.ts` | 团队 API、`updateOrg(default_member_role)` |
 | `lib/api/repos.ts` | `repoTeamGrants` / `grantRepoTeam` / `revokeRepoTeam` / `repoAccess` |
-| `components/badge-chip.tsx` / `badge-strip.tsx` / `badge-display-picker.tsx` | 徽章展示与挂载 |
+| `components/badge-chip.tsx` / `badge-strip.tsx` / `badge-display-picker.tsx` | 徽章展示（图标 → emoji → 奖章）与挂载 |
 | `components/org-teams-card.tsx` | 组织设置里的团队管理 |
 | `components/repo-team-access.tsx` | 仓库团队授权 + 权限总览 |
 | `admin/sections/BadgesSection.tsx` | 管理后台徽章管理 |
 | `pages/OrgSettings.tsx` | 组织设置（显示名/简介/封面/默认角色/团队/徽章） |
 | `pages/repoview/settings-tab.tsx` | 仓库设置（含「你的权限」卡片 + `Gated` 置灰） |
+| `pages/repoview/settings/MemberRoleCard.tsx` | 组织成员角色按仓库覆盖（admin，仅组织仓库） |
 | `pages/repos/RepoCard.tsx`、`pages/Explore.tsx`、`pages/UserPage.tsx`、`pages/OrgPage.tsx`、`repoview/repo-header.tsx` | 徽章展示与角色门控 |
 
 ---
@@ -235,15 +253,15 @@ PATCH /api/orgs/{org}   # 新增 default_member_role（read/triage/write/maintai
 ## 7. 测试
 
 - Go 单测：
-  - `store/roles_test.go`（角色矩阵、组织默认角色、成员+协作者取最高）
-  - `store/org_teams_test.go`（团队角色、`AccessEntries`、团队进入可访问列表）
-  - `store/badges_test.go`（CRUD/图标/授予/展示/批量/级联）
+  - `store/roles_test.go`（角色矩阵、组织默认角色、成员+协作者取最高、按仓库覆盖）
+  - `store/org_teams_test.go`（团队角色、按用户聚合的 `AccessEntries`、团队进入可访问列表；`TestAccessibleListsCoverTeams` 锁住占位符顺序）
+  - `store/badges_test.go`（CRUD/图标/删图标/emoji/授予/展示/批量/级联）
 - 黑盒 pytest：
   - `test_badges.py`、`test_teams.py`、`test_roles.py`、`test_orgs*.py`、`test_collabs.py`
   - 徽章 12 条 + 团队 10 条路由均被命中（满足覆盖率门禁）
 - 前端 Vitest：
   - `repo-role.test.ts`、`collabs-dialog.test.tsx`、`org-settings.test.tsx`
-  - `badge-*`、`repo-team-access.test.tsx`、`admin-badges.test.tsx`
+  - `badge-*`（含 emoji 兜底）、`repo-team-access.test.tsx`、`admin-badges.test.tsx`、`member-role-card.test.tsx`
 
 跑全量：`task test`（go + frontend）、`task test:api`（pytest）。
 
@@ -252,11 +270,16 @@ PATCH /api/orgs/{org}   # 新增 default_member_role（read/triage/write/maintai
 ## 8. 已知限制 / 后续 TODO
 
 1. **团队授权仅限组织仓库**（`owner` 必须为组织名）；个人仓库只能加协作者。
-2. `AccessEntries` 对同一用户不合并来源（既在组织又是协作者会出现多条）；如需「最终有效角色」视图可再聚合。
-3. 组织成员**默认角色是组织级**，不能按团队/按仓库覆盖（团队授权可覆盖，但不是“按仓库改默认”）。
+2. ~~`AccessEntries` 对同一用户不合并来源~~ ✅ 已聚合：`Role` 为有效角色、`Sources` 列出全部来源。
+3. ~~组织成员默认角色不能按仓库覆盖~~ ✅ 已支持 `repos.member_role`（空=继承）；仍不能按**团队**改默认。
 4. 评审/合并目前是固定映射（triage / write），没有做成可配置开关；如需“可评审不可合并”的显式开关，可在仓库设置加字段。
-5. 徽章无删除图标接口（只能整枚删除）；无 emoji 兜底（无图用奖章图标）。
-6. `getRepo` 返回完整角色后，前端仍有个别 `role === "read"` 之类的比较，如遇边界请改用 `repo-role.ts` 的能力函数。
+5. ~~徽章无删除图标接口 / 无 emoji 兜底~~ ✅ 已支持 `DELETE .../image` 与 `emoji` 字段。
+6. ~~`getRepo` 返回完整角色后前端仍有窄类型比较~~ ✅ `Repo.role` 类型已改为完整 `RepoRole`；仍建议用 `repo-role.ts` 的能力函数。
+
+### 本轮修复的回归（供对照）
+
+- `accessibleReposSubquery` 团队分支加入后，`paged.go`（模板列表/计数）与 `search.go`（代码搜索候选）实参少一个用户名 → SQL 参数错位。已修复并加 `TestAccessibleListsCoverTeams`。
+- `backend/tests` 的协作者非法角色用例仍把 `admin` 当非法值（角色系统上线后 `admin` 已合法），已改用未知值。
 
 ---
 
