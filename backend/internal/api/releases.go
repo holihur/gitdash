@@ -156,12 +156,8 @@ func (a *API) getRelease(w http.ResponseWriter, r *http.Request) {
 //	@Router      /repos/{name}/releases/{tag} [delete]
 //	@Router      /users/{owner}/repos/{name}/releases/{tag} [delete]
 func (a *API) deleteRelease(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, false)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
-		return
-	}
-	if !a.store.IsRepoOwner(owner, userFrom(r)) { // 与 deleteRepo 一致：仅所有者可删除
-		writeNotFound(w, "release")
 		return
 	}
 	tag := r.PathValue("tag")

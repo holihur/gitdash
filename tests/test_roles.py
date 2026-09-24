@@ -75,6 +75,18 @@ def test_org_member_default_role(user_factory):
         owner.delete(f"/orgs/{org}", expect=204)
 
 
+def test_release_delete_requires_write(role_env):
+    an, _, repo, users = role_env
+    _, cw = users["write"]
+    _, cr = users["read"]
+    cw.post(_p(an, repo, "/commits"), json=_commit_body("rel.txt"), expect=201)
+    cw.post(_p(an, repo, "/refs"), json={"type": "tag", "name": "v1", "from": "main"}, expect=201)
+    cw.post(_p(an, repo, "/releases"), json={"tag_name": "v1", "name": "R"}, expect=201)
+    # read 不能删除（404 隐藏存在性），write 可以
+    cr.delete(_p(an, repo, "/releases/v1"), expect=404)
+    cw.delete(_p(an, repo, "/releases/v1"), expect=204)
+
+
 def test_repo_detail_reports_full_role(role_env):
     an, alice, repo, users = role_env
     for role in ["read", "triage", "write", "maintain", "admin"]:

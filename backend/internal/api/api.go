@@ -1273,20 +1273,4 @@ func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) 
 
 // attachStars 批量填充仓库的 star 数与当前用户是否已 star。
 
-func (a *API) requireOwner(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-	owner, name, ok := a.resolveTarget(w, r)
-	if !ok {
-		return "", "", false
-	}
-	if !a.store.IsRepoOwner(owner, userFrom(r)) {
-		writeNotFound(w, "repo")
-		return "", "", false
-	}
-	if a.store.IsRepoBanned(owner, name) {
-		writeNotFound(w, "repo")
-		return "", "", false
-	}
-	return owner, name, true
-}
-
 // ---- orgs (namespace) ----
