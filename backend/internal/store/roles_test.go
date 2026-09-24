@@ -52,6 +52,13 @@ func TestOrgDefaultMemberRole(t *testing.T) {
 	if got := s.RepoRole("acme", "r", "alice"); got != RoleOwner {
 		t.Fatalf("owner role = %q", got)
 	}
+	// 组织成员同时是仓库协作者（更高角色）时取较高者。
+	if err := s.UpsertCollab("acme", "r", "carol", RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleAdmin {
+		t.Fatalf("org member + collaborator = %q, want admin", got)
+	}
 }
 
 func TestRepoRoles(t *testing.T) {

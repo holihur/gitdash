@@ -313,7 +313,7 @@ func (s *Store) SharedByName(username, name string) (string, error) {
 }
 
 // RepoRole 返回用户在仓库中的有效角色（"" 表示无权限）。
-// 优先级：owner（本人 / 组织 owner）> 组织成员 write > 协作者权限 > 公开仓库 read。
+// 优先级：owner（本人 / 组织 owner）> max(组织成员默认角色, 协作者权限, 团队权限) > 公开仓库 read。
 func (s *Store) RepoRole(owner, repo, username string) string {
 	if s.IsRepoBanned(owner, repo) {
 		return ""
@@ -321,22 +321,24 @@ func (s *Store) RepoRole(owner, repo, username string) string {
 	if username != "" && owner == username {
 		return RoleOwner
 	}
+	best := ""
 	if username != "" && s.IsOrg(owner) {
 		switch s.OrgRole(owner, username) {
 		case RoleOwner:
 			return RoleOwner
 		case "member":
-			return s.OrgDefaultMemberRole(owner)
+			best = s.OrgDefaultMemberRole(owner)
 		}
 	}
-	best := ""
 	if username != "" {
 		var row collabRow
 		if err := s.db.Where("owner = ? AND repo = ? AND username = ?", owner, repo, username).
 			First(&row).Error; err == nil && ValidCollabRole(row.Permission) {
-			best = row.Permission
+			if RoleRank(row.Permission) > RoleRank(best) {
+				best = row.Permission
+			}
 		}
-		// 组织团队授权：取协作者与团队中的最高角色。
+		// 组织团队授权：取组织默认 / 协作者 / 团队中的最高角色。
 		if tr := s.RepoTeamRole(owner, repo, username); RoleRank(tr) > RoleRank(best) {
 			best = tr
 		}
