@@ -633,10 +633,22 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/orgs/{org}/members", a.auth(a.listOrgMembers))
 	mux.HandleFunc("POST /api/orgs/{org}/members", a.auth(a.addOrgMember))
 	mux.HandleFunc("DELETE /api/orgs/{org}/members/{username}", a.auth(a.removeOrgMember))
+	// org teams（组织团队）
+	mux.HandleFunc("GET /api/orgs/{org}/teams", a.auth(a.listOrgTeams))
+	mux.HandleFunc("POST /api/orgs/{org}/teams", a.auth(a.createOrgTeam))
+	mux.HandleFunc("DELETE /api/orgs/{org}/teams/{id}", a.auth(a.deleteOrgTeam))
+	mux.HandleFunc("GET /api/orgs/{org}/teams/{id}/members", a.auth(a.listOrgTeamMembers))
+	mux.HandleFunc("POST /api/orgs/{org}/teams/{id}/members", a.auth(a.addOrgTeamMember))
+	mux.HandleFunc("DELETE /api/orgs/{org}/teams/{id}/members/{username}", a.auth(a.removeOrgTeamMember))
 	mux.HandleFunc("GET /api/orgs/{org}/repos", a.auth(a.listOrgRepos))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/collabs", a.auth(a.listCollabs))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/collabs", a.auth(a.addCollab))
 	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/collabs/{username}", a.auth(a.removeCollab))
+	// team grants + access audit
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/team-grants", a.auth(a.listRepoTeamGrants))
+	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/team-grants/{teamId}", a.auth(a.grantRepoTeam))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/team-grants/{teamId}", a.auth(a.revokeRepoTeam))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/access", a.auth(a.getRepoAccess))
 
 	// webhooks
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/webhooks", a.auth(a.listWebhooks))

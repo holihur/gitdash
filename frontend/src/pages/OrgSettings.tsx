@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CoverBanner } from "@/components/cover-banner";
 import { BadgeDisplayPicker } from "@/components/badge-display-picker";
+import { OrgTeamsCard } from "@/components/org-teams-card";
 import { COLLAB_ROLES } from "@/lib/repo-role";
 
 /** 组织设置独立页：编辑显示名 / 简介 / 封面（仅 owner）。 */
@@ -196,6 +197,7 @@ export default function OrgSettings() {
       </Card>
 
       <BadgeDisplayPicker kind="org" owner={profile.name} />
+      <OrgTeamsCard org={profile.name} />
     </div>
   );
 }

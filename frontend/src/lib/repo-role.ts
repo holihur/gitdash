@@ -24,6 +24,10 @@ export const canRead = (role?: string | null) => roleAtLeast(role, "read");
 export const canTriage = (role?: string | null) => roleAtLeast(role, "triage");
 /** 可推代码 / 文件操作 / release / 触发流水线。 */
 export const canWrite = (role?: string | null) => roleAtLeast(role, "write");
+/** 可评审 PR（批准 / 请求修改）。 */
+export const canReview = (role?: string | null) => roleAtLeast(role, "triage");
+/** 可合并 PR。 */
+export const canMerge = (role?: string | null) => roleAtLeast(role, "write");
 /** 可改仓库设置（webhook、deploy key、分支保护、环境变量/密钥）。 */
 export const canMaintain = (role?: string | null) => roleAtLeast(role, "maintain");
 /** 可管理协作者与可见性。 */

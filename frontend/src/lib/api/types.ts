@@ -188,6 +188,29 @@ export interface OrgMember {
   role: string;
 }
 
+/** 组织团队。 */
+export interface OrgTeam {
+  id: number;
+  org: string;
+  name: string;
+  member_count: number;
+  created_at: string;
+}
+
+/** 仓库团队授权。 */
+export interface RepoTeamGrant {
+  team_id: number;
+  team_name: string;
+  permission: "read" | "triage" | "write" | "maintain" | "admin";
+}
+
+/** 权限审计条目：谁通过什么途径获得什么角色。 */
+export interface AccessEntry {
+  subject: string;
+  role: string;
+  source: string;
+}
+
 export interface SSHKey {
   id: number;
   name: string;

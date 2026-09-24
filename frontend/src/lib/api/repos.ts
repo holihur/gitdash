@@ -1,5 +1,5 @@
 import { pageQuery, req, reqPage } from "./core";
-import type { Blame, Blob, Branch, Commit, DeployKey, GlobalSearchResult, PullDiff, Repo, RepoCommitRules, RepoGCResult, RepoPages, Tag, TopicCount, TreeEntry } from "./types";
+import type { AccessEntry, Blame, Blob, Branch, Commit, DeployKey, GlobalSearchResult, PullDiff, Repo, RepoCommitRules, RepoGCResult, RepoPages, RepoTeamGrant, Tag, TopicCount, TreeEntry } from "./types";
 
 export const reposApi = {
   // repos（所有仓库级操作使用 owner 限定的 URL，协作者也可访问）
@@ -179,6 +179,18 @@ export const reposApi = {
     req<PullDiff & { base: string; head: string }>(
       `/users/${owner}/repos/${name}/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`,
     ),
+  // team grants + access audit
+  repoTeamGrants: (owner: string, name: string) =>
+    req<RepoTeamGrant[]>(`/users/${owner}/repos/${name}/team-grants`),
+  grantRepoTeam: (owner: string, name: string, teamId: number, permission: string) =>
+    req<null>(`/users/${owner}/repos/${name}/team-grants/${teamId}`, {
+      method: "PUT",
+      body: JSON.stringify({ permission }),
+    }),
+  revokeRepoTeam: (owner: string, name: string, teamId: number) =>
+    req<null>(`/users/${owner}/repos/${name}/team-grants/${teamId}`, { method: "DELETE" }),
+  repoAccess: (owner: string, name: string) =>
+    req<AccessEntry[]>(`/users/${owner}/repos/${name}/access`),
   createCommit: (
     owner: string,
     name: string,

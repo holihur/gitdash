@@ -1,4 +1,5 @@
 import type { Repo } from "@/lib/api";
+import type { ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import { TemplateCard } from "./settings/TemplateCard";
 import { GcCard } from "./settings/GcCard";
 import { MirrorCard } from "./settings/MirrorCard";
 import { DangerZoneCard } from "./settings/DangerZoneCard";
+import { RepoTeamAccess } from "@/components/repo-team-access";
 import {
   canAdmin,
   canMaintain,
@@ -36,6 +38,20 @@ export interface SettingsTabProps {
   name: string;
   repo: Repo | null;
   setRepo: (repo: Repo) => void;
+}
+
+/** 权限不足时置灰展示（而非隐藏），便于用户发现能力边界。 */
+function Gated({ enabled, reason, children }: { enabled: boolean; reason: string; children: ReactNode }) {
+  if (enabled) return <>{children}</>;
+  return (
+    <div
+      aria-disabled="true"
+      title={reason}
+      className="pointer-events-none opacity-50 [&_button]:pointer-events-none [&_input]:pointer-events-none [&_select]:pointer-events-none [&_textarea]:pointer-events-none"
+    >
+      {children}
+    </div>
+  );
 }
 
 export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabProps) {
@@ -89,11 +105,18 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       {canMaint && <PipelineCard owner={owner} name={name} />}
       {canMaint && <RepoEnvVarsCard owner={owner} name={name} />}
       {canMaint && <SecretsCard owner={owner} name={name} />}
-      {canAdm && <VisibilityCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+      <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
+        <VisibilityCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
+      </Gated>
+      <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
+        <RepoTeamAccess owner={owner} name={name} />
+      </Gated>
       {canMaint && <TemplateCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
       {canMaint && <GcCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
       {canMaint && <MirrorCard owner={owner} name={name} />}
-      {ownerOnly && <DangerZoneCard owner={owner} name={name} />}
+      <Gated enabled={ownerOnly} reason={t("repoAccess.requiresOwner")}>
+        <DangerZoneCard owner={owner} name={name} />
+      </Gated>
     </div>
   );
 }

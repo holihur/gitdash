@@ -1,5 +1,5 @@
 import { req, sendForm } from "./core";
-import type { Collab, Org, OrgFollowState, OrgMember, OrgProfile, Repo, UserSummary } from "./types";
+import type { Collab, Org, OrgFollowState, OrgMember, OrgProfile, OrgTeam, Repo, UserSummary } from "./types";
 
 export const orgsApi = {
   // orgs（组织）
@@ -35,6 +35,22 @@ export const orgsApi = {
   removeOrgMember: (org: string, username: string) =>
     req<null>(`/orgs/${org}/members/${username}`, { method: "DELETE" }),
   listOrgRepos: (org: string) => req<{ role: string; repos: Repo[] }>(`/orgs/${org}/repos`),
+
+  // org teams
+  listOrgTeams: (org: string) => req<OrgTeam[]>(`/orgs/${org}/teams`),
+  createOrgTeam: (org: string, name: string) =>
+    req<OrgTeam>(`/orgs/${org}/teams`, { method: "POST", body: JSON.stringify({ name }) }),
+  deleteOrgTeam: (org: string, id: number) =>
+    req<null>(`/orgs/${org}/teams/${id}`, { method: "DELETE" }),
+  listOrgTeamMembers: (org: string, id: number) =>
+    req<{ members: string[] }>(`/orgs/${org}/teams/${id}/members`),
+  addOrgTeamMember: (org: string, id: number, username: string) =>
+    req<null>(`/orgs/${org}/teams/${id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    }),
+  removeOrgTeamMember: (org: string, id: number, username: string) =>
+    req<null>(`/orgs/${org}/teams/${id}/members/${username}`, { method: "DELETE" }),
 
 
   // collaborators

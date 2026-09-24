@@ -385,6 +385,36 @@ type orgFollowRow struct {
 
 func (orgFollowRow) TableName() string { return "org_follows" }
 
+// ---- org teams（组织团队：给仓库批量授权）----
+
+// orgTeamRow 组织内的团队。
+type orgTeamRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	Org       string `gorm:"not null;uniqueIndex:uq_org_team;size:255"`
+	Name      string `gorm:"not null;uniqueIndex:uq_org_team;size:100"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (orgTeamRow) TableName() string { return "org_teams" }
+
+// orgTeamMemberRow 团队成员。
+type orgTeamMemberRow struct {
+	TeamID   int64  `gorm:"primaryKey;index:idx_org_team_member_user"`
+	Username string `gorm:"primaryKey;size:255;index:idx_org_team_member_user"`
+}
+
+func (orgTeamMemberRow) TableName() string { return "org_team_members" }
+
+// repoTeamGrantRow 把组织团队授权到某个仓库（仅组织仓库，owner 为组织名）。
+type repoTeamGrantRow struct {
+	Owner      string `gorm:"primaryKey;size:255"`
+	Repo       string `gorm:"primaryKey;size:255"`
+	TeamID     int64  `gorm:"primaryKey"`
+	Permission string `gorm:"not null;default:'read';size:16"`
+}
+
+func (repoTeamGrantRow) TableName() string { return "repo_team_grants" }
+
 // ---- webhooks / admin / settings / oauth ----
 
 type webhookRow struct {

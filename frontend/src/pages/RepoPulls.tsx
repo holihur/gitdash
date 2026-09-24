@@ -31,7 +31,7 @@ import Pagination from "@/components/ui/pagination";
 import { useQueryState } from "@/lib/query-state";
 import { cn, formatDate } from "@/lib/utils";
 import ListSkeleton from "@/components/list-skeleton";
-import { canWrite as roleCanWrite } from "@/lib/repo-role";
+import { canWrite as roleCanWrite, canReview as roleCanReview } from "@/lib/repo-role";
 
 export default function RepoPulls({
   owner,
@@ -43,6 +43,8 @@ export default function RepoPulls({
   role?: string;
 }) {
   const canWrite = roleCanWrite(role);
+  const canMerge = canWrite;
+  const canReview = roleCanReview(role);
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
   const [pulls, setPulls] = useState<PullRequest[]>([]);
@@ -313,6 +315,7 @@ export default function RepoPulls({
                       </code>
                       {pr.state === "open" && (
                         <>
+                          {canMerge && (
                           <Button
                             size="sm"
                             className="gap-1"
@@ -322,6 +325,7 @@ export default function RepoPulls({
                             <GitMerge className="h-3.5 w-3.5" />
                             {t("pulls.merge")}
                           </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -485,7 +489,7 @@ export default function RepoPulls({
                       number={pr.number}
                       canWrite={canWrite}
                     />
-                    <PullReviewSection owner={owner} name={name} number={pr.number} canWrite={canWrite} />
+                    <PullReviewSection owner={owner} name={name} number={pr.number} canWrite={canReview} />
                     <CommentSection owner={owner} name={name} number={pr.number} kind="pulls" />
                   </div>
                 )}

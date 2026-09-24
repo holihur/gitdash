@@ -3,7 +3,9 @@ import {
   COLLAB_ROLES,
   canAdmin,
   canMaintain,
+  canMerge,
   canRead,
+  canReview,
   canTriage,
   canWrite,
   isRepoOwner,
@@ -34,6 +36,11 @@ describe("repo role ranking", () => {
     expect(canAdmin("admin")).toBe(true);
     expect(isRepoOwner("admin")).toBe(false);
     expect(isRepoOwner("owner")).toBe(true);
+    // 评审 = triage，合并 = write（可评审不可合并）。
+    expect(canReview("read")).toBe(false);
+    expect(canReview("triage")).toBe(true);
+    expect(canMerge("triage")).toBe(false);
+    expect(canMerge("write")).toBe(true);
   });
 
   it("可授予角色不含 owner", () => {

@@ -329,12 +329,20 @@ func (s *Store) RepoRole(owner, repo, username string) string {
 			return s.OrgDefaultMemberRole(owner)
 		}
 	}
+	best := ""
 	if username != "" {
 		var row collabRow
 		if err := s.db.Where("owner = ? AND repo = ? AND username = ?", owner, repo, username).
 			First(&row).Error; err == nil && ValidCollabRole(row.Permission) {
-			return row.Permission
+			best = row.Permission
 		}
+		// 组织团队授权：取协作者与团队中的最高角色。
+		if tr := s.RepoTeamRole(owner, repo, username); RoleRank(tr) > RoleRank(best) {
+			best = tr
+		}
+	}
+	if best != "" {
+		return best
 	}
 	// 公开仓库：任何访问者（含匿名）至少 read。
 	if r, err := s.GetRepo(owner, repo); err == nil && !r.Private {
@@ -414,6 +422,17 @@ const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
 				WHEN 'triage' THEN 2
 				ELSE 1 END AS role_rank
 			FROM repo_collabs WHERE repo_collabs.username = ?
+		UNION ALL
+		SELECT rtg.owner AS owner, rtg.repo AS name,
+			CASE rtg.permission
+				WHEN 'admin' THEN 5
+				WHEN 'maintain' THEN 4
+				WHEN 'write' THEN 3
+				WHEN 'triage' THEN 2
+				ELSE 1 END AS role_rank
+			FROM repo_team_grants rtg
+			JOIN org_team_members tm ON tm.team_id = rtg.team_id
+			WHERE tm.username = ?
 	) src
 	JOIN repos r ON r.owner = src.owner AND r.name = src.name
 	WHERE r.banned = ? AND NOT EXISTS (SELECT 1 FROM orgs o WHERE o.name = r.owner AND o.banned = ?)
@@ -457,7 +476,7 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 		FROM (` + accessibleReposSubquery + `) t
 		JOIN repos r ON r.id = t.id
 		ORDER BY r.owner, r.name`
-	args := []any{username, username, username, false, true}
+	args := []any{username, username, username, username, false, true}
 	if limit > 0 {
 		if offset < 0 {
 			offset = 0
@@ -485,7 +504,7 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 func (s *Store) CountAccessibleRepos(username string) (int, error) {
 	var n int64
 	row := s.db.Raw(`SELECT COUNT(*) FROM (`+accessibleReposSubquery+`) t`,
-		username, username, username, false, true).Row()
+		username, username, username, username, false, true).Row()
 	if err := row.Scan(&n); err != nil {
 		return 0, err
 	}
