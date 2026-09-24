@@ -24,6 +24,7 @@ import { GcCard } from "./settings/GcCard";
 import { MirrorCard } from "./settings/MirrorCard";
 import { DangerZoneCard } from "./settings/DangerZoneCard";
 import { RepoTeamAccess } from "@/components/repo-team-access";
+import { MemberRoleCard } from "./settings/MemberRoleCard";
 import {
   canAdmin,
   canMaintain,
@@ -108,6 +109,11 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
       <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
         <VisibilityCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
       </Gated>
+      {repo.is_org && (
+        <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
+          <MemberRoleCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
+        </Gated>
+      )}
       <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
         <RepoTeamAccess owner={owner} name={name} />
       </Gated>

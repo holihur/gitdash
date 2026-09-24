@@ -286,6 +286,52 @@ func (a *API) setRepoDescription(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, repo)
 }
 
+// setRepoMemberRole 设置组织成员在本仓库的默认角色覆盖。
+//
+//	@Summary     设置组织成员默认角色
+//	@Description 仅组织仓库可用，需仓库 admin；空字符串表示清除覆盖、回退组织默认。
+//	@Tags        repos
+//	@Accept      json
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       body  body setRepoMemberRoleReq true "role"
+//	@Success     200 {object} store.Repo
+//	@Failure     400 {object} map[string]string
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/member-role [post]
+func (a *API) setRepoMemberRole(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireRole(w, r, store.RoleAdmin)
+	if !ok {
+		return
+	}
+	if !a.store.IsOrg(owner) {
+		writeCode(w, http.StatusBadRequest, "not_org", "member role applies to organization repositories only")
+		return
+	}
+	var in setRepoMemberRoleReq
+	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	role := strings.TrimSpace(in.Role)
+	if role != "" && !store.ValidCollabRole(role) {
+		writeCode(w, http.StatusBadRequest, "invalid_role", "role must be one of read/triage/write/maintain/admin or empty")
+		return
+	}
+	if err := a.store.SetRepoMemberRole(owner, name, role); err != nil {
+		internalError(w, err)
+		return
+	}
+	repo, err := a.store.GetRepo(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	repo.IsOrg = true
+	writeJSON(w, http.StatusOK, repo)
+}
+
 // listTemplateRepos 列出当前用户可访问的模版仓库。
 //
 //	@Summary     列出可访问的模版仓库

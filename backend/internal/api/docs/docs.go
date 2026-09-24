@@ -11274,6 +11274,77 @@ const docTemplate = `{
                 ]
             }
         },
+        "/users/{owner}/repos/{name}/member-role": {
+            "post": {
+                "description": "仅组织仓库可用，需仓库 admin；空字符串表示清除覆盖、回退组织默认。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "repos"
+                ],
+                "summary": "设置组织成员默认角色",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "role",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.setRepoMemberRoleReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/store.Repo"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/users/{owner}/repos/{name}/milestones": {
             "get": {
                 "produces": [
@@ -17643,6 +17714,15 @@ const docTemplate = `{
                 }
             }
         },
+        "api.setRepoMemberRoleReq": {
+            "type": "object",
+            "properties": {
+                "role": {
+                    "description": "read/triage/write/maintain/admin；空表示继承组织默认",
+                    "type": "string"
+                }
+            }
+        },
         "api.setRepoSecretReq": {
             "type": "object",
             "properties": {
@@ -19424,6 +19504,10 @@ const docTemplate = `{
                 "import_url": {
                     "type": "string"
                 },
+                "is_org": {
+                    "description": "IsOrg 仓库归属组织（仅用于设置界面判断，由 API 层填充）。",
+                    "type": "boolean"
+                },
                 "is_template": {
                     "type": "boolean"
                 },
@@ -19437,6 +19521,10 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/store.LanguageStat"
                     }
+                },
+                "member_role": {
+                    "description": "MemberRole 组织成员在本仓库的默认角色覆盖（空 = 继承组织默认）。",
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"

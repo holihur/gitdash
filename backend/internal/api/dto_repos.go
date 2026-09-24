@@ -87,6 +87,11 @@ type setRepoDescriptionReq struct {
 	Description string `json:"description"` // 仓库描述（可为空，最长 500 字符）
 }
 
+// setRepoMemberRoleReq 设置组织成员在本仓库的默认角色覆盖请求体。
+type setRepoMemberRoleReq struct {
+	Role string `json:"role"` // read/triage/write/maintain/admin；空表示继承组织默认
+}
+
 // addCollabReq 添加/更新协作者请求体。
 type addCollabReq struct {
 	Username   string `json:"username"`   // 协作者用户名

@@ -593,6 +593,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/default-branch", a.auth(a.setRepoDefaultBranch))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/issues-enabled", a.auth(a.setRepoIssues))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/description", a.auth(a.setRepoDescription))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/member-role", a.auth(a.setRepoMemberRole))
 	// Pages 静态网站托管（仓库级，默认关闭）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pages", a.auth(a.getRepoPages))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/pages", a.auth(a.setRepoPages))

@@ -70,6 +70,32 @@ def test_org_member_default_role(user_factory):
         member.patch(f"/orgs/{org}", json={"default_member_role": "write"}, expect=404)
         # profile 回传该设置。
         assert owner.get(f"/orgs/{org}/profile", expect=200).json()["default_member_role"] == "read"
+
+        # 按仓库覆盖组织成员默认角色：组织默认 read 时给该仓库 write，成员可推送。
+        moved = owner.post(
+            f"/users/{org}/repos/{repo}/member-role", json={"role": "write"}, expect=200
+        ).json()
+        assert moved["member_role"] == "write" and moved["is_org"] is True
+        member.post(f"/users/{org}/repos/{repo}/commits", json=_commit_body("o3.txt"), expect=201)
+        # 仓库详情体现覆盖后的有效角色。
+        assert member.get(f"/users/{org}/repos/{repo}", expect=200).json()["role"] == "write"
+        # 清空覆盖 → 回退组织默认 read。
+        owner.post(f"/users/{org}/repos/{repo}/member-role", json={"role": ""}, expect=200)
+        member.post(f"/users/{org}/repos/{repo}/commits", json=_commit_body("o4.txt"), expect=404)
+        # 非法角色拒绝；非 admin 不能改。
+        owner.post(f"/users/{org}/repos/{repo}/member-role", json={"role": "owner"}, expect=400)
+        member.post(
+            f"/users/{org}/repos/{repo}/member-role", json={"role": "write"}, expect=404
+        )
+        # 个人仓库不适用（非组织）。
+        personal = f"pr-{_uuid()[:8]}"
+        owner.post("/repos", json={"name": personal, "private": True}, expect=201)
+        try:
+            owner.post(
+                f"/users/{on}/repos/{personal}/member-role", json={"role": "read"}, expect=400
+            )
+        finally:
+            owner.delete(f"/repos/{personal}", expect=204)
     finally:
         owner.delete(f"/users/{org}/repos/{repo}", expect=204)
         owner.delete(f"/orgs/{org}", expect=204)

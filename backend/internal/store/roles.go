@@ -1,5 +1,10 @@
 package store
 
+import "errors"
+
+// ErrInvalidRole 表示角色字符串不合法。
+var ErrInvalidRole = errors.New("invalid role")
+
 // 仓库角色（从低到高）：read < triage < write < maintain < admin < owner。
 //
 //   - read      只读：浏览代码 / issue / PR、clone

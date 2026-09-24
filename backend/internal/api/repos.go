@@ -246,6 +246,7 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	// 当前用户视角的完整角色（read/triage/write/maintain/admin/owner），前端据此控制设置类 UI。
 	repo.Role = a.store.RepoRole(owner, name, me)
+	repo.IsOrg = a.store.IsOrg(owner)
 	if ts, err := a.store.ListRepoTopics(owner, name); err == nil {
 		repo.Topics = ts
 	}

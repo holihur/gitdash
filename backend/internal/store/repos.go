@@ -1,6 +1,8 @@
 package store
 
 import (
+	"strings"
+
 	"gorm.io/gorm"
 )
 
@@ -28,6 +30,7 @@ func toRepo(r repoRow) Repo {
 		Banned:        r.Banned,
 		DefaultBranch: def,
 		HasIssues:     r.HasIssues,
+		MemberRole:    r.MemberRole,
 		PagesEnabled:  r.PagesEnabled,
 		PagesBranch:   r.PagesBranch,
 		PagesDir:      r.PagesDir,
@@ -224,6 +227,32 @@ func (s *Store) SetRepoDescription(owner, name, description string) error {
 	return nil
 }
 
+// SetRepoMemberRole 设置组织成员在本仓库的默认角色覆盖（仅 owner/admin 调用）。
+// 传空字符串表示清除覆盖、回退组织默认。
+func (s *Store) SetRepoMemberRole(owner, name, role string) error {
+	role = strings.TrimSpace(role)
+	if role != "" && !ValidCollabRole(role) {
+		return ErrInvalidRole
+	}
+	res := s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).Update("member_role", role)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// RepoMemberRole 返回组织成员在该仓库的默认角色：仓库覆盖优先，否则回退组织默认。
+func (s *Store) RepoMemberRole(owner, repo string) string {
+	var row repoRow
+	if err := s.db.Select("member_role").Where("owner = ? AND name = ?", owner, repo).First(&row).Error; err == nil && ValidCollabRole(row.MemberRole) {
+		return row.MemberRole
+	}
+	return s.OrgDefaultMemberRole(owner)
+}
+
 func (s *Store) GetRepo(owner, name string) (Repo, error) {
 	var row repoRow
 	err := s.db.Where("owner = ? AND name = ?", owner, name).First(&row).Error
@@ -327,7 +356,7 @@ func (s *Store) RepoRole(owner, repo, username string) string {
 		case RoleOwner:
 			return RoleOwner
 		case "member":
-			best = s.OrgDefaultMemberRole(owner)
+			best = s.RepoMemberRole(owner, repo)
 		}
 	}
 	if username != "" {
@@ -406,13 +435,14 @@ const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
 		UNION ALL
 		SELECT repos.owner AS owner, repos.name AS name,
 			CASE WHEN m.role = 'owner' THEN 6
-				ELSE COALESCE((SELECT CASE o.default_member_role
+				ELSE CASE COALESCE(NULLIF(repos.member_role, ''),
+					(SELECT o.default_member_role FROM orgs o WHERE o.name = repos.owner), 'write')
 					WHEN 'admin' THEN 5
 					WHEN 'maintain' THEN 4
 					WHEN 'write' THEN 3
 					WHEN 'triage' THEN 2
 					WHEN 'read' THEN 1
-					ELSE 3 END FROM orgs o WHERE o.name = repos.owner), 3)
+					ELSE 3 END
 			END AS role_rank
 			FROM repos JOIN org_members m ON repos.owner = m.org WHERE m.username = ?
 		UNION ALL

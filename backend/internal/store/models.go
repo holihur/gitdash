@@ -51,6 +51,8 @@ type repoRow struct {
 	DefaultBranch string `gorm:"not null;default:'main';size:255"`
 	// HasIssues 是否启用 issue 功能（默认开启）；关闭后不可创建/修改 issue。
 	HasIssues bool `gorm:"not null;default:true"`
+	// MemberRole 组织成员在本仓库的默认角色覆盖（read/triage/write/maintain/admin）；空表示继承组织默认。
+	MemberRole string `gorm:"not null;default:'';size:16"`
 	// Pages 静态网站托管（默认关闭）：从指定分支/目录发布静态站点。
 	PagesEnabled bool   `gorm:"not null;default:false"`
 	PagesBranch  string `gorm:"not null;default:'';size:255"`

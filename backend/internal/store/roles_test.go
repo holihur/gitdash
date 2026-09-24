@@ -153,3 +153,78 @@ func TestRepoRoles(t *testing.T) {
 		t.Fatal("RoleAtLeast mismatch")
 	}
 }
+
+func TestRepoMemberRoleOverride(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{"alice", "carol"} {
+		if _, err := s.CreateUser(u, u+"-pass-123456"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreateOrg("acme", "ACME", "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRepo("acme", "r", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddOrgMember("acme", "carol", "member"); err != nil {
+		t.Fatal(err)
+	}
+	// 组织默认 read。
+	if err := s.SetOrgInfo("acme", "ACME", "", RoleRead); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleRead {
+		t.Fatalf("org default role = %q, want read", got)
+	}
+	// 仓库覆盖为 write。
+	if err := s.SetRepoMemberRole("acme", "r", RoleWrite); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoMemberRole("acme", "r"); got != RoleWrite {
+		t.Fatalf("repo member role = %q, want write", got)
+	}
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleWrite {
+		t.Fatalf("member role after override = %q, want write", got)
+	}
+	// 覆盖只影响该仓库：同组织其它仓库仍用组织默认 read。
+	if _, err := s.CreateRepo("acme", "r2", "", true); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoRole("acme", "r2", "carol"); got != RoleRead {
+		t.Fatalf("other repo role = %q, want read", got)
+	}
+	// 可访问仓库列表（SQL 子查询）也要反映覆盖后的角色。
+	repos, err := s.AccessibleRepos("carol", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roleByName := map[string]string{}
+	for _, r := range repos {
+		roleByName[r.Name] = r.Role
+	}
+	if roleByName["r"] != RoleWrite || roleByName["r2"] != RoleRead {
+		t.Fatalf("accessible roles = %+v, want r=write r2=read", roleByName)
+	}
+	// 覆盖可低于组织默认（通过先调高组织默认验证）。
+	if err := s.SetOrgInfo("acme", "ACME", "", RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleWrite {
+		t.Fatalf("lowered override role = %q, want write", got)
+	}
+	// 非法角色被拒。
+	if err := s.SetRepoMemberRole("acme", "r", RoleOwner); err != ErrInvalidRole {
+		t.Fatalf("invalid role err = %v", err)
+	}
+	// 清空覆盖回退组织默认。
+	if err := s.SetRepoMemberRole("acme", "r", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.RepoRole("acme", "r", "carol"); got != RoleAdmin {
+		t.Fatalf("after clear role = %q, want admin", got)
+	}
+}

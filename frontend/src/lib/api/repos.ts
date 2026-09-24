@@ -50,6 +50,12 @@ export const reposApi = {
       method: "POST",
       body: JSON.stringify({ description }),
     }),
+  /** 设置组织成员在本仓库的默认角色覆盖（空字符串 = 继承组织默认）。 */
+  setRepoMemberRole: (owner: string, name: string, role: string) =>
+    req<Repo>(`/users/${owner}/repos/${name}/member-role`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
   getRepoPages: (owner: string, name: string) =>
     req<RepoPages>(`/users/${owner}/repos/${name}/pages`),  setRepoPages: (
     owner: string,

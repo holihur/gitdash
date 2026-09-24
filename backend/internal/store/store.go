@@ -69,6 +69,10 @@ type Repo struct {
 	DefaultBranch string `json:"default_branch"`
 	// HasIssues 是否启用 issue 功能。
 	HasIssues bool `json:"has_issues"`
+	// MemberRole 组织成员在本仓库的默认角色覆盖（空 = 继承组织默认）。
+	MemberRole string `json:"member_role,omitempty"`
+	// IsOrg 仓库归属组织（仅用于设置界面判断，由 API 层填充）。
+	IsOrg bool `json:"is_org,omitempty"`
 	// Pages 静态网站托管（默认关闭）。
 	PagesEnabled bool   `json:"pages_enabled"`
 	PagesBranch  string `json:"pages_branch,omitempty"`

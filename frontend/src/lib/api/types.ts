@@ -1,5 +1,7 @@
 // API 响应类型（按域拆分的模块共用的类型集中于此）。
 
+import type { RepoRole } from "@/lib/repo-role";
+
 export interface User {
   username: string;
   email?: string;
@@ -98,12 +100,16 @@ export interface Repo {
   default_branch?: string;
   /** 是否启用 issue 功能 */
   has_issues?: boolean;
+  /** 组织成员在本仓库的默认角色覆盖（空 = 继承组织默认） */
+  member_role?: string;
+  /** 仓库归属组织（仅详情接口返回，用于设置界面判断） */
+  is_org?: boolean;
   /** 静态网站托管（Pages），默认关闭 */
   pages_enabled?: boolean;
   pages_branch?: string;
   pages_dir?: string;
-  /** 仅“可访问仓库列表”返回：owner / read / write */
-  role?: "owner" | "read" | "write";
+  /** 当前用户在该仓库的有效角色（详情 / 可访问列表返回） */
+  role?: RepoRole;
   /** star 数量与当前用户是否已 star */
   stars?: number;
   starred?: boolean;
