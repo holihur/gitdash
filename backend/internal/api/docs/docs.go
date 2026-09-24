@@ -8218,7 +8218,7 @@ const docTemplate = `{
                 ]
             },
             "post": {
-                "description": "permission 为 read 或 write；仅仓库所有者可操作。",
+                "description": "permission 为 read / triage / write / maintain / admin；仅仓库所有者或 admin 协作者可操作。",
                 "consumes": [
                     "application/json"
                 ],

@@ -209,7 +209,7 @@ func (a *API) AutoMergeForRepo(owner, repo, _ string) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/merge-queue [delete]
 func (a *API) dequeuePull(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

@@ -537,7 +537,7 @@ export interface Collab {
   owner: string;
   repo: string;
   username: string;
-  permission: "read" | "write";
+  permission: "read" | "triage" | "write" | "maintain" | "admin";
   created_at: string;
 }
 

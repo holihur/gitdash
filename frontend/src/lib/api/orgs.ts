@@ -40,7 +40,7 @@ export const orgsApi = {
   // collaborators
   listCollabs: (owner: string, name: string) =>
     req<Collab[]>(`/users/${owner}/repos/${name}/collabs`),
-  addCollab: (owner: string, name: string, username: string, permission: "read" | "write") =>
+  addCollab: (owner: string, name: string, username: string, permission: "read" | "triage" | "write" | "maintain" | "admin") =>
     req<Collab>(`/users/${owner}/repos/${name}/collabs`, {
       method: "POST",
       body: JSON.stringify({ username, permission }),

@@ -13,12 +13,14 @@ export function IssueItem({
   owner,
   name,
   canWrite,
+  canTriage,
   onChanged,
 }: {
   issue: Issue;
   owner: string;
   name: string;
   canWrite: boolean;
+  canTriage: boolean;
   onChanged: () => void;
 }) {
   const { t, lang } = useI18n();
@@ -103,6 +105,7 @@ export function IssueItem({
           name={name}
           issue={issue}
           canWrite={canWrite}
+          canTriage={canTriage}
           onChanged={onChanged}
         />
       </div>

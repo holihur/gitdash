@@ -26,7 +26,7 @@ func validWebhookURL(raw string) bool {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/webhooks [get]
 func (a *API) listWebhooks(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -97,7 +97,7 @@ func (a *API) listWebhookEvents(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/webhooks [post]
 func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -156,7 +156,7 @@ func (a *API) createWebhook(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/webhooks/{id} [delete]
 func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -186,7 +186,7 @@ func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/webhooks/{id}/deliveries [get]
 func (a *API) listWebhookDeliveries(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

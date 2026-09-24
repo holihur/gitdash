@@ -44,7 +44,7 @@ type setRepoTopsReq struct {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/topics [put]
 func (a *API) setRepoTops(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

@@ -74,7 +74,7 @@ func (a *API) getRepoPages(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pages [put]
 func (a *API) setRepoPages(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

@@ -51,7 +51,7 @@ func (a *API) getMirror(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/mirror [put]
 func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -92,7 +92,7 @@ func (a *API) setMirror(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/mirror [delete]
 func (a *API) deleteMirror(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -115,7 +115,7 @@ func (a *API) deleteMirror(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/mirror/sync [post]
 func (a *API) syncMirror(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

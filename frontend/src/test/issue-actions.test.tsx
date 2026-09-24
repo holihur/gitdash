@@ -46,7 +46,7 @@ function renderActions(issue: Issue) {
   render(
     <MemoryRouter>
       <I18nProvider>
-        <IssueActions owner="alice" name="demo" issue={issue} canWrite onChanged={onChanged} />
+        <IssueActions owner="alice" name="demo" issue={issue} canWrite canTriage onChanged={onChanged} />
       </I18nProvider>
     </MemoryRouter>,
   );

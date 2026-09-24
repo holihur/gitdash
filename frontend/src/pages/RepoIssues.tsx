@@ -13,11 +13,13 @@ import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
 import { CreateIssueDialog } from "@/components/issues/dialogs";
 import { IssueItem } from "@/components/issues/issue-item";
+import { canTriage, canWrite } from "@/lib/repo-role";
 import { IssueFilters } from "@/components/issues/issue-filters";
 
 export default function RepoIssues({ owner, name, role }: { owner: string; name: string; role?: "owner" | "read" | "write" }) {
   const { t, to } = useI18n();
-  const canWrite = role === "owner" || role === "write";
+  const canWriteCode = canWrite(role);
+  const canManageIssues = canTriage(role);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [issueTotal, setIssueTotal] = useState(0);
   // 页码/页大小/标签筛选同步进 URL(?i_page/?i_size/?i_label)
@@ -235,7 +237,8 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
               issue={issue}
               owner={owner}
               name={name}
-              canWrite={canWrite}
+              canWrite={canWriteCode}
+              canTriage={canManageIssues}
               onChanged={load}
             />
           ))}

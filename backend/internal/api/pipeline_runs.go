@@ -87,7 +87,7 @@ func (a *API) getPipelineRun(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pipeline/runs/{id}/cancel [post]
 func (a *API) cancelPipelineRun(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -119,7 +119,7 @@ func (a *API) cancelPipelineRun(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pipeline/runs [post]
 func (a *API) createPipelineRun(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -145,7 +145,7 @@ func (a *API) createPipelineRun(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pipeline/dispatch [post]
 func (a *API) dispatchPipelineRun(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -169,7 +169,7 @@ func (a *API) dispatchPipelineRun(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pipeline/runs/{id}/rerun [post]
 func (a *API) rerunPipelineRun(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

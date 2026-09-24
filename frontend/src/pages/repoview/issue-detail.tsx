@@ -15,6 +15,7 @@ import LabelChip from "@/components/label-chip";
 import { MarkdownView } from "@/components/markdown";
 import CommentSection from "@/components/comment-section";
 import { IssueActions } from "@/components/issues/issue-actions";
+import { canTriage, canWrite } from "@/lib/repo-role";
 
 /** Issue 详情独立页：左侧正文 + 评论，右侧标签 / 里程碑设置。 */
 export default function IssueDetail({
@@ -31,7 +32,8 @@ export default function IssueDetail({
   const { t, to, lang } = useI18n();
   const locale = dateLocale(lang);
   const navigate = useNavigate();
-  const canWrite = role === "owner" || role === "write";
+  const canWriteCode = canWrite(role);
+  const canManageIssues = canTriage(role);
   const listUrl = buildRepoPath(owner, name, { tab: "issues" });
 
   const [issue, setIssue] = useState<Issue | null>(null);
@@ -211,7 +213,8 @@ export default function IssueDetail({
           owner={owner}
           name={name}
           issue={issue}
-          canWrite={canWrite}
+          canWrite={canWriteCode}
+          canTriage={canManageIssues}
           onChanged={load}
           onDeleted={() => navigate(listUrl)}
         />

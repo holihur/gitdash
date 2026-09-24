@@ -26,6 +26,7 @@ export function IssueActions({
   name,
   issue,
   canWrite,
+  canTriage,
   onChanged,
   onDeleted,
 }: {
@@ -33,6 +34,7 @@ export function IssueActions({
   name: string;
   issue: Issue;
   canWrite: boolean;
+  canTriage: boolean;
   onChanged: () => void;
   onDeleted?: () => void;
 }) {
@@ -194,28 +196,34 @@ export function IssueActions({
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={toggleState}>
-        {isOpen ? t("issues.close") : t("issues.reopen")}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 shrink-0 p-0"
-        title={issue.pinned ? t("issues.unpin") : t("issues.pin")}
-        disabled={busy}
-        onClick={togglePin}
-      >
-        {issue.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 shrink-0 p-0"
-        title={t("issues.edit")}
-        onClick={openEdit}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </Button>
+      {canTriage && (
+        <Button size="sm" variant="outline" className="shrink-0" disabled={busy} onClick={toggleState}>
+          {isOpen ? t("issues.close") : t("issues.reopen")}
+        </Button>
+      )}
+      {canTriage && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 shrink-0 p-0"
+          title={issue.pinned ? t("issues.unpin") : t("issues.pin")}
+          disabled={busy}
+          onClick={togglePin}
+        >
+          {issue.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+        </Button>
+      )}
+      {canTriage && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 shrink-0 p-0"
+          title={t("issues.edit")}
+          onClick={openEdit}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
       {canWrite && (
         <Button
           size="sm"
@@ -227,15 +235,17 @@ export function IssueActions({
           <Bot className="h-3.5 w-3.5" />
         </Button>
       )}
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-8 w-8 shrink-0 p-0 text-destructive"
-        title={t("issues.delete")}
-        onClick={() => setDeleteOpen(true)}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      {canTriage && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-8 w-8 shrink-0 p-0 text-destructive"
+          title={t("issues.delete")}
+          onClick={() => setDeleteOpen(true)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
 
       <EditIssueDialog
         open={editOpen}

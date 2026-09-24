@@ -19,7 +19,7 @@ import (
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/env [get]
 func (a *API) listRepoEnvVars(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -52,7 +52,7 @@ func (a *API) listRepoEnvVars(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/env [put]
 func (a *API) setRepoEnvVar(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -86,7 +86,7 @@ func (a *API) setRepoEnvVar(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/env/{key} [delete]
 func (a *API) deleteRepoEnvVar(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

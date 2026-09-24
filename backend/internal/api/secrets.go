@@ -19,7 +19,7 @@ import (
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/secrets [get]
 func (a *API) listRepoSecrets(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -45,7 +45,7 @@ func (a *API) listRepoSecrets(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/secrets [put]
 func (a *API) setRepoSecret(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -78,7 +78,7 @@ func (a *API) setRepoSecret(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/secrets/{secret} [delete]
 func (a *API) deleteRepoSecret(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

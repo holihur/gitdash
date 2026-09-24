@@ -13,6 +13,7 @@ import {
 import { useI18n } from "@/lib/i18n";
 import { RelativeTime } from "@/components/relative-time";
 import { LanguageBadge } from "@/components/language-bar";
+import { canAdmin, canMaintain, isRepoOwner } from "@/lib/repo-role";
 import { BadgeStrip } from "@/components/badge-strip";
 
 interface Props {
@@ -36,6 +37,10 @@ export default function RepoCard({
   onDelete,
 }: Props) {
   const { t } = useI18n();
+  const role = repo.role;
+  const ownerOnly = isRepoOwner(role) || isOwner;
+  const adm = ownerOnly || canAdmin(role);
+  const maint = adm || canMaintain(role);
   return (
     <Card className="flex min-w-0 flex-col">
       <CardHeader className="pb-3">
@@ -45,7 +50,7 @@ export default function RepoCard({
               {repo.name}
             </Link>
           </CardTitle>
-          {isOwner && (
+          {maint && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -58,21 +63,25 @@ export default function RepoCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onManageCollabs(repo)}>
-                  <Users />
-                  {t("collabs.manage")}
-                </DropdownMenuItem>
+                {adm && (
+                  <DropdownMenuItem onClick={() => onManageCollabs(repo)}>
+                    <Users />
+                    {t("collabs.manage")}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => onManageWebhooks(repo)}>
                   <Webhook />
                   {t("webhooks.manage")}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() => onDelete(repo)}
-                >
-                  <Trash2 />
-                  {t("repos.delete")}
-                </DropdownMenuItem>
+                {ownerOnly && (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => onDelete(repo)}
+                  >
+                    <Trash2 />
+                    {t("repos.delete")}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

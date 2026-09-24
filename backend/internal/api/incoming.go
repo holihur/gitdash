@@ -25,7 +25,7 @@ func incomingWebhookPath(owner, name string) string {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/incoming-webhook [get]
 func (a *API) getIncomingWebhook(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -58,7 +58,7 @@ func (a *API) getIncomingWebhook(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/incoming-webhook [post]
 func (a *API) setIncomingWebhook(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -87,7 +87,7 @@ func (a *API) setIncomingWebhook(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/incoming-webhook [delete]
 func (a *API) deleteIncomingWebhook(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

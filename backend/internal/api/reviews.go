@@ -33,7 +33,7 @@ var validReviewState = map[string]bool{
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/reviews [post]
 func (a *API) createReview(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}

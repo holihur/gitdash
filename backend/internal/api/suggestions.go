@@ -39,7 +39,7 @@ func parseSuggestion(body string) (string, bool) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/comments/{id}/apply [post]
 func (a *API) applySuggestion(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

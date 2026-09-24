@@ -75,7 +75,7 @@ func (a *API) enrichPull(owner, name string, pr *store.PullRequest) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls [post]
 func (a *API) createPull(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -222,7 +222,7 @@ func (a *API) pullDiff(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/merge [post]
 func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -296,7 +296,7 @@ func (a *API) mergePull(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/auto-merge [post]
 func (a *API) setPullAutoMerge(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -350,7 +350,7 @@ func (a *API) setPullAutoMerge(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/state [post]
 func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -399,7 +399,7 @@ func (a *API) setPullState(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/draft [post]
 func (a *API) setPullDraft(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

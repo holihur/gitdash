@@ -332,7 +332,7 @@ func (a *API) listCopilots(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/copilots [post]
 func (a *API) createCopilot(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -447,7 +447,7 @@ type copilotChatIn struct {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/copilots/{id}/chat [get]
 func (a *API) copilotChat(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -522,7 +522,7 @@ func (a *API) copilotChat(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/copilots/{id}/stop [post]
 func (a *API) stopCopilot(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -548,7 +548,7 @@ func (a *API) stopCopilot(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/copilots/{id} [delete]
 func (a *API) deleteCopilot(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

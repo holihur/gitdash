@@ -72,7 +72,7 @@ func (a *API) listReleases(w http.ResponseWriter, r *http.Request) {
 //	@Router      /repos/{name}/releases [post]
 //	@Router      /users/{owner}/repos/{name}/releases [post]
 func (a *API) createRelease(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -218,7 +218,7 @@ func cleanFilename(raw string) (string, bool) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/releases/{tag}/assets [post]
 func (a *API) uploadAsset(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}
@@ -369,7 +369,7 @@ func (a *API) downloadAsset(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/releases/{tag}/assets/{filename} [delete]
 func (a *API) deleteAsset(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

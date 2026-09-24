@@ -20,7 +20,7 @@ import (
 //	@Router      /repos/{name}/gc [post]
 //	@Router      /users/{owner}/repos/{name}/gc [post]
 func (a *API) gcRepo(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

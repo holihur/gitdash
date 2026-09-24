@@ -72,7 +72,7 @@ func (a *API) listComments(w http.ResponseWriter, r *http.Request, kind string) 
 //	@Router      /users/{owner}/repos/{name}/pulls/{number}/comments [post]
 //	@Router      /repos/{name}/pulls/{number}/comments [post]
 func (a *API) addComment(w http.ResponseWriter, r *http.Request, kind string) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}

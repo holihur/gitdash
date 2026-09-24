@@ -1214,7 +1214,10 @@ func (a *API) resolveTarget(w http.ResponseWriter, r *http.Request) (string, str
 // requireAccess 校验目标仓库存在且当前用户拥有所需权限（无权限一律 404）。
 // 公开仓库（private=false）：任意登录用户可读；写操作仍要求 owner/可写协作者。
 
-func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) (string, string, bool) {
+// requireRole 校验当前用户对目标仓库的角色是否达到 min
+// （read / triage / write / maintain / admin / owner）。
+// read 级别沿用可见性规则（anonymous > public > private+CanRead）；更高等级要求有效角色 >= min。
+func (a *API) requireRole(w http.ResponseWriter, r *http.Request, min string) (string, string, bool) {
 	owner, name, ok := a.resolveTarget(w, r)
 	if !ok {
 		return "", "", false
@@ -1229,39 +1232,43 @@ func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) 
 		writeNotFound(w, "repo")
 		return "", "", false
 	}
-	if me == owner {
-		return owner, name, true
-	}
-	vis := repo.Visibility
-	if vis == "" {
-		if repo.Private {
-			vis = "private"
-		} else {
-			vis = "public"
+	// read 级别：按可见性放行。
+	if store.RoleRank(min) <= store.RoleRank(store.RoleRead) {
+		vis := repo.Visibility
+		if vis == "" {
+			if repo.Private {
+				vis = "private"
+			} else {
+				vis = "public"
+			}
 		}
-	}
-	if write {
-		if !a.store.CanWrite(owner, name, me) {
+		var can bool
+		switch vis {
+		case "anonymous":
+			can = true
+		case "public":
+			can = me != ""
+		default:
+			can = me != "" && a.store.CanRead(owner, name, me)
+		}
+		if !can {
 			writeNotFound(w, "repo")
 			return "", "", false
 		}
 		return owner, name, true
 	}
-	// 读：anonymous=任何人；public=任意登录用户；private=成员/协作者
-	var can bool
-	switch vis {
-	case "anonymous":
-		can = true
-	case "public":
-		can = me != ""
-	default:
-		can = me != "" && a.store.CanRead(owner, name, me)
-	}
-	if !can {
+	if !a.store.CanDo(owner, name, me, min) {
 		writeNotFound(w, "repo")
 		return "", "", false
 	}
 	return owner, name, true
+}
+
+func (a *API) requireAccess(w http.ResponseWriter, r *http.Request, write bool) (string, string, bool) {
+	if write {
+		return a.requireRole(w, r, store.RoleWrite)
+	}
+	return a.requireRole(w, r, store.RoleRead)
 }
 
 // attachStars 批量填充仓库的 star 数与当前用户是否已 star。

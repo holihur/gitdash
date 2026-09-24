@@ -26,7 +26,7 @@ import (
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/deploy-keys [get]
 func (a *API) listDeployKeys(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -53,7 +53,7 @@ func (a *API) listDeployKeys(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/deploy-keys [post]
 func (a *API) createDeployKey(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -109,7 +109,7 @@ func (a *API) createDeployKey(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/deploy-keys/{id} [delete]
 func (a *API) deleteDeployKey(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}

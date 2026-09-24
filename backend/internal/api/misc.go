@@ -71,7 +71,7 @@ func (a *API) listOrgRepos(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/visibility [post]
 func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "admin")
 	if !ok {
 		return
 	}
@@ -123,7 +123,7 @@ func (a *API) setRepoVisibility(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/template [post]
 func (a *API) setRepoTemplate(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -164,7 +164,7 @@ func (a *API) setRepoTemplate(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/default-branch [post]
 func (a *API) setRepoDefaultBranch(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -217,7 +217,7 @@ func (a *API) setRepoDefaultBranch(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues-enabled [post]
 func (a *API) setRepoIssues(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -260,7 +260,7 @@ const maxRepoDescription = 500
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/description [post]
 func (a *API) setRepoDescription(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "maintain")
 	if !ok {
 		return
 	}
@@ -365,7 +365,7 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/collabs [get]
 func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "admin")
 	if !ok {
 		return
 	}
@@ -387,7 +387,7 @@ func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
 // addCollab 添加或更新协作者。
 //
 //	@Summary     添加协作者
-//	@Description permission 为 read 或 write；仅仓库所有者可操作。
+//	@Description permission 为 read / triage / write / maintain / admin；仅仓库所有者或 admin 协作者可操作。
 //	@Tags        repos
 //	@Accept      json
 //	@Produce     json
@@ -401,7 +401,7 @@ func (a *API) listCollabs(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/collabs [post]
 func (a *API) addCollab(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "admin")
 	if !ok {
 		return
 	}
@@ -418,8 +418,8 @@ func (a *API) addCollab(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "owner_as_collab", "owner is already the owner")
 		return
 	}
-	if in.Permission != "read" && in.Permission != "write" {
-		writeCode(w, http.StatusBadRequest, "invalid_permission", "permission must be 'read' or 'write'")
+	if !store.ValidCollabRole(in.Permission) {
+		writeCode(w, http.StatusBadRequest, "invalid_permission", "permission must be one of read/triage/write/maintain/admin")
 		return
 	}
 	if _, err := a.store.GetByUsername(in.Username); err != nil {
@@ -457,7 +457,7 @@ func (a *API) addCollab(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/collabs/{username} [delete]
 func (a *API) removeCollab(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireOwner(w, r)
+	owner, name, ok := a.requireRole(w, r, "admin")
 	if !ok {
 		return
 	}

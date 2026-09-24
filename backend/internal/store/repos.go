@@ -312,46 +312,50 @@ func (s *Store) SharedByName(username, name string) (string, error) {
 	return row.Owner, nil
 }
 
-func (s *Store) CanRead(owner, repo, username string) bool {
+// RepoRole 返回用户在仓库中的有效角色（"" 表示无权限）。
+// 优先级：owner（本人 / 组织 owner）> 组织成员 write > 协作者权限 > 公开仓库 read。
+func (s *Store) RepoRole(owner, repo, username string) string {
 	if s.IsRepoBanned(owner, repo) {
-		return false
+		return ""
 	}
-	if owner == username {
-		return true
+	if username != "" && owner == username {
+		return RoleOwner
 	}
-	// 公开仓库直接放行（含组织仓库）
-	if r, err := s.GetRepo(owner, repo); err == nil && !r.Private {
-		return true
-	}
-	if s.IsOrg(owner) {
-		if s.OrgRole(owner, username) != "" {
-			return true
+	if username != "" && s.IsOrg(owner) {
+		switch s.OrgRole(owner, username) {
+		case RoleOwner:
+			return RoleOwner
+		case "member":
+			return RoleWrite
 		}
 	}
-	var n int64
-	err := s.db.Model(&collabRow{}).Where("owner = ? AND repo = ? AND username = ?", owner, repo, username).
-		Limit(1).Count(&n).Error
-	return err == nil && n > 0
+	if username != "" {
+		var row collabRow
+		if err := s.db.Where("owner = ? AND repo = ? AND username = ?", owner, repo, username).
+			First(&row).Error; err == nil && ValidCollabRole(row.Permission) {
+			return row.Permission
+		}
+	}
+	// 公开仓库：任何访问者（含匿名）至少 read。
+	if r, err := s.GetRepo(owner, repo); err == nil && !r.Private {
+		return RoleRead
+	}
+	return ""
 }
 
+// CanRead 报告用户（可为匿名）是否可读仓库。
+func (s *Store) CanRead(owner, repo, username string) bool {
+	return s.RepoRole(owner, repo, username) != ""
+}
+
+// CanWrite 报告用户是否具备写代码权限（>= write）。
 func (s *Store) CanWrite(owner, repo, username string) bool {
-	if s.IsRepoBanned(owner, repo) {
-		return false
-	}
-	if owner == username {
-		return true
-	}
-	if s.IsOrg(owner) {
-		role := s.OrgRole(owner, username)
-		if role == "owner" || role == "member" {
-			return true
-		}
-	}
-	var n int64
-	err := s.db.Model(&collabRow{}).
-		Where("owner = ? AND repo = ? AND username = ? AND permission = ?", owner, repo, username, "write").
-		Limit(1).Count(&n).Error
-	return err == nil && n > 0
+	return RoleAtLeast(s.RepoRole(owner, repo, username), RoleWrite)
+}
+
+// CanDo 报告用户在仓库中的角色是否达到 min 等级。
+func (s *Store) CanDo(owner, repo, username, min string) bool {
+	return RoleAtLeast(s.RepoRole(owner, repo, username), min)
 }
 
 // IsRepoOwner owner 语义：用户本人，或该用户是仓库所属组织的 owner。
@@ -384,18 +388,23 @@ func (s *Store) CountExploreRepos() (int, error) {
 // accessibleReposSubquery 是“用户可访问仓库 id + 权限等级”的 UNION 子查询。
 // 三段来源：自有仓库 / 所属组织仓库 / 协作者仓库；用 MAX(role_rank) 去重取最高权限。
 // banned 仓库与被封禁组织的仓库会被过滤，保证列表与计数口径完全一致。
-// role_rank：3=owner，2=write，1=read。
+// role_rank：6=owner，5=admin，4=maintain，3=write，2=triage，1=read。
 const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
 	FROM (
-		SELECT repos.owner AS owner, repos.name AS name, 3 AS role_rank
+		SELECT repos.owner AS owner, repos.name AS name, 6 AS role_rank
 			FROM repos WHERE repos.owner = ?
 		UNION ALL
 		SELECT repos.owner AS owner, repos.name AS name,
-			CASE WHEN m.role = 'owner' THEN 3 ELSE 2 END AS role_rank
+			CASE WHEN m.role = 'owner' THEN 6 ELSE 3 END AS role_rank
 			FROM repos JOIN org_members m ON repos.owner = m.org WHERE m.username = ?
 		UNION ALL
 		SELECT repo_collabs.owner AS owner, repo_collabs.repo AS name,
-			CASE WHEN repo_collabs.permission = 'write' THEN 2 ELSE 1 END AS role_rank
+			CASE repo_collabs.permission
+				WHEN 'admin' THEN 5
+				WHEN 'maintain' THEN 4
+				WHEN 'write' THEN 3
+				WHEN 'triage' THEN 2
+				ELSE 1 END AS role_rank
 			FROM repo_collabs WHERE repo_collabs.username = ?
 	) src
 	JOIN repos r ON r.owner = src.owner AND r.name = src.name
@@ -404,12 +413,18 @@ const accessibleReposSubquery = `SELECT r.id, MAX(src.role_rank) AS role_rank
 
 func roleFromRank(rank int) string {
 	switch {
-	case rank >= 3:
-		return "owner"
+	case rank >= 6:
+		return RoleOwner
+	case rank == 5:
+		return RoleAdmin
+	case rank == 4:
+		return RoleMaintain
+	case rank == 3:
+		return RoleWrite
 	case rank == 2:
-		return "write"
+		return RoleTriage
 	default:
-		return "read"
+		return RoleRead
 	}
 }
 

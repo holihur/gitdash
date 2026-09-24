@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { COLLAB_ROLES } from "@/lib/repo-role";
 
 interface Props {
   open: boolean;
@@ -29,7 +30,7 @@ export default function CollaboratorsDialog({ open, onOpenChange, owner, repo }:
   const { t, to } = useI18n();
   const [collabs, setCollabs] = useState<Collab[]>([]);
   const [username, setUsername] = useState("");
-  const [permission, setPermission] = useState<"read" | "write">("write");
+  const [permission, setPermission] = useState<Collab["permission"]>("write");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -97,10 +98,10 @@ export default function CollaboratorsDialog({ open, onOpenChange, owner, repo }:
                 <div key={c.username} className="flex items-center gap-3 px-3 py-2">
                   <span className="flex-1 truncate text-sm font-medium">{c.username}</span>
                   <Badge
-                    variant={c.permission === "write" ? "default" : "secondary"}
+                    variant={c.permission === "read" ? "secondary" : "default"}
                     className="shrink-0"
                   >
-                    {c.permission === "write" ? t("collabs.write") : t("collabs.read")}
+                    {t(`collabs.${c.permission}`)}
                   </Badge>
                   <Button
                     variant="ghost"
@@ -137,11 +138,14 @@ export default function CollaboratorsDialog({ open, onOpenChange, owner, repo }:
               <select
                 aria-label={t("collabs.permission")}
                 value={permission}
-                onChange={(e) => setPermission(e.target.value as "read" | "write")}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-32"
+                onChange={(e) => setPermission(e.target.value as Collab["permission"])}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-40"
               >
-                <option value="write">{t("collabs.write")}</option>
-                <option value="read">{t("collabs.read")}</option>
+                {COLLAB_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {t(`collabs.${r}`)}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

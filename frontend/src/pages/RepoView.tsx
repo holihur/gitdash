@@ -16,6 +16,7 @@ import RepoHeader from "./repoview/repo-header";
 import ForkDialog from "./repoview/fork-dialog";
 import { useRepoRouting } from "./repoview/use-repo-routing";
 import { useRepoData } from "./repoview/use-repo-data";
+import { canMaintain } from "@/lib/repo-role";
 
 const CodeTab = lazy(() => import("./repoview/code-tab"));
 const CommitsTab = lazy(() => import("./repoview/commits-tab"));
@@ -57,6 +58,8 @@ export default function RepoView() {
   // 仓库角色由后端按 owner / 协作者 / 组织角色计算；组织仓库的 owner 也是"owner"，
   // 不能用 me === owner 判断（组织仓库 owner 是组织名）。
   const isOwner = repo?.role === "owner";
+  // 设置 tab 对 maintain 及以上开放（内部再按 maintain/admin/owner 细分）。
+  const canMaintainRepo = canMaintain(repo?.role);
 
   const [refsOpen, setRefsOpen] = useState(false);
   const [starBusy, setStarBusy] = useState(false);
@@ -203,9 +206,9 @@ export default function RepoView() {
       { value: "copilot", label: t("copilot.tab") },
       { value: "releases", label: t("releases.tab") },
       { value: "projects", label: t("projects.tab") },
-      ...(isOwner ? [{ value: "settings", label: t("repo.settings") }] : []),
+      ...(canMaintainRepo ? [{ value: "settings", label: t("repo.settings") }] : []),
     ],
-    [t, isOwner, repo?.has_issues],
+    [t, canMaintainRepo, repo?.has_issues],
   );
 
   // 关闭 issue 后，若 URL 仍指向 issues tab，回退到 code。
@@ -349,7 +352,7 @@ export default function RepoView() {
           </Suspense>
         </TabsContent>
 
-        {isOwner && (
+        {canMaintainRepo && (
           <TabsContent value="settings">
             <Suspense fallback={<TabFallback />}>
               <SettingsTab owner={owner} name={name} repo={repo} setRepo={setRepo} />

@@ -70,7 +70,7 @@ func patchSubjects(data string) []string {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/patches [post]
 func (a *API) receivePatches(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "write")
 	if !ok {
 		return
 	}

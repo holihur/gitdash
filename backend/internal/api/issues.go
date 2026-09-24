@@ -132,7 +132,7 @@ func (a *API) issueCounts(w http.ResponseWriter, r *http.Request) {
 //	@Router      /users/{owner}/repos/{name}/issues [post]
 //	@Router      /repos/{name}/issues [post]
 func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -335,7 +335,7 @@ func (a *API) linkedPulls(owner, name string, issue store.Issue) []store.PullReq
 //	@Router      /users/{owner}/repos/{name}/issues/{number} [patch]
 //	@Router      /repos/{name}/issues/{number} [patch]
 func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -477,7 +477,7 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 //	@Router      /users/{owner}/repos/{name}/issues/{number} [delete]
 //	@Router      /repos/{name}/issues/{number} [delete]
 func (a *API) deleteIssue(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -542,7 +542,7 @@ func (a *API) enrichIssues(owner, repo string, issues []store.Issue) []map[strin
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues/{number}/labels [post]
 func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -591,7 +591,7 @@ func (a *API) setIssueLabels(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues/{number}/milestone [post]
 func (a *API) setIssueMilestone(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -675,7 +675,7 @@ func (a *API) recordLabelDelta(owner, name string, number int64, actor string, b
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues/{number}/assignees [put]
 func (a *API) setIssueAssignees(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -859,7 +859,7 @@ var labelColorRe = regexp.MustCompile(`^#?[0-9a-fA-F]{6}$`)
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/labels [post]
 func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -913,7 +913,7 @@ func (a *API) createLabel(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/labels/{id} [patch]
 func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -991,7 +991,7 @@ func (a *API) updateLabel(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/labels/{id} [delete]
 func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -1050,7 +1050,7 @@ func (a *API) listMilestones(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/milestones [post]
 func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -1091,7 +1091,7 @@ func (a *API) createMilestone(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/milestones/{id} [patch]
 func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
@@ -1139,7 +1139,7 @@ func (a *API) updateMilestone(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/milestones/{id} [delete]
 func (a *API) deleteMilestone(w http.ResponseWriter, r *http.Request) {
-	owner, name, ok := a.requireAccess(w, r, true)
+	owner, name, ok := a.requireRole(w, r, "triage")
 	if !ok {
 		return
 	}
