@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import Pagination from "@/components/ui/pagination";
 import { Avatar } from "@/components/avatar";
-import { CoverBanner } from "@/components/cover-banner";
+import { ProfileHero } from "@/components/profile-hero";
+import { BadgeStrip } from "@/components/badge-strip";
 import { cn, formatDate } from "@/lib/utils";
 import { RelativeTime } from "@/components/relative-time";
 
@@ -102,56 +103,61 @@ export default function UserPage() {
 
   return (
     <div className="space-y-6">
-      <CoverBanner coverUrl={profile.cover_url} />
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <Avatar username={profile.username} size={80} />
-        <div className="min-w-0 flex-1 space-y-1">
-          <h1 className="truncate text-2xl font-bold">{profile.username}</h1>
-          {profile.bio && <p className="whitespace-pre-wrap text-sm">{profile.bio}</p>}
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <CalendarDays className="h-3.5 w-3.5" />
-            {t("user.memberSince", { date: formatDate(profile.created_at, locale) })}
-          </p>
-          <p className="flex flex-wrap items-center gap-4 pt-1 text-sm text-muted-foreground">
-            <span>
-              <span className="font-medium text-foreground">{profile.followers}</span>{" "}
-              {t("user.followers")}
-            </span>
-            <span>
-              <span className="font-medium text-foreground">{profile.following}</span>{" "}
-              {t("user.following")}
-            </span>
-          </p>
-        </div>
-        {profile.is_self ? (
-          <Button asChild variant="outline" size="sm" className="gap-1.5 self-start">
-            <Link to="/profile">
-              <Settings className="h-4 w-4" />
-              {t("user.editProfile")}
-            </Link>
-          </Button>
-        ) : (
-          <Button
-            variant={profile.is_following ? "outline" : "default"}
-            size="sm"
-            className="gap-1.5 self-start"
-            disabled={busy}
-            onClick={toggleFollow}
-          >
-            {profile.is_following ? (
-              <>
-                <UserMinus className="h-4 w-4" />
-                {t("user.unfollow")}
-              </>
-            ) : (
-              <>
-                <UserPlus className="h-4 w-4" />
-                {t("user.follow")}
-              </>
-            )}
-          </Button>
-        )}
-      </div>
+      <ProfileHero
+        coverUrl={profile.cover_url}
+        avatar={<Avatar username={profile.username} size={80} className="ring-4 ring-background" />}
+        title={profile.username}
+        badges={<BadgeStrip kind="user" owner={profile.username} />}
+        bio={profile.bio}
+        meta={
+          <>
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {t("user.memberSince", { date: formatDate(profile.created_at, locale) })}
+            </p>
+            <p className="flex flex-wrap items-center gap-4 pt-1 text-sm text-muted-foreground">
+              <span>
+                <span className="font-medium text-foreground">{profile.followers}</span>{" "}
+                {t("user.followers")}
+              </span>
+              <span>
+                <span className="font-medium text-foreground">{profile.following}</span>{" "}
+                {t("user.following")}
+              </span>
+            </p>
+          </>
+        }
+        actions={
+          profile.is_self ? (
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link to="/profile">
+                <Settings className="h-4 w-4" />
+                {t("user.editProfile")}
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              variant={profile.is_following ? "outline" : "default"}
+              size="sm"
+              className="gap-1.5"
+              disabled={busy}
+              onClick={toggleFollow}
+            >
+              {profile.is_following ? (
+                <>
+                  <UserMinus className="h-4 w-4" />
+                  {t("user.unfollow")}
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4" />
+                  {t("user.follow")}
+                </>
+              )}
+            </Button>
+          )
+        }
+      />
 
       <div className="flex flex-wrap gap-1 border-b">
         {tabs.map((tab) => (
@@ -244,6 +250,7 @@ function RepoCard({ repo }: { repo: Repo }) {
         <p className="line-clamp-2 min-h-5 text-sm text-muted-foreground">
           {repo.description || t("common.noDescription")}
         </p>
+        <BadgeStrip kind="repo" owner={repo.owner} repo={repo.name} />
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>
             <RelativeTime iso={repo.created_at} locale={locale} />

@@ -13,6 +13,7 @@ import {
 import { cn, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { cloneCommand, type Repo } from "@/lib/api";
+import { BadgeStrip } from "@/components/badge-strip";
 
 interface Props {
   owner: string;
@@ -52,6 +53,7 @@ export default function RepoHeader({
           <span className="text-muted-foreground">/</span>
           {name}
         </h1>
+        <BadgeStrip kind="repo" owner={owner} repo={name} className="mt-1" />
         <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
         {repo?.topics && repo.topics.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">

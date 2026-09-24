@@ -6,6 +6,7 @@ import { apiErrorMsg } from "@/lib/errors";
 import { formatDate } from "@/lib/utils";
 import { EmailSection } from "./profile/EmailSection";
 import { BioSection } from "./profile/BioSection";
+import { BadgeDisplayPicker } from "@/components/badge-display-picker";
 import { AvatarSection } from "./profile/AvatarSection";
 import { CoverSection } from "./profile/CoverSection";
 import { ByokSection } from "./profile/ByokSection";
@@ -60,6 +61,7 @@ export default function ProfilePage() {
       />
       <AvatarSection username={profile.username} />
       <CoverSection coverUrl={profile.cover_url} onChanged={loadProfile} />
+      <BadgeDisplayPicker kind="user" owner={profile.username} />
       <BioSection />
       <ByokSection />
       <PasswordSection />

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Pagination from "@/components/ui/pagination";
 import { RelativeTime } from "@/components/relative-time";
 import { LanguageBadge } from "@/components/language-bar";
+import { BadgeStrip } from "@/components/badge-strip";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { useQueryState } from "@/lib/query-state";
 import { apiErrorMsg } from "@/lib/errors";
@@ -173,6 +174,7 @@ export default function Explore() {
                 >
                   <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="font-medium">{r.owner}/{r.name}</span>
+                  <BadgeStrip kind="repo" owner={r.owner} repo={r.name} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">
                     {r.description}
                   </span>
@@ -248,6 +250,11 @@ export default function Explore() {
                       </Badge>
                     )}
                     {u.display && <span className="text-muted-foreground">{u.display}</span>}
+                    <BadgeStrip
+                      kind={u.kind === "org" ? "org" : "user"}
+                      owner={u.name}
+                      className="shrink-0"
+                    />
                   </>
                 );
                 return u.kind === "user" ? (
@@ -327,6 +334,7 @@ export default function Explore() {
                   <span className="line-clamp-2 block">
                     {repo.description || t("common.noDescription")}
                   </span>
+                  <BadgeStrip kind="repo" owner={repo.owner} repo={repo.name} className="mt-1" />
                 </CardDescription>
               </CardHeader>
               <CardContent className="mt-auto space-y-3">

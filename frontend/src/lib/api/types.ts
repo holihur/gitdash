@@ -355,6 +355,27 @@ export interface Milestone {
   closed_issues: number;
 }
 
+/** 系统徽章（仅管理后台可定义与授予）。 */
+export interface Badge {
+  id: number;
+  slug: string;
+  label: string;
+  description: string;
+  has_image: boolean;
+  image_updated_at?: string;
+  created_at: string;
+}
+
+/** 徽章授予记录（管理端视图）。 */
+export interface BadgeGrant {
+  badge_id: number;
+  label: string;
+  kind: "user" | "repo" | "org";
+  owner: string;
+  repo: string;
+  created_at: string;
+}
+
 export interface Project {
   id: number;
   owner: string;
@@ -737,7 +758,8 @@ export type NotifAction =
   | "converted_to_draft"
   | "banned_user"
   | "banned_repo"
-  | "banned_org";
+  | "banned_org"
+  | "badge_granted";
 
 export interface Notification {
   id: number;

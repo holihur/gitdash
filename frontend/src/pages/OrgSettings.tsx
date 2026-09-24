@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CoverBanner } from "@/components/cover-banner";
+import { BadgeDisplayPicker } from "@/components/badge-display-picker";
 
 /** 组织设置独立页：编辑显示名 / 简介 / 封面（仅 owner）。 */
 export default function OrgSettings() {
@@ -168,6 +169,8 @@ export default function OrgSettings() {
           </div>
         </CardContent>
       </Card>
+
+      <BadgeDisplayPicker kind="org" owner={profile.name} />
     </div>
   );
 }

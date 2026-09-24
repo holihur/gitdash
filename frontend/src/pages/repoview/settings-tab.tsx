@@ -6,6 +6,7 @@ import { RepoEnvVarsCard } from "./settings/RepoEnvVarsCard";
 import { SecretsCard } from "./settings/SecretsCard";
 import { PipelineCard } from "./settings/PipelineCard";
 import { DescriptionCard } from "./settings/DescriptionCard";
+import { BadgeDisplayPicker } from "@/components/badge-display-picker";
 import { TopicsCard } from "./settings/TopicsCard";
 import { DefaultBranchCard } from "./settings/DefaultBranchCard";
 import { IssuesFeatureCard } from "./settings/IssuesFeatureCard";
@@ -30,6 +31,7 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   return (
     <div className="space-y-4">
       {isOwner && <DescriptionCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+      {isOwner && <BadgeDisplayPicker kind="repo" owner={owner} repo={name} />}
       {isOwner && <TopicsCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
       <BranchProtectionsCard owner={owner} name={name} />
       {isOwner && <DefaultBranchCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}

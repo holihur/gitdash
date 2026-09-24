@@ -43,6 +43,26 @@ export async function adminList<T>(path: string): Promise<{ items: T; total: num
   return { items: (await res.json()) as T, total: Number.isFinite(total) ? total : 0 };
 }
 
+/** 管理端 multipart 上传（徽章图标等）。 */
+export async function adminUpload<T>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(`/api/admin${path}`, {
+    method: "POST",
+    credentials: "same-origin",
+    body: form,
+  });
+  if (res.status === 404) throw new ApiDisabledError();
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok) {
+    throw new Error((data as { error?: string })?.error ?? res.statusText);
+  }
+  return data as T;
+}
+
 export type Translator = (key: string, vars?: Record<string, string | number>) => string | undefined;
 
 /** 返回原始响应与解析后的错误体（含 code），供用户管理接口按错误码做 i18n。 */

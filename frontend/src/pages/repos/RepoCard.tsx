@@ -13,6 +13,7 @@ import {
 import { useI18n } from "@/lib/i18n";
 import { RelativeTime } from "@/components/relative-time";
 import { LanguageBadge } from "@/components/language-bar";
+import { BadgeStrip } from "@/components/badge-strip";
 
 interface Props {
   repo: Repo;
@@ -93,6 +94,7 @@ export default function RepoCard({
           <span className="line-clamp-2 block">
             {repo.description || t("common.noDescription")}
           </span>
+          <BadgeStrip kind="repo" owner={repo.owner} repo={repo.name} className="mt-1" />
         </CardDescription>
       </CardHeader>
       <CardContent className="mt-auto space-y-3">

@@ -21,6 +21,9 @@ import { copilotApi } from "./api/copilot";
 import { applicationsApi } from "./api/applications";
 import { feedbackApi } from "./api/feedback";
 import { connectionsApi } from "./api/connections";
+import { badgesApi } from "./api/badges";
+
+export { badgeImageUrl, invalidateBadges } from "./api/badges";
 
 export const api = {
   ...authApi,
@@ -41,4 +44,5 @@ export const api = {
   ...applicationsApi,
   ...feedbackApi,
   ...connectionsApi,
+  ...badgesApi,
 };

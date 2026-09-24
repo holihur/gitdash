@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
+  Award,
   Ban,
   Bell,
   Check,
@@ -52,6 +53,8 @@ function notifIcon(n: Notification) {
     case "banned_repo":
     case "banned_org":
       return <Ban className="h-4 w-4 shrink-0 text-destructive" />;
+    case "badge_granted":
+      return <Award className="h-4 w-4 shrink-0 text-amber-500" />;
   }
 }
 
@@ -224,7 +227,7 @@ export default function Inbox({ onChanged }: { onChanged?: () => void }) {
                       )}
                     >
                       {n.kind === "system"
-                        ? t(`inbox.system.${n.action}`, { owner: n.owner, repo: n.repo, actor: n.actor })
+                        ? t(`inbox.system.${n.action}`, { owner: n.owner, repo: n.repo, actor: n.actor, title: n.title })
                         : `#${n.number} · ${n.title}`}
                     </span>
                     <span className="block text-xs text-muted-foreground">

@@ -362,6 +362,16 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/admin/repos/{owner}/{name}/ban", a.adminAuth(a.adminBanRepo))
 	mux.HandleFunc("GET /api/admin/orgs", a.adminAuth(a.adminListOrgs))
 	mux.HandleFunc("POST /api/admin/orgs/{name}/ban", a.adminAuth(a.adminBanOrg))
+
+	// badges（徽章：仅管理端定义与授予）
+	mux.HandleFunc("GET /api/admin/badges", a.adminAuth(a.adminListBadges))
+	mux.HandleFunc("POST /api/admin/badges", a.adminAuth(a.adminCreateBadge))
+	mux.HandleFunc("PATCH /api/admin/badges/{id}", a.adminAuth(a.adminUpdateBadge))
+	mux.HandleFunc("DELETE /api/admin/badges/{id}", a.adminAuth(a.adminDeleteBadge))
+	mux.HandleFunc("POST /api/admin/badges/{id}/image", a.adminAuth(a.adminSetBadgeImage))
+	mux.HandleFunc("GET /api/admin/badges/{id}/grants", a.adminAuth(a.adminListBadgeGrants))
+	mux.HandleFunc("POST /api/admin/badges/{id}/grants", a.adminAuth(a.adminGrantBadge))
+	mux.HandleFunc("DELETE /api/admin/badges/{id}/grants", a.adminAuth(a.adminRevokeBadge))
 	// IP / CIDR 黑名单
 	mux.HandleFunc("GET /api/admin/ip-bans", a.adminAuth(a.adminListIPBans))
 	mux.HandleFunc("POST /api/admin/ip-bans", a.adminAuth(a.adminAddIPBan))
@@ -599,6 +609,13 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
 	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))
 	mux.HandleFunc("GET /api/search/code", a.auth(a.searchCode))
+
+	// badges（徽章展示 / 挂载设置）
+	mux.HandleFunc("GET /api/badges", a.authOptional(a.getBadges))
+	mux.HandleFunc("POST /api/badges/batch", a.authOptional(a.postBadgesBatch))
+	mux.HandleFunc("GET /api/badges/{id}/image", a.authOptional(a.getBadgeImage))
+	mux.HandleFunc("GET /api/badges/owned", a.auth(a.getOwnedBadges))
+	mux.HandleFunc("PUT /api/badges/display", a.auth(a.setBadgeDisplay))
 
 	// orgs (namespace)
 	mux.HandleFunc("POST /api/orgs", a.auth(a.createOrg))

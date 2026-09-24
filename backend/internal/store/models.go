@@ -786,6 +786,55 @@ type orgCoverRow struct {
 
 func (orgCoverRow) TableName() string { return "org_covers" }
 
+// ---- badges（系统徽章）----
+
+// badgeRow 徽章定义（仅管理后台可创建）。图片单独存 badgeImageRow。
+type badgeRow struct {
+	ID          int64  `gorm:"primaryKey;autoIncrement"`
+	Slug        string `gorm:"not null;uniqueIndex;size:64"`
+	Label       string `gorm:"not null;size:64"`
+	Description string `gorm:"not null;default:'';size:500"`
+	CreatedAt   string `gorm:"not null"`
+}
+
+func (badgeRow) TableName() string { return "badges" }
+
+// badgeImageRow 徽章图标（单独表，避免常规列表加载大字段）。
+type badgeImageRow struct {
+	BadgeID     int64  `gorm:"primaryKey"`
+	ContentType string `gorm:"not null;default:'';size:64"`
+	Data        []byte `gorm:"not null"`
+	UpdatedAt   string `gorm:"not null"`
+}
+
+func (badgeImageRow) TableName() string { return "badge_images" }
+
+// badgeGrantRow 徽章授予记录：把一个徽章发给 用户 / 仓库 / 组织。
+// kind = user | repo | org；repo 仅 kind=repo 时有值。
+type badgeGrantRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	BadgeID   int64  `gorm:"not null;uniqueIndex:uq_badge_grant,priority:1"`
+	Kind      string `gorm:"not null;uniqueIndex:uq_badge_grant,priority:2;size:8"`
+	Owner     string `gorm:"not null;uniqueIndex:uq_badge_grant,priority:3;size:255"`
+	Repo      string `gorm:"not null;default:'';uniqueIndex:uq_badge_grant,priority:4;size:255"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (badgeGrantRow) TableName() string { return "badge_grants" }
+
+// badgeDisplayRow 目标实际挂出的徽章（必须是已授予徽章的子集，最多 3 个）。
+type badgeDisplayRow struct {
+	ID int64 `gorm:"primaryKey;autoIncrement"`
+	// 目标定位：kind + owner + repo（repo 仅 kind=repo 时有值）。
+	Kind     string `gorm:"not null;index:idx_badge_display_target,priority:1;uniqueIndex:uq_badge_display,priority:1;size:8"`
+	Owner    string `gorm:"not null;index:idx_badge_display_target,priority:2;uniqueIndex:uq_badge_display,priority:2;size:255"`
+	Repo     string `gorm:"not null;default:'';index:idx_badge_display_target,priority:3;uniqueIndex:uq_badge_display,priority:3;size:255"`
+	BadgeID  int64  `gorm:"not null;uniqueIndex:uq_badge_display,priority:4"`
+	Position int    `gorm:"not null;default:0"`
+}
+
+func (badgeDisplayRow) TableName() string { return "badge_displays" }
+
 // ---- copilot sessions（嵌入式 agent，工作区为仓库的本地克隆副本）----
 
 // copilotSessionRow 仓库内的一个 AI copilot 会话，绑定到某个 BYOK 密钥。

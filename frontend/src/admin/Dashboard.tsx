@@ -18,6 +18,7 @@ import { OrgsSection } from "./sections/OrgsSection";
 import { IPBlacklistSection } from "./sections/IPBlacklistSection";
 import { QuotaSection } from "./sections/QuotaSection";
 import { CodeSearchSection } from "./sections/CodeSearchSection";
+import { BadgesSection } from "./sections/BadgesSection";
 
 export function Dashboard({ user, onLogout }: { user: string; onLogout: () => void }) {
   const { t, to } = useI18n();
@@ -72,6 +73,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
       <UsersSection />
       <ReposSection />
       <OrgsSection />
+      <BadgesSection />
       <IPBlacklistSection />
       <QuotaSection />
     </div>
