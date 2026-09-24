@@ -16,7 +16,7 @@ import { IssueItem } from "@/components/issues/issue-item";
 import { canTriage, canWrite } from "@/lib/repo-role";
 import { IssueFilters } from "@/components/issues/issue-filters";
 
-export default function RepoIssues({ owner, name, role }: { owner: string; name: string; role?: "owner" | "read" | "write" }) {
+export default function RepoIssues({ owner, name, role }: { owner: string; name: string; role?: string }) {
   const { t, to } = useI18n();
   const canWriteCode = canWrite(role);
   const canManageIssues = canTriage(role);

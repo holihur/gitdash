@@ -12,12 +12,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import ConfirmDialog from "@/components/confirm-dialog";
 import { ProjectCardDialog, ProjectGanttView, ProjectListView, type CardDraft } from "@/components/projects-views";
 import { ProjectBoardView, UNGROUPED } from "@/components/projects-board-view";
+import { canWrite as roleCanWrite } from "@/lib/repo-role";
 
 interface Props {
   owner: string;
   name: string;
   project: Project;
-  role?: "owner" | "read" | "write";
+  role?: string;
   onBack: () => void;
   onProjectChanged: (p: Project) => void;
 }
@@ -26,7 +27,7 @@ type ProjectView = "board" | "list" | "gantt";
 
 export default function ProjectsBoard({ owner, name, project, role, onBack, onProjectChanged }: Props) {
   const { t, to } = useI18n();
-  const canWrite = role === "owner" || role === "write";
+  const canWrite = roleCanWrite(role);
   const { get, set: setQuery } = useQueryState();
   const [board, setBoard] = useState<ProjectBoard | null>(null);
   const [busy, setBusy] = useState(false);

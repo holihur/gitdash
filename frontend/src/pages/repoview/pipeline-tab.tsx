@@ -3,7 +3,7 @@ import RepoPipeline from "@/pages/RepoPipeline";
 export interface PipelineTabProps {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }
 
 export default function PipelineTab({ owner, name, role }: PipelineTabProps) {

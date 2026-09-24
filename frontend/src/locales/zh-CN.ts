@@ -724,6 +724,15 @@ export const zhCN: Messages = {
     remove: "移除",
     sharedBy: "由 {owner} 共享",
   },
+  repoAccess: {
+    title: "你的权限",
+    yourRole: "你在本仓库的角色：",
+    read: "浏览代码与议题",
+    triage: "管理议题与 PR",
+    write: "推送代码、发布、流水线",
+    maintain: "仓库设置（Webhook、密钥、分支保护）",
+    admin: "协作者与可见性",
+  },
   webhooks: {
     manage: "Webhooks",
     add: "添加 Webhook",

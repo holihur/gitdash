@@ -3,7 +3,7 @@ import RepoPulls from "@/pages/RepoPulls";
 export interface PullsTabProps {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }
 
 export default function PullsTab({ owner, name, role }: PullsTabProps) {

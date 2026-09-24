@@ -19,16 +19,17 @@ import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import ConfirmDialog from "@/components/confirm-dialog";
 import ProjectsBoard from "@/components/projects-board";
+import { canWrite as roleCanWrite } from "@/lib/repo-role";
 
 interface Props {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }
 
 export default function ProjectsTab({ owner, name, role }: Props) {
   const { t, to } = useI18n();
-  const canWrite = role === "owner" || role === "write";
+  const canWrite = roleCanWrite(role);
   const [items, setItems] = useState<Project[]>([]);
   const [current, setCurrent] = useState<Project | null>(null);
   const { getNum, set: setQuery } = useQueryState();

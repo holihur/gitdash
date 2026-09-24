@@ -24,17 +24,18 @@ import { apiErrorMsg } from "@/lib/errors";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { StatusBadge } from "@/components/copilot/status-badge";
 import { CopilotChat } from "@/components/copilot/chat";
+import { canWrite as roleCanWrite } from "@/lib/repo-role";
 
 export interface CopilotTabProps {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }
 
 export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
   const { t, to, lang } = useI18n();
   const locale = dateLocale(lang);
-  const canWrite = role === "owner" || role === "write";
+  const canWrite = roleCanWrite(role);
   const [searchParams, setSearchParams] = useSearchParams();
   const wantedId = Number(searchParams.get("copilot")) || null;
 

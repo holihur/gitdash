@@ -13,18 +13,19 @@ import { MermaidDiagram } from "@/components/mermaid";
 import PipelineDocs from "@/components/pipeline-docs";
 import PipelineRunsCard from "@/components/pipeline-runs";
 import { toMermaid } from "@/components/pipeline-shared";
+import { canWrite as roleCanWrite, canMaintain } from "@/lib/repo-role";
 
 interface Props {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }
 
 export default function RepoPipeline({ owner, name, role }: Props) {
   const { t, to, lang } = useI18n();
   const locale = dateLocale(lang);
-  const isOwner = role === "owner";
-  const canWrite = role === "owner" || role === "write";
+  const canToggle = canMaintain(role);
+  const canWrite = roleCanWrite(role);
 
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -187,7 +188,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
               <CardDescription className="mt-1">{t("pipeline.hint")}</CardDescription>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              {isOwner && (
+              {canToggle && (
                 <Button
                   variant={enabled ? "default" : "outline"}
                   size="sm"

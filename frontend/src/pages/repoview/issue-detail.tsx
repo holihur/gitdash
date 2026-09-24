@@ -26,7 +26,7 @@ export default function IssueDetail({
 }: {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
   number: number;
 }) {
   const { t, to, lang } = useI18n();

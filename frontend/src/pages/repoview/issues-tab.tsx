@@ -9,7 +9,7 @@ export default function IssuesTab({
 }: {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
   issueNumber: number;
 }) {
   if (issueNumber > 0) {

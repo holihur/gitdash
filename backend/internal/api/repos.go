@@ -244,15 +244,8 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 		repo.ImportStatus = is
 		repo.ImportError = ie
 	}
-	// 当前用户视角的角色（owner/write/read），前端据此控制设置类 UI
-	switch {
-	case a.store.IsRepoOwner(owner, me):
-		repo.Role = "owner"
-	case a.store.CanWrite(owner, name, me):
-		repo.Role = "write"
-	default:
-		repo.Role = "read"
-	}
+	// 当前用户视角的完整角色（read/triage/write/maintain/admin/owner），前端据此控制设置类 UI。
+	repo.Role = a.store.RepoRole(owner, name, me)
 	if ts, err := a.store.ListRepoTopics(owner, name); err == nil {
 		repo.Topics = ts
 	}

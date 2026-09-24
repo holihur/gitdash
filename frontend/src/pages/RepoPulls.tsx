@@ -31,6 +31,7 @@ import Pagination from "@/components/ui/pagination";
 import { useQueryState } from "@/lib/query-state";
 import { cn, formatDate } from "@/lib/utils";
 import ListSkeleton from "@/components/list-skeleton";
+import { canWrite as roleCanWrite } from "@/lib/repo-role";
 
 export default function RepoPulls({
   owner,
@@ -39,9 +40,9 @@ export default function RepoPulls({
 }: {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }) {
-  const canWrite = role === "owner" || role === "write";
+  const canWrite = roleCanWrite(role);
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
   const [pulls, setPulls] = useState<PullRequest[]>([]);

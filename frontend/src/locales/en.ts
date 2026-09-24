@@ -727,6 +727,15 @@ export const en = {
     remove: "Remove",
     sharedBy: "shared by {owner}",
   },
+  repoAccess: {
+    title: "Your access",
+    yourRole: "Your role in this repository:",
+    read: "Read code & issues",
+    triage: "Manage issues & pull requests",
+    write: "Push code, releases, pipelines",
+    maintain: "Repository settings (webhooks, keys, protections)",
+    admin: "Collaborators & visibility",
+  },
   webhooks: {
     manage: "Webhooks",
     add: "Add webhook",

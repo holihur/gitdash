@@ -32,6 +32,7 @@ import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import { DiffView, type DiffFileInfo } from "@/components/diff-view";
 import { buildCommitGraph, laneColor, type CommitGraphRow } from "@/lib/commit-graph";
+import { canWrite as roleCanWrite } from "@/lib/repo-role";
 
 export interface CommitsTabProps {
   owner: string;
@@ -153,7 +154,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
   const [revertSha, setRevertSha] = useState<string | null>(null);
   const [revertBusy, setRevertBusy] = useState(false);
   const [reload, setReload] = useState(0);
-  const canWrite = role === "owner" || role === "write";
+  const canWrite = roleCanWrite(role);
 
   // 搜索输入防抖，避免每次按键都请求后端。
   useEffect(() => {

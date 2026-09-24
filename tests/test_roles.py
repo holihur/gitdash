@@ -75,6 +75,14 @@ def test_org_member_default_role(user_factory):
         owner.delete(f"/orgs/{org}", expect=204)
 
 
+def test_repo_detail_reports_full_role(role_env):
+    an, alice, repo, users = role_env
+    for role in ["read", "triage", "write", "maintain", "admin"]:
+        _, c = users[role]
+        assert c.get(f"/users/{an}/repos/{repo}", expect=200).json()["role"] == role
+    assert alice.get(f"/users/{an}/repos/{repo}", expect=200).json()["role"] == "owner"
+
+
 def test_read_role(role_env):
     an, _, repo, users = role_env
     _, c = users["read"]

@@ -22,17 +22,18 @@ import { cn, formatSize } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
+import { canWrite as roleCanWrite } from "@/lib/repo-role";
 
 export interface ReleasesTabProps {
   owner: string;
   name: string;
-  role?: "owner" | "read" | "write";
+  role?: string;
 }
 
 export default function ReleasesTab({ owner, name, role }: ReleasesTabProps) {
   const { t, lang, to } = useI18n();
   const locale = dateLocale(lang);
-  const canWrite = role === "owner" || role === "write";
+  const canWrite = roleCanWrite(role);
   const [releases, setReleases] = useState<Release[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);

@@ -95,8 +95,7 @@ export default function RepoCard({
             )}
             {isMine && !isOwner && repo.role && (
               <Badge variant="secondary" className="font-normal">
-                {t("collabs.sharedBy", { owner: repo.owner })} ·
-                {repo.role === "write" ? t("collabs.write") : t("collabs.read")}
+                {t("collabs.sharedBy", { owner: repo.owner })} · {t(`collabs.${repo.role}`)}
               </Badge>
             )}
           </span>

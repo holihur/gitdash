@@ -16,7 +16,7 @@ import RepoHeader from "./repoview/repo-header";
 import ForkDialog from "./repoview/fork-dialog";
 import { useRepoRouting } from "./repoview/use-repo-routing";
 import { useRepoData } from "./repoview/use-repo-data";
-import { canMaintain } from "@/lib/repo-role";
+import { canMaintain, canWrite } from "@/lib/repo-role";
 
 const CodeTab = lazy(() => import("./repoview/code-tab"));
 const CommitsTab = lazy(() => import("./repoview/commits-tab"));
@@ -367,7 +367,7 @@ export default function RepoView() {
         owner={owner}
         repo={name}
         current={ref || branches[0]?.name || "main"}
-        canWrite={repo?.role === "owner" || repo?.role === "write"}
+        canWrite={canWrite(repo?.role)}
         onRefresh={refreshRefs}
       />
       <ForkDialog
