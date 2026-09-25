@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -33,7 +34,7 @@ func TestBadgeCRUDAndImage(t *testing.T) {
 	if b.HasImage {
 		t.Fatal("new badge should have no image")
 	}
-	if _, err := s.CreateBadge("verified", "Dup", ""); err != ErrExists {
+	if _, err := s.CreateBadge("verified", "Dup", ""); !errors.Is(err, ErrExists) {
 		t.Fatalf("want ErrExists, got %v", err)
 	}
 	if err := s.SetBadgeImage(b.ID, "image/png", []byte("png-bytes")); err != nil {
@@ -69,10 +70,10 @@ func TestBadgeCRUDAndImage(t *testing.T) {
 	if err != nil || got.HasImage || got.Emoji != emoji || got.Label != "Verified Pro" {
 		t.Fatalf("badge after image delete = %+v, %v", got, err)
 	}
-	if _, _, err := s.GetBadgeImage(b.ID); err != ErrNotFound {
+	if _, _, err := s.GetBadgeImage(b.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("image should be gone, got %v", err)
 	}
-	if err := s.DeleteBadgeImage(b.ID); err != ErrNotFound {
+	if err := s.DeleteBadgeImage(b.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("second delete = %v, want ErrNotFound", err)
 	}
 }
@@ -116,7 +117,7 @@ func TestBadgeGrantDisplayRevoke(t *testing.T) {
 		t.Fatalf("auto display = %d, want %d", len(disp), MaxDisplayedBadges)
 	}
 	// 重复授予
-	if err := s.GrantBadge(ids[0], "user", "alice", ""); err != ErrExists {
+	if err := s.GrantBadge(ids[0], "user", "alice", ""); !errors.Is(err, ErrExists) {
 		t.Fatalf("want ErrExists, got %v", err)
 	}
 
@@ -143,7 +144,7 @@ func TestBadgeGrantDisplayRevoke(t *testing.T) {
 			t.Fatal("revoked badge still displayed")
 		}
 	}
-	if err := s.RevokeBadge(ids[4], "user", "alice", ""); err != ErrNotFound {
+	if err := s.RevokeBadge(ids[4], "user", "alice", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
@@ -194,17 +195,17 @@ func TestBadgeDeleteCascades(t *testing.T) {
 	if err := s.DeleteBadge(b.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetBadge(b.ID); err != ErrNotFound {
+	if _, err := s.GetBadge(b.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("badge should be gone, got %v", err)
 	}
-	if _, _, err := s.GetBadgeImage(b.ID); err != ErrNotFound {
+	if _, _, err := s.GetBadgeImage(b.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("image should be gone, got %v", err)
 	}
 	grants, _ := s.ListBadgeGrants(b.ID)
 	if len(grants) != 0 {
 		t.Fatalf("grants should be gone, got %d", len(grants))
 	}
-	if err := s.DeleteBadge(b.ID); err != ErrNotFound {
+	if err := s.DeleteBadge(b.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -26,7 +27,7 @@ func TestOrgTeams(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateOrgTeam("acme", "backend"); err != ErrExists {
+	if _, err := s.CreateOrgTeam("acme", "backend"); !errors.Is(err, ErrExists) {
 		t.Fatalf("duplicate team -> %v", err)
 	}
 	if err := s.AddOrgTeamMember("acme", team.ID, "bob"); err != nil {

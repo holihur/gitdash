@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -217,7 +218,7 @@ func TestRepoMemberRoleOverride(t *testing.T) {
 		t.Fatalf("lowered override role = %q, want write", got)
 	}
 	// 非法角色被拒。
-	if err := s.SetRepoMemberRole("acme", "r", RoleOwner); err != ErrInvalidRole {
+	if err := s.SetRepoMemberRole("acme", "r", RoleOwner); !errors.Is(err, ErrInvalidRole) {
 		t.Fatalf("invalid role err = %v", err)
 	}
 	// 清空覆盖回退组织默认。
