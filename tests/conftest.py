@@ -18,6 +18,28 @@
 from __future__ import annotations
 
 import os
+import sys
+
+
+def _gha_annotate(level: str, title: str, msg: str) -> None:
+    """在 GitHub Actions 下输出 workflow 命令，使失败用例成为可通过公开 API 读取的 annotation。"""
+    if not os.environ.get("GITHUB_ACTIONS"):
+        return
+    try:
+        sys.__stdout__.write(f"::{level} title={title}::{msg}\n")
+        sys.__stdout__.flush()
+    except Exception:  # pragma: no cover - 永不阻断测试
+        pass
+
+
+def pytest_runtest_logreport(report) -> None:  # noqa: ANN001
+    if report.failed:
+        _gha_annotate("error", "pytest", report.nodeid)
+
+
+def pytest_collectreport(report) -> None:  # noqa: ANN001
+    if report.failed:
+        _gha_annotate("error", "pytest-collect", getattr(report, "nodeid", "?"))
 import socket
 import subprocess
 import time
