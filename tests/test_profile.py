@@ -33,8 +33,9 @@ def user(user_factory):
 def test_profile_me_fields(user):
     _, _, c = user
     me = c.get("/me", expect=200).json()
-    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "notify_email", "email_verified", "avatar_url", "cover_url", "bio"}
+    assert set(me) == {"username", "email", "created_at", "mfa_enabled", "mfa_required", "notify_email", "email_verified", "avatar_url", "cover_url", "bio"}
     assert me["mfa_enabled"] is False
+    assert me["mfa_required"] is False
     assert me["notify_email"] is False
     assert me["created_at"]
     # 未设置头像 / 封面时为空串
