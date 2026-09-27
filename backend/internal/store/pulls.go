@@ -164,10 +164,12 @@ func (s *Store) ListAutoMergePulls(owner, repo string) ([]PullRequest, error) {
 }
 
 // MarkPullMerged 记录合并结果（fast-forward 后 target 指向 headSHA）。
+// 带 state='open' 守卫：并发/重复合并时只有首个请求能落库，后续返回 ErrNotFound，
+// 避免重复的 merged 通知与 webhook（审计 F-03）。
 func (s *Store) MarkPullMerged(owner, repo string, number int64, headSHA, mergedBy string) (PullRequest, error) {
 	now := now()
 	res := s.db.Model(&pullRequestRow{}).
-		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
+		Where("owner = ? AND repo = ? AND number = ? AND state = ?", owner, repo, number, "open").
 		Updates(map[string]any{
 			"state": "merged", "head_sha": headSHA, "merged_by": mergedBy,
 			"merged_at": now, "updated_at": now, "auto_merge": false,

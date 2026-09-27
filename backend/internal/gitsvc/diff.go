@@ -50,7 +50,12 @@ func mergeFastForward(owner, name, target, source string) (string, error) {
 	if !canFastForward(owner, name, target, source) {
 		return "", fmt.Errorf("cannot fast-forward %q to %q (diverged)", target, source)
 	}
-	if _, err := gitOut(repoPath(owner, name), "update-ref", "refs/heads/"+target, sha); err != nil {
+	// CAS：仅当 target 仍指向合并开始时读取的值才更新，避免并发 push/合并被静默覆盖。
+	old, err := revSHA(owner, name, "refs/heads/"+target)
+	if err != nil {
+		return "", err
+	}
+	if _, err := gitOut(repoPath(owner, name), "update-ref", "refs/heads/"+target, sha, old); err != nil {
 		return "", err
 	}
 	return sha, nil

@@ -5,10 +5,35 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/store"
 )
+
+// mergeLocks 按 (owner/repo/branch) 串行化合并：门禁判定 → ref 更新 → 落库
+// 全在同一把锁内，避免并发/双击造成重复合并（审计 F-03/F-06）。
+type mergeKeyedMutex struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+func (k *mergeKeyedMutex) lock(key string) func() {
+	k.mu.Lock()
+	if k.locks == nil {
+		k.locks = map[string]*sync.Mutex{}
+	}
+	m := k.locks[key]
+	if m == nil {
+		m = &sync.Mutex{}
+		k.locks[key] = m
+	}
+	k.mu.Unlock()
+	m.Lock()
+	return m.Unlock
+}
+
+var mergeLocks mergeKeyedMutex
 
 // mergeGateErr 合并门禁/执行失败：HTTP 状态 + 错误码 + 消息。
 type mergeGateErr struct {
@@ -18,51 +43,52 @@ type mergeGateErr struct {
 	internal bool // true 用 writeErr（内部错误），否则 writeCode（业务错误）
 }
 
-// mergeGateError 校验 PR 是否满足合并门禁；nil 表示可合并。
-func (a *API) mergeGateError(owner, name string, pr store.PullRequest) *mergeGateErr {
+// mergeGateError 校验 PR 是否满足合并门禁；返回门禁依据的源分支 head 与错误
+// （error 为 nil 表示可合并）。head 供调用方在真正合并前复核源分支未前进（F-04）。
+func (a *API) mergeGateError(owner, name string, pr store.PullRequest) (string, *mergeGateErr) {
+	head := pr.HeadSHA
+	if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
+		head = h
+	}
 	if pr.State != "open" {
-		return &mergeGateErr{http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged", false}
+		return head, &mergeGateErr{http.StatusConflict, "pull_not_mergeable", "only open pull requests can be merged", false}
 	}
 	if pr.Draft {
-		return &mergeGateErr{http.StatusConflict, "pull_is_draft", "draft pull requests cannot be merged; mark it ready for review first", false}
+		return head, &mergeGateErr{http.StatusConflict, "pull_is_draft", "draft pull requests cannot be merged; mark it ready for review first", false}
 	}
 	prot, pErr := a.store.GetBranchProtection(owner, name, pr.TargetBranch)
 	if pErr != nil {
-		return nil // 未设置保护规则
+		return head, nil // 未设置保护规则
 	}
 	// CODEOWNERS：变更文件声明的 owner 需逐个批准。
 	if prot.RequireCodeowners {
 		_, _, _, missing, coErr := a.codeownersStatus(owner, name, pr)
 		if coErr != nil {
-			return &mergeGateErr{http.StatusInternalServerError, "internal", coErr.Error(), true}
+			return head, &mergeGateErr{http.StatusInternalServerError, "internal", coErr.Error(), true}
 		}
 		if len(missing) > 0 {
-			return &mergeGateErr{http.StatusConflict, "codeowners_required",
+			return head, &mergeGateErr{http.StatusConflict, "codeowners_required",
 				fmt.Sprintf("merge blocked: code owner approval required from %s", strings.Join(missing, ", ")), false}
 		}
-	}
-	head := pr.HeadSHA
-	if h, hErr := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); hErr == nil {
-		head = h
 	}
 	if prot.RequireCI {
 		status := "missing"
 		passed := false
 		if ci, has, cErr := a.store.AggregatePipelineStatusForSHA(owner, name, head); cErr != nil {
-			return &mergeGateErr{http.StatusInternalServerError, "internal", cErr.Error(), true}
+			return head, &mergeGateErr{http.StatusInternalServerError, "internal", cErr.Error(), true}
 		} else if has {
 			status = ci.Status
 			passed = ci.Status == "success"
 		}
 		if !passed {
-			return &mergeGateErr{http.StatusConflict, "ci_required",
+			return head, &mergeGateErr{http.StatusConflict, "ci_required",
 				fmt.Sprintf("merge blocked: branch %q requires a successful CI run on the current head (current: %s)", pr.TargetBranch, status), false}
 		}
 	}
 	// 有效 approve = reviewer 最新状态为 approve、reviewer 非 PR 作者、针对当前 head（head 前进后过期失效）。
 	reviews, _, lErr := a.store.ListReviews(owner, name, pr.Number)
 	if lErr != nil {
-		return &mergeGateErr{http.StatusInternalServerError, "internal", lErr.Error(), true}
+		return head, &mergeGateErr{http.StatusInternalServerError, "internal", lErr.Error(), true}
 	}
 	latest := map[string]store.PullReview{}
 	for _, rv := range reviews {
@@ -81,21 +107,31 @@ func (a *API) mergeGateError(owner, name string, pr store.PullRequest) *mergeGat
 		}
 	}
 	if blocked {
-		return &mergeGateErr{http.StatusConflict, "changes_requested",
+		return head, &mergeGateErr{http.StatusConflict, "changes_requested",
 			"merge blocked: a reviewer requested changes (a new approve or a new head commit clears it)", false}
 	}
 	if valid < prot.MinApprovals {
-		return &mergeGateErr{http.StatusConflict, "review_required",
+		return head, &mergeGateErr{http.StatusConflict, "review_required",
 			fmt.Sprintf("branch %q requires %d approval(s) from reviewers other than the PR author (current: %d; approvals on an older head do not count)",
 				pr.TargetBranch, prot.MinApprovals, valid), false}
 	}
-	return nil
+	return head, nil
 }
 
 // executeMerge 通过门禁后按 method 执行合并并记录；用于手动与自动合并。
 func (a *API) executeMerge(owner, name string, pr store.PullRequest, method, actor string) (store.PullRequest, *mergeGateErr) {
-	if ge := a.mergeGateError(owner, name, pr); ge != nil {
+	// 同一 (owner/repo/target) 的合并全程串行化：门禁 → ref 更新 → 落库。
+	unlock := mergeLocks.lock(owner + "/" + name + "/" + pr.TargetBranch)
+	defer unlock()
+	head, ge := a.mergeGateError(owner, name, pr)
+	if ge != nil {
 		return store.PullRequest{}, ge
+	}
+	// F-04：真正合并前复核源分支仍停在门禁判定的 head；若已前进则拒绝，避免
+	// 落地一个从未通过 review/CI 的提交。
+	if h, err := gitsvc.RevSHA(owner, name, "refs/heads/"+pr.SourceBranch); err == nil && h != head {
+		return store.PullRequest{}, &mergeGateErr{http.StatusConflict, "head_changed",
+			"the source branch changed after the merge gate was evaluated; retry the merge", false}
 	}
 	var headSHA string
 	switch method {
@@ -125,6 +161,10 @@ func (a *API) executeMerge(owner, name string, pr store.PullRequest, method, act
 	}
 	merged, err := a.store.MarkPullMerged(owner, name, pr.Number, headSHA, actor)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			// 并发/重复合并：已被其它请求先落库，跳过通知与 webhook。
+			return store.PullRequest{}, &mergeGateErr{http.StatusConflict, "pull_not_mergeable", "pull request is no longer open", false}
+		}
 		return store.PullRequest{}, &mergeGateErr{http.StatusInternalServerError, "internal", err.Error(), true}
 	}
 	a.maybeAnalyzeLanguages(owner, name, pr.TargetBranch, headSHA)
