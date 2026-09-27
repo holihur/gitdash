@@ -3,6 +3,7 @@ package store
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestClaimSchedule(t *testing.T) {
@@ -137,5 +138,31 @@ func TestListPipelineRunsPaged(t *testing.T) {
 	}
 	if page3[0].ID != 1 {
 		t.Fatalf("last page id = %d, want 1", page3[0].ID)
+	}
+}
+
+// TestRunningPipelineRunIDsExcludesFutureDelayed 覆盖审计 F-09：未来时间点的
+// 延迟运行不占用并发配额。
+func TestRunningPipelineRunIDsExcludesFutureDelayed(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
+	for i := 0; i < 3; i++ {
+		if _, err := st.CreatePipelineRun("a", "r", ".gitdash.yml", "sha", "main", "u", "workflow_dispatch", nil, 1, future); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids, err := st.RunningPipelineRunIDs("a", "r", ".gitdash.yml")
+	if err != nil || len(ids) != 0 {
+		t.Fatalf("future delayed runs counted = %v err=%v", ids, err)
+	}
+	if _, err := st.CreatePipelineRun("a", "r", ".gitdash.yml", "sha", "main", "u", "push", nil, 1); err != nil {
+		t.Fatal(err)
+	}
+	ids, err = st.RunningPipelineRunIDs("a", "r", ".gitdash.yml")
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("ready run not counted = %v err=%v", ids, err)
 	}
 }

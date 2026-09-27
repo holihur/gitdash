@@ -89,7 +89,9 @@ func (s *Store) SetPipeline(owner, repo string, enabled bool) error {
 // CreatePipelineRun 新建一次运行记录（初始 pending）。
 // file 为流水线定义文件路径（单文件兼容传 ""，落库为空）。
 // event 为触发事件；inputs 为 dispatch 传入的键值对（其余事件为 nil）。
-func (s *Store) CreatePipelineRun(owner, repo, file, sha, ref, triggerBy, event string, inputs map[string]string, stepsTotal int) (PipelineRun, error) {
+// 可选 runAt（延迟运行）：在同一 INSERT 内写入 run_at，避免“先建 pending、再单独
+// 写 run_at”第二步失败留下永远不会被拾取的 pending 运行（审计 F-08）。
+func (s *Store) CreatePipelineRun(owner, repo, file, sha, ref, triggerBy, event string, inputs map[string]string, stepsTotal int, runAt ...string) (PipelineRun, error) {
 	inputsJSON := ""
 	if len(inputs) > 0 {
 		if b, err := json.Marshal(inputs); err == nil {
@@ -97,13 +99,17 @@ func (s *Store) CreatePipelineRun(owner, repo, file, sha, ref, triggerBy, event 
 		}
 	}
 	ts := now()
+	runAtVal := ""
+	if len(runAt) > 0 {
+		runAtVal = runAt[0]
+	}
 	r := PipelineRun{
 		Owner: owner, Repo: repo, File: file, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event,
-		Inputs: inputs, Status: "pending", StepsTotal: stepsTotal, CreatedAt: ts,
+		Inputs: inputs, Status: "pending", StepsTotal: stepsTotal, CreatedAt: ts, RunAt: runAtVal,
 	}
 	row := pipelineRunRow{
 		Owner: owner, Repo: repo, File: file, SHA: sha, Ref: ref, TriggerBy: triggerBy, Event: event, Inputs: inputsJSON,
-		Status: "pending", StepsTotal: stepsTotal, StepsDone: 0, CreatedAt: ts,
+		Status: "pending", StepsTotal: stepsTotal, StepsDone: 0, CreatedAt: ts, RunAt: runAtVal,
 	}
 	if err := s.db.Create(&row).Error; err != nil {
 		return r, err
@@ -227,9 +233,13 @@ func (s *Store) GetPipelineRun(owner, repo string, id int64) (PipelineRun, error
 
 // RunningPipelineRunIDs 仍在进行中的运行（用于避免同仓库/同文件并发排队过多）。
 // file 为空时统计仓库全部文件。
+// 未来时间点的延迟运行（run_at > now）不计入并发上限，否则若干 workflow_dispatch
+// 的 24h 延迟运行会占满 maxActiveRuns，导致后续 push 被静默丢弃（审计 F-09）。
 func (s *Store) RunningPipelineRunIDs(owner, repo, file string) ([]int64, error) {
 	var ids []int64
-	db := s.db.Model(&pipelineRunRow{}).Where("owner = ? AND repo = ? AND status IN ('pending','running')", owner, repo)
+	db := s.db.Model(&pipelineRunRow{}).
+		Where("owner = ? AND repo = ? AND status IN ('pending','running')", owner, repo).
+		Where("run_at = '' OR run_at <= ?", now())
 	if file != "" {
 		db = db.Where("file = ?", file)
 	}

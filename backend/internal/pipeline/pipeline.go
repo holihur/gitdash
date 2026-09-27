@@ -311,9 +311,13 @@ func PushHandler(st *store.Store) func(webhooks.Event) {
 		if strings.HasPrefix(ev.Ref, "refs/heads/") {
 			ref = strings.TrimPrefix(ev.Ref, "refs/heads/")
 		}
-		if _, err := TriggerAll(st, TriggerOpts{Owner: ev.Owner, Repo: ev.Repo, SHA: ev.New, Ref: ref, By: ev.User, Event: "push"}); err != nil &&
-			!ignorableTriggerErr(err) {
-			logx.Infof("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
+		if _, err := TriggerAll(st, TriggerOpts{Owner: ev.Owner, Repo: ev.Repo, SHA: ev.New, Ref: ref, By: ev.User, Event: "push"}); err != nil {
+			if errors.Is(err, ErrTooManyRuns) {
+				// 不再静默：并发配额命中时显式告警，便于排查“push 未被触发”。
+				logx.Warnf("pipeline: %s/%s push skipped (too many active runs)", ev.Owner, ev.Repo)
+			} else if !ignorableTriggerErr(err) {
+				logx.Infof("pipeline: trigger %s/%s: %v", ev.Owner, ev.Repo, err)
+			}
 		}
 		// 分支 push：若该分支是某个 open PR 的源分支，按 pull_request 事件再触发一次（synchronize）
 		if branch, ok := strings.CutPrefix(ev.Ref, "refs/heads/"); ok {
@@ -381,19 +385,19 @@ func Trigger(st *store.Store, opts TriggerOpts) (store.PipelineRun, error) {
 	if !opts.Force && !cfg.Triggers(opts.Event) {
 		return store.PipelineRun{}, ErrTriggerDisabled
 	}
-	run, err := st.CreatePipelineRun(opts.Owner, opts.Repo, file, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, cfg.UnitCount())
+	// 延迟执行：在同一次插入里写入 run_at，由 StartDelayedRunner 到期后派发，
+	// 避免“先建 pending、再写 run_at”第二步失败留下永不被拾取的 pending 运行（F-08）。
+	runAt := ""
+	if opts.Delay > 0 {
+		runAt = time.Now().UTC().Add(opts.Delay).Format(time.RFC3339)
+	}
+	run, err := st.CreatePipelineRun(opts.Owner, opts.Repo, file, opts.SHA, opts.Ref, opts.By, opts.Event, opts.Inputs, cfg.UnitCount(), runAt)
 	if err != nil {
 		return run, err
 	}
 	job := RunJob{RunID: run.ID, Owner: opts.Owner, Repo: opts.Repo, File: file, SHA: opts.SHA, Ref: opts.Ref, Event: opts.Event, By: opts.By, Inputs: opts.Inputs}
 	emitPipelineEvent(job, "queued")
-	// 延迟执行：仅落库 run_at，由 StartDelayedRunner 到期后派发。
 	if opts.Delay > 0 {
-		runAt := time.Now().UTC().Add(opts.Delay).Format(time.RFC3339)
-		if err := st.SetPipelineRunRunAt(run.ID, runAt); err != nil {
-			return run, err
-		}
-		run.RunAt = runAt
 		return run, nil
 	}
 	if err := dispatchJob(st, job); err != nil {
@@ -507,6 +511,14 @@ func executeRun(st *store.Store, job RunJob) {
 	if started, err := st.ClaimPipelineRun(runID); err != nil || !started {
 		return
 	}
+	// panic 兜底：exec 内部 panic 不会走正常 Finish 路径，否则该行会永久卡在
+	// running（审计 F-08）。
+	defer func() {
+		if r := recover(); r != nil {
+			_ = st.FinishPipelineRun(runID, "failed", fmt.Sprintf("panic: %v", r))
+			logx.Errorf("pipeline run %d panicked: %v", runID, r)
+		}
+	}()
 	emitPipelineEvent(job, "started")
 
 	// 可取消上下文：CancelRun 通过登记表即时终止本地执行的步骤。
