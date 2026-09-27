@@ -214,8 +214,11 @@ func (s *Store) RepoTeamRole(owner, repo, username string) string {
 		return ""
 	}
 	var rank int
+	// 额外 JOIN org_teams 并校验 t.org = rtg.owner：即使存在残留的
+	// repo_team_grants / org_team_members 行也不再生效（审计 F-21 纵深防御）。
 	_ = s.db.Raw(`SELECT COALESCE(MAX(`+strings.Replace(roleRankSQL, "%s", "rtg.permission", 1)+`), 0)
 		FROM repo_team_grants rtg
+		JOIN org_teams t ON t.id = rtg.team_id AND t.org = rtg.owner
 		JOIN org_team_members m ON m.team_id = rtg.team_id
 		WHERE rtg.owner = ? AND rtg.repo = ? AND m.username = ?`,
 		owner, repo, username).Scan(&rank).Error

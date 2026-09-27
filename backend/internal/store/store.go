@@ -16,7 +16,9 @@ import (
 
 var (
 	ErrNotFound = errors.New("not found")
-	ErrExists   = errors.New("already exists")
+	// ErrOrgNotEmpty 组织下仍有仓库时拒绝删除（供 API 映射 409）。
+	ErrOrgNotEmpty = errors.New("org not empty")
+	ErrExists      = errors.New("already exists")
 )
 
 // ---- public DTO（保持原有 JSON 形状，api 层无感知） ----

@@ -60,7 +60,12 @@ func (a *API) canReadPackage(owner, typ, name, username string) bool {
 	repo := a.pkgLinkedRepo(owner, typ, name)
 	repoPrivate := false
 	if repo != "" {
-		if r, err := a.store.GetRepo(owner, repo); err == nil && r.Private {
+		r, err := a.store.GetRepo(owner, repo)
+		if err != nil {
+			// 关联仓库已删除/不可读：fail-closed，按最严格一档处理，
+			// 避免删除私有仓库后其匿名包永久对未认证用户可读（审计 F-24）。
+			repoPrivate = true
+		} else if r.Private {
 			repoPrivate = true
 		}
 	}

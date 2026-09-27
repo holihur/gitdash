@@ -287,6 +287,43 @@ func (s *Store) GetRepo(owner, name string) (Repo, error) {
 
 func (s *Store) DeleteRepo(owner, name string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		// 依赖父表 ID 的子表：需在 issue/label/project/card 删除前清理（审计 F-24）。
+		issueIDs := tx.Model(&issueRow{}).Select("id").Where("owner = ? AND repo = ?", owner, name)
+		projectIDs := tx.Model(&projectRow{}).Select("id").Where("owner = ? AND repo = ?", owner, name)
+		cardIDs := tx.Model(&projectCardRow{}).Select("id").Where("project_id IN (?)", projectIDs)
+		for _, d := range []struct {
+			model any
+			cond  string
+			arg   any
+		}{
+			{&issueAssigneeRow{}, "issue_id IN (?)", issueIDs},
+			{&issueLabelRow{}, "issue_id IN (?)", issueIDs},
+			{&projectColumnRow{}, "project_id IN (?)", projectIDs},
+			{&projectSwimlaneRow{}, "project_id IN (?)", projectIDs},
+			{&projectCardAssigneeRow{}, "card_id IN (?)", cardIDs},
+			{&projectCardLabelRow{}, "card_id IN (?)", cardIDs},
+			{&projectCardRow{}, "project_id IN (?)", projectIDs},
+		} {
+			if err := tx.Where(d.cond, d.arg).Delete(d.model).Error; err != nil {
+				return err
+			}
+		}
+		// 包标签 / 审计无 repo 列，按所属包的 (type,name) 清理。
+		var pkgs []struct {
+			Type string
+			Name string
+		}
+		if err := tx.Model(&packageRow{}).Select("type, name").Where("owner = ? AND repo = ?", owner, name).Scan(&pkgs).Error; err != nil {
+			return err
+		}
+		for _, p := range pkgs {
+			if err := tx.Where("owner = ? AND type = ? AND name = ?", owner, p.Type, p.Name).Delete(&packageTagRow{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("owner = ? AND type = ? AND name = ?", owner, p.Type, p.Name).Delete(&packageAuditRow{}).Error; err != nil {
+				return err
+			}
+		}
 		deletes := []struct {
 			model any
 			cond  string
@@ -321,6 +358,16 @@ func (s *Store) DeleteRepo(owner, name string) error {
 			{&incomingWebhookRow{}, "owner = ? AND repo = ?"},
 			{&deployKeyRow{}, "owner = ? AND repo = ?"},
 			{&repoCommitRuleRow{}, "owner = ? AND repo = ?"},
+			{&issueEventRow{}, "owner = ? AND repo = ?"},
+			{&issueSubscriberRow{}, "owner = ? AND repo = ?"},
+			{&repoSecretRow{}, "owner = ? AND repo = ?"},
+			{&mergeQueueRow{}, "owner = ? AND repo = ?"},
+			{&repoTeamGrantRow{}, "owner = ? AND repo = ?"},
+			{&projectRow{}, "owner = ? AND repo = ?"},
+			{&copilotSessionRow{}, "owner = ? AND repo = ?"},
+			{&pipelineScheduleRow{}, "owner = ? AND repo = ?"},
+			{&badgeGrantRow{}, "owner = ? AND repo = ?"},
+			{&packageRow{}, "owner = ? AND repo = ?"},
 		}
 		for _, d := range deletes {
 			if err := tx.Where(d.cond, owner, name).Delete(d.model).Error; err != nil {

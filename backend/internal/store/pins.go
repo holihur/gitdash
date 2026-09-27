@@ -47,8 +47,8 @@ func (s *Store) PinRepo(username, owner, repo string) ([]RepoPin, error) {
 	if !errors.Is(notFoundErr(err), ErrNotFound) {
 		return nil, err
 	}
-	var count int64
-	if err := s.db.Model(&repoPinRow{}).Where("user_id = ?", uid).Count(&count).Error; err != nil {
+	count, err := s.countLiveRepoPins(uid)
+	if err != nil {
 		return nil, err
 	}
 	if count >= MaxPinnedRepos {
@@ -82,14 +82,22 @@ func (s *Store) UnpinRepo(username, owner, repo string) ([]RepoPin, error) {
 	return s.ListRepoPins(username)
 }
 
-// CountRepoPins 返回用户已置顶的仓库数量。
+// CountRepoPins 返回用户已置顶且仍然存在的仓库数量（与展示口径一致，
+// 避免已删除仓库的陈旧 pin 占用 6 个配额）。
 func (s *Store) CountRepoPins(username string) (int, error) {
 	uid, err := s.UserID(username)
 	if err != nil {
 		return 0, err
 	}
+	return s.countLiveRepoPins(uid)
+}
+
+func (s *Store) countLiveRepoPins(uid int64) (int, error) {
 	var n int64
-	if err := s.db.Model(&repoPinRow{}).Where("user_id = ?", uid).Count(&n).Error; err != nil {
+	if err := s.db.Model(&repoPinRow{}).
+		Joins("JOIN repos ON repos.owner = repo_pins.owner AND repos.name = repo_pins.repo AND repos.banned = ?", false).
+		Where("repo_pins.user_id = ?", uid).
+		Count(&n).Error; err != nil {
 		return 0, err
 	}
 	return int(n), nil

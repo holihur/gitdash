@@ -184,7 +184,7 @@ func (a *API) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := a.store.DeleteOrg(org); err != nil {
-		if strings.Contains(err.Error(), "not empty") {
+		if errors.Is(err, store.ErrOrgNotEmpty) {
 			writeCode(w, http.StatusConflict, "org_not_empty", "delete or move all repositories before deleting the organization")
 			return
 		}

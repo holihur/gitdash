@@ -1,7 +1,7 @@
 package store
 
 import (
-	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -208,9 +208,41 @@ func (s *Store) DeleteOrg(org string) error {
 			return err
 		}
 		if cnt > 0 {
-			return errors.New("org not empty")
+			return ErrOrgNotEmpty
 		}
-		if err := tx.Where("org = ?", org).Delete(&orgMemberRow{}).Error; err != nil {
+		// 先清团队子表（需 team id），再清其余 org 关联行，避免同名组织重建后
+		// 残留 team grants / members 导致权限复活（审计 F-21）。
+		teamIDs := tx.Model(&orgTeamRow{}).Select("id").Where("org = ?", org)
+		if err := tx.Where("team_id IN (?)", teamIDs).Delete(&orgTeamMemberRow{}).Error; err != nil {
+			return err
+		}
+		for _, d := range []struct {
+			model any
+			cond  string
+		}{
+			{&orgTeamRow{}, "org = ?"},
+			{&repoTeamGrantRow{}, "owner = ?"},
+			{&orgMemberRow{}, "org = ?"},
+			{&orgFollowRow{}, "org = ?"},
+			{&orgCoverRow{}, "org = ?"},
+			{&packageRow{}, "owner = ?"},
+			{&packageTagRow{}, "owner = ?"},
+			{&packageAuditRow{}, "owner = ?"},
+			{&badgeGrantRow{}, "owner = ?"},
+			{&badgeDisplayRow{}, "owner = ?"},
+		} {
+			if err := tx.Where(d.cond, org).Delete(d.model).Error; err != nil {
+				return err
+			}
+		}
+		// runner 的 scope 形如 org:<name>（与 owner 列不同）。
+		scope := "org:" + org
+		for _, m := range []any{&runnerRow{}, &runnerTokenRow{}} {
+			if err := tx.Where("scope = ?", scope).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("\"key\" = ?", quotaOrgPrefix+strings.ToLower(org)).Delete(&settingRow{}).Error; err != nil {
 			return err
 		}
 		return tx.Where("name = ?", org).Delete(&orgRow{}).Error
