@@ -80,6 +80,9 @@ type Repo struct {
 	CreatedAt    string `json:"created_at"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
+	// Pinned / PinPosition 用户主页置顶标记（由 API 层填充，store 查询不扫描）
+	Pinned      bool `json:"pinned,omitempty"`
+	PinPosition int  `json:"pin_position,omitempty"`
 	// 展示字段（由 API 层填充，store 查询不扫描）
 	Stars     int    `json:"stars"`
 	Starred   bool   `json:"starred"`

@@ -23,6 +23,7 @@ func (s *Store) migrate() error {
 		&repoRow{},
 		&repoCounterRow{},
 		&repoTopicRow{},
+		&repoPinRow{},
 		&repoCommitRuleRow{},
 		&repoLanguageRow{},
 		&repoLanguageMetaRow{},

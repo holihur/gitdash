@@ -14,6 +14,7 @@ English | 简体中文
 - **项目看板**：仓库级看板项目，支持列、泳道与卡片（关联 issue 或文本便签），网页端拖拽流转 —— 详见[项目文档](https://holihur.github.io/gitdash/zh-cn/projects/kanban/)
 - **Pull Request**：基于 fork 的 PR，支持 squash 合并
 - **Star 与 Fork**：一键 star / fork 仓库
+- **仓库置顶**：可将最多 6 个自己的仓库置顶到个人主页（及仓库列表）最前
 - **镜像与导入**：从远端 URL 导入仓库，push 镜像到 GitHub/GitLab 等远端
 - **账号绑定与批量导入**：通过 OAuth 绑定 GitHub、GitLab、Gitea/Forgejo、Bitbucket 账号，在导入弹窗中勾选并批量导入仓库
 - **Webhook**：仓库级出站 webhook，支持按事件类型订阅（push / issue / PR / 评论 / 分支标签 / Release / 流水线 / fork / star / watch），HMAC 签名推送，经任务队列异步派发并按退避重试；另提供**入站 webhook** token，外部系统可凭其创建 issue
@@ -404,6 +405,8 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | POST | `/api/users/{owner}/repos/{name}/commits/{sha}/revert` | 撤销提交（在指定分支生成反向提交） |
 | GET/POST | `/api/keys` | 列出 / 添加 SSH 公钥（绑定当前用户） |
 | GET | `/api/me/passkeys` | 列出自己已注册的 Passkey |
+| GET/POST | `/api/me/pins` | 列出 / 置顶一个仓库到个人主页（最多 6 个） |
+| DELETE | `/api/me/pins/{owner}/{repo}` | 取消置顶 |
 | POST | `/api/me/passkeys/register/begin` | 开始注册 Passkey（返回挑战与会话 id） |
 | POST | `/api/me/passkeys/register/finish` | 完成 Passkey 注册 |
 | DELETE | `/api/me/passkeys/{id}` | 删除自己的某个 Passkey |

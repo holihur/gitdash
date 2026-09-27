@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarDays, FolderGit2, Settings, Star, UserMinus, UserPlus } from "lucide-react";
+import { CalendarDays, FolderGit2, Pin, PinOff, Settings, Star, UserMinus, UserPlus } from "lucide-react";
 import { api, type Repo, type UserProfile, type UserSummary } from "@/lib/api";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -30,6 +30,7 @@ export default function UserPage() {
   const [people, setPeople] = useState<UserSummary[] | null>(null);
   const [peopleTotal, setPeopleTotal] = useState(0);
   const [peoplePage, setPeoplePage] = useState(1);
+  const [pinBusy, setPinBusy] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -83,6 +84,41 @@ export default function UserPage() {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // applyPins 用最新的置顶列表就地更新仓库顺序与标记（避免整页重载）。
+  const applyPins = (pins: Repo[]) => {
+    setProfile((prev) => {
+      if (!prev) return prev;
+      const order = new Map(pins.map((p, i) => [`${p.owner}/${p.name}`, i]));
+      const repos = prev.repos.map((r) => {
+        const pos = order.get(`${r.owner}/${r.name}`);
+        return pos === undefined
+          ? { ...r, pinned: false, pin_position: undefined }
+          : { ...r, pinned: true, pin_position: pos };
+      });
+      repos.sort((a, b) => {
+        if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+        if (a.pinned && b.pinned) return (a.pin_position ?? 0) - (b.pin_position ?? 0);
+        return 0;
+      });
+      return { ...prev, repos };
+    });
+  };
+
+  const togglePin = async (repo: Repo) => {
+    const key = `${repo.owner}/${repo.name}`;
+    setPinBusy(key);
+    try {
+      const r = repo.pinned
+        ? await api.unpinRepo(repo.owner, repo.name)
+        : await api.pinRepo(repo.name, repo.owner);
+      applyPins(r.pins);
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setPinBusy("");
     }
   };
 
@@ -186,10 +222,46 @@ export default function UserPage() {
             {t("user.noRepos")}
           </p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {profile.repos.map((repo) => (
-              <RepoCard key={`${repo.owner}/${repo.name}`} repo={repo} />
-            ))}
+          <div className="space-y-6">
+            {profile.repos.some((r) => r.pinned) && (
+              <section className="space-y-3">
+                <h2 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                  <Pin className="h-3.5 w-3.5" />
+                  {t("user.pinned")}
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {profile.repos
+                    .filter((r) => r.pinned)
+                    .map((repo) => (
+                      <RepoCard
+                        key={`pin-${repo.owner}/${repo.name}`}
+                        repo={repo}
+                        canPin={profile.is_self}
+                        pinBusy={pinBusy === `${repo.owner}/${repo.name}`}
+                        onTogglePin={togglePin}
+                      />
+                    ))}
+                </div>
+              </section>
+            )}
+            <section className="space-y-3">
+              {profile.repos.some((r) => r.pinned) && (
+                <h2 className="text-sm font-semibold text-muted-foreground">{t("user.allRepos")}</h2>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {profile.repos
+                  .filter((r) => !r.pinned)
+                  .map((repo) => (
+                    <RepoCard
+                      key={`${repo.owner}/${repo.name}`}
+                      repo={repo}
+                      canPin={profile.is_self}
+                      pinBusy={pinBusy === `${repo.owner}/${repo.name}`}
+                      onTogglePin={togglePin}
+                    />
+                  ))}
+              </div>
+            </section>
           </div>
         )
       ) : people === null ? (
@@ -227,7 +299,17 @@ export default function UserPage() {
   );
 }
 
-function RepoCard({ repo }: { repo: Repo }) {
+function RepoCard({
+  repo,
+  canPin,
+  pinBusy,
+  onTogglePin,
+}: {
+  repo: Repo;
+  canPin?: boolean;
+  pinBusy?: boolean;
+  onTogglePin?: (repo: Repo) => void;
+}) {
   const { t, lang } = useI18n();
   const locale = dateLocale(lang);
   return (
@@ -245,6 +327,18 @@ function RepoCard({ repo }: { repo: Repo }) {
             <Badge variant="secondary" className="font-normal">
               {t("repo.privateRepo")}
             </Badge>
+          )}
+          {canPin && onTogglePin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-7 w-7 shrink-0 text-muted-foreground"
+              disabled={pinBusy}
+              title={repo.pinned ? t("user.unpin") : t("user.pin")}
+              onClick={() => onTogglePin(repo)}
+            >
+              {repo.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+            </Button>
           )}
         </div>
         <p className="line-clamp-2 min-h-5 text-sm text-muted-foreground">

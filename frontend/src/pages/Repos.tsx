@@ -86,6 +86,9 @@ export default function Repos() {
   const [importPrivate, setImportPrivate] = useState(true);
   const [importKey, setImportKey] = useState("");
   const [importBusy, setImportBusy] = useState(false);
+  // 置顶仓库（“我的仓库” tab）：key = owner/name
+  const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [pinBusy, setPinBusy] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,6 +120,34 @@ export default function Repos() {
     api.listOrgs().then(setOrgs).catch(() => setOrgs([]));
     api.listTemplateRepos().then(setTemplateRepos).catch(() => setTemplateRepos([]));
   }, [load]);
+
+  const loadPins = useCallback(async () => {
+    try {
+      const r = await api.listPins();
+      setPinnedKeys(new Set(r.pins.map((p) => `${p.owner}/${p.name}`)));
+    } catch {
+      setPinnedKeys(new Set());
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPins();
+  }, [loadPins]);
+
+  const togglePin = async (repo: Repo) => {
+    const key = `${repo.owner}/${repo.name}`;
+    setPinBusy(key);
+    try {
+      const r = pinnedKeys.has(key)
+        ? await api.unpinRepo(repo.owner, repo.name)
+        : await api.pinRepo(repo.name, repo.owner);
+      setPinnedKeys(new Set(r.pins.map((p) => `${p.owner}/${p.name}`)));
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setPinBusy("");
+    }
+  };
 
   // 首屏若直接落在“点赞/关注” tab，load() 不会拉“我的仓库”数量，额外查一次；
   // 平时（默认 repos tab）由 load() 维护，无需重复请求。
@@ -383,15 +414,26 @@ export default function Repos() {
 
         {show.length > 0 && !loading && (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {show.map((repo) => {
+            {(isMine
+              ? [...show].sort(
+                  (a, b) =>
+                    Number(pinnedKeys.has(`${b.owner}/${b.name}`)) -
+                    Number(pinnedKeys.has(`${a.owner}/${a.name}`)),
+                )
+              : show
+            ).map((repo) => {
               const isOwner = isMine && (repo.role === undefined || repo.role === "owner");
+              const key = `${repo.owner}/${repo.name}`;
               return (
                 <RepoCard
-                  key={`${repo.owner}/${repo.name}`}
+                  key={key}
                   repo={repo}
                   isMine={isMine}
                   isOwner={isOwner}
                   locale={dateLocale(lang)}
+                  pinned={isMine && pinnedKeys.has(key)}
+                  pinBusy={pinBusy === key}
+                  onTogglePin={isMine && isOwner ? togglePin : undefined}
                   onManageCollabs={setCollabRepo}
                   onManageWebhooks={setHookRepo}
                   onDelete={setPendingDelete}

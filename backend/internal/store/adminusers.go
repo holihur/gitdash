@@ -93,7 +93,7 @@ func (s *Store) DeleteUserAccount(username string) error {
 		}
 
 		// --- 按 user_id 关联的归属数据 ---
-		for _, m := range []any{&sessionRow{}, &webauthnCredentialRow{}, &sshKeyRow{}, &gpgKeyRow{}, &patRow{}, &userOAuthRow{}} {
+		for _, m := range []any{&sessionRow{}, &webauthnCredentialRow{}, &sshKeyRow{}, &gpgKeyRow{}, &patRow{}, &userOAuthRow{}, &repoPinRow{}} {
 			if err := tx.Where("user_id = ?", u.ID).Delete(m).Error; err != nil {
 				return err
 			}
@@ -103,6 +103,10 @@ func (s *Store) DeleteUserAccount(username string) error {
 			if err := tx.Where("username = ?", username).Delete(m).Error; err != nil {
 				return err
 			}
+		}
+		// 被别人置顶的本用户仓库（pin 的 owner 指向该用户）
+		if err := tx.Where("owner = ?", username).Delete(&repoPinRow{}).Error; err != nil {
+			return err
 		}
 		// 关注关系（作为关注者或被关注者）
 		if err := tx.Where("follower = ? OR followee = ?", username, username).Delete(&followRow{}).Error; err != nil {

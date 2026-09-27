@@ -408,6 +408,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/me/passkeys/register/begin", a.auth(a.passkeyRegisterBegin))
 	mux.HandleFunc("POST /api/me/passkeys/register/finish", a.auth(a.passkeyRegisterFinish))
 	mux.HandleFunc("DELETE /api/me/passkeys/{id}", a.auth(a.deletePasskey))
+	// 个人仓库置顶（pinned repositories）
+	mux.HandleFunc("GET /api/me/pins", a.auth(a.listMyPins))
+	mux.HandleFunc("POST /api/me/pins", a.auth(a.pinMyRepo))
+	mux.HandleFunc("DELETE /api/me/pins/{owner}/{repo}", a.auth(a.unpinMyRepo))
 
 	// byok（bring your own key：用户自带 LLM 密钥）
 	mux.HandleFunc("GET /api/me/byok", a.auth(a.listByok))

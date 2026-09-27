@@ -179,6 +179,16 @@ export interface Repo {
   language?: string;
   /** 语言构成（详情/code 页展示，按占比降序，最多 top5） */
   languages?: LanguageStat[];
+  /** 个人主页置顶标记（置顶仓库排在最前） */
+  pinned?: boolean;
+  /** 置顶顺序（越小越靠前） */
+  pin_position?: number;
+}
+
+/** 置顶仓库列表响应（最多 limit 个）。 */
+export interface RepoPins {
+  pins: Repo[];
+  limit: number;
 }
 
 /** 单种语言的字节数与占比（仓库代码成分）。 */

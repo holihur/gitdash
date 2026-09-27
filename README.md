@@ -14,6 +14,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Projects (kanban)**: per-repo kanban projects with columns, swimlanes and cards (issue-linked or text notes), drag & drop in the web UI — see the [Projects docs](https://holihur.github.io/gitdash/projects/kanban/)
 - **Pull requests**: fork-based pull requests with squash merge and reviewer flow
 - **Stars & forks**: star repos and fork them with one click
+- **Pinned repositories**: pin up to 6 of your repositories to the top of your profile (and the repository dashboard)
 - **Repo mirroring & import**: import from a remote URL and push-mirror to GitHub/GitLab-like remotes
 - **Connected accounts & batch import**: link GitHub, GitLab, Gitea/Forgejo or Bitbucket accounts (OAuth) and import selected repositories in bulk from the import dialog
 - **Webhooks**: per-repo outbound webhooks with per-event subscriptions (push / issues / pull requests / comments / branches & tags / releases / pipeline / fork / star / watch) and HMAC signature delivery, dispatched asynchronously through the job queue with backoff retries; plus an **incoming webhook** token that lets external systems create issues
@@ -420,6 +421,8 @@ Business (requires `Authorization: Bearer <token>`, token from register/login):
 | POST | `/api/users/{owner}/repos/{name}/commits/{sha}/revert` | Revert a commit (creates an inverse commit on a branch) |
 | GET/POST | `/api/keys` | List / add SSH public keys (bound to the current user) |
 | GET | `/api/me/passkeys` | List your registered passkeys |
+| GET/POST | `/api/me/pins` | List / pin a repository to your profile (max 6) |
+| DELETE | `/api/me/pins/{owner}/{repo}` | Unpin a repository from your profile |
 | POST | `/api/me/passkeys/register/begin` | Begin passkey registration (returns challenge + session id) |
 | POST | `/api/me/passkeys/register/finish` | Finish passkey registration |
 | DELETE | `/api/me/passkeys/{id}` | Delete one of your passkeys |

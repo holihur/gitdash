@@ -118,6 +118,19 @@ type repoTopicRow struct {
 
 func (repoTopicRow) TableName() string { return "repo_topics" }
 
+// repoPinRow 用户主页置顶（pinned）仓库。一个用户最多置顶 MaxPinnedRepos 个；
+// Position 决定展示顺序（同一用户的 pin 之间递增）。
+type repoPinRow struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement"`
+	UserID    int64  `gorm:"not null;index;uniqueIndex:uq_repo_pin,priority:1"`
+	Owner     string `gorm:"not null;uniqueIndex:uq_repo_pin,priority:2;size:255"`
+	Repo      string `gorm:"not null;uniqueIndex:uq_repo_pin,priority:3;size:255"`
+	Position  int    `gorm:"not null;default:0"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (repoPinRow) TableName() string { return "repo_pins" }
+
 // ---- ssh keys / gpg keys ----
 
 type sshKeyRow struct {

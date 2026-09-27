@@ -4634,6 +4634,166 @@ const docTemplate = `{
                 ]
             }
         },
+        "/me/pins": {
+            "get": {
+                "description": "返回当前用户置顶的仓库（最多 6 个）与数量上限。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "列出置顶仓库",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "description": "置顶当前用户拥有的仓库；幂等，最多 6 个（超限返回 409）。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "置顶仓库",
+                "parameters": [
+                    {
+                        "description": "owner 与 repo",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.pinRepoReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/me/pins/{owner}/{repo}": {
+            "delete": {
+                "description": "取消置顶指定的自己的仓库；幂等返回最新列表。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "取消置顶仓库",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库归属",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "repo",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/me/profile": {
             "post": {
                 "description": "更新当前用户邮箱与邮件通知开关；邮箱空串表示清除。返回 200 与更新后的资料。",
@@ -17925,6 +18085,19 @@ const docTemplate = `{
                 }
             }
         },
+        "api.pinRepoReq": {
+            "type": "object",
+            "properties": {
+                "owner": {
+                    "description": "仓库归属（缺省为当前用户）",
+                    "type": "string"
+                },
+                "repo": {
+                    "description": "仓库名",
+                    "type": "string"
+                }
+            }
+        },
         "api.registerReq": {
             "type": "object",
             "properties": {
@@ -19927,6 +20100,13 @@ const docTemplate = `{
                 },
                 "pages_enabled": {
                     "description": "Pages 静态网站托管（默认关闭）。",
+                    "type": "boolean"
+                },
+                "pin_position": {
+                    "type": "integer"
+                },
+                "pinned": {
+                    "description": "Pinned / PinPosition 用户主页置顶标记（由 API 层填充，store 查询不扫描）",
                     "type": "boolean"
                 },
                 "private": {

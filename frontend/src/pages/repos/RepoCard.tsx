@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Eye, MoreVertical, Star, Trash2, Users, Webhook } from "lucide-react";
+import { Eye, MoreVertical, Pin, PinOff, Star, Trash2, Users, Webhook } from "lucide-react";
 import type { Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,10 @@ interface Props {
   onManageCollabs: (repo: Repo) => void;
   onManageWebhooks: (repo: Repo) => void;
   onDelete: (repo: Repo) => void;
+  /** 是否已置顶到个人主页；仅“我的仓库” tab 且为自己所有时展示操作。 */
+  pinned?: boolean;
+  pinBusy?: boolean;
+  onTogglePin?: (repo: Repo) => void;
 }
 
 /** 仓库列表卡片：名称、描述、统计与 owner 操作下拉。 */
@@ -35,6 +39,9 @@ export default function RepoCard({
   onManageCollabs,
   onManageWebhooks,
   onDelete,
+  pinned,
+  pinBusy,
+  onTogglePin,
 }: Props) {
   const { t } = useI18n();
   const role = repo.role;
@@ -67,6 +74,12 @@ export default function RepoCard({
                   <DropdownMenuItem onClick={() => onManageCollabs(repo)}>
                     <Users />
                     {t("collabs.manage")}
+                  </DropdownMenuItem>
+                )}
+                {ownerOnly && onTogglePin && (
+                  <DropdownMenuItem disabled={pinBusy} onClick={() => onTogglePin(repo)}>
+                    {pinned ? <PinOff /> : <Pin />}
+                    {pinned ? t("user.unpin") : t("user.pin")}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={() => onManageWebhooks(repo)}>
@@ -118,6 +131,12 @@ export default function RepoCard({
           {repo.is_template && (
             <Badge variant="outline" className="font-normal">
               {t("repos.templateBadge")}
+            </Badge>
+          )}
+          {pinned && (
+            <Badge variant="secondary" className="gap-1 font-normal">
+              <Pin className="h-3 w-3" />
+              {t("user.pinned")}
             </Badge>
           )}
           <Badge variant="secondary" className="gap-1 font-normal">

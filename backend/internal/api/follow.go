@@ -51,6 +51,13 @@ func (a *API) getUserProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		repos = public
 	}
+	// 置顶仓库排在最前（本人与他人都可见）。
+	pins, err := a.store.ListRepoPins(username)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	annotatePins(repos, pins)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
 	a.attachLanguages(repos)
