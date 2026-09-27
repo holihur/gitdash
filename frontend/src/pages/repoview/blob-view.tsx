@@ -16,7 +16,6 @@ import { MarkdownView } from "@/components/markdown";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
 import { formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
-import { buildCommitFocusUrl } from "@/lib/repo-url";
 
 function isMarkdown(path: string): boolean {
   const base = path.split("/").pop() ?? "";
@@ -47,6 +46,8 @@ interface Props {
   onRename: () => void;
   onDelete: () => void;
   onOpenRepoLink: (target: RepoLinkTarget) => void;
+  /** 点击某个提交（blame / 最新提交）查看该提交下的文件内容。 */
+  onOpenCommit: (sha: string) => void;
 }
 
 /** 单文件内容视图：blame / markdown / 代码高亮，含编辑与删除操作。 */
@@ -63,6 +64,7 @@ export default function BlobView({
   onRename,
   onDelete,
   onOpenRepoLink,
+  onOpenCommit,
 }: Props) {
   const { t } = useI18n();
   const kind = previewKind(blob.path);
@@ -148,13 +150,15 @@ export default function BlobView({
                     return (
                       <tr key={l.line} className="border-b border-border/50 last:border-0">
                         <td className="w-40 max-w-40 truncate whitespace-nowrap border-r border-border/50 bg-muted/40 px-2 py-0.5 align-top text-muted-foreground">
-                          <a
-                            className="block truncate hover:underline"
-                            href={buildCommitFocusUrl(owner, name, l.commit, refName)}
+                          <button
+                            type="button"
+                            className="block max-w-full truncate text-left hover:underline"
                             title={c ? `${c.author} · ${c.message}` : l.commit}
+                            onClick={() => onOpenCommit(l.commit)}
                           >
-                            {c ? c.author : l.commit.slice(0, 7)}
-                          </a>
+                            <span className="font-medium">{c ? c.author : l.commit.slice(0, 7)}</span>
+                            <span className="ml-1 font-mono text-[10px]">{l.commit.slice(0, 7)}</span>
+                          </button>
                         </td>
                         <td className="w-10 whitespace-nowrap px-2 py-0.5 align-top text-right text-muted-foreground">
                           {l.line}

@@ -516,6 +516,7 @@ export const zhCN: Messages = {
     fileTooLarge: "文件过大，仅显示大小",
     previewNotAvailable: "该文件无法在浏览器中预览。",
     blame: "追溯",
+    viewAtCommit: "查看该提交时的内容",
     loading: "加载中…",
     emptyDir: "该目录为空",
     noCommits: "暂无提交",

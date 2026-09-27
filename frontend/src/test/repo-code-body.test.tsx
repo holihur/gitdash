@@ -49,6 +49,7 @@ function renderBody(overrides: Record<string, unknown> = {}) {
         entries={[]}
         currentDir=""
         onOpenEntry={noop}
+        onOpenCommit={noop}
         onEditPath={noop}
         onRenamePath={noop}
         onRemoveEntry={noop}

@@ -32,6 +32,7 @@ interface Props {
   entries: TreeEntry[];
   currentDir: string;
   onOpenEntry: (entry: TreeEntry) => void;
+  onOpenCommit: (sha: string) => void;
   onEditPath: (targetPath: string) => void;
   onRenamePath: (targetPath: string, isDir: boolean) => void;
   onRemoveEntry: (targetPath: string, isDir: boolean) => void;
@@ -62,6 +63,7 @@ export function RepoCodeBody({
   entries,
   currentDir,
   onOpenEntry,
+  onOpenCommit,
   onEditPath,
   onRenamePath,
   onRemoveEntry,
@@ -81,12 +83,14 @@ export function RepoCodeBody({
           <span className="hidden shrink-0 text-muted-foreground sm:inline">
             {latestCommit.author}
           </span>
-          <code
-            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
-            title={latestCommit.sha}
+          <button
+            type="button"
+            className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs hover:bg-muted/70 hover:underline"
+            title={t("repo.viewAtCommit")}
+            onClick={() => onOpenCommit(latestCommit.sha)}
           >
             {latestCommit.sha.slice(0, 7)}
-          </code>
+          </button>
           <span className="shrink-0 whitespace-nowrap text-muted-foreground">
             <RelativeTime iso={latestCommit.date} locale={locale} />
           </span>
@@ -128,6 +132,7 @@ export function RepoCodeBody({
           onRename={() => onRenamePath(blob.path, false)}
           onDelete={() => onDeleteBlob(blob.path)}
           onOpenRepoLink={onOpenRepoLink}
+          onOpenCommit={onOpenCommit}
         />
       )}
 
@@ -137,6 +142,7 @@ export function RepoCodeBody({
           currentDir={currentDir}
           locale={locale}
           onOpenEntry={onOpenEntry}
+          onOpenCommit={onOpenCommit}
           onEditPath={onEditPath}
           onRename={onRenamePath}
           onRemove={onRemoveEntry}

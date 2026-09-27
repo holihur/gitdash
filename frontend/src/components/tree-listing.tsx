@@ -19,6 +19,7 @@ interface Props {
   currentDir: string;
   locale: string;
   onOpenEntry: (entry: TreeEntry) => void;
+  onOpenCommit: (sha: string) => void;
   onEditPath: (path: string) => void;
   onRename: (path: string, isDir: boolean) => void;
   onRemove: (path: string, isDir: boolean) => void;
@@ -30,6 +31,7 @@ export default function TreeListing({
   currentDir,
   locale,
   onOpenEntry,
+  onOpenCommit,
   onEditPath,
   onRename,
   onRemove,
@@ -106,12 +108,14 @@ export default function TreeListing({
                     {entry.last_commit || entry.modified_msg ? (
                       <div className="flex min-w-0 items-center gap-2">
                         {entry.last_commit && (
-                          <code
-                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs"
-                            title={entry.last_commit}
+                          <button
+                            type="button"
+                            className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs hover:bg-muted/70 hover:underline"
+                            title={t("repo.viewAtCommit")}
+                            onClick={() => onOpenCommit(entry.last_commit!)}
                           >
                             {entry.last_commit.slice(0, 7)}
-                          </code>
+                          </button>
                         )}
                         <CommitMessage message={entry.modified_msg} />
                       </div>

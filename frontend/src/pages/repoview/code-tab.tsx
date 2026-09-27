@@ -111,6 +111,11 @@ export default function CodeTab({
     setParams({ file, line: null, blame: null });
   };
 
+  // 点击 commit hash：保持当前路径，把 ref 切到该提交以查看“当时的”内容。
+  const openCommit = (sha: string) => {
+    setParams({ ref: sha, line: null, blame: null, hash: null });
+  };
+
   // README / Markdown 文件里的仓库内引用：在代码浏览器内跳转，保持当前 ref。
   const openRepoLink = (target: RepoLinkTarget) => {
     if (target.kind === "dir") {
@@ -331,6 +336,7 @@ export default function CodeTab({
         entries={entries}
         currentDir={currentDir}
         onOpenEntry={openEntry}
+        onOpenCommit={openCommit}
         onEditPath={openEditDialog}
         onRenamePath={renameEntry}
         onRemoveEntry={removeEntry}

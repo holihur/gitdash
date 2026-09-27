@@ -518,6 +518,7 @@ export const en = {
     fileTooLarge: "File too large, showing size only",
     previewNotAvailable: "This file cannot be previewed in the browser.",
     blame: "Blame",
+    viewAtCommit: "View content at this commit",
     loading: "Loading…",
     emptyDir: "This directory is empty",
     noCommits: "No commits yet",

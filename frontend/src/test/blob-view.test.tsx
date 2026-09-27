@@ -32,6 +32,7 @@ function renderView(blob: Blob, extra: Record<string, unknown> = {}) {
     onRename: vi.fn(),
     onDelete: vi.fn(),
     onOpenRepoLink: vi.fn(),
+    onOpenCommit: vi.fn(),
   };
   render(
     <I18nProvider>
@@ -99,7 +100,8 @@ describe("BlobView", () => {
     expect(screen.getByText("File too large, showing size only")).toBeInTheDocument();
   });
 
-  it("blame 表格展示作者与行内容", () => {
+  it("blame 表格展示作者与行内容，点击提交查看当时内容", async () => {
+    const user = userEvent.setup();
     const blame: Blame = {
       path: "src/main.go",
       commits: { abc1234: { sha: "abc1234", author: "alice", date: "2026-01-01T00:00:00Z", message: "add" } },
@@ -108,14 +110,13 @@ describe("BlobView", () => {
         { line: 2, commit: "abc1234", content: "func main() {}" },
       ],
     };
-    renderView(makeBlob("src/main.go"), { blameParam: true, blame });
+    const h = renderView(makeBlob("src/main.go"), { blameParam: true, blame });
     expect(screen.queryByTestId("codemirror")).not.toBeInTheDocument();
     expect(screen.getAllByText("alice")).toHaveLength(2);
     expect(screen.getByText("package main")).toBeInTheDocument();
-    expect(screen.getAllByRole("link")[0]).toHaveAttribute(
-      "href",
-      "/repo/alice/demo/commits?commit=abc1234&ref=main",
-    );
+    // 点击提交 → 查看该提交下的文件内容
+    await user.click(screen.getAllByTitle("alice · add")[0]);
+    expect(h.onOpenCommit).toHaveBeenCalledWith("abc1234");
   });
 
   it("菜单可切换 blame / 编辑 / 重命名 / 删除", async () => {
