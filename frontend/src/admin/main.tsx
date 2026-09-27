@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import AdminApp from "./App";
 import "../index.css";
 import { ThemeProvider } from "@/lib/theme";
@@ -11,7 +12,9 @@ void preloadLang(detectLang()).finally(() => {
     <React.StrictMode>
       <ThemeProvider>
         <I18nProvider>
-          <AdminApp />
+          <BrowserRouter basename="/admin">
+            <AdminApp />
+          </BrowserRouter>
         </I18nProvider>
       </ThemeProvider>
     </React.StrictMode>,

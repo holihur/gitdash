@@ -127,6 +127,18 @@ describe("repo-url 路径化路由", () => {
       buildRepoPath("alice", "demo", { tab: "code", kind: "blob", path: "a b/c.md" }),
     ).toBe("/repo/alice/demo/blob/a%20b/c.md");
     expect(buildRepoPath("alice", "demo", { tab: "issues" })).toBe("/repo/alice/demo/issues");
+    // settings 分区路径化（路由绑定）
+    expect(buildRepoPath("alice", "demo", { tab: "settings" })).toBe("/repo/alice/demo/settings");
+    expect(
+      buildRepoPath("alice", "demo", { tab: "settings", settingsSection: "integrations" }),
+    ).toBe("/repo/alice/demo/settings/integrations");
+    expect(parseRepoRoute("settings/integrations")).toEqual({
+      tab: "settings",
+      kind: "tree",
+      path: "",
+      issueNumber: 0,
+      settingsSection: "integrations",
+    });
   });
 });
 

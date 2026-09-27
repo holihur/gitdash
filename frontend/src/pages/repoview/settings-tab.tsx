@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, X } from "lucide-react";
+import { Blocks, Check, Cog, GitBranch, Shield, Wrench, X } from "lucide-react";
+import { SettingsLayout, type SettingsNavItem } from "@/components/settings-layout";
+import { useRepoRouting } from "./use-repo-routing";
 import { IncomingWebhookCard } from "./settings/IncomingWebhookCard";
 import { OutgoingWebhooksCard } from "./settings/OutgoingWebhooksCard";
 import { BranchProtectionsCard } from "./settings/BranchProtectionsCard";
@@ -61,7 +63,9 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
   const canAdm = canAdmin(role);
   const ownerOnly = isRepoOwner(role);
   const { t } = useI18n();
+  const { settingsSection, setParams } = useRepoRouting();
   if (!repo) return null;
+
   const caps: [boolean, string][] = [
     [canRead(role), t("repoAccess.read")],
     [canTriage(role), t("repoAccess.triage")],
@@ -69,60 +73,118 @@ export default function SettingsTab({ owner, name, repo, setRepo }: SettingsTabP
     [canMaintain(role), t("repoAccess.maintain")],
     [canAdmin(role), t("repoAccess.admin")],
   ];
+
+  const capabilityCard = (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{t("repoAccess.title")}</CardTitle>
+        <CardDescription className="flex items-center gap-2">
+          {t("repoAccess.yourRole")}
+          <Badge variant="secondary">{t(`collabs.${role ?? "read"}`)}</Badge>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-1.5 text-sm sm:grid-cols-2">
+        {caps.map(([ok, label]) => (
+          <span key={label} className="flex items-center gap-1.5">
+            {ok ? (
+              <Check className="h-3.5 w-3.5 shrink-0 text-green-600" />
+            ) : (
+              <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
+            <span className={ok ? "" : "text-muted-foreground"}>{label}</span>
+          </span>
+        ))}
+      </CardContent>
+    </Card>
+  );
+
+  const items: SettingsNavItem[] = [
+    {
+      key: "general",
+      label: t("settingsNav.general"),
+      icon: Cog,
+      content: (
+        <>
+          {capabilityCard}
+          {canMaint && <DescriptionCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+          {canMaint && <BadgeDisplayPicker kind="repo" owner={owner} repo={name} />}
+          {canMaint && <TopicsCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+          {canMaint && <DefaultBranchCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+          {canMaint && <IssuesFeatureCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+          {canMaint && <PagesCard owner={owner} name={name} />}
+          {canMaint && <TemplateCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+          <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
+            <VisibilityCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
+          </Gated>
+          {repo.is_org && (
+            <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
+              <MemberRoleCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
+            </Gated>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "access",
+      label: t("settingsNav.access"),
+      icon: Shield,
+      content: (
+        <>
+          {canMaint && <BranchProtectionsCard owner={owner} name={name} />}
+          {canMaint && <DeployKeysCard owner={owner} name={name} />}
+          <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
+            <RepoTeamAccess owner={owner} name={name} />
+          </Gated>
+        </>
+      ),
+    },
+    {
+      key: "integrations",
+      label: t("settingsNav.integrations"),
+      icon: Blocks,
+      content: (
+        <>
+          {canMaint && <IncomingWebhookCard owner={owner} name={name} />}
+          {canMaint && <OutgoingWebhooksCard owner={owner} name={name} />}
+          {canMaint && <CommitRulesCard owner={owner} name={name} />}
+          {canMaint && <MirrorCard owner={owner} name={name} />}
+        </>
+      ),
+    },
+    {
+      key: "cicd",
+      label: t("settingsNav.cicd"),
+      icon: GitBranch,
+      content: (
+        <>
+          {canMaint && <PipelineCard owner={owner} name={name} />}
+          {canMaint && <RepoEnvVarsCard owner={owner} name={name} />}
+          {canMaint && <SecretsCard owner={owner} name={name} />}
+        </>
+      ),
+    },
+    {
+      key: "advanced",
+      label: t("settingsNav.advanced"),
+      icon: Wrench,
+      content: (
+        <>
+          {canMaint && <GcCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
+          <Gated enabled={ownerOnly} reason={t("repoAccess.requiresOwner")}>
+            <DangerZoneCard owner={owner} name={name} />
+          </Gated>
+        </>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">{t("repoAccess.title")}</CardTitle>
-          <CardDescription className="flex items-center gap-2">
-            {t("repoAccess.yourRole")}
-            <Badge variant="secondary">{t(`collabs.${role ?? "read"}`)}</Badge>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-1.5 text-sm sm:grid-cols-2">
-          {caps.map(([ok, label]) => (
-            <span key={label} className="flex items-center gap-1.5">
-              {ok ? (
-                <Check className="h-3.5 w-3.5 shrink-0 text-green-600" />
-              ) : (
-                <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              )}
-              <span className={ok ? "" : "text-muted-foreground"}>{label}</span>
-            </span>
-          ))}
-        </CardContent>
-      </Card>
-      {canMaint && <DescriptionCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
-      {canMaint && <BadgeDisplayPicker kind="repo" owner={owner} repo={name} />}
-      {canMaint && <TopicsCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
-      {canMaint && <BranchProtectionsCard owner={owner} name={name} />}
-      {canMaint && <DefaultBranchCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
-      {canMaint && <IssuesFeatureCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
-      {canMaint && <PagesCard owner={owner} name={name} />}
-      {canMaint && <DeployKeysCard owner={owner} name={name} />}
-      {canMaint && <CommitRulesCard owner={owner} name={name} />}
-      {canMaint && <IncomingWebhookCard owner={owner} name={name} />}
-      {canMaint && <OutgoingWebhooksCard owner={owner} name={name} />}
-      {canMaint && <PipelineCard owner={owner} name={name} />}
-      {canMaint && <RepoEnvVarsCard owner={owner} name={name} />}
-      {canMaint && <SecretsCard owner={owner} name={name} />}
-      <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
-        <VisibilityCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
-      </Gated>
-      {repo.is_org && (
-        <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
-          <MemberRoleCard owner={owner} name={name} repo={repo} setRepo={setRepo} />
-        </Gated>
-      )}
-      <Gated enabled={canAdm} reason={t("repoAccess.requiresAdmin")}>
-        <RepoTeamAccess owner={owner} name={name} />
-      </Gated>
-      {canMaint && <TemplateCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
-      {canMaint && <GcCard owner={owner} name={name} repo={repo} setRepo={setRepo} />}
-      {canMaint && <MirrorCard owner={owner} name={name} />}
-      <Gated enabled={ownerOnly} reason={t("repoAccess.requiresOwner")}>
-        <DangerZoneCard owner={owner} name={name} />
-      </Gated>
-    </div>
+    <SettingsLayout
+      title={t("repo.settings")}
+      description={t("settingsNav.repoSubtitle")}
+      items={items}
+      active={settingsSection || "general"}
+      onSelect={(key) => setParams({ tab: "settings", settingsSection: key === "general" ? null : key })}
+    />
   );
 }

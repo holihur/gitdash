@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Route, Routes } from "react-router-dom";
 import { GitBranch } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,6 +54,10 @@ export default function AdminApp() {
     );
   }
 
-  return <Dashboard user={me} onLogout={() => setMe(null)} />;
+  return (
+    <Routes>
+      <Route path="/:section?" element={<Dashboard user={me} onLogout={() => setMe(null)} />} />
+    </Routes>
+  );
 }
 

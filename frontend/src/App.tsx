@@ -391,7 +391,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
             }
           />
           <Route
-            path="/profile"
+            path="/profile/:section?"
             element={
               <Suspense fallback={<PageLoading />}>
                 <ProfilePage />

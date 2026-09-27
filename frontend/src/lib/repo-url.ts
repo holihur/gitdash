@@ -37,6 +37,8 @@ export interface RepoRoute {
   path: string;
   /** issues tab 下指向的 issue 编号；0 表示列表页 */
   issueNumber: number;
+  /** settings tab 下选中的分区（仅 settings tab 存在；空串 = 默认分区） */
+  settingsSection?: string;
 }
 
 const encodePath = (p: string): string =>
@@ -68,6 +70,7 @@ export function parseRepoRoute(splat: string | undefined): RepoRoute {
       kind: "tree",
       path: "",
       issueNumber: head === "issues" ? parseIssueNumber(tail) : 0,
+      settingsSection: head === "settings" ? tail.split("/").filter(Boolean)[0] ?? "" : undefined,
     };
   }
   // 未知路径：回退代码根目录
@@ -94,9 +97,13 @@ export function buildFileOpPath(owner: string, name: string, mode: FileOpMode): 
 export function buildRepoPath(
   owner: string,
   name: string,
-  route: { tab: RepoTab; kind?: RepoCodeKind; path?: string },
+  route: { tab: RepoTab; kind?: RepoCodeKind; path?: string; settingsSection?: string },
 ): string {
   const base = `/repo/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+  if (route.tab === "settings") {
+    const sec = (route.settingsSection ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
+    return sec ? `${base}/settings/${encodePath(sec)}` : `${base}/settings`;
+  }
   if (route.tab !== "code") return `${base}/${route.tab}`;
   const p = (route.path ?? "").replace(/^\/+/, "").replace(/\/+$/, "");
   if (!p) return base;

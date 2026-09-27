@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { I18nProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import AdminApp from "@/admin/App";
@@ -23,11 +24,13 @@ function fetchMock(handlers: Record<string, (url: string) => Promise<Response>>)
   });
 }
 
-function renderAdmin() {
+function renderAdmin(initialPath = "/") {
   return render(
     <ThemeProvider>
       <I18nProvider>
-        <AdminApp />
+        <MemoryRouter initialEntries={[initialPath]}>
+          <AdminApp />
+        </MemoryRouter>
       </I18nProvider>
     </ThemeProvider>,
   );
@@ -95,7 +98,7 @@ describe("AdminApp", () => {
         ),
     };
     vi.stubGlobal("fetch", fetchMock(handlers));
-    renderAdmin();
+    renderAdmin("/system");
     await waitFor(() =>
       expect(screen.getByText("203.0.113.0/24")).toBeInTheDocument(),
     );

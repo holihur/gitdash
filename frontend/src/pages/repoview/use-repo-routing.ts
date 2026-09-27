@@ -14,6 +14,8 @@ export interface RepoRouting {
   lineParam: number | null;
   /** issues tab 下的 issue 编号（0 = 列表页） */
   issueNumber: number;
+  /** settings tab 下选中的分区（空串 = 默认） */
+  settingsSection: string;
   setParams: (patch: Record<string, string | null>) => void;
 }
 
@@ -38,6 +40,7 @@ export function useRepoRouting(): RepoRouting {
   const urlRef = searchParams.get("ref") ?? "";
   const lineParam = Number(searchParams.get("line")) || null;
   const issueNumber = route.issueNumber;
+  const settingsSection = route.settingsSection ?? "";
 
   // 兼容既有 `setParams` 语义（CodeTab / tab 切换均调用），把变更翻译为路径化导航。
   const setParams = useCallback(
@@ -50,6 +53,7 @@ export function useRepoRouting(): RepoRouting {
       let nextRef = urlRef;
       let nextLine: number | null = lineParam;
       let nextHash = "";
+      let nextSettings = route.settingsSection ?? "";
 
       if ("path" in patch) dirPath = patch.path ?? "";
       if ("file" in patch) {
@@ -62,6 +66,7 @@ export function useRepoRouting(): RepoRouting {
       }
       if ("ref" in patch) nextRef = patch.ref ?? "";
       if ("line" in patch) nextLine = patch.line ? Number(patch.line) : null;
+      if ("settingsSection" in patch) nextSettings = patch.settingsSection ?? "";
       // 支持跨文件锚点：patch.hash 不进查询参数，只拼成 URL 片段。
       if ("hash" in patch) nextHash = patch.hash ?? "";
 
@@ -72,7 +77,7 @@ export function useRepoRouting(): RepoRouting {
               kind,
               path: kind === "tree" ? dirPath : filePath,
             })
-          : buildRepoPath(owner, name, { tab: nextTab });
+          : buildRepoPath(owner, name, { tab: nextTab, settingsSection: nextSettings });
 
       const next = new URLSearchParams(searchParams);
       if (nextRef) next.set("ref", nextRef);
@@ -106,5 +111,5 @@ export function useRepoRouting(): RepoRouting {
     navigate(`${pathname}${qs ? `?${qs}` : ""}`, { replace: true });
   }, [searchParams, navigate, owner, name]);
 
-  return { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, issueNumber, setParams };
+  return { owner, name, tab, fileParam, path, currentDir, blameParam, urlRef, lineParam, issueNumber, settingsSection, setParams };
 }
