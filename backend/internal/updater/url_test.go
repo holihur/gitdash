@@ -1,6 +1,9 @@
 package updater
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 // TestValidReleaseURL 覆盖安全评审 §3.6：只信任 https 的 GitHub 下载地址。
 func TestValidReleaseURL(t *testing.T) {
@@ -25,5 +28,26 @@ func TestValidReleaseURL(t *testing.T) {
 		if validReleaseURL(u) {
 			t.Fatalf("validReleaseURL(%q) = true, want false", u)
 		}
+	}
+}
+
+// TestRedirectRevalidation 覆盖安全审计 A4：下载重定向必须逐跳重新校验。
+func TestRedirectRevalidation(t *testing.T) {
+	mk := func(raw string) *http.Request {
+		req, err := http.NewRequest("GET", raw, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	if err := httpClient.CheckRedirect(mk("https://github.com/x"), nil); err != nil {
+		t.Fatalf("trusted redirect rejected: %v", err)
+	}
+	if err := httpClient.CheckRedirect(mk("https://evil.example.com/x"), nil); err == nil {
+		t.Fatal("redirect to untrusted host accepted")
+	}
+	via := make([]*http.Request, 10)
+	if err := httpClient.CheckRedirect(mk("https://github.com/x"), via); err == nil {
+		t.Fatal("redirect chain longer than 10 accepted")
 	}
 }

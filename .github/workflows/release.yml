@@ -11,6 +11,11 @@ jobs:
   goreleaser:
     name: GoReleaser
     runs-on: ubuntu-latest
+    env:
+      # 仓库变量（公开）：minisign 公钥，编译期嵌入更新器用于验签。
+      GITDASH_MINISIGN_PUBKEY: ${{ vars.GITDASH_MINISIGN_PUBKEY }}
+      # 密钥（secret）：设置后对 checksums.txt 生成并上传 minisign 签名。
+      MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +48,19 @@ jobs:
           # 包管理器发布（缺省为空时 goreleaser 自动跳过对应 publisher）
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+
+      # 对 checksums.txt 生成 minisign 签名并上传（未配置 MINISIGN_SECRET_KEY 时跳过）。
+      - name: Sign release checksums (minisign)
+        if: env.MINISIGN_SECRET_KEY != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update && sudo apt-get install -y minisign
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          chmod 600 "$RUNNER_TEMP/minisign.key"
+          gh release download "$GITHUB_REF_NAME" -p checksums.txt -O "$RUNNER_TEMP/checksums.txt" --clobber
+          minisign -S -s "$RUNNER_TEMP/minisign.key" -m "$RUNNER_TEMP/checksums.txt" -t "gitdash $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" "$RUNNER_TEMP/checksums.txt.minisig" --clobber
 
       # 文档站（Hugo）编译 + Pagefind 索引，打包为单个制品附加到本次 release。
       - name: Setup Hugo

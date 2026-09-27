@@ -23,13 +23,47 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gitdash/backend/internal/envx"
 )
 
 const DefaultRepo = "holihur/gitdash"
 
 const maxBinarySize = 512 << 20 // 512MB
 
-var httpClient = &http.Client{Timeout: 15 * time.Minute}
+// SigningKey 是编译期注入的 minisign 公钥（base64）；goreleaser 通过 ldflags
+// -X 从 GITDASH_MINISIGN_PUBKEY 注入。为空时可经 GITDASH_UPDATE_MINISIGN_PUBKEY
+// 在运行时提供。配置后更新强制要求 release 附带 checksums.txt.minisig 并验签。
+var SigningKey = ""
+
+// signingKey 返回当前生效的 minisign 公钥（运行时环境变量优先于编译期注入）。
+func signingKey() string {
+	if v := strings.TrimSpace(os.Getenv("GITDASH_UPDATE_MINISIGN_PUBKEY")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(SigningKey)
+}
+
+// signatureRequired 报告是否强制要求签名：显式 GITDASH_UPDATE_REQUIRE_SIGNATURE=1
+// 或已配置公钥时均强制。
+func signatureRequired() bool {
+	return envx.Bool("GITDASH_UPDATE_REQUIRE_SIGNATURE", signingKey() != "")
+}
+
+var httpClient = &http.Client{
+	Timeout: 15 * time.Minute,
+	// 逐跳重新校验下载地址，避免 validReleaseURL 只检查首个 URL 而被 302
+	// 重定向到任意主机（安全审计 A4）。
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		if !validReleaseURL(req.URL.String()) {
+			return fmt.Errorf("redirect to untrusted host: %s", req.URL.Host)
+		}
+		return nil
+	},
+}
 
 // validReleaseURL 校验 release 资产 URL：必须 https，且主机属于 GitHub 域。
 func validReleaseURL(raw string) bool {
@@ -102,13 +136,15 @@ func apply(ctx context.Context, rel *Release) error {
 		binaryName = "gitdash.exe"
 	}
 
-	var archiveURL, sumsURL string
+	var archiveURL, sumsURL, sigURL string
 	for _, a := range rel.Assets {
 		switch a.Name {
 		case archiveName:
 			archiveURL = a.BrowserDownloadURL
 		case "checksums.txt":
 			sumsURL = a.BrowserDownloadURL
+		case "checksums.txt.minisig":
+			sigURL = a.BrowserDownloadURL
 		}
 	}
 	if archiveURL == "" {
@@ -121,6 +157,13 @@ func apply(ctx context.Context, rel *Release) error {
 	if !validReleaseURL(archiveURL) || !validReleaseURL(sumsURL) {
 		return fmt.Errorf("release %s 的下载地址不可信", rel.TagName)
 	}
+	key := signingKey()
+	if key == "" && signatureRequired() {
+		return errors.New("更新签名强制校验已开启（GITDASH_UPDATE_REQUIRE_SIGNATURE=1）但未配置 minisign 公钥")
+	}
+	if key != "" && (sigURL == "" || !validReleaseURL(sigURL)) {
+		return fmt.Errorf("release %s 缺少可信的 checksums.txt.minisig 签名", rel.TagName)
+	}
 
 	fmt.Printf("下载 %s\n", archiveURL)
 	archive, err := httpGet(ctx, archiveURL)
@@ -130,6 +173,16 @@ func apply(ctx context.Context, rel *Release) error {
 	sums, err := httpGet(ctx, sumsURL)
 	if err != nil {
 		return fmt.Errorf("下载 checksums.txt 失败: %w", err)
+	}
+	// 先用 minisign 公钥认证 checksums.txt，再信任其中的 SHA256。
+	if key != "" {
+		sig, err := httpGet(ctx, sigURL)
+		if err != nil {
+			return fmt.Errorf("下载签名失败: %w", err)
+		}
+		if err := VerifyMinisign(sums, sig, key); err != nil {
+			return fmt.Errorf("签名校验失败: %w", err)
+		}
 	}
 	if err := VerifyChecksum(archive, sums, archiveName); err != nil {
 		return fmt.Errorf("校验失败: %w", err)

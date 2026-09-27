@@ -8,9 +8,14 @@
 #
 # 安装 gitdash 时会一并安装同压缩包内的 agent（若存在），使 copilot 可直接使用。
 #
+# 完整性：始终从同 release 下载 checksums.txt 并校验 SHA256；若本机有 minisign
+# 且设置了 GITDASH_MINISIGN_PUBKEY，则额外强制校验 checksums.txt 的 minisign 签名。
+#
 # 环境变量:
-#   GITDASH_VERSION      指定版本 (如 v0.1.0)，默认最新 release
-#   GITDASH_INSTALL_DIR  安装目录，默认 /usr/local/bin（无权限时 ~/.local/bin）
+#   GITDASH_VERSION             指定版本 (如 v0.1.0)，默认最新 release
+#   GITDASH_INSTALL_DIR         安装目录，默认 /usr/local/bin（无权限时 ~/.local/bin）
+#   GITDASH_MINISIGN_PUBKEY     minisign 公钥（base64），设置后强制验签
+#   GITDASH_REQUIRE_SIGNATURE   设为 1 且未提供公钥时直接报错
 set -euo pipefail
 
 REPO="holihur/gitdash"
@@ -70,13 +75,43 @@ fi
 VER="${VERSION#v}"
 # release 压缩包按项目名（gitdash）命名，且同时包含 gitdash / gitdash-runner / agent
 # 三个二进制；安装时同样下载该压缩包，再取出 $BIN_NAME（与 install.ps1 一致）。
-URL="https://github.com/$REPO/releases/download/$VERSION/gitdash_${VER}_${OS}_${ARCH}.tar.gz"
+
+ARCHIVE_NAME="gitdash_${VER}_${OS}_${ARCH}.tar.gz"
+URL="https://github.com/$REPO/releases/download/$VERSION/$ARCHIVE_NAME"
+SUMS_URL="https://github.com/$REPO/releases/download/$VERSION/checksums.txt"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 log "下载 $URL"
 fetch_to "$URL" "$TMP/gitdash.tar.gz"
+
+# 完整性：校验 SHA256（checksum 与二进制同源，仅作为传输完整性校验）。
+log "校验 SHA256..."
+fetch_to "$SUMS_URL" "$TMP/checksums.txt"
+WANT="$(awk -v n="$ARCHIVE_NAME" '$2==n{print $1}' "$TMP/checksums.txt" | head -n1)"
+[ -n "$WANT" ] || err "checksums.txt 中没有 $ARCHIVE_NAME"
+if command -v sha256sum >/dev/null 2>&1; then
+  GOT="$(sha256sum "$TMP/gitdash.tar.gz" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+  GOT="$(shasum -a 256 "$TMP/gitdash.tar.gz" | awk '{print $1}')"
+else
+  err "需要 sha256sum 或 shasum 进行完整性校验"
+fi
+[ "$GOT" = "$WANT" ] || err "SHA256 不匹配，下载可能被篡改，已中止"
+log "SHA256 校验通过"
+
+# 签名：配置了公钥时强制用 minisign 校验 checksums.txt。
+if [ -n "${GITDASH_MINISIGN_PUBKEY:-}" ]; then
+  command -v minisign >/dev/null 2>&1 || err "设置了 GITDASH_MINISIGN_PUBKEY 但未安装 minisign"
+  fetch_to "$SUMS_URL.minisig" "$TMP/checksums.txt.minisig"
+  printf '%s\n' "$GITDASH_MINISIGN_PUBKEY" >"$TMP/minisign.pub"
+  minisign -Vm "$TMP/checksums.txt" -p "$TMP/minisign.pub" >/dev/null || err "minisign 签名校验失败"
+  log "minisign 签名校验通过"
+elif [ "${GITDASH_REQUIRE_SIGNATURE:-}" = "1" ]; then
+  err "GITDASH_REQUIRE_SIGNATURE=1 但未提供 GITDASH_MINISIGN_PUBKEY"
+fi
+
 tar -xzf "$TMP/gitdash.tar.gz" -C "$TMP"
 [ -f "$TMP/$BIN_NAME" ] || err "压缩包中未找到 $BIN_NAME"
 

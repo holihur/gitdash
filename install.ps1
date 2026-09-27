@@ -11,6 +11,8 @@
 #
 # Installing gitdash also installs the bundled agent runtime (if present), so copilot works out of the box.
 #
+# Integrity: always downloads checksums.txt from the same release and verifies SHA256.
+#
 # Environment variables:
 #   GITDASH_VERSION      pin a version (e.g. v0.1.0), defaults to latest release
 #   GITDASH_INSTALL_DIR  install directory, defaults to %LOCALAPPDATA%\Programs\gitdash
@@ -43,7 +45,9 @@ if (-not $Version) {
     if (-not $Version) { throw "Failed to query latest version; set GITDASH_VERSION and retry" }
 }
 $Ver = $Version.TrimStart("v")
-$Url = "https://github.com/$Repo/releases/download/$Version/gitdash_${Ver}_windows_${Arch}.zip"
+$ArchiveName = "gitdash_${Ver}_windows_${Arch}.zip"
+$Url = "https://github.com/$Repo/releases/download/$Version/$ArchiveName"
+$SumsUrl = "https://github.com/$Repo/releases/download/$Version/checksums.txt"
 
 $Tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("gitdash-install-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $Tmp | Out-Null
@@ -51,6 +55,16 @@ try {
     Write-Step "Downloading $Url"
     $Zip = Join-Path $Tmp "gitdash.zip"
     Invoke-WebRequest -Uri $Url -OutFile $Zip -UserAgent "gitdash-install"
+
+    Write-Step "Verifying SHA256..."
+    $SumsFile = Join-Path $Tmp "checksums.txt"
+    Invoke-WebRequest -Uri $SumsUrl -OutFile $SumsFile -UserAgent "gitdash-install"
+    $line = Get-Content $SumsFile | Where-Object { $_ -match "\s+$([regex]::Escape($ArchiveName))$" } | Select-Object -First 1
+    if (-not $line) { throw "checksums.txt does not contain $ArchiveName" }
+    $want = ($line -split '\s+')[0]
+    $got = (Get-FileHash -Algorithm SHA256 -Path $Zip).Hash
+    if ($got.ToLower() -ne $want.ToLower()) { throw "SHA256 mismatch; download may be tampered with" }
+    Write-Step "SHA256 OK"
 
     Write-Step "Extracting"
     Expand-Archive -Path $Zip -DestinationPath $Tmp -Force

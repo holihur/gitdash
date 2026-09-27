@@ -20,7 +20,8 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{ .Version }}
+      - >-
+        -s -w -X main.version={{ .Version }}{{ with .Env.GITDASH_MINISIGN_PUBKEY }} -X gitdash/backend/internal/updater.SigningKey={{ . }}{{ end }}
   # 自托管 CI agent（runner）
   - id: gitdash-runner
     dir: backend
@@ -85,6 +86,10 @@ archives:
 
 checksum:
   name_template: checksums.txt
+
+# 发布签名（minisign）在 .github/workflows/release.yml 中按需执行：
+# 配置 MINISIGN_SECRET_KEY 后会对 checksums.txt 生成并上传 checksums.txt.minisig；
+# 同时通过仓库变量 GITDASH_MINISIGN_PUBKEY 把公钥编译进更新器。
 
 # 系统包（apt / yum / apk 直接安装）
 nfpms:
