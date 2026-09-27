@@ -166,3 +166,53 @@ func TestAdminUsersCRUD(t *testing.T) {
 		t.Fatalf("delete ghost = %d, want 404", code)
 	}
 }
+
+// TestAdminLogoutRevokesBearerSession 覆盖安全审计 A7/M2.8：adminLogout 必须
+// 同时吊销 Bearer 认证的管理员会话，而不只是清 cookie。
+func TestAdminLogoutRevokesBearerSession(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(dir + "/t.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, _ := bcrypt.GenerateFromPassword([]byte("admin-pass-123"), bcrypt.DefaultCost)
+	if err := st.CreateAdminUser("admin", string(hash)); err != nil {
+		t.Fatal(err)
+	}
+	hs := httptest.NewServer(api.New(st, "test").Handler(""))
+	defer hs.Close()
+	tok := adminLogin(t, hs)
+
+	bearer := func(method, path string) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(method, hs.URL+"/api"+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+tok)
+		res, err := hs.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	if r := bearer("GET", "/admin/me"); r.StatusCode != 200 {
+		t.Fatalf("bearer me = %d, want 200", r.StatusCode)
+	} else {
+		_ = r.Body.Close()
+	}
+	if r := bearer("POST", "/admin/logout"); r.StatusCode != 204 {
+		t.Fatalf("logout = %d, want 204", r.StatusCode)
+	} else {
+		_ = r.Body.Close()
+	}
+	if r := bearer("GET", "/admin/me"); r.StatusCode != 401 {
+		t.Fatalf("bearer me after logout = %d, want 401", r.StatusCode)
+	} else {
+		_ = r.Body.Close()
+	}
+	if code, _ := adminDo(t, hs, tok, "GET", "/admin/me", ""); code != 401 {
+		t.Fatalf("cookie me after logout = %d, want 401", code)
+	}
+}

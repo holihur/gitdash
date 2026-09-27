@@ -142,8 +142,13 @@ func (a *API) adminLogin(w http.ResponseWriter, r *http.Request) {
 //	@Security    BearerAuth
 //	@Router      /admin/logout [post]
 func (a *API) adminLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie(adminCookie); err == nil {
+	// adminAuth 同时接受 cookie 与 Bearer；登出必须一并吊销，否则 Bearer
+	// 客户端拿到 204 后 token 仍在服务端有效（安全审计 A7/M2.8）。
+	if c, err := r.Cookie(adminCookie); err == nil && c.Value != "" {
 		_ = a.store.DeleteAdminSession(c.Value)
+	}
+	if bt := bearerToken(r); bt != "" {
+		_ = a.store.DeleteAdminSession(bt)
 	}
 	http.SetCookie(w, &http.Cookie{Name: adminCookie, Value: "", Path: "/", HttpOnly: true, MaxAge: -1})
 	w.WriteHeader(http.StatusNoContent)

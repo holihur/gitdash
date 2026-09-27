@@ -92,3 +92,53 @@ func TestEmailMFACodeHashed(t *testing.T) {
 		t.Fatalf("stored email code = %q, want sha256", stored)
 	}
 }
+
+// TestAdminSessionTokenHashedAtRest 覆盖安全审计 A7：管理员会话 token 以
+// sha256 落库，且旧版明文行仍可查找并会被就地升级。
+func TestAdminSessionTokenHashedAtRest(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CreateAdminUser("root", "hash"); err != nil {
+		t.Fatal(err)
+	}
+	aid, _, err := s.AdminAuth("root")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := "unit-test-admin-session-token" //gitleaks:allow
+	if err := s.CreateAdminSession(token, aid); err != nil {
+		t.Fatal(err)
+	}
+	var row adminSessionRow
+	if err := s.db.First(&row, "admin_id = ?", aid).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.Token == token || row.Token != patHash(token) {
+		t.Fatalf("stored admin token = %q, want sha256 hash", row.Token)
+	}
+	if id, name, err := s.GetAdminSession(token); err != nil || id != aid || name != "root" {
+		t.Fatalf("GetAdminSession = %d, %q, %v", id, name, err)
+	}
+	// 登出后两者都失效
+	if err := s.DeleteAdminSession(token); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.GetAdminSession(token); err == nil {
+		t.Fatal("admin session still valid after delete")
+	}
+
+	// 旧版明文行：查找成功并升级为哈希。
+	legacy := "legacy-plaintext-admin-session"
+	if err := s.db.Create(&adminSessionRow{Token: legacy, AdminID: aid, CreatedAt: now(), ExpiresAt: time.Now().Add(time.Hour).UTC().Format(time.RFC3339)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if id, name, err := s.GetAdminSession(legacy); err != nil || id != aid || name != "root" {
+		t.Fatalf("legacy GetAdminSession = %d, %q, %v", id, name, err)
+	}
+	var upgraded adminSessionRow
+	if err := s.db.First(&upgraded, "admin_id = ? AND token = ?", aid, patHash(legacy)).Error; err != nil {
+		t.Fatalf("legacy admin row not upgraded: %v", err)
+	}
+}

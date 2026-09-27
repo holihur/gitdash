@@ -43,9 +43,10 @@ func (s *Store) UpdateAdminPassword(username, passwordHash string) error {
 	return nil
 }
 
+// CreateAdminSession 存储管理员会话 token 的 sha256（不落库明文，安全审计 A7）。
 func (s *Store) CreateAdminSession(token string, adminID int64) error {
 	row := adminSessionRow{
-		Token:     token,
+		Token:     patHash(token),
 		AdminID:   adminID,
 		CreatedAt: now(),
 		ExpiresAt: time.Now().Add(12 * time.Hour).UTC().Format(time.RFC3339),
@@ -53,7 +54,26 @@ func (s *Store) CreateAdminSession(token string, adminID int64) error {
 	return s.db.Create(&row).Error
 }
 
+// GetAdminSession 按 token 的 sha256 查找；兼容旧版明文行并在命中后升级为哈希存储。
 func (s *Store) GetAdminSession(token string) (int64, string, error) {
+	hash := patHash(token)
+	id, username, err := s.adminSessionUser(hash)
+	if err != nil {
+		return 0, "", err
+	}
+	if id == 0 && hash != token {
+		if id, username, _ = s.adminSessionUser(token); id != 0 {
+			_ = s.db.Model(&adminSessionRow{}).Where("token = ?", token).Update("token", hash).Error
+		}
+	}
+	if id == 0 {
+		return 0, "", ErrNotFound
+	}
+	return id, username, nil
+}
+
+// adminSessionUser 按已存储的 token（哈希或旧明文）取管理员；无有效行返回 id=0。
+func (s *Store) adminSessionUser(stored string) (int64, string, error) {
 	var dest struct {
 		ID       int64
 		Username string
@@ -61,24 +81,22 @@ func (s *Store) GetAdminSession(token string) (int64, string, error) {
 	err := s.db.Table("admin_sessions").
 		Select("admin_users.id, admin_users.username").
 		Joins("JOIN admin_users ON admin_users.id = admin_sessions.admin_id").
-		Where("admin_sessions.token = ? AND admin_sessions.expires_at > ?", token, now()).
+		Where("admin_sessions.token = ? AND admin_sessions.expires_at > ?", stored, now()).
 		Scan(&dest).Error
 	if err != nil {
 		return 0, "", err
 	}
-	if dest.ID == 0 && dest.Username == "" {
-		return 0, "", ErrNotFound
-	}
 	return dest.ID, dest.Username, nil
 }
 
+// DeleteAdminSession 同时按哈希与旧明文删除（兼容存量明文行）。
 func (s *Store) DeleteAdminSession(token string) error {
-	return s.db.Where("token = ?", token).Delete(&adminSessionRow{}).Error
+	return s.db.Where("token IN ?", []string{patHash(token), token}).Delete(&adminSessionRow{}).Error
 }
 
 // DeleteAdminSessionsExcept 摧销管理员除 keepToken 外的全部会话（改密后调用）。
 func (s *Store) DeleteAdminSessionsExcept(adminID int64, keepToken string) error {
-	return s.db.Where("admin_id = ? AND token <> ?", adminID, keepToken).
+	return s.db.Where("admin_id = ? AND token <> ?", adminID, patHash(keepToken)).
 		Delete(&adminSessionRow{}).Error
 }
 
