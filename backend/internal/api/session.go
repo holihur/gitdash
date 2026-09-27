@@ -3,15 +3,21 @@ package api
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"strings"
+	"time"
 )
+
+// errEmailMFAUnavailable 表示用户使用 email MFA 但 SMTP 未配置，无法下发验证码。
+var errEmailMFAUnavailable = errors.New("email mfa requires SMTP to be configured")
 
 func (a *API) rateKey(username, ip string) string { return username + "|" + ip }
 
@@ -297,15 +303,92 @@ func (a *API) startSession(w http.ResponseWriter, r *http.Request, status int, u
 	writeJSON(w, status, map[string]string{"token": token, "username": ua.Username})
 }
 
+// beginMFAChallenge 在用户启用 MFA 时创建一个一次性挑战。required=false 表示
+// 无需二次验证，调用方应直接签发会话。这是社交登录 / passkey 登录与密码登录
+// 共用的 MFA 入口，避免“旁路登录跳过 MFA”（安全审计 A2）。
+func (a *API) beginMFAChallenge(username string) (token, method string, required bool, err error) {
+	ua, err := a.store.GetByUsername(username)
+	if err != nil {
+		return "", "", false, err
+	}
+	if !ua.MFAEnabled {
+		return "", "", false, nil
+	}
+	method = ua.MFAMethod
+	if method == "" {
+		method = "totp"
+	}
+	token, err = newSessionToken()
+	if err != nil {
+		return "", "", false, err
+	}
+	expires := time.Now().Add(10 * time.Minute).UTC().Format(time.RFC3339)
+	if err := a.store.PutMFAChallenge(token, ua.Username, expires); err != nil {
+		return "", "", false, err
+	}
+	if method == "email" {
+		if !a.emailReady() {
+			_ = a.store.DeleteMFAChallenge(token)
+			return "", "", false, errEmailMFAUnavailable
+		}
+		if err := a.issueEmailMFACode(token, ua.Username, ua.Email, "gitdash: sign-in verification code"); err != nil {
+			_ = a.store.DeleteMFAChallenge(token)
+			return "", "", false, err
+		}
+	}
+	return token, method, true, nil
+}
+
+// oauthIssueSession 完成社交登录：用户启用 MFA 时必须先完成二次验证，否则
+// 只重定向回登录页并带上 mfa_token/mfa_method（由前端继续校验）。
 func (a *API) oauthIssueSession(w http.ResponseWriter, r *http.Request, username string) {
-	if ua, err := a.store.GetByUsername(username); err == nil && !ua.Banned {
-		if token, err := newSessionToken(); err == nil {
-			if err := a.store.CreateSession(token, ua.ID); err == nil {
-				a.setSessionCookie(w, r, token)
-			}
+	ua, err := a.store.GetByUsername(username)
+	if err != nil || ua.Banned {
+		http.Redirect(w, r, "/login?error=oauth_failed", http.StatusFound)
+		return
+	}
+	token, method, required, err := a.beginMFAChallenge(username)
+	if err != nil {
+		reason := "oauth_failed"
+		if errors.Is(err, errEmailMFAUnavailable) {
+			reason = "mfa_unavailable"
+		}
+		http.Redirect(w, r, "/login?error="+reason, http.StatusFound)
+		return
+	}
+	if required {
+		q := url.Values{}
+		q.Set("mfa_token", token)
+		q.Set("mfa_method", method)
+		http.Redirect(w, r, "/login?"+q.Encode(), http.StatusFound)
+		return
+	}
+	sess, err := newSessionToken()
+	if err == nil {
+		if err := a.store.CreateSession(sess, ua.ID); err == nil {
+			a.setSessionCookie(w, r, sess)
 		}
 	}
 	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+// issueSessionOrMFA 供 JSON 登录流程（如 passkey）使用：MFA 已启用则返回
+// mfa_required 挑战，否则直接签发会话。
+func (a *API) issueSessionOrMFA(w http.ResponseWriter, r *http.Request, status int, username string) {
+	token, method, required, err := a.beginMFAChallenge(username)
+	if err != nil {
+		if errors.Is(err, errEmailMFAUnavailable) {
+			writeCode(w, http.StatusServiceUnavailable, "mfa_unavailable", "email mfa requires SMTP to be configured")
+			return
+		}
+		internalError(w, err)
+		return
+	}
+	if required {
+		writeJSON(w, status, map[string]any{"mfa_required": true, "mfa_token": token, "mfa_method": method})
+		return
+	}
+	a.startSession(w, r, status, username)
 }
 
 // ---- admin & oauth providers ----

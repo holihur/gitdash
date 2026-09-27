@@ -37,9 +37,12 @@ export default function Login({ onAuthed }: Props) {
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  // MFA 二次验证阶段
-  const [mfaToken, setMfaToken] = useState("");
-  const [mfaMethod, setMfaMethod] = useState<"totp" | "email">("totp");
+  // MFA 二次验证阶段。社交登录（OAuth/OIDC/GitHub）在用户启用 MFA 时
+  // 会重定向回 /login?mfa_token=...&mfa_method=...，这里直接进入第二步。
+  const [mfaToken, setMfaToken] = useState(() => searchParams.get("mfa_token") ?? "");
+  const [mfaMethod, setMfaMethod] = useState<"totp" | "email">(
+    searchParams.get("mfa_method") === "email" ? "email" : "totp",
+  );
   const [code, setCode] = useState("");
   const [githubEnabled, setGithubEnabled] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
@@ -140,6 +143,12 @@ export default function Login({ onAuthed }: Props) {
       const begin = await api.passkeyLoginBegin(username.trim() || undefined);
       const credential = await getPasskeyAssertion(begin);
       const r = await api.passkeyLoginFinish(begin.session_id, credential);
+      if (r.mfa_required && r.mfa_token) {
+        setMfaToken(r.mfa_token);
+        setMfaMethod(r.mfa_method === "email" ? "email" : "totp");
+        setCode("");
+        return; // 进入第二步
+      }
       finish(r);
     } catch (e) {
       if ((e as { name?: string })?.name === "NotAllowedError") {

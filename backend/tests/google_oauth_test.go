@@ -183,3 +183,102 @@ func TestAdminConfigGoogleLogin(t *testing.T) {
 		t.Fatalf("relogin callback = %d", r7.StatusCode)
 	}
 }
+
+// TestGoogleLoginHonorsMFA 验证已启用 MFA 的账号经社交登录时不会被直接签发会话，
+// 而是重定向回登录页完成二次验证（安全审计 A2）。
+func TestGoogleLoginHonorsMFA(t *testing.T) {
+	google := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/auth":
+			rd := r.URL.Query().Get("redirect_uri")
+			http.Redirect(w, r, rd+"?code=fake-code&state="+url.QueryEscape(r.URL.Query().Get("state")), http.StatusFound)
+		case "/token":
+			writeJSONH(w, map[string]string{"access_token": "fake-google-token"})
+		case "/userinfo":
+			writeJSONH(w, map[string]any{
+				"sub": "google-mfa-1", "email": "Mfa.User@gmail.com", "email_verified": true, "name": "Mfa User",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer google.Close()
+
+	t.Setenv("GITDASH_GOOGLE_AUTH_URL", google.URL+"/auth")
+	t.Setenv("GITDASH_GOOGLE_TOKEN_URL", google.URL+"/token")
+	t.Setenv("GITDASH_GOOGLE_USERINFO_URL", google.URL+"/userinfo")
+
+	hs, st := startAPISeed(t, func(st *store.Store) {
+		hash, _ := bcrypt.GenerateFromPassword([]byte("admin-pass-123"), bcrypt.DefaultCost)
+		if err := st.CreateAdminUser("admin", string(hash)); err != nil {
+			t.Fatalf("seed admin: %v", err)
+		}
+	})
+
+	jar, _ := cookiejar.New(nil)
+	admin := &http.Client{Jar: jar}
+	login, _ := http.NewRequest("POST", hs.URL+"/api/admin/login",
+		strings.NewReader(`{"username":"admin","password":"admin-pass-123"}`))
+	login.Header.Set("Content-Type", "application/json")
+	if rl, err := admin.Do(login); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = rl.Body.Close()
+	}
+	save, _ := http.NewRequest("POST", hs.URL+"/api/admin/settings", strings.NewReader(
+		`{"google_oauth_enabled":true,"google_client_id":"gcid","google_client_secret":"gsecret-very-long"}`))
+	save.Header.Set("Content-Type", "application/json")
+	if rs, err := admin.Do(save); err != nil {
+		t.Fatal(err)
+	} else {
+		_ = rs.Body.Close()
+	}
+
+	runFlow := func() (*http.Client, string) {
+		user, _ := jarNoRedirectClient()
+		start, _ := http.NewRequest("GET", hs.URL+"/api/auth/google", nil)
+		r1, err := user.Do(start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = r1.Body.Close()
+		authReq, _ := http.NewRequest("GET", r1.Header.Get("Location"), nil)
+		r2, err := user.Do(authReq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = r2.Body.Close()
+		cbLoc := r2.Header.Get("Location")
+		cbReq, _ := http.NewRequest("GET", cbLoc, nil)
+		r3, err := user.Do(cbReq)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = r3.Body.Close()
+		return user, r3.Header.Get("Location")
+	}
+
+	// 第一次社交登录创建账号并签发会话
+	if _, loc := runFlow(); strings.Contains(loc, "mfa_token=") {
+		t.Fatalf("first login unexpectedly required MFA: %s", loc)
+	}
+	// 为该账号启用 TOTP MFA
+	if err := st.SetMFASecret("mfa-user", "JBSWY3DPEHPK3PXP", true); err != nil {
+		t.Fatalf("enable mfa: %v", err)
+	}
+
+	// 再次社交登录：必须重定向到登录页完成 MFA，且不下发会话
+	user2, loc := runFlow()
+	if !strings.Contains(loc, "/login?") || !strings.Contains(loc, "mfa_token=") {
+		t.Fatalf("callback redirect = %q, want /login?mfa_token=...", loc)
+	}
+	me, _ := http.NewRequest("GET", hs.URL+"/api/me", nil)
+	rme, err := user2.Do(me)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rme.Body.Close() }()
+	if rme.StatusCode != 401 {
+		t.Fatalf("oauth session issued despite MFA: /api/me = %d, want 401", rme.StatusCode)
+	}
+}

@@ -2063,7 +2063,7 @@ const docTemplate = `{
         },
         "/auth/passkey/finish": {
             "post": {
-                "description": "校验 assertion 后签发正式会话 token / cookie。",
+                "description": "校验 assertion 后签发正式会话 token / cookie，或返回 MFA 挑战。",
                 "consumes": [
                     "application/json"
                 ],
@@ -2090,9 +2090,7 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "additionalProperties": true
                         }
                     },
                     "401": {

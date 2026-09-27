@@ -485,15 +485,16 @@ func (a *API) passkeyLoginBegin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// passkeyLoginFinish 完成 passkey 登录并签发会话。
+// passkeyLoginFinish 完成 passkey 登录并签发会话；若账号已启用 MFA，则返回
+// mfa_required 挑战而不是直接签发会话。
 //
 //	@Summary     完成 Passkey 登录
-//	@Description 校验 assertion 后签发正式会话 token / cookie。
+//	@Description 校验 assertion 后签发正式会话 token / cookie，或返回 MFA 挑战。
 //	@Tags        auth
 //	@Accept      json
 //	@Produce     json
 //	@Param       body body passkeyLoginFinishReq true "session_id 与 assertion"
-//	@Success     200 {object} map[string]string
+//	@Success     200 {object} map[string]any
 //	@Failure     401 {object} map[string]string
 //	@Failure     429 {object} map[string]string
 //	@Router      /auth/passkey/finish [post]
@@ -564,5 +565,6 @@ func (a *API) passkeyLoginFinish(w http.ResponseWriter, r *http.Request) {
 	if data, merr := json.Marshal(cred); merr == nil {
 		_ = a.store.UpdateWebAuthnCredential(webauthnCredentialID(cred), data)
 	}
-	a.startSession(w, r, http.StatusOK, username)
+	// passkey 通过后仍需尊重用户已启用的 MFA（TOTP/email），避免静默降级。
+	a.issueSessionOrMFA(w, r, http.StatusOK, username)
 }
