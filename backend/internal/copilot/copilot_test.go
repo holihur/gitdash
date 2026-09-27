@@ -232,3 +232,36 @@ func TestWriteAgentKeyFile(t *testing.T) {
 		t.Fatalf("key file not removed: %v", err)
 	}
 }
+
+func TestEnabledDefaultsOff(t *testing.T) {
+	t.Setenv("GITDASH_COPILOT", "")
+	if Enabled() {
+		t.Fatal("copilot must be disabled by default")
+	}
+	for _, v := range []string{"1", "true", "yes", "on", "TRUE"} {
+		t.Setenv("GITDASH_COPILOT", v)
+		if !Enabled() {
+			t.Fatalf("copilot should be enabled for %q", v)
+		}
+	}
+	for _, v := range []string{"0", "false", "no", "off"} {
+		t.Setenv("GITDASH_COPILOT", v)
+		if Enabled() {
+			t.Fatalf("copilot should be disabled for %q", v)
+		}
+	}
+}
+
+func TestAgentEnvFiltersSecrets(t *testing.T) {
+	t.Setenv("GITDASH_SECRET_KEY", "super-secret")
+	t.Setenv("GITDASH_SMTP_PASS", "smtp-secret")
+	t.Setenv("PATH", "/usr/bin")
+	env := agentEnv("AGENT_API_TOKEN=tok")
+	joined := strings.Join(env, "\n")
+	if strings.Contains(joined, "super-secret") || strings.Contains(joined, "smtp-secret") {
+		t.Fatalf("agent env leaked service secrets: %v", env)
+	}
+	if !strings.Contains(joined, "PATH=/usr/bin") || !strings.Contains(joined, "AGENT_API_TOKEN=tok") {
+		t.Fatalf("agent env missing whitelisted or extra vars: %v", env)
+	}
+}

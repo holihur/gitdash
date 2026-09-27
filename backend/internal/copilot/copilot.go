@@ -25,10 +25,37 @@ import (
 	"sync"
 	"time"
 
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/gitsvc"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
 )
+
+// Enabled 报告是否启用 copilot 功能。默认关闭：agent 在宿主直接执行 shell 命令，
+// 任意仓库 write 权限即可升级为服务账号 RCE（安全审计 C1）。需显式设置
+// GITDASH_COPILOT=1/true/yes/on 才启用。
+func Enabled() bool { return envx.Bool("GITDASH_COPILOT", false) }
+
+// agentEnvAllow 是传给 agent 进程的环境变量白名单。agent 会在仓库 checkout 中
+// 执行任意 shell 命令，因此绝不能继承服务端全部环境（DB DSN、SMTP 密码、
+// GITDASH_SECRET_KEY、gRPC token 等）。
+var agentEnvAllow = []string{
+	"PATH", "HOME", "USER", "LOGNAME", "SHELL",
+	"TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_CTYPE", "TZ",
+	"SSL_CERT_FILE", "SSL_CERT_DIR",
+	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
+}
+
+// agentEnv 基于白名单构造 agent 的子进程环境，再追加调用方提供的变量。
+func agentEnv(extra ...string) []string {
+	env := make([]string, 0, len(agentEnvAllow)+len(extra))
+	for _, k := range agentEnvAllow {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	return append(env, extra...)
+}
 
 // ProtocolVersion 是 gitdash 期望的 agent 聊天协议版本。
 const ProtocolVersion = "copilot-api/1"
@@ -354,7 +381,7 @@ func (m *Manager) ensureRuntime(ctx context.Context, session store.CopilotSessio
 		return nil, err
 	}
 	defer cleanupKey()
-	cmd.Env = append(os.Environ(),
+	cmd.Env = agentEnv(
 		"AGENT_API_TOKEN="+agentToken,
 		"LLM_API_KEY_FILE="+keyFile,
 		"LLM_BASE_URL="+baseURL,

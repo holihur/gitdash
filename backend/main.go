@@ -344,8 +344,12 @@ func run() {
 	if err := pipeline.Init(dataDir); err != nil {
 		logx.Fatalf("init pipeline: %v", err)
 	}
-	if err := copilot.Init(dataDir); err != nil {
-		logx.Fatalf("init copilot: %v", err)
+	if copilot.Enabled() {
+		if err := copilot.Init(dataDir); err != nil {
+			logx.Fatalf("init copilot: %v", err)
+		}
+	} else {
+		logx.Infof("copilot disabled (set GITDASH_COPILOT=1 to enable; agent runs on host)")
 	}
 
 	// 数据库：GITDASH_DB 为 postgres:// 连接串时用 PG，否则用 SQLite 文件（默认 data/gitdash.db）
@@ -505,9 +509,11 @@ func run() {
 	a := api.New(st, version)
 	a.SetCodeSearch(codeSearch)
 	a.SetSSHPort(sshAddr)
-	copilotMgr := copilot.NewManager(st)
-	copilotMgr.SetPullHook(a.CopilotPullOpened)
-	a.SetCopilotManager(copilotMgr)
+	if copilot.Enabled() {
+		copilotMgr := copilot.NewManager(st)
+		copilotMgr.SetPullHook(a.CopilotPullOpened)
+		a.SetCopilotManager(copilotMgr)
+	}
 	if shutdown, terr := telemetry.Setup(context.Background(), "gitdash", version); terr != nil {
 		logx.Warnf("telemetry setup: %v", terr)
 	} else {

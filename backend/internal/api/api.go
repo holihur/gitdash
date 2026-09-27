@@ -716,13 +716,17 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/runner/ws", a.runnerWS)
 
 	// copilot（BYOK AI copilot 会话，嵌入式 agent + 双向聊天 + 自动提交推送闭环）
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots", a.auth(a.listCopilots))
-	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots", a.auth(a.createCopilot))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.getCopilot))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}/messages", a.auth(a.copilotMessages))
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}/chat", a.auth(a.copilotChat))
-	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots/{id}/stop", a.auth(a.stopCopilot))
-	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.deleteCopilot))
+	// 默认关闭：agent 在宿主直接执行 shell 命令，开启即有 RCE 风险，需显式
+	// GITDASH_COPILOT=1。关闭时不注册任何 copilot 路由（404）。
+	if copilot.Enabled() {
+		mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots", a.auth(a.listCopilots))
+		mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots", a.auth(a.createCopilot))
+		mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.getCopilot))
+		mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}/messages", a.auth(a.copilotMessages))
+		mux.HandleFunc("GET /api/users/{owner}/repos/{name}/copilots/{id}/chat", a.auth(a.copilotChat))
+		mux.HandleFunc("POST /api/users/{owner}/repos/{name}/copilots/{id}/stop", a.auth(a.stopCopilot))
+		mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/copilots/{id}", a.auth(a.deleteCopilot))
+	}
 
 	// ssh keys
 	mux.HandleFunc("GET /api/keys", a.auth(a.listKeys))

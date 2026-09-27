@@ -18,7 +18,12 @@ import (
 )
 
 // SetCopilotManager 注入 copilot 编排器（main 启动时注入）。
-func (a *API) SetCopilotManager(m *copilot.Manager) { a.copilotMgr = m }
+func (a *API) SetCopilotManager(m *copilot.Manager) {
+	if !copilot.Enabled() {
+		return
+	}
+	a.copilotMgr = m
+}
 
 // CopilotPullOpened 是 copilot 自动开 PR 后的回调：向仓库关注者推送通知。
 func (a *API) CopilotPullOpened(session store.CopilotSession, pr store.PullRequest) {
