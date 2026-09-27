@@ -10,7 +10,17 @@ import ConfirmDialog from "@/components/confirm-dialog";
 import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 
-export function AuthorizedSection({ to, locale }: { to: (k: string) => string | undefined; locale: string }) {
+type Translator = (key: string, vars?: Record<string, string | number>) => string;
+
+export function AuthorizedSection({
+  t,
+  to,
+  locale,
+}: {
+  t: Translator;
+  to: (k: string, vars?: Record<string, string | number>) => string | undefined;
+  locale: string;
+}) {
   const [auths, setAuths] = useState<OAuthAuthorization[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingRevoke, setPendingRevoke] = useState<OAuthAuthorization | null>(null);
@@ -34,7 +44,7 @@ export function AuthorizedSection({ to, locale }: { to: (k: string) => string | 
     setPendingRevoke(null);
     try {
       await api.revokeAuthorization(auth.id);
-      toast.success(`Revoked access for "${auth.app_name}"`);
+      toast.success(t("oauthApps.revoked", { name: auth.app_name }));
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -54,10 +64,8 @@ export function AuthorizedSection({ to, locale }: { to: (k: string) => string | 
     return (
       <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 px-4 text-center">
         <KeyRound className="h-10 w-10 text-muted-foreground" />
-        <p className="font-medium">No authorized applications</p>
-        <p className="text-sm text-muted-foreground">
-          Applications you authorize will appear here so you can revoke access at any time.
-        </p>
+        <p className="font-medium">{t("oauthApps.authorizedEmpty")}</p>
+        <p className="text-sm text-muted-foreground">{t("oauthApps.authorizedEmptyHint")}</p>
       </div>
     );
   }
@@ -67,10 +75,10 @@ export function AuthorizedSection({ to, locale }: { to: (k: string) => string | 
         <Table className="min-w-[680px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Application</TableHead>
-              <TableHead>Scopes</TableHead>
-              <TableHead>Authorized</TableHead>
-              <TableHead>Last used</TableHead>
+              <TableHead>{t("oauthApps.application")}</TableHead>
+              <TableHead>{t("oauthApps.scopes")}</TableHead>
+              <TableHead>{t("oauthApps.authorized")}</TableHead>
+              <TableHead>{t("oauthApps.lastUsed")}</TableHead>
               <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
@@ -99,7 +107,7 @@ export function AuthorizedSection({ to, locale }: { to: (k: string) => string | 
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="sm" onClick={() => setPendingRevoke(auth)}>
-                    Revoke
+                    {t("oauthApps.revoke")}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -110,12 +118,11 @@ export function AuthorizedSection({ to, locale }: { to: (k: string) => string | 
       <ConfirmDialog
         open={pendingRevoke !== null}
         onOpenChange={(o) => !o && setPendingRevoke(null)}
-        title="Revoke access?"
-        description={`The access token issued to "${pendingRevoke?.app_name ?? ""}" will stop working immediately.`}
-        confirmText="Revoke"
+        title={t("oauthApps.revokeTitle")}
+        description={t("oauthApps.revokeConfirm", { name: pendingRevoke?.app_name ?? "" })}
+        confirmText={t("oauthApps.revoke")}
         onConfirm={() => pendingRevoke && revoke(pendingRevoke)}
       />
     </div>
   );
 }
-

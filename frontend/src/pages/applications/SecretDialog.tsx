@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useI18n } from "@/lib/i18n";
 import { copyText } from "@/lib/utils";
 
 export function SecretDialog({
@@ -24,6 +25,7 @@ export function SecretDialog({
   description: string;
   secret: string;
 }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await copyText(secret);
@@ -39,12 +41,12 @@ export function SecretDialog({
         </DialogHeader>
         <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-3">
           <code className="min-w-0 flex-1 break-all font-mono text-xs">{secret}</code>
-          <Button variant="outline" size="icon" onClick={copy} title="Copy">
+          <Button variant="outline" size="icon" onClick={copy} title={t("common.copy")}>
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
         </div>
         <DialogFooter>
-          <Button onClick={() => onOpenChange(false)}>Done</Button>
+          <Button onClick={() => onOpenChange(false)}>{t("common.done")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -240,7 +240,7 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
       },
       { key: "runners", to: "/runners", icon: <Cpu className="h-4 w-4" />, label: t("nav.runners") },
       { key: "keys", to: "/keys", icon: <KeyRound className="h-4 w-4" />, label: t("nav.keys") },
-      { key: "applications", to: "/applications", icon: <AppWindow className="h-4 w-4" />, label: "OAuth Apps" },
+      { key: "applications", to: "/applications", icon: <AppWindow className="h-4 w-4" />, label: t("nav.applications") },
       { key: "packages", to: "/packages", icon: <Package className="h-4 w-4" />, label: t("nav.packages") },
     ],
     [t, unread],

@@ -24,3 +24,12 @@ other = "Repositório de código"
 
 [language]
 other = "Idioma"
+
+[menu]
+other = "Menu"
+
+[search]
+other = "Pesquisar"
+
+[searchClose]
+other = "Fechar pesquisa"

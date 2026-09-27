@@ -24,3 +24,12 @@ other = "소스 저장소"
 
 [language]
 other = "언어"
+
+[menu]
+other = "메뉴"
+
+[search]
+other = "검색"
+
+[searchClose]
+other = "검색 닫기"

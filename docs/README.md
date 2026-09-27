@@ -15,7 +15,8 @@ from the site root; other languages live under their language prefix.
 | 中文 (`zh-cn`) | `/gitdash/zh-cn/` | `content/zh-cn/` (complete) |
 | 日本語 / 한국어 / Français / Deutsch / Русский / Español / Português | `/gitdash/<lang>/` | falls back to `content/en/` until translated |
 
-- UI strings live in `i18n/<lang>.toml` (missing keys fall back to English).
+- UI strings live in `i18n/<lang>.toml`; every language defines the same keys
+  (a missing key still falls back to English).
 - The header language selector links to the current page's translation, or to
   that language's home page if no translation exists.
 - `hreflang` alternates are emitted automatically for SEO.
@@ -52,6 +53,7 @@ npx --yes pagefind@1.3.0 --site docs/public
 
 > The header search button loads Pagefind lazily, so a plain `hugo server`
 > preview works without the index (search simply reports that it isn't built).
+> `static/js/search.js` localizes the Pagefind UI from `<html lang>`.
 
 ## Build
 

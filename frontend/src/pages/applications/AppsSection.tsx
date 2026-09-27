@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
@@ -21,7 +22,30 @@ import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
 import { SecretDialog } from "./SecretDialog";
 
-export function AppsSection({ to, locale }: { to: (k: string) => string | undefined; locale: string }) {
+type Translator = (key: string, vars?: Record<string, string | number>) => string;
+
+const REDIRECT_URI = "redirect_uri";
+
+/** 把译文里的 redirect_uri 拆出来包进 <code>，其余部分原样输出。 */
+function withCodeToken(text: string): ReactNode[] {
+  const at = text.indexOf(REDIRECT_URI);
+  if (at < 0) return [text];
+  return [
+    text.slice(0, at),
+    <code key={REDIRECT_URI}>{REDIRECT_URI}</code>,
+    text.slice(at + REDIRECT_URI.length),
+  ];
+}
+
+export function AppsSection({
+  t,
+  to,
+  locale,
+}: {
+  t: Translator;
+  to: (k: string, vars?: Record<string, string | number>) => string | undefined;
+  locale: string;
+}) {
   const [apps, setApps] = useState<OAuthApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -85,7 +109,7 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
     setPendingDelete(null);
     try {
       await api.deleteApp(app.id);
-      toast.success(`Deleted "${app.name}"`);
+      toast.success(t("oauthApps.deleted", { name: app.name }));
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -95,36 +119,33 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          The client secret is only shown once at creation; reset it if it is lost.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("oauthApps.secretHint")}</p>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2 sm:self-start">
               <Plus className="h-4 w-4" />
-              New OAuth App
+              {t("oauthApps.create")}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle>Register a new OAuth application</DialogTitle>
+              <DialogTitle>{t("oauthApps.createTitle")}</DialogTitle>
               <DialogDescription>
-                Callback URL must exactly match the <code>redirect_uri</code> used in the
-                authorization request.
+                {withCodeToken(t("oauthApps.createHint", { uri: REDIRECT_URI }))}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="app-name">Application name</Label>
+                <Label htmlFor="app-name">{t("oauthApps.nameLabel")}</Label>
                 <Input
                   id="app-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="My App"
+                  placeholder={t("oauthApps.namePlaceholder")}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="app-home">Homepage URL</Label>
+                <Label htmlFor="app-home">{t("oauthApps.homepageLabel")}</Label>
                 <Input
                   id="app-home"
                   value={homepage}
@@ -133,7 +154,7 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="app-desc">Description (optional)</Label>
+                <Label htmlFor="app-desc">{t("oauthApps.descriptionLabel")}</Label>
                 <Input
                   id="app-desc"
                   value={description}
@@ -141,7 +162,7 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="app-cb">Callback URL</Label>
+                <Label htmlFor="app-cb">{t("oauthApps.callbackLabel")}</Label>
                 <Input
                   id="app-cb"
                   value={callbackUrl}
@@ -155,7 +176,7 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
                 onClick={create}
                 disabled={busy || !name.trim() || !callbackUrl.trim()}
               >
-                Register application
+                {t("oauthApps.register")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -171,20 +192,18 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
       ) : apps.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-16 px-4 text-center">
           <KeyRound className="h-10 w-10 text-muted-foreground" />
-          <p className="font-medium">No OAuth applications yet</p>
-          <p className="text-sm text-muted-foreground">
-            Register an application to get a client ID and secret.
-          </p>
+          <p className="font-medium">{t("oauthApps.empty")}</p>
+          <p className="text-sm text-muted-foreground">{t("oauthApps.emptyHint")}</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <Table className="min-w-[680px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Client ID</TableHead>
-                <TableHead>Callback URL</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>{t("oauthApps.name")}</TableHead>
+                <TableHead>{t("oauthApps.clientId")}</TableHead>
+                <TableHead>{t("oauthApps.callbackUrl")}</TableHead>
+                <TableHead>{t("oauthApps.created")}</TableHead>
                 <TableHead className="w-40" />
               </TableRow>
             </TableHeader>
@@ -202,11 +221,12 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" onClick={() => reset(app)}>
-                        Reset secret
+                        {t("oauthApps.resetSecret")}
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={t("common.delete")}
                         onClick={() => setPendingDelete(app)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -226,20 +246,19 @@ export function AppsSection({ to, locale }: { to: (k: string) => string | undefi
           setCreated(null);
           setResetSecret(null);
         }}
-        title="Client secret"
-        description="Copy this secret now. You will not be able to see it again."
+        title={t("oauthApps.secretTitle")}
+        description={t("oauthApps.secretBody")}
         secret={created?.client_secret ?? resetSecret?.secret ?? ""}
       />
 
       <ConfirmDialog
         open={pendingDelete !== null}
         onOpenChange={(o) => !o && setPendingDelete(null)}
-        title="Delete OAuth application?"
-        description={`This permanently deletes "${pendingDelete?.name ?? ""}" and revokes all tokens issued to it.`}
-        confirmText="Delete"
+        title={t("oauthApps.deleteTitle")}
+        description={t("oauthApps.deleteConfirm", { name: pendingDelete?.name ?? "" })}
+        confirmText={t("common.delete")}
         onConfirm={() => pendingDelete && remove(pendingDelete)}
       />
     </div>
   );
 }
-

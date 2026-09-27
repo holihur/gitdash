@@ -24,3 +24,12 @@ other = "Repositorio fuente"
 
 [language]
 other = "Idioma"
+
+[menu]
+other = "Menú"
+
+[search]
+other = "Buscar"
+
+[searchClose]
+other = "Cerrar búsqueda"

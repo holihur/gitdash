@@ -24,3 +24,12 @@ other = "Dépôt source"
 
 [language]
 other = "Langue"
+
+[menu]
+other = "Menu"
+
+[search]
+other = "Rechercher"
+
+[searchClose]
+other = "Fermer la recherche"

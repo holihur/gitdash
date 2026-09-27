@@ -24,3 +24,12 @@ other = "Исходный репозиторий"
 
 [language]
 other = "Язык"
+
+[menu]
+other = "Меню"
+
+[search]
+other = "Поиск"
+
+[searchClose]
+other = "Закрыть поиск"

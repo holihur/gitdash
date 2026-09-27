@@ -24,3 +24,12 @@ other = "Quell-Repository"
 
 [language]
 other = "Sprache"
+
+[menu]
+other = "Menü"
+
+[search]
+other = "Suchen"
+
+[searchClose]
+other = "Suche schließen"

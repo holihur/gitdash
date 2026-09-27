@@ -335,9 +335,9 @@ func (a *API) SetSSHPort(addr string) {
 //	@Router      /instance [get]
 func (a *API) instance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"version":         a.publicVersion(),
-		"ssh_port":        a.sshPort,
-		"docs_url":        a.docsURL(),
+		"version":                   a.publicVersion(),
+		"ssh_port":                  a.sshPort,
+		"docs_url":                  a.docsURL(),
 		"copilot_enabled":           copilot.Enabled(),
 		"pipeline_executor_enabled": pipelineExecutorEnabled(),
 	})

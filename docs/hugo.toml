@@ -46,29 +46,57 @@ summaryLength = 30
       docsLabel = "文档"
   [languages.ja]
     languageName = "日本語"
+    languageCode = "ja"
     weight = 3
     contentDir = "content/en"
+    [languages.ja.params]
+      description = "Gitdash のドキュメント。モジュールと機能別に構成。"
+      docsLabel = "ドキュメント"
   [languages.ko]
     languageName = "한국어"
+    languageCode = "ko"
     weight = 4
     contentDir = "content/en"
+    [languages.ko.params]
+      description = "Gitdash 문서 · 모듈과 기능별로 구성."
+      docsLabel = "문서"
   [languages.fr]
     languageName = "Français"
+    languageCode = "fr"
     weight = 5
     contentDir = "content/en"
+    [languages.fr.params]
+      description = "Documentation Gitdash, organisée par module et fonctionnalité."
+      docsLabel = "Docs"
   [languages.de]
     languageName = "Deutsch"
+    languageCode = "de"
     weight = 6
     contentDir = "content/en"
+    [languages.de.params]
+      description = "Gitdash-Dokumentation, nach Modul und Funktion gegliedert."
+      docsLabel = "Doku"
   [languages.ru]
     languageName = "Русский"
+    languageCode = "ru"
     weight = 7
     contentDir = "content/en"
+    [languages.ru.params]
+      description = "Документация Gitdash, организованная по модулям и функциям."
+      docsLabel = "Документация"
   [languages.es]
     languageName = "Español"
+    languageCode = "es"
     weight = 8
     contentDir = "content/en"
+    [languages.es.params]
+      description = "Documentación de Gitdash, organizada por módulo y función."
+      docsLabel = "Documentación"
   [languages.pt]
     languageName = "Português"
+    languageCode = "pt-BR"
     weight = 9
     contentDir = "content/en"
+    [languages.pt.params]
+      description = "Documentação do Gitdash, organizada por módulo e recurso."
+      docsLabel = "Documentação"

@@ -30,22 +30,24 @@ function flatten(obj: Record<string, unknown>, prefix = ""): Record<string, stri
 
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join(",");
 
-// i18n 只维护 zh-CN（完整）与 en；其余语言可只提供部分翻译，缺失 key 运行时回退英文。
-const COMPLETE_LOCALES: Record<string, Record<string, unknown>> = { "zh-CN": zhCN };
-const PARTIAL_LOCALES: Record<string, Record<string, unknown>> = { ja, ko, fr, de, ru, es, pt };
-const ALL_LOCALES = { ...COMPLETE_LOCALES, ...PARTIAL_LOCALES };
+// 所有语言都必须与 en 的 key 完全对齐：类型上已由 Messages 约束，这里再兜一层运行时校验，
+// 避免有人把某个语言改回 DeepPartial 后静默回退英文。
+const ALL_LOCALES: Record<string, Record<string, unknown>> = {
+  "zh-CN": zhCN,
+  ja,
+  ko,
+  fr,
+  de,
+  ru,
+  es,
+  pt,
+};
 
 describe("locales", () => {
-  it("中文与英文 key 完全对齐", () => {
-    expect(leafPaths(zhCN).sort()).toEqual(leafPaths(en).sort());
-  });
-
-  it("其余语言只允许 en 的子集（缺失 key 运行时回退英文）", () => {
-    const enKeys = new Set(leafPaths(en));
-    for (const [name, messages] of Object.entries(PARTIAL_LOCALES)) {
-      for (const key of leafPaths(messages)) {
-        expect(enKeys.has(key), `${name} 含未知 key ${key}`).toBe(true);
-      }
+  it("所有语言与英文 key 完全对齐", () => {
+    const enKeys = leafPaths(en).sort();
+    for (const [name, messages] of Object.entries(ALL_LOCALES)) {
+      expect(leafPaths(messages).sort(), `${name} 的 key 集合与 en 不一致`).toEqual(enKeys);
     }
   });
 
@@ -59,9 +61,9 @@ describe("locales", () => {
     }
   });
 
-  it("已翻译 key 的占位符与 en 保持一致", () => {
+  it("占位符与 en 保持一致", () => {
     const enFlat = flatten(en);
-    for (const [name, messages] of Object.entries({ "zh-CN": zhCN, ...PARTIAL_LOCALES })) {
+    for (const [name, messages] of Object.entries(ALL_LOCALES)) {
       for (const [key, value] of Object.entries(flatten(messages))) {
         expect(placeholders(value), `${name}:${key} placeholders`).toBe(
           placeholders(enFlat[key] ?? ""),

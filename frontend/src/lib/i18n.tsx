@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { en, type DeepPartial, type Messages } from "@/locales/en";
+import { en, type Messages } from "@/locales/en";
 
 export type Lang =
   | "en"
@@ -50,7 +50,8 @@ export function dateLocale(lang: Lang): string {
   return DATE_LOCALES[lang] ?? "en-US";
 }
 
-type Msg = Messages | DeepPartial<Messages>;
+// 所有语言包都是完整的 Messages（key 与 en 一一对应，由类型系统保证）。
+type Msg = Messages;
 
 // 语言包按需加载：只有 en 静态打包（作为缺失 key 的兜底），其余语言在切换/启动时
 // 才下载对应 chunk。此前 9 种语言全部静态打包进首屏公共 chunk（约 500KB 源码），

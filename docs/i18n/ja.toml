@@ -24,3 +24,12 @@ other = "ソースリポジトリ"
 
 [language]
 other = "言語"
+
+[menu]
+other = "メニュー"
+
+[search]
+other = "検索"
+
+[searchClose]
+other = "検索を閉じる"
