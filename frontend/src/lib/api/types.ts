@@ -73,6 +73,54 @@ export interface MFAEnroll {
   otpauth_url: string;
 }
 
+/** 已注册的 passkey（WebAuthn 凭据）。 */
+export interface Passkey {
+  id: number;
+  name: string;
+  credential_id: string;
+  created_at: string;
+  last_used_at?: string;
+  transports?: string[];
+  backup_eligible?: boolean;
+  backup_state?: boolean;
+}
+
+/** WebAuthn begin 阶段的响应：一次性 session 与要交给浏览器的选项。 */
+export interface PasskeyBegin<TOptions> {
+  session_id: string;
+  public_key: TOptions;
+  name?: string;
+}
+
+/** 服务端返回的注册选项（base64url 字符串，前端需转成 ArrayBuffer）。 */
+export interface PasskeyCreationOptionsJSON {
+  publicKey: {
+    challenge: string;
+    rp: { id: string; name: string };
+    user: { id: string; name: string; displayName: string };
+    pubKeyCredParams: { type: "public-key"; alg: number }[];
+    timeout?: number;
+    attestation?: string;
+    authenticatorSelection?: Record<string, unknown>;
+    excludeCredentials?: { id: string; type: string; transports?: string[] }[];
+    extensions?: Record<string, unknown>;
+  };
+  mediation?: string;
+}
+
+/** 服务端返回的登录选项（base64url 字符串，前端需转成 ArrayBuffer）。 */
+export interface PasskeyRequestOptionsJSON {
+  publicKey: {
+    challenge: string;
+    rpId?: string;
+    timeout?: number;
+    userVerification?: string;
+    allowCredentials?: { id: string; type: string; transports?: string[] }[];
+    extensions?: Record<string, unknown>;
+  };
+  mediation?: string;
+}
+
 export interface RepoPages {
   enabled: boolean;
   branch: string;

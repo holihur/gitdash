@@ -93,7 +93,7 @@ func (s *Store) DeleteUserAccount(username string) error {
 		}
 
 		// --- 按 user_id 关联的归属数据 ---
-		for _, m := range []any{&sessionRow{}, &sshKeyRow{}, &gpgKeyRow{}, &patRow{}, &userOAuthRow{}} {
+		for _, m := range []any{&sessionRow{}, &webauthnCredentialRow{}, &sshKeyRow{}, &gpgKeyRow{}, &patRow{}, &userOAuthRow{}} {
 			if err := tx.Where("user_id = ?", u.ID).Delete(m).Error; err != nil {
 				return err
 			}

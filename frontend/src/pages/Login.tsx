@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { GitBranch, Github, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { GitBranch, Github, Fingerprint, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
+import { getPasskeyAssertion, passkeySupported } from "@/lib/webauthn";
 import { useDocsUrl } from "@/lib/docs";
 import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -43,6 +44,7 @@ export default function Login({ onAuthed }: Props) {
   const [githubEnabled, setGithubEnabled] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const [oidc, setOidc] = useState<{ enabled: boolean; name: string }>({ enabled: false, name: "OIDC" });
+  const [passkeyEnabled, setPasskeyEnabled] = useState(false);
   const [version, setVersion] = useState("");
   const [providersError, setProvidersError] = useState(false);
   // 管理端可关闭的登录方式（缺省开启，兼容旧服务端）
@@ -58,6 +60,7 @@ export default function Login({ onAuthed }: Props) {
         setGithubEnabled(Boolean(d?.github?.enabled));
         setGoogleEnabled(Boolean(d?.google?.enabled));
         setOidc({ enabled: Boolean(d?.oidc?.enabled), name: d?.oidc?.name || "OIDC" });
+        setPasskeyEnabled(Boolean(d?.passkey?.enabled));
         setResetEnabled(Boolean(d?.password_reset?.enabled));
         setPasswordEnabled(d?.password?.enabled !== false);
         setRegisterEnabled(d?.register?.enabled !== false);
@@ -122,6 +125,28 @@ export default function Login({ onAuthed }: Props) {
       finish(r);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitPasskey = async () => {
+    if (!passkeySupported()) {
+      toast.error(t("login.passkeyUnsupported"));
+      return;
+    }
+    setBusy(true);
+    try {
+      const begin = await api.passkeyLoginBegin(username.trim() || undefined);
+      const credential = await getPasskeyAssertion(begin);
+      const r = await api.passkeyLoginFinish(begin.session_id, credential);
+      finish(r);
+    } catch (e) {
+      if ((e as { name?: string })?.name === "NotAllowedError") {
+        toast.message(t("login.passkeyCancelled"));
+      } else {
+        toast.error(apiErrorMsg(to, e));
+      }
     } finally {
       setBusy(false);
     }
@@ -474,8 +499,19 @@ export default function Login({ onAuthed }: Props) {
                 </a>
               </p>
             )}
-            {(githubEnabled || googleEnabled || oidc.enabled || providersError) && (
+            {(passkeyEnabled || githubEnabled || googleEnabled || oidc.enabled || providersError) && (
               <div className="mt-3 space-y-2">
+                {passkeyEnabled && (
+                  <button
+                    type="button"
+                    onClick={submitPasskey}
+                    disabled={busy}
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-input py-2 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-50"
+                  >
+                    <Fingerprint className="h-4 w-4" />
+                    {t("login.signInWithPasskey")}
+                  </button>
+                )}
                 {githubEnabled && (
                   <a
                     href="/api/auth/github"

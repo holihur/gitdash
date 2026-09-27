@@ -27,6 +27,20 @@ type userRow struct {
 
 func (userRow) TableName() string { return "users" }
 
+// webauthnCredentialRow 是 FIDO2/passkey 凭据记录。CredentialID 为 base64url(rawID)，
+// 全局唯一；Data 为序列化后的 webauthn.Credential（store 层按不透明 JSON 存取）。
+type webauthnCredentialRow struct {
+	ID           int64  `gorm:"primaryKey;autoIncrement"`
+	UserID       int64  `gorm:"not null;index"`
+	CredentialID string `gorm:"not null;uniqueIndex;size:512"`
+	Name         string `gorm:"not null;default:'';size:255"`
+	Data         string `gorm:"not null;default:''"`
+	CreatedAt    string `gorm:"not null"`
+	LastUsedAt   string `gorm:"not null;default:''"`
+}
+
+func (webauthnCredentialRow) TableName() string { return "webauthn_credentials" }
+
 type sessionRow struct {
 	Token     string `gorm:"primaryKey;size:255"`
 	UserID    int64  `gorm:"not null;index"`

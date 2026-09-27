@@ -384,6 +384,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/auth/reset-password", a.resetPassword)
 	mux.HandleFunc("POST /api/auth/mfa-verify", a.mfaVerify)
 	mux.HandleFunc("POST /api/auth/mfa-email/resend", a.mfaEmailResend)
+	// passkey（WebAuthn / FIDO2）登录（公开）
+	mux.HandleFunc("POST /api/auth/passkey/begin", a.passkeyLoginBegin)
+	mux.HandleFunc("POST /api/auth/passkey/finish", a.passkeyLoginFinish)
 	mux.HandleFunc("POST /api/auth/logout", a.auth(a.logout))
 	mux.HandleFunc("GET /api/me", a.auth(a.me))
 	mux.HandleFunc("GET /api/me/export", a.auth(a.exportMe))
@@ -400,6 +403,11 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("POST /api/me/mfa/email/enroll", a.auth(a.mfaEmailEnroll))
 	mux.HandleFunc("POST /api/me/mfa/email/activate", a.auth(a.mfaEmailActivate))
 	mux.HandleFunc("POST /api/me/mfa/email/send", a.auth(a.mfaEmailSend))
+	// passkey（WebAuthn / FIDO2）凭据管理
+	mux.HandleFunc("GET /api/me/passkeys", a.auth(a.listPasskeys))
+	mux.HandleFunc("POST /api/me/passkeys/register/begin", a.auth(a.passkeyRegisterBegin))
+	mux.HandleFunc("POST /api/me/passkeys/register/finish", a.auth(a.passkeyRegisterFinish))
+	mux.HandleFunc("DELETE /api/me/passkeys/{id}", a.auth(a.deletePasskey))
 
 	// byok（bring your own key：用户自带 LLM 密钥）
 	mux.HandleFunc("GET /api/me/byok", a.auth(a.listByok))

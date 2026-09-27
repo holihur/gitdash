@@ -387,6 +387,11 @@ func run() {
 			} else if n > 0 {
 				logx.Infof("mfa-challenge cleanup: removed %d expired challenges", n)
 			}
+			if n, err := st.PruneWebAuthnSessions(time.Now().UTC().Format(time.RFC3339)); err != nil {
+				logx.Infof("webauthn-session cleanup: %v", err)
+			} else if n > 0 {
+				logx.Infof("webauthn-session cleanup: removed %d expired sessions", n)
+			}
 			if n, err := st.PruneSessions(); err != nil {
 				logx.Infof("session cleanup: %v", err)
 			} else if n > 0 {

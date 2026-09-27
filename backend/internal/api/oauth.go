@@ -82,6 +82,8 @@ func (a *API) providers(w http.ResponseWriter, r *http.Request) {
 		"password":       map[string]any{"enabled": passwordOn},
 		"register":       map[string]any{"enabled": passwordOn && !a.registrationDisabledByAdmin()},
 		"password_reset": map[string]any{"enabled": passwordOn && a.emailReady()},
+		// passkey（WebAuthn）可用性：始终启用（RP 配置按请求推导或由环境变量固定）。
+		"passkey": map[string]any{"enabled": true},
 		// Swagger/OpenAPI 是否对匿名开放（管理端可关闭）。
 		"swagger": map[string]any{"enabled": a.swaggerEnabled()},
 	}

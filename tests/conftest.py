@@ -150,6 +150,8 @@ def _spawn_server(binary: Path, tmpdir: Path, extra_env: dict | None = None, reg
             "GITDASH_MAIL_INBOUND_SECRET", "test-mail-inbound-secret"
         ),
         GITDASH_MAIL_REPLY_DOMAIN=os.environ.get("GITDASH_MAIL_REPLY_DOMAIN", "gitdash.test"),
+        # WebAuthn/Passkey：黑盒实例跑在 IP 上，RPID 需为域名（库拒绝 IP）
+        GITDASH_WEBAUTHN_RPID=os.environ.get("GITDASH_WEBAUTHN_RPID", "localhost"),
     )
     # SMTP 透传：允许 email MFA / 邮箱验证黑盒测试注入本地 SMTP sink
     for var in ("GITDASH_SMTP_HOST", "GITDASH_SMTP_PORT", "GITDASH_SMTP_USER", "GITDASH_SMTP_PASS", "GITDASH_SMTP_FROM"):

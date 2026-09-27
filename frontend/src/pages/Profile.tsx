@@ -12,6 +12,7 @@ import { CoverSection } from "./profile/CoverSection";
 import { ByokSection } from "./profile/ByokSection";
 import { PasswordSection } from "./profile/PasswordSection";
 import { MFASection } from "./profile/MFASection";
+import { PasskeySection } from "./profile/PasskeySection";
 import { GPGKeySection } from "./profile/GPGKeySection";
 import { ConnectionsSection } from "./profile/ConnectionsSection";
 import { RunnersSection } from "./profile/RunnersSection";
@@ -66,6 +67,7 @@ export default function ProfilePage() {
       <ByokSection />
       <PasswordSection />
       <MFASection mfaEnabled={profile.mfa_enabled} onChanged={loadProfile} />
+      <PasskeySection />
       <GPGKeySection />
       <ConnectionsSection />
       <RunnersSection />

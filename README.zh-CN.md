@@ -18,6 +18,7 @@ English | 简体中文
 - **账号绑定与批量导入**：通过 OAuth 绑定 GitHub、GitLab、Gitea/Forgejo、Bitbucket 账号，在导入弹窗中勾选并批量导入仓库
 - **Webhook**：仓库级出站 webhook，支持按事件类型订阅（push / issue / PR / 评论 / 分支标签 / Release / 流水线 / fork / star / watch），HMAC 签名推送，经任务队列异步派发并按退避重试；另提供**入站 webhook** token，外部系统可凭其创建 issue
 - **GPG Key**：上传 GPG 公钥验证提交签名
+- **Passkey（WebAuthn）**：在 **个人资料 → Passkey** 中注册 FIDO2 / 平台认证器（Touch ID、Windows Hello、安全密钥、密码管理器）并免密码登录；非标准域名/反代场景可配置 `GITDASH_WEBAUTHN_RPID` / `GITDASH_WEBAUTHN_ORIGINS`
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)
 - **CLI（`gitdash-cli`）**：`gh`/`glab` 风格命令行客户端（仓库 / issue / PR / copilot），支持 PAT 或 OAuth 2.0 设备流登录，见 [CLI](#cli-gitdash-cli)
@@ -210,6 +211,9 @@ go run .
 | `GITDASH_MAIL_INBOUND_SECRET` | `GITDASH_MAIL_SECRET` | `POST /api/mail/inbound` 要求的共享密钥 |
 | `GITDASH_TRUSTED_PROXIES` | 空（仅回环） | 信任 `X-Forwarded-For` 的反代 IP/CIDR 列表（逗号分隔）。反代**必须重写/剥离**外部传入的 `X-Forwarded-For`（而非追加客户端头部），否则客户端可伪造最左 IP，绕过 PAT IP 白名单 / 登录限流 |
 | `GITDASH_SECURE_COOKIES` | 关闭 | 反代终止 TLS 时设为 `1`，让会话/管理 cookie 带 `Secure` |
+| `GITDASH_WEBAUTHN_RPID` | 请求 Host | Passkey 的 Relying Party ID；反代或非标准域名下需显式设置（必须是域名，不能是 IP） |
+| `GITDASH_WEBAUTHN_ORIGINS` | 请求 origin | 允许的 WebAuthn origin，逗号分隔（如 `https://git.example.com`） |
+| `GITDASH_WEBAUTHN_RP_NAME` | `gitdash` | Passkey 弹窗中展示的 Relying Party 名称 |
 | `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | 空 | 内置 HTTPS 证书/私钥路径 |
 | `GITDASH_ACME_DOMAINS` | 空 | 逗号分隔域名；设置后用 ACME 自动申请证书（另见 `GITDASH_ACME_EMAIL`） |
 | `GITDASH_PIPELINE_VOLUMES_DIR` | 空（禁止） | CI 允许挂载的宿主目录；未设置则禁止流水线挂载宿主卷 |
@@ -379,6 +383,8 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | --- | --- | --- |
 | POST | `/api/auth/register` | 注册，返回会话 token |
 | POST | `/api/auth/login` | 登录，返回会话 token |
+| POST | `/api/auth/passkey/begin` | 开始 Passkey（WebAuthn）登录，返回挑战与 session id |
+| POST | `/api/auth/passkey/finish` | 完成 Passkey 登录，返回会话 token |
 | POST | `/api/auth/logout` | 登出（作废当前 token） |
 | GET | `/api/me` | 当前用户 |
 | DELETE | `/api/me` | 注销账号（校验密码/MFA 后彻底删除全部数据） |
@@ -397,6 +403,10 @@ task test:ui                              # 构建带内嵌前端的二进制并
 | POST | `/api/users/{owner}/repos/{name}/commits` | 创建提交（批量文件变更） |
 | POST | `/api/users/{owner}/repos/{name}/commits/{sha}/revert` | 撤销提交（在指定分支生成反向提交） |
 | GET/POST | `/api/keys` | 列出 / 添加 SSH 公钥（绑定当前用户） |
+| GET | `/api/me/passkeys` | 列出自己已注册的 Passkey |
+| POST | `/api/me/passkeys/register/begin` | 开始注册 Passkey（返回挑战与会话 id） |
+| POST | `/api/me/passkeys/register/finish` | 完成 Passkey 注册 |
+| DELETE | `/api/me/passkeys/{id}` | 删除自己的某个 Passkey |
 | DELETE | `/api/keys/{id}` | 删除自己的公钥 |
 
 仓库社交 / 收件箱（watch → 订阅仓库动态到收件箱）：

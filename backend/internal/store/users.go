@@ -29,6 +29,16 @@ func (s *Store) GetByUsername(username string) (UserAuth, error) {
 	return UserAuth(row), nil
 }
 
+// GetByID 按主键 ID 查找用户；不存在返回 ErrNotFound。
+// 用于 WebAuthn discoverable 登录：user handle 编码了稳定的用户 ID。
+func (s *Store) GetByID(id int64) (UserAuth, error) {
+	var row userRow
+	if err := s.db.Where("id = ?", id).First(&row).Error; err != nil {
+		return UserAuth{}, notFoundErr(err)
+	}
+	return UserAuth(row), nil
+}
+
 // GetByEmail 按邮箱（大小写不敏感）查找用户；不存在返回 ErrNotFound。
 // 用于 patch-by-email：把入站邮件发件人映射为仓库有写权限的用户。
 func (s *Store) GetByEmail(email string) (UserAuth, error) {

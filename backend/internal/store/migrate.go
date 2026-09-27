@@ -19,6 +19,7 @@ func (s *Store) migrate() error {
 	if err := s.db.AutoMigrate(
 		&userRow{},
 		&sessionRow{},
+		&webauthnCredentialRow{},
 		&repoRow{},
 		&repoCounterRow{},
 		&repoTopicRow{},

@@ -1,5 +1,14 @@
 import { req, sendForm } from "./core";
-import type { LoginResult, MFAEnroll, MFAStatus, User } from "./types";
+import type {
+  LoginResult,
+  MFAEnroll,
+  MFAStatus,
+  Passkey,
+  PasskeyBegin,
+  PasskeyCreationOptionsJSON,
+  PasskeyRequestOptionsJSON,
+  User,
+} from "./types";
 
 export const authApi = {
   // auth
@@ -48,6 +57,8 @@ export const authApi = {
       /** 匿名 Swagger/OpenAPI 开关（缺省视为开启）。 */
       swagger?: { enabled?: boolean };
       password_reset?: { enabled?: boolean };
+      /** passkey（WebAuthn）登录开关（缺省视为关闭，兼容旧服务端）。 */
+      passkey?: { enabled?: boolean };
     }>("/auth/providers"),
   version: () => req<{ version: string }>("/version"),
   verifyEmail: (token: string) =>
@@ -108,4 +119,29 @@ export const authApi = {
   mfaEmailActivate: (code: string) =>
     req<null>("/me/mfa/email/activate", { method: "POST", body: JSON.stringify({ code }) }),
   mfaEmailSend: () => req<null>("/me/mfa/email/send", { method: "POST" }),
+
+  // passkey（WebAuthn / FIDO2）
+  passkeyList: () => req<{ passkeys: Passkey[] }>("/me/passkeys"),
+  passkeyRegisterBegin: (name?: string) =>
+    req<PasskeyBegin<PasskeyCreationOptionsJSON>>("/me/passkeys/register/begin", {
+      method: "POST",
+      body: JSON.stringify({ name: name ?? "" }),
+    }),
+  passkeyRegisterFinish: (sessionId: string, name: string, credential: unknown) =>
+    req<Passkey>("/me/passkeys/register/finish", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, name, credential }),
+    }),
+  passkeyDelete: (id: number) =>
+    req<null>(`/me/passkeys/${id}`, { method: "DELETE" }),
+  passkeyLoginBegin: (username?: string) =>
+    req<PasskeyBegin<PasskeyRequestOptionsJSON>>("/auth/passkey/begin", {
+      method: "POST",
+      body: JSON.stringify({ username: username ?? "" }),
+    }),
+  passkeyLoginFinish: (sessionId: string, credential: unknown) =>
+    req<LoginResult>("/auth/passkey/finish", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, credential }),
+    }),
 };

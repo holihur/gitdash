@@ -18,6 +18,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Connected accounts & batch import**: link GitHub, GitLab, Gitea/Forgejo or Bitbucket accounts (OAuth) and import selected repositories in bulk from the import dialog
 - **Webhooks**: per-repo outbound webhooks with per-event subscriptions (push / issues / pull requests / comments / branches & tags / releases / pipeline / fork / star / watch) and HMAC signature delivery, dispatched asynchronously through the job queue with backoff retries; plus an **incoming webhook** token that lets external systems create issues
 - **GPG keys**: upload GPG public keys to verify commit signatures
+- **Passkeys (WebAuthn)**: register FIDO2 / platform authenticators (Touch ID, Windows Hello, security keys, password managers) in **Profile → Passkeys** and sign in passwordlessly; configure `GITDASH_WEBAUTHN_RPID` / `GITDASH_WEBAUTHN_ORIGINS` for non-standard domains
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)
 - **CLI (`gitdash-cli`)**: a `gh`/`glab`-style command-line client (repo / issue / PR / copilot) that logs in with a PAT or the OAuth 2.0 device flow — see [CLI](#cli-gitdash-cli)
@@ -210,6 +211,9 @@ Environment variables (all optional):
 | `GITDASH_MAIL_INBOUND_SECRET` | `GITDASH_MAIL_SECRET` | Shared secret required by `POST /api/mail/inbound` |
 | `GITDASH_TRUSTED_PROXIES` | empty (loopback only) | Comma-separated proxy IP/CIDR allowed to set `X-Forwarded-For`. The proxy **must strip/overwrite** the incoming `X-Forwarded-For` (not append client headers), otherwise a client can spoof the left-most IP and bypass PAT IP allow-lists / login rate limits |
 | `GITDASH_SECURE_COOKIES` | off | Set to `1` behind a TLS-terminating proxy so session/admin cookies get `Secure` |
+| `GITDASH_WEBAUTHN_RPID` | request host | Relying Party ID for passkeys; set when behind a proxy or on a non-standard domain (must be a domain, not an IP) |
+| `GITDASH_WEBAUTHN_ORIGINS` | request origin | Comma-separated allowed WebAuthn origins (e.g. `https://git.example.com`) |
+| `GITDASH_WEBAUTHN_RP_NAME` | `gitdash` | Relying Party display name shown in the passkey prompt |
 | `GITDASH_TLS_CERT` / `GITDASH_TLS_KEY` | empty | Built-in HTTPS certificate/key paths |
 | `GITDASH_ACME_DOMAINS` | empty | Comma-separated domains; obtain certificates automatically via ACME (see `GITDASH_ACME_EMAIL`) |
 | `GITDASH_PIPELINE_VOLUMES_DIR` | empty (denied) | Host directory CI may mount; unset denies all host volume mounts |
@@ -395,6 +399,8 @@ Auth (public):
 | --- | --- | --- |
 | POST | `/api/auth/register` | Register, returns a session token |
 | POST | `/api/auth/login` | Login, returns a session token |
+| POST | `/api/auth/passkey/begin` | Begin a passkey (WebAuthn) sign-in; returns challenge + session id |
+| POST | `/api/auth/passkey/finish` | Finish passkey sign-in, returns a session token |
 | POST | `/api/auth/logout` | Logout (invalidates the current token) |
 | GET | `/api/me` | Current user |
 | DELETE | `/api/me` | Delete own account (password/MFA confirmation, wipes all data) |
@@ -413,6 +419,10 @@ Business (requires `Authorization: Bearer <token>`, token from register/login):
 | POST | `/api/users/{owner}/repos/{name}/commits` | Create a commit (batch file changes) |
 | POST | `/api/users/{owner}/repos/{name}/commits/{sha}/revert` | Revert a commit (creates an inverse commit on a branch) |
 | GET/POST | `/api/keys` | List / add SSH public keys (bound to the current user) |
+| GET | `/api/me/passkeys` | List your registered passkeys |
+| POST | `/api/me/passkeys/register/begin` | Begin passkey registration (returns challenge + session id) |
+| POST | `/api/me/passkeys/register/finish` | Finish passkey registration |
+| DELETE | `/api/me/passkeys/{id}` | Delete one of your passkeys |
 | DELETE | `/api/keys/{id}` | Delete your own public key |
 
 Repo social / inbox (watch → subscribe to repo activity in your inbox):

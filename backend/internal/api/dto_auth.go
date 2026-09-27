@@ -1,5 +1,7 @@
 package api
 
+import "encoding/json"
+
 // 请求体 DTO（仅供 swaggo 文档引用；handler 解析逻辑不变）。
 
 // registerReq 注册请求体。
@@ -95,4 +97,37 @@ type adminLoginReq struct {
 type adminChangePasswordReq struct {
 	Current string `json:"current_password"` // 当前密码
 	New     string `json:"new_password"`     // 新密码（至少 8 位，且包含小写字母/大写字母/数字/特殊字符中的至少 3 类）
+}
+
+// ---- passkey（WebAuthn）----
+
+// passkeyRegisterReq 开始注册 passkey 请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type passkeyRegisterReq struct {
+	Name string `json:"name"` // 凭据名称（可空，默认由服务端推断）
+}
+
+// passkeyRegisterFinishReq 完成 passkey 注册请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type passkeyRegisterFinishReq struct {
+	SessionID  string          `json:"session_id"` // begin 阶段返回的会话 ID
+	Name       string          `json:"name"`       // 凭据名称（可空）
+	Credential json.RawMessage `json:"credential"` // 浏览器 PublicKeyCredential 的 JSON 表达（base64url 字段）
+}
+
+// passkeyLoginBeginReq 开始 passkey 登录请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type passkeyLoginBeginReq struct {
+	Username string `json:"username"` // 可选：限定该用户的凭据；为空则为 discoverable 登录
+}
+
+// passkeyLoginFinishReq 完成 passkey 登录请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type passkeyLoginFinishReq struct {
+	SessionID  string          `json:"session_id"` // begin 阶段返回的会话 ID
+	Credential json.RawMessage `json:"credential"` // 浏览器 PublicKeyCredential 的 JSON 表达（base64url 字段）
 }
