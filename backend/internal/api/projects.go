@@ -148,7 +148,11 @@ func (a *API) deleteProject(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteProject(owner, name, id), store.ErrNotFound) {
+	if err := a.store.DeleteProject(owner, name, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "project_not_found", "project not found")
 		return
 	}
@@ -374,7 +378,11 @@ func (a *API) deleteProjectColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	moveTo, _ := strconv.ParseInt(r.URL.Query().Get("move_to"), 10, 64)
-	if errors.Is(a.store.DeleteProjectColumn(pid, cid, moveTo), store.ErrNotFound) {
+	if err := a.store.DeleteProjectColumn(pid, cid, moveTo); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "column_not_found", "column not found")
 		return
 	}
@@ -521,7 +529,11 @@ func (a *API) deleteProjectSwimlane(w http.ResponseWriter, r *http.Request) {
 	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
 		return
 	}
-	if errors.Is(a.store.DeleteProjectSwimlane(pid, lid), store.ErrNotFound) {
+	if err := a.store.DeleteProjectSwimlane(pid, lid); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "swimlane_not_found", "swimlane not found")
 		return
 	}
@@ -771,7 +783,11 @@ func (a *API) deleteProjectCard(w http.ResponseWriter, r *http.Request) {
 	if !ok2 || !a.checkProjectExists(w, owner, name, pid) {
 		return
 	}
-	if errors.Is(a.store.DeleteProjectCard(pid, cid), store.ErrNotFound) {
+	if err := a.store.DeleteProjectCard(pid, cid); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "card_not_found", "card not found")
 		return
 	}

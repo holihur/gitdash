@@ -11,17 +11,21 @@ import (
 
 // CreateProject 创建看板项目，并初始化默认列（To Do / In Progress / Done）与默认泳道（Default）。
 func (s *Store) CreateProject(owner, repo, name, description string) (Project, error) {
-	r := projectRow{Owner: owner, Repo: repo, Name: name, Description: description, CreatedAt: now()}
-	if err := s.db.Create(&r).Error; err != nil {
-		return Project{}, err
-	}
-	p := Project{ID: r.ID, Owner: r.Owner, Repo: r.Repo, Name: r.Name, Description: r.Description, CreatedAt: r.CreatedAt}
-	for i, col := range []string{"To Do", "In Progress", "Done"} {
-		if err := s.db.Create(&projectColumnRow{ProjectID: r.ID, Name: col, Position: i}).Error; err != nil {
-			return Project{}, err
+	var p Project
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		r := projectRow{Owner: owner, Repo: repo, Name: name, Description: description, CreatedAt: now()}
+		if err := tx.Create(&r).Error; err != nil {
+			return err
 		}
-	}
-	if err := s.db.Create(&projectSwimlaneRow{ProjectID: r.ID, Name: "Default", Position: 0}).Error; err != nil {
+		p = Project{ID: r.ID, Owner: r.Owner, Repo: r.Repo, Name: r.Name, Description: r.Description, CreatedAt: r.CreatedAt}
+		for i, col := range []string{"To Do", "In Progress", "Done"} {
+			if err := tx.Create(&projectColumnRow{ProjectID: r.ID, Name: col, Position: i}).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Create(&projectSwimlaneRow{ProjectID: r.ID, Name: "Default", Position: 0}).Error
+	})
+	if err != nil {
 		return Project{}, err
 	}
 	return p, nil

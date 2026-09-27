@@ -165,7 +165,11 @@ func (a *API) deleteWebhook(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteWebhook(owner, name, id), store.ErrNotFound) {
+	if err := a.store.DeleteWebhook(owner, name, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "webhook_not_found", "webhook not found")
 		return
 	}

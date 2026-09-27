@@ -558,7 +558,11 @@ func (a *API) deleteIssue(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_issue_number", "invalid issue number")
 		return
 	}
-	if errors.Is(a.store.DeleteIssue(owner, name, number), store.ErrNotFound) {
+	if err := a.store.DeleteIssue(owner, name, number); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "issue_not_found", "issue not found")
 		return
 	}
@@ -1072,7 +1076,11 @@ func (a *API) deleteLabel(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteLabel(owner, name, id), store.ErrNotFound) {
+	if err := a.store.DeleteLabel(owner, name, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "label_not_found", "label not found")
 		return
 	}
@@ -1220,7 +1228,11 @@ func (a *API) deleteMilestone(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteMilestone(owner, name, id), store.ErrNotFound) {
+	if err := a.store.DeleteMilestone(owner, name, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "milestone_not_found", "milestone not found")
 		return
 	}

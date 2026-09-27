@@ -92,7 +92,11 @@ func (a *API) deleteGPGKey(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteGPGKey(userFrom(r), id), store.ErrNotFound) {
+	if err := a.store.DeleteGPGKey(userFrom(r), id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "gpg_key_not_found", "gpg key not found")
 		return
 	}

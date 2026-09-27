@@ -118,7 +118,11 @@ func (a *API) deleteDeployKey(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteDeployKey(owner, name, id), store.ErrNotFound) {
+	if err := a.store.DeleteDeployKey(owner, name, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeNotFound(w, "deploy key")
 		return
 	}

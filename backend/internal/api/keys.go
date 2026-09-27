@@ -107,7 +107,11 @@ func (a *API) deleteKey(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_id", "invalid id")
 		return
 	}
-	if errors.Is(a.store.DeleteKey(userFrom(r), id), store.ErrNotFound) {
+	if err := a.store.DeleteKey(userFrom(r), id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeNotFound(w, "ssh key")
 		return
 	}

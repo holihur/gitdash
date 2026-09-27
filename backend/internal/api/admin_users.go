@@ -162,8 +162,9 @@ func (a *API) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusForbidden, "template_user_protected", "the system template user cannot be deleted")
 		return
 	}
-	// 先清理磁盘数据（git 仓库 / 流水线日志），再删除数据库记录
-	a.purgeUserRepoFiles(username)
+	// 先收集仓库名，再删 DB；仅 DB 提交成功后才 best-effort 清理磁盘数据，
+	// 避免事务回滚时 git 数据已被删除（审计 F-14）。
+	names := a.userRepoNames(username)
 	if err := a.store.AdminDeleteUser(username); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeNotFound(w, "user")
@@ -172,6 +173,7 @@ func (a *API) adminDeleteUser(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	a.purgeUserRepoFiles(username, names)
 	logx.Infof("admin %q deleted user %q", userFrom(r), username)
 	w.WriteHeader(http.StatusNoContent)
 }

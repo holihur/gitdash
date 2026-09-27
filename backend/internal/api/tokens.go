@@ -137,8 +137,12 @@ func (a *API) deleteToken(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if errors.Is(a.store.DeletePAT(uid, id), store.ErrNotFound) {
-		writeNotFound(w, "token")
+	if err := a.store.DeletePAT(uid, id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeNotFound(w, "token")
+			return
+		}
+		internalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

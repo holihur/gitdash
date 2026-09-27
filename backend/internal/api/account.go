@@ -14,26 +14,37 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// purgeUserRepoFiles 删除用户名下所有仓库的磁盘数据（git 对象 + 流水线日志）。
-// DB 记录由 store.DeleteUserAccount 负责。
-func (a *API) purgeUserRepoFiles(username string) {
+// userRepoNames 收集用户名下的仓库名。必须在删除 DB 行之前调用（删库后查询为空），
+// 供随后 best-effort 清理磁盘数据。
+func (a *API) userRepoNames(username string) []string {
 	repos, err := a.store.ListRepos(username)
 	if err != nil {
 		logx.Infof("list repos for %q: %v", username, err)
-		return
+		return nil
 	}
+	names := make([]string, 0, len(repos))
 	for _, rp := range repos {
-		if err := gitsvc.Delete(username, rp.Name); err != nil {
-			logx.Infof("delete git repo %s/%s: %v", username, rp.Name, err)
+		names = append(names, rp.Name)
+	}
+	return names
+}
+
+// purgeUserRepoFiles 删除用户名下仓库的磁盘数据（git 对象 + 流水线日志 + 索引）。
+// 仅在 DB 事务成功提交后调用：DB 是唯一可安全重试的环节，磁盘删除失败只记日志。
+// DB 记录由 store.DeleteUserAccount 负责。
+func (a *API) purgeUserRepoFiles(username string, names []string) {
+	for _, name := range names {
+		if err := gitsvc.Delete(username, name); err != nil {
+			logx.Infof("delete git repo %s/%s: %v", username, name, err)
 		}
 		if a.codeIndex != nil {
-			a.codeIndex.Forget(username, rp.Name)
+			a.codeIndex.Forget(username, name)
 		}
-		if err := pipeline.DeleteLogs(username, rp.Name); err != nil {
-			logx.Infof("delete pipeline logs %s/%s: %v", username, rp.Name, err)
+		if err := pipeline.DeleteLogs(username, name); err != nil {
+			logx.Infof("delete pipeline logs %s/%s: %v", username, name, err)
 		}
-		if err := pipeline.DeleteArtifacts(username, rp.Name); err != nil {
-			logx.Infof("delete pipeline artifacts %s/%s: %v", username, rp.Name, err)
+		if err := pipeline.DeleteArtifacts(username, name); err != nil {
+			logx.Infof("delete pipeline artifacts %s/%s: %v", username, name, err)
 		}
 	}
 }
@@ -94,10 +105,12 @@ func (a *API) deleteMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.rateReset(key)
-	// 先清理磁盘数据（git 仓库 / 流水线日志），再删除数据库记录
-	a.purgeUserRepoFiles(username)
+	// 先收集仓库名，再删 DB（大事务，失败可安全重试）；仅 DB 提交成功后才
+	// best-effort 清理磁盘，避免事务回滚时 git 数据已被不可恢复地删除。
+	names := a.userRepoNames(username)
 	if err := a.store.DeleteUserAccount(username); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
+			a.purgeUserRepoFiles(username, names)
 			a.clearSessionCookie(w)
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -105,6 +118,7 @@ func (a *API) deleteMe(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	a.purgeUserRepoFiles(username, names)
 	logx.Infof("user %q deleted their account", username)
 	a.clearSessionCookie(w)
 	w.WriteHeader(http.StatusNoContent)

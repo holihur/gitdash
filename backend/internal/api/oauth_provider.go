@@ -108,7 +108,11 @@ func (a *API) deleteOAuthApp(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if errors.Is(a.store.DeleteOAuthApp(uid, id), store.ErrNotFound) {
+	if err := a.store.DeleteOAuthApp(uid, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeNotFound(w, "oauth_app")
 		return
 	}
@@ -172,7 +176,11 @@ func (a *API) revokeOAuthAuthorization(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	if errors.Is(a.store.RevokeOAuthAuthorization(uid, id), store.ErrNotFound) {
+	if err := a.store.RevokeOAuthAuthorization(uid, id); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeNotFound(w, "oauth_authorization")
 		return
 	}

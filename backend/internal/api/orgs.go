@@ -308,7 +308,11 @@ func (a *API) removeOrgMember(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if errors.Is(a.store.RemoveOrgMember(org, target), store.ErrNotFound) {
+	if err := a.store.RemoveOrgMember(org, target); err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			internalError(w, err)
+			return
+		}
 		writeCode(w, http.StatusNotFound, "member_not_found", "member not found")
 		return
 	}
