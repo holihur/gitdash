@@ -169,14 +169,7 @@ func writeCommit(owner, name, branch, message, author string, changes []FileChan
 		}
 		switch c.Action {
 		case "create", "update":
-			file := filepath.Join(tmp, filepath.FromSlash(p))
-			parent := filepath.Dir(file)
-			if _, err := os.Stat(parent); err != nil {
-				if err := os.MkdirAll(parent, 0o755); err != nil {
-					return "", err
-				}
-			}
-			if err := os.WriteFile(file, []byte(c.Content), 0o644); err != nil {
+			if err := safeWriteFile(tmp, p, []byte(c.Content)); err != nil {
 				return "", err
 			}
 		case "delete":
@@ -195,9 +188,9 @@ func writeCommit(owner, name, branch, message, author string, changes []FileChan
 			if from == "" || from == p {
 				continue
 			}
-			// 目标父目录需先存在，git mv 不会自动创建中间目录。
-			dst := filepath.Join(tmp, filepath.FromSlash(p))
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			// 目标父目录需先存在，git mv 不会自动创建中间目录。逐段校验
+			// 拒绝符号链接分量，防止经由仓库内 symlink 写入宿主目录。
+			if _, err := safeParentDir(tmp, filepath.ToSlash(filepath.Dir(filepath.FromSlash(p)))); err != nil {
 				return "", err
 			}
 			if _, err := gitOut(tmp, "mv", "--", from, p); err != nil {
@@ -230,3 +223,58 @@ func writeCommit(owner, name, branch, message, author string, changes []FileChan
 }
 
 // Tag 轻量/附注标签信息（sha 为指向的提交）。
+
+// safeParentDir 逐段创建/校验 tmp 下的目录，拒绝任何符号链接分量，
+// 确保最终目录仍位于 tmp 内。rel 为斜杠分隔的相对目录（可为 "."）。
+//
+// 安全审计 A3：CleanPath 只拦 "."/".."，无法识别仓库里提交的 symlink，
+// 因此 Web 文件编辑器会被诱导跟随 symlink 写入宿主任意路径。
+func safeParentDir(tmp, rel string) (string, error) {
+	cur := tmp
+	for _, part := range strings.Split(filepath.ToSlash(rel), "/") {
+		if part == "" || part == "." {
+			continue
+		}
+		if part == ".." {
+			return "", fmt.Errorf("invalid path %q", rel)
+		}
+		cur = filepath.Join(cur, part)
+		fi, err := os.Lstat(cur)
+		if err == nil {
+			if fi.Mode()&os.ModeSymlink != 0 {
+				return "", fmt.Errorf("refusing to follow symlink in path %q", rel)
+			}
+			if !fi.IsDir() {
+				return "", fmt.Errorf("path component is not a directory: %q", rel)
+			}
+			continue
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		if err := os.Mkdir(cur, 0o755); err != nil && !os.IsExist(err) {
+			return "", err
+		}
+	}
+	return cur, nil
+}
+
+// safeWriteFile 把内容写入 tmp 内相对路径 p：中间目录逐段拒绝符号链接，
+// 目标文件以 O_NOFOLLOW 打开，确保仓库内提交的 symlink 无法逃逸出工作区。
+func safeWriteFile(tmp, p string, content []byte) error {
+	native := filepath.FromSlash(p)
+	parent, err := safeParentDir(tmp, filepath.ToSlash(filepath.Dir(native)))
+	if err != nil {
+		return err
+	}
+	dst := filepath.Join(parent, filepath.Base(native))
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY|oNoFollow, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}

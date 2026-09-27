@@ -525,3 +525,76 @@ func TestCommitsPagination(t *testing.T) {
 		t.Fatalf("search offset = %+v, %v", found, err)
 	}
 }
+
+func TestSafeWriteFileRejectsSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "pwn")); err != nil {
+		t.Fatal(err)
+	}
+	if err := safeWriteFile(root, "pwn/evil.txt", []byte("x")); err == nil {
+		t.Fatal("expected symlinked intermediate dir to be rejected")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "evil.txt")); !os.IsNotExist(err) {
+		t.Fatalf("escaped write happened: %v", err)
+	}
+	// 目标本身是 symlink 时也必须拒绝（O_NOFOLLOW）
+	if err := os.Symlink(filepath.Join(outside, "target.txt"), filepath.Join(root, "link.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := safeWriteFile(root, "link.txt", []byte("x")); err == nil {
+		t.Fatal("expected symlink target file to be rejected")
+	}
+	// 正常嵌套写入仍可用
+	if err := safeWriteFile(root, "ok/nested.txt", []byte("y")); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(root, "ok", "nested.txt")); err != nil || string(b) != "y" {
+		t.Fatalf("normal write = %q err=%v", b, err)
+	}
+}
+
+func TestWriteCommitRejectsSymlinkEscape(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := Init(dataDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := CreateBare("alice", "sym"); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitTemplate("alice", "sym"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 用真实 git 在默认分支提交一个指向外部目录的 symlink。
+	outside := t.TempDir()
+	work := t.TempDir()
+	if _, err := gitOut("", "clone", "-q", repoPath("alice", "sym"), work); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(work, "pwn")); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = gitOut(work, "config", "user.name", "t")
+	_, _ = gitOut(work, "config", "user.email", "t@example.com")
+	if _, err := gitOut(work, "add", "-A"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gitOut(work, "commit", "-q", "-m", "add symlink"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gitOut(work, "push", "-q", "origin", "HEAD:main"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 经由 symlink 写入外部路径必须被拒绝，且外部文件不得出现。
+	_, err := WriteCommit("alice", "sym", "main", "evil", "alice", []FileChange{
+		{Path: "pwn/evil.txt", Action: "create", Content: "pwned"},
+	})
+	if err == nil {
+		t.Fatal("WriteCommit via symlink escaped the worktree")
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "evil.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("escaped write happened: %v", statErr)
+	}
+}
