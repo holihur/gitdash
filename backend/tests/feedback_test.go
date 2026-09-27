@@ -292,3 +292,31 @@ func TestAdminFeedbackSelfTarget(t *testing.T) {
 		t.Fatalf("feedback_local = %v, want true", s["feedback_local"])
 	}
 }
+
+// TestFeedbackSelfTargetPrivateRejectsAnonymous 覆盖安全审计 M1.3：匿名用户
+// 不得向私有反馈仓库投递 issue；有读权限的登录用户仍可投递。
+func TestFeedbackSelfTargetPrivateRejectsAnonymous(t *testing.T) {
+	hs, st := startAPISeed(t, func(st *store.Store) {
+		if _, err := st.CreateRepo("oxco", "priv", "", true); err != nil {
+			t.Fatalf("seed repo: %v", err)
+		}
+	})
+	_ = st.SetSetting("feedback_enabled", "1")
+	_ = st.SetSetting("feedback_repo", hs.URL+"/oxco/priv")
+
+	// 匿名：403（不再匿名写入私有仓库）。
+	resp, err := http.Post(hs.URL+"/api/feedback", "application/json",
+		strings.NewReader(`{"body":"anonymous spam"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("anonymous feedback to private repo = %d, want 403", resp.StatusCode)
+	}
+
+	// 仓库 owner 登录后：201。
+	env := &Env{t: t, BaseURL: hs.URL}
+	owner := register(t, env, "oxco", "password-1")
+	owner.mustStatus("POST", "/feedback", map[string]string{"body": "legit feedback"}, http.StatusCreated)
+}

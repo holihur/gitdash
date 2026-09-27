@@ -181,6 +181,12 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if typ == "docker" {
+		// docker/OCI 无按镜像的可见性模型，命名空间成员（本人/组织成员）
+		// 才可枚举镜像与 tag（安全审计 M1.2）。
+		if !a.registryAllowed(owner, pkgUser(r)) {
+			pkgForbidden(w)
+			return
+		}
 		images, err := a.store.ListRegistryImages(owner)
 		if err != nil {
 			internalError(w, err)
@@ -232,6 +238,12 @@ func (a *API) listPackagesUI(w http.ResponseWriter, r *http.Request) {
 //	@Router      /packages/{owner}/audit [get]
 func (a *API) listPackageAudit(w http.ResponseWriter, r *http.Request) {
 	owner := r.PathValue("owner")
+	// 审计日志含私有包名/版本/操作者，仅命名空间发布者（owner 或组织 owner）
+	// 可读，避免跨租户 IDOR（安全审计 M1.1）。
+	if !a.canPublishPackage(owner, pkgUser(r)) {
+		pkgForbidden(w)
+		return
+	}
 	typ := r.URL.Query().Get("type")
 	name := r.URL.Query().Get("name")
 	limit, offset := pageParams(r)

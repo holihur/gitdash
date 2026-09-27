@@ -269,7 +269,10 @@ func (s *Store) IssueParticipantRecipients(owner, repo, kind string, number int6
 	delete(seen, actor)
 	out := make([]string, 0, len(seen))
 	for u := range seen {
-		out = append(out, u)
+		// 已被撤销访问权的参与者/订阅者不再收到私有仓库活动（安全审计 M1.4）。
+		if s.CanRead(owner, repo, u) {
+			out = append(out, u)
+		}
 	}
 	return out
 }

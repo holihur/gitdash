@@ -161,7 +161,9 @@ func (s *Store) NotifyRecipients(owner, repo, actor string) []string {
 	delete(seen, actor)
 	users := make([]string, 0, len(seen))
 	for u := range seen {
-		if u != "" {
+		// 撤销协作/组织成员后不能继续收到私有仓库活动（安全审计 M1.4）：
+		// 按当前可见性过滤（公开仓库任何人仍可读）。
+		if u != "" && s.CanRead(owner, repo, u) {
 			users = append(users, u)
 		}
 	}

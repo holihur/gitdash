@@ -93,16 +93,34 @@ func (s *Store) DeleteUserAccount(username string) error {
 		}
 
 		// --- 按 user_id 关联的归属数据 ---
+		// 先吊销该用户曾作为 deploy key 添加到他仓的公钥（指纹维度），避免删号后
+		// 仍持有他人仓库 SSH 权限（安全审计 M1.5）。
+		var keyFingerprints []string
+		if err := tx.Model(&sshKeyRow{}).Where("user_id = ?", u.ID).Pluck("fingerprint", &keyFingerprints).Error; err != nil {
+			return err
+		}
+		if len(keyFingerprints) > 0 {
+			if err := tx.Where("fingerprint IN ?", keyFingerprints).Delete(&deployKeyRow{}).Error; err != nil {
+				return err
+			}
+		}
 		for _, m := range []any{&sessionRow{}, &webauthnCredentialRow{}, &sshKeyRow{}, &gpgKeyRow{}, &patRow{}, &userOAuthRow{}, &repoPinRow{}} {
 			if err := tx.Where("user_id = ?", u.ID).Delete(m).Error; err != nil {
 				return err
 			}
 		}
-		// --- 按用户名关联的归属数据 ---
-		for _, m := range []any{&starRow{}, &watchRow{}, &notificationRow{}, &orgMemberRow{}, &collabRow{}, &byokKeyRow{}, &userAvatarRow{}} {
+		// --- 按用户名关联的归属数据（含团队成员/订阅/指派，避免用户名复用继承权限）---
+		for _, m := range []any{&starRow{}, &watchRow{}, &notificationRow{}, &orgMemberRow{}, &collabRow{}, &byokKeyRow{}, &userAvatarRow{}, &orgTeamMemberRow{}, &issueSubscriberRow{}, &issueAssigneeRow{}} {
 			if err := tx.Where("username = ?", username).Delete(m).Error; err != nil {
 				return err
 			}
+		}
+		// 组织关注 / 合并队列（字段名非 username）
+		if err := tx.Where("follower = ?", username).Delete(&orgFollowRow{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("enqueued_by = ?", username).Delete(&mergeQueueRow{}).Error; err != nil {
+			return err
 		}
 		// 被别人置顶的本用户仓库（pin 的 owner 指向该用户）
 		if err := tx.Where("owner = ?", username).Delete(&repoPinRow{}).Error; err != nil {

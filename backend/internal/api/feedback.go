@@ -86,6 +86,30 @@ func (a *API) feedbackSelfTarget(raw string) bool {
 	return true
 }
 
+// feedbackTargetAllowed 允许匿名/任意用户向 public/anonymous 反馈仓投递，
+// 但私有反馈仓仅限有读权限的登录用户，防止匿名未授权写入（安全审计 M1.3）。
+func (a *API) feedbackTargetAllowed(r *http.Request, owner, repo string) bool {
+	rp, err := a.store.GetRepo(owner, repo)
+	if err != nil {
+		return false
+	}
+	vis := rp.Visibility
+	if vis == "" {
+		if rp.Private {
+			vis = "private"
+		} else {
+			vis = "public"
+		}
+	}
+	switch vis {
+	case "anonymous", "public":
+		return true
+	default:
+		me := userFrom(r)
+		return me != "" && a.store.CanRead(owner, repo, me)
+	}
+}
+
 // feedbackIssueNumber 从 enrichIssues 返回的 JSON map 中取回 issue 编号。
 func feedbackIssueNumber(m map[string]any) int {
 	switch v := m["number"].(type) {
@@ -178,6 +202,10 @@ func (a *API) submitFeedback(w http.ResponseWriter, r *http.Request) {
 
 	// 目标为本实例仓库：直接创建本地 issue，无需令牌，也不发起自请求。
 	if selfTarget {
+		if !a.feedbackTargetAllowed(r, owner, repo) {
+			writeCode(w, http.StatusForbidden, "forbidden", "you do not have permission to post feedback to this repository")
+			return
+		}
 		author := userFrom(r)
 		if author == "" {
 			author = owner

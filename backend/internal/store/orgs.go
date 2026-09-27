@@ -178,14 +178,27 @@ func (s *Store) AddOrgMember(org, username, role string) error {
 }
 
 func (s *Store) RemoveOrgMember(org, username string) error {
-	res := s.db.Where("org = ? AND username = ?", org, username).Delete(&orgMemberRow{})
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("org = ? AND username = ?", org, username).Delete(&orgMemberRow{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrNotFound
+		}
+		// 同步清理该用户在 org 下所有团队中的成员行，避免移除组织成员后仍通过
+		// 团队授权保留仓库权限（安全审计 M1.5）。
+		var teamIDs []int64
+		if err := tx.Model(&orgTeamRow{}).Where("org = ?", org).Pluck("id", &teamIDs).Error; err != nil {
+			return err
+		}
+		if len(teamIDs) > 0 {
+			if err := tx.Where("team_id IN ? AND username = ?", teamIDs, username).Delete(&orgTeamMemberRow{}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Store) DeleteOrg(org string) error {
