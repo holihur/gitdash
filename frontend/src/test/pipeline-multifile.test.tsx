@@ -49,7 +49,7 @@ beforeEach(() => {
     file: ".gitdash.yml",
     files: [".gitdash.yml", ".gitdash/ci.yml"],
   });
-  api.listPipelineRuns.mockResolvedValue([run(2, ".gitdash/ci.yml")]);
+  api.listPipelineRuns.mockResolvedValue({ items: [run(2, ".gitdash/ci.yml")], total: 1 });
   api.getPipelineParams.mockResolvedValue({ ref: "main", file: ".gitdash.yml", params: [] });
   api.triggerPipelineRun.mockResolvedValue({
     runs: [run(3, ".gitdash.yml"), run(4, ".gitdash/ci.yml")],
@@ -72,7 +72,7 @@ describe("RepoPipeline multi-file", () => {
       expect(within(table).getByText(".gitdash/ci.yml")).toBeInTheDocument(),
     );
     // 文件下拉包含两个候选文件
-    const combo = screen.getByRole("combobox");
+    const combo = screen.getAllByRole("combobox")[0];
     expect(within(combo).getByRole("option", { name: ".gitdash.yml" })).toBeInTheDocument();
     expect(within(combo).getByRole("option", { name: ".gitdash/ci.yml" })).toBeInTheDocument();
   });
@@ -108,7 +108,7 @@ describe("RepoPipeline multi-file", () => {
     renderPipeline();
     await screen.findByRole("table");
 
-    const combo = screen.getByRole("combobox");
+    const combo = screen.getAllByRole("combobox")[0];
     await user.selectOptions(combo, ".gitdash/ci.yml");
     await user.click(screen.getByRole("button", { name: /run now/i }));
 
@@ -128,7 +128,7 @@ describe("RepoPipeline multi-file", () => {
     renderPipeline();
     await screen.findByRole("table");
 
-    const combo = screen.getByRole("combobox");
+    const combo = screen.getAllByRole("combobox")[0];
     expect(within(combo).getByRole("option", { name: /all pipelines/i })).toBeInTheDocument();
     await user.selectOptions(combo, "");
     await user.click(screen.getByRole("button", { name: /run now/i }));
@@ -139,9 +139,10 @@ describe("RepoPipeline multi-file", () => {
   });
 
   it("sends the delay and shows a delayed pending run's schedule", async () => {
-    api.listPipelineRuns.mockResolvedValue([
-      { ...run(9, ".gitdash.yml"), status: "pending", run_at: "2026-01-01T01:00:00Z" },
-    ]);
+    api.listPipelineRuns.mockResolvedValue({
+      items: [{ ...run(9, ".gitdash.yml"), status: "pending", run_at: "2026-01-01T01:00:00Z" }],
+      total: 1,
+    });
     const user = userEvent.setup();
     renderPipeline();
 

@@ -104,3 +104,38 @@ func TestListEnabledPipelines(t *testing.T) {
 		t.Fatalf("enabled pipelines = %#v", got)
 	}
 }
+
+// TestListPipelineRunsPaged 覆盖运行记录分页与总数。
+func TestListPipelineRunsPaged(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := st.CreatePipelineRun("a", "r", ".gitdash.yml", "sha", "main", "u", "push", nil, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	total, err := st.CountPipelineRuns("a", "r")
+	if err != nil || total != 5 {
+		t.Fatalf("count = %d err=%v", total, err)
+	}
+	page1, err := st.ListPipelineRunsPaged("a", "r", 2, 0)
+	if err != nil || len(page1) != 2 {
+		t.Fatalf("page1 = %d err=%v", len(page1), err)
+	}
+	if page1[0].ID <= page1[1].ID {
+		t.Fatalf("expected newest-first ordering: %d, %d", page1[0].ID, page1[1].ID)
+	}
+	all, err := st.ListPipelineRunsPaged("a", "r", 2, 0)
+	if err != nil || len(all) != 2 {
+		t.Fatal(err)
+	}
+	page3, err := st.ListPipelineRunsPaged("a", "r", 2, 4)
+	if err != nil || len(page3) != 1 {
+		t.Fatalf("page3 = %d err=%v", len(page3), err)
+	}
+	if page3[0].ID != 1 {
+		t.Fatalf("last page id = %d, want 1", page3[0].ID)
+	}
+}

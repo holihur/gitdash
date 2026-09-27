@@ -21,6 +21,7 @@ import { apiErrorMsg } from "@/lib/errors";
 import { MermaidDiagram } from "@/components/mermaid";
 import PipelineDocs from "@/components/pipeline-docs";
 import PipelineRunsCard from "@/components/pipeline-runs";
+import Pagination from "@/components/ui/pagination";
 import { toMermaid } from "@/components/pipeline-shared";
 import { canWrite as roleCanWrite, canMaintain } from "@/lib/repo-role";
 
@@ -40,6 +41,9 @@ export default function RepoPipeline({ owner, name, role }: Props) {
   const [files, setFiles] = useState<string[]>([]);
   const [file, setFile] = useState("");
   const [runs, setRuns] = useState<PipelineRun[]>([]);
+  const [runsTotal, setRunsTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState(false);
   const [triggering, setTriggering] = useState(false);
@@ -57,18 +61,22 @@ export default function RepoPipeline({ owner, name, role }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [cfg, rs] = await Promise.all([api.getPipeline(owner, name), api.listPipelineRuns(owner, name)]);
+      const [cfg, rs] = await Promise.all([
+        api.getPipeline(owner, name),
+        api.listPipelineRuns(owner, name, pageSize, (page - 1) * pageSize),
+      ]);
       setEnabled(cfg.enabled);
       const discovered = cfg.files ?? [];
       setFiles(discovered);
       setFile((prev) => prev || discovered[0] || "");
-      setRuns(rs);
+      setRuns(rs.items);
+      setRunsTotal(rs.total);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
     } finally {
       setLoading(false);
     }
-  }, [owner, name, to]);
+  }, [owner, name, to, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -80,14 +88,17 @@ export default function RepoPipeline({ owner, name, role }: Props) {
     if (!active) return;
     timerRef.current = window.setTimeout(() => {
       api
-        .listPipelineRuns(owner, name)
-        .then(setRuns)
+        .listPipelineRuns(owner, name, pageSize, (page - 1) * pageSize)
+        .then((p) => {
+          setRuns(p.items);
+          setRunsTotal(p.total);
+        })
         .catch(() => undefined);
     }, 3000);
     return () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
-  }, [runs, owner, name]);
+  }, [runs, owner, name, page, pageSize]);
 
   const toggle = async () => {
     if (enabled === null) return;
@@ -129,7 +140,12 @@ export default function RepoPipeline({ owner, name, role }: Props) {
       const { runs: created } = await api.triggerPipelineRun(owner, name, body);
       if (created.length === 0) return;
       toast.success(t("pipeline.triggered", { id: created.map((r) => r.id).join(", ") }));
-      setRuns((rs) => [...created, ...rs]);
+      if (page !== 1) {
+        setPage(1); // 回到第一页（触发的新运行在最前）
+      } else {
+        setRuns((rs) => [...created, ...rs]);
+        setRunsTotal((n) => n + created.length);
+      }
       setExpanded(created[0].id);
       setParamsOpen(false);
     } catch (e) {
@@ -244,6 +260,7 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                       onChange={(e) => setFile(e.target.value)}
                       className="h-8 max-w-[14rem] rounded-md border border-input bg-background px-2 text-xs"
                       title={t("pipeline.fileLabel")}
+                      aria-label={t("pipeline.fileLabel")}
                     >
                       {files.length > 1 && <option value="">{t("pipeline.allFiles")}</option>}
                       {files.map((f) => (
@@ -318,6 +335,17 @@ export default function RepoPipeline({ owner, name, role }: Props) {
           </CardContent>
         </Card>
       )}
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={runsTotal}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
 
       <PipelineRunsCard
         owner={owner}

@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { apiErrorMsg } from "@/lib/errors";
+import { buildRepoPath } from "@/lib/repo-url";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+/** 仓库设置里的流水线卡片：只读状态 + 跳转 Pipeline tab；开关本身只在 Pipeline
+ * tab 上提供，避免两处重复的启用/禁用入口。 */
 export function PipelineCard({ owner, name }: { owner: string; name: string }) {
-  const { t, to } = useI18n();
+  const { t } = useI18n();
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api
@@ -18,19 +19,6 @@ export function PipelineCard({ owner, name }: { owner: string; name: string }) {
       .then((p) => setEnabled(p.enabled))
       .catch(() => setEnabled(false));
   }, [owner, name]);
-
-  const toggle = async () => {
-    setBusy(true);
-    try {
-      const res = await api.setPipeline(owner, name, !enabled);
-      setEnabled(res.enabled);
-      toast.success(t(res.enabled ? "pipeline.enabled" : "pipeline.disabled"));
-    } catch (e) {
-      toast.error(apiErrorMsg(to, e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Card>
@@ -43,8 +31,10 @@ export function PipelineCard({ owner, name }: { owner: string; name: string }) {
           <Badge variant={enabled ? "secondary" : "outline"}>
             {t(enabled ? "pipeline.statusOn" : "pipeline.statusOff")}
           </Badge>
-          <Button size="sm" variant="outline" disabled={busy || enabled === null} onClick={toggle}>
-            {t(enabled ? "pipeline.turnOff" : "pipeline.turnOn")}
+          <Button size="sm" variant="outline" asChild>
+            <Link to={buildRepoPath(owner, name, { tab: "pipeline" })}>
+              {t("pipeline.manage")}
+            </Link>
           </Button>
         </div>
       </CardContent>

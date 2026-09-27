@@ -14,14 +14,15 @@ import (
 // 本文件负责流水线的「运行」：查询、手动/dispatch 触发、取消、重跑及目标解析。
 // 定义/配置（开关、文件、可视化图）见 pipeline.go。
 
-// listPipelineRuns 列出流水线运行记录（?limit 限制数量）。
+// listPipelineRuns 分页列出流水线运行记录（?limit/?offset，X-Total-Count 返回总数）。
 //
 //	@Summary     列出流水线运行
 //	@Tags        pipeline
 //	@Produce     json
-//	@Param       owner path string true "仓库所有者"
-//	@Param       name  path string true "仓库名"
-//	@Param       limit query int false "数量上限"
+//	@Param       owner  path  string true  "仓库所有者"
+//	@Param       name   path  string true  "仓库名"
+//	@Param       limit  query int    false "每页数量上限"
+//	@Param       offset query int    false "偏移量"
 //	@Success     200 {array}  object
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/pipeline/runs [get]
@@ -30,12 +31,18 @@ func (a *API) listPipelineRuns(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	runs, err := a.store.ListPipelineRuns(owner, name, limit)
+	limit, offset := pageParams(r)
+	runs, err := a.store.ListPipelineRunsPaged(owner, name, limit, offset)
 	if err != nil {
 		internalError(w, err)
 		return
 	}
+	total, err := a.store.CountPipelineRuns(owner, name)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	setTotal(w, total)
 	for i := range runs {
 		runs[i].HasArtifacts = pipeline.HasArtifacts(owner, name, runs[i].ID)
 	}

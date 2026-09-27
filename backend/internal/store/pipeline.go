@@ -181,14 +181,22 @@ func (s *Store) FinishPipelineRun(id int64, status, errMsg string) error {
 		Updates(map[string]any{"status": status, "error": errMsg, "finished_at": ts}).Error
 }
 
-// ListPipelineRuns 最近 limit 条运行记录（新→旧）。
+// ListPipelineRuns 最近 limit 条运行记录（新→旧，offset=0 的便捷形式）。
 func (s *Store) ListPipelineRuns(owner, repo string, limit int) ([]PipelineRun, error) {
+	return s.ListPipelineRunsPaged(owner, repo, limit, 0)
+}
+
+// ListPipelineRunsPaged 分页列出运行记录（新→旧）；limit<=0 表示默认 20。
+func (s *Store) ListPipelineRunsPaged(owner, repo string, limit, offset int) ([]PipelineRun, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
+	if offset < 0 {
+		offset = 0
+	}
 	var rows []pipelineRunRow
 	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).
-		Order("id DESC").Limit(limit).Find(&rows).Error; err != nil {
+		Order("id DESC").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	runs := make([]PipelineRun, 0, len(rows))
@@ -196,6 +204,15 @@ func (s *Store) ListPipelineRuns(owner, repo string, limit int) ([]PipelineRun, 
 		runs = append(runs, runRowToDTO(r))
 	}
 	return runs, nil
+}
+
+// CountPipelineRuns 仓库运行记录总数（分页总数用）。
+func (s *Store) CountPipelineRuns(owner, repo string) (int, error) {
+	var n int64
+	if err := s.db.Model(&pipelineRunRow{}).Where("owner = ? AND repo = ?", owner, repo).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return int(n), nil
 }
 
 // GetPipelineRun 单条运行记录（不存在返回 ErrNotFound）。

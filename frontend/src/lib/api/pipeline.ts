@@ -1,4 +1,4 @@
-import { req } from "./core";
+import { req, reqPage } from "./core";
 import type { ArtifactFile, PipelineGraph, PipelineParams, PipelineRun, RepoEnvVar, RepoSecret, Runner } from "./types";
 
 export const pipelineApi = {
@@ -24,8 +24,12 @@ export const pipelineApi = {
       method: "PUT",
       body: JSON.stringify({ enabled }),
     }),
-  listPipelineRuns: (owner: string, name: string) =>
-    req<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?limit=50`),
+  listPipelineRuns: (owner: string, name: string, limit = 20, offset = 0) => {
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (offset > 0) params.set("offset", String(offset));
+    return reqPage<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?${params.toString()}`);
+  },
   getPipelineRun: (owner: string, name: string, id: number) =>
     req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`, {}, { fresh: true }),
   triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string; file?: string; delay?: string; inputs?: Record<string, string> } | string) =>
