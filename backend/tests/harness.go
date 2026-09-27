@@ -71,6 +71,9 @@ func start(t *testing.T) *Env {
 	dir := t.TempDir()
 	// pre-receive hook 由 git 子进程执行时需要找到测试 DB（见 main_test.go）
 	t.Setenv("GITDASH_DATA", dir)
+	// 内置流水线执行器生产默认关闭；测试显式开启 host 模式以便覆盖流水线 API
+	// （注册仍开放，故 host 步骤本身会被 ErrHostDisabled 拒绝，符合用例预期）。
+	t.Setenv("GITDASH_PIPELINE_EXEC", "host")
 	// 集成测试默认关闭“注册自动建同名仓库”，保持用例对仓库数量的确定性；
 	// 需要验证该行为的用例自行覆盖为 "1"（见 profile_repo_test.go）。
 	t.Setenv("GITDASH_PROFILE_REPO", "0")

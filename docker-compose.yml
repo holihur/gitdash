@@ -53,6 +53,10 @@ services:
       # GITDASH_REDIS_DB: "0"
       # 需要自动更新时取消注释（仅正式发布版生效）：
       # GITDASH_AUTO_UPDATE: "1"
+      # 内置流水线执行器默认关闭（opt-in）。启用需显式开模式 + 镜像白名单：
+      # GITDASH_PIPELINE_EXEC: docker
+      # GITDASH_DISABLE_REGISTRATION: "1"   # docker/host 模式要求关闭开放注册
+      # GITDASH_PIPELINE_IMAGES: "alpine:3.19,golang:1.22"
     volumes:
       - gitdash-data:/data
     # 数据一致 + 便于备份；如需替换默认监听端口可在此覆盖：

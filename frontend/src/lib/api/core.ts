@@ -17,12 +17,14 @@ export class ApiError extends Error {
 
 let sshPort = "2222";
 let copilotEnabled = false;
-const copilotListeners = new Set<() => void>();
+let pipelineExecutorEnabled = false;
+// 实例能力位（copilot / 内置流水线执行器）变更的订阅者。
+const capabilityListeners = new Set<() => void>();
 
-/** 订阅 copilot 能力位变化（配合 useSyncExternalStore）。 */
+/** 订阅实例能力位变化（配合 useSyncExternalStore）。 */
 export function subscribeCopilot(fn: () => void): () => void {
-  copilotListeners.add(fn);
-  return () => copilotListeners.delete(fn);
+  capabilityListeners.add(fn);
+  return () => capabilityListeners.delete(fn);
 }
 
 /** 启动时调用：拉取实例信息（真实 SSH 端口、文档站地址、copilot 能力位），失败保持默认。 */
@@ -33,13 +35,16 @@ export async function loadInstanceInfo(): Promise<void> {
       ssh_port: string;
       docs_url?: string;
       copilot_enabled?: boolean;
+      pipeline_executor_enabled?: boolean;
     }>("/instance");
     if (r.ssh_port) sshPort = r.ssh_port;
     if (r.docs_url) setDocsURL(r.docs_url);
-    const next = Boolean(r.copilot_enabled);
-    if (next !== copilotEnabled) {
-      copilotEnabled = next;
-      copilotListeners.forEach((fn) => fn());
+    const nextCopilot = Boolean(r.copilot_enabled);
+    const nextPipeline = Boolean(r.pipeline_executor_enabled);
+    if (nextCopilot !== copilotEnabled || nextPipeline !== pipelineExecutorEnabled) {
+      copilotEnabled = nextCopilot;
+      pipelineExecutorEnabled = nextPipeline;
+      capabilityListeners.forEach((fn) => fn());
     }
   } catch {
     /* ignore：回退默认端口 */
@@ -49,6 +54,11 @@ export async function loadInstanceInfo(): Promise<void> {
 /** 实例是否启用 copilot（由 /api/instance 能力位驱动；默认关闭）。 */
 export function isCopilotEnabled(): boolean {
   return copilotEnabled;
+}
+
+/** 实例是否启用内置流水线执行器（默认关闭，需显式 GITDASH_PIPELINE_EXEC）。 */
+export function isPipelineExecutorEnabled(): boolean {
+  return pipelineExecutorEnabled;
 }
 
 export function cloneUrl(owner: string, name: string): string {

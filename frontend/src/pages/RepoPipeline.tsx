@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { Loader2, Play, Workflow } from "lucide-react";
-import { api, type PipelineGraph, type PipelineParam, type PipelineRun } from "@/lib/api";
+import {
+  api,
+  isPipelineExecutorEnabled,
+  subscribeCopilot,
+  type PipelineGraph,
+  type PipelineParam,
+  type PipelineRun,
+} from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +43,8 @@ export default function RepoPipeline({ owner, name, role }: Props) {
   const locale = dateLocale(lang);
   const canToggle = canMaintain(role);
   const canWrite = roleCanWrite(role);
+  // 内置执行器默认关闭；能力位来自 /api/instance。
+  const executorOn = useSyncExternalStore(subscribeCopilot, isPipelineExecutorEnabled, isPipelineExecutorEnabled);
 
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -246,7 +255,8 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                 <Button
                   variant={enabled ? "default" : "outline"}
                   size="sm"
-                  disabled={toggling || enabled === null}
+                  disabled={toggling || enabled === null || (!executorOn && !enabled)}
+                  title={!executorOn ? t("pipeline.executorDisabled") : undefined}
                   onClick={toggle}
                 >
                   {enabled ? t("pipeline.turnOff") : t("pipeline.turnOn")}
@@ -281,7 +291,14 @@ export default function RepoPipeline({ owner, name, role }: Props) {
                     title={t("pipeline.delayHint")}
                     className="h-8 w-28 text-xs"
                   />
-                  <Button variant="outline" size="sm" className="gap-1.5" disabled={triggering} onClick={openRunForm}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={triggering || !executorOn}
+                    title={!executorOn ? t("pipeline.executorDisabled") : undefined}
+                    onClick={openRunForm}
+                  >
                     <Play className="h-3.5 w-3.5" />
                     {t("pipeline.runNow")}
                   </Button>
@@ -309,6 +326,11 @@ export default function RepoPipeline({ owner, name, role }: Props) {
             <Badge variant={enabled ? "default" : "secondary"}>
               {enabled === null ? "…" : t(enabled ? "pipeline.statusOn" : "pipeline.statusOff")}
             </Badge>
+            {!executorOn && (
+              <span className="text-xs text-amber-600 dark:text-amber-400">
+                {t("pipeline.executorDisabled")}
+              </span>
+            )}
             {(files.length > 0 ? files : [".gitdash.yml"]).map((f) => (
               <code key={f} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{f}</code>
             ))}

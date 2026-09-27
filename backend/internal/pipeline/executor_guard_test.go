@@ -8,22 +8,30 @@ import (
 	"time"
 )
 
-// TestBuiltinExecutorDisabled 覆盖 S-06 加固：GITDASH_PIPELINE_EXEC=off
-// 时内置执行器（docker 与 host）整体禁用。
+// TestBuiltinExecutorDisabled 覆盖 H1/P0：内置执行器改为 opt-in（默认关闭）。
 func TestBuiltinExecutorDisabled(t *testing.T) {
-	t.Setenv("GITDASH_PIPELINE_EXEC", "")
-	if BuiltinExecutorDisabled() {
-		t.Fatal("executor should be enabled by default")
-	}
-	for _, v := range []string{"off", "OFF", " off "} {
+	SetHostAllowed(false)
+	t.Setenv("GITDASH_DISABLE_REGISTRATION", "")
+	// 未设置 / 非法值 / off → 默认关闭。
+	for _, v := range []string{"", "off", "OFF", " off ", "weird"} {
 		t.Setenv("GITDASH_PIPELINE_EXEC", v)
 		if !BuiltinExecutorDisabled() {
-			t.Fatalf("BuiltinExecutorDisabled() = false for %q", v)
+			t.Fatalf("BuiltinExecutorDisabled() = false for %q; want true (opt-in)", v)
 		}
 	}
+	// docker：开放注册下仍关闭；关闭注册后启用。
 	t.Setenv("GITDASH_PIPELINE_EXEC", "docker")
+	if !BuiltinExecutorDisabled() {
+		t.Fatal("docker mode with open registration must stay disabled")
+	}
+	t.Setenv("GITDASH_DISABLE_REGISTRATION", "1")
 	if BuiltinExecutorDisabled() {
-		t.Fatal("docker mode must not count as disabled")
+		t.Fatal("docker mode with registration disabled must be enabled")
+	}
+	// host：hostAllowed 由 Init 单独门控，不在此处报告为 disabled。
+	t.Setenv("GITDASH_PIPELINE_EXEC", "host")
+	if BuiltinExecutorDisabled() {
+		t.Fatal("host mode must not be reported disabled")
 	}
 }
 
@@ -37,12 +45,15 @@ func TestBuiltinExecuteRejectedWhenDisabled(t *testing.T) {
 	}
 }
 
-// TestImageAllowed 覆盖 GITDASH_PIPELINE_IMAGES 白名单：未配置放行全部，
+// TestImageAllowed 覆盖 H1/P0：镜像白名单默认拒绝（未配置时非空镜像一律拒绝），
 // 配置后仅放行列出的镜像；host 模式（空 image）不受限。
 func TestImageAllowed(t *testing.T) {
 	t.Setenv("GITDASH_PIPELINE_IMAGES", "")
-	if !imageAllowed("alpine:latest") {
-		t.Fatal("unset allowlist should allow any image")
+	if imageAllowed("alpine:latest") {
+		t.Fatal("unset allowlist must deny images (default deny)")
+	}
+	if !imageAllowed("") {
+		t.Fatal("host mode (empty image) must remain allowed")
 	}
 	t.Setenv("GITDASH_PIPELINE_IMAGES", "alpine:latest, golang:1.22")
 	if !imageAllowed("alpine:latest") || !imageAllowed("golang:1.22") {
@@ -51,13 +62,11 @@ func TestImageAllowed(t *testing.T) {
 	if imageAllowed("ubuntu:latest") {
 		t.Fatal("unlisted image should be rejected")
 	}
-	if !imageAllowed("") {
-		t.Fatal("host mode (empty image) must remain allowed")
-	}
 }
 
 func TestBuiltinExecuteRejectedWhenImageNotAllowed(t *testing.T) {
-	t.Setenv("GITDASH_PIPELINE_EXEC", "")
+	t.Setenv("GITDASH_PIPELINE_EXEC", "docker")
+	t.Setenv("GITDASH_DISABLE_REGISTRATION", "1")
 	t.Setenv("GITDASH_PIPELINE_IMAGES", "alpine:latest")
 	be := &builtinDockerExecutor{}
 	cfg := &Config{Timeout: time.Second, Image: "ubuntu:latest"}

@@ -9,6 +9,10 @@ Type=simple
 Environment=GITDASH_DATA=/var/lib/gitdash
 Environment=GITDASH_HTTP_ADDR=:8080
 Environment=GITDASH_SSH_ADDR=:2222
+# 内置流水线执行器默认关闭（opt-in）。如需启用，在 EnvironmentFile 中设置：
+#   GITDASH_PIPELINE_EXEC=docker
+#   GITDASH_DISABLE_REGISTRATION=1
+#   GITDASH_PIPELINE_IMAGES=alpine:3.19,golang:1.22
 # 可选配置（管理员密码、SMTP、OAuth、自动更新等）写在这里；不存在时忽略。
 # 示例文件由包安装脚本生成于 /etc/gitdash/gitdash.env，修改后 systemctl restart gitdash。
 EnvironmentFile=-/etc/gitdash/gitdash.env

@@ -865,6 +865,7 @@ export const en = {
     turnOn: "Enable",
     turnOff: "Disable",
     manage: "Manage in Pipeline",
+    executorDisabled: "The built-in pipeline executor is disabled on this instance (set GITDASH_PIPELINE_EXEC=docker to enable).",
     enabled: "Pipeline enabled",
     disabled: "Pipeline disabled",
     runNow: "Run now",

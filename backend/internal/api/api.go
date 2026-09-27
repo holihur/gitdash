@@ -338,7 +338,8 @@ func (a *API) instance(w http.ResponseWriter, r *http.Request) {
 		"version":         a.publicVersion(),
 		"ssh_port":        a.sshPort,
 		"docs_url":        a.docsURL(),
-		"copilot_enabled": copilot.Enabled(),
+		"copilot_enabled":           copilot.Enabled(),
+		"pipeline_executor_enabled": pipelineExecutorEnabled(),
 	})
 }
 

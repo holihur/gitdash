@@ -11,6 +11,10 @@ import (
 // 本文件只负责流水线的「定义/配置」：开关、文件发现与可视化图。
 // 运行相关（触发/取消/重跑/查询）见 pipeline_runs.go。
 
+// pipelineExecutorEnabled 内置执行器是否启用（/api/instance 能力位，前端据此
+// 隐藏/禁用流水线开关）。
+func pipelineExecutorEnabled() bool { return !pipeline.BuiltinExecutorDisabled() }
+
 // getPipeline 获取仓库流水线开关状态。
 //
 //	@Summary     获取流水线配置
@@ -170,6 +174,12 @@ func (a *API) setPipeline(w http.ResponseWriter, r *http.Request) {
 		Enabled bool `json:"enabled"`
 	}
 	if err := readJSON(w, r, &in); err != nil {
+		return
+	}
+	// 服务端闸门：执行器未启用时不允许开启流水线，避免用户以为已启用、运行时才报错。
+	if in.Enabled && pipeline.BuiltinExecutorDisabled() {
+		writeCode(w, http.StatusForbidden, "executor_disabled",
+			"the built-in pipeline executor is disabled; set GITDASH_PIPELINE_EXEC=docker (and GITDASH_PIPELINE_IMAGES) to enable it")
 		return
 	}
 	if err := a.store.SetPipeline(owner, name, in.Enabled); err != nil {

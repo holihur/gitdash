@@ -58,18 +58,39 @@ var hostAllowed = false
 // HostAllowed 是否允许 host 执行。
 func HostAllowed() bool { return hostAllowed }
 
-// BuiltinExecutorDisabled 内置执行器是否被显式关闭（GITDASH_PIPELINE_EXEC=off）。
-// 关闭后，未指定 runs-on 的流水线将被拒绝，避免服务端直接跑容器（收敛 S-06 暴露面）。
+// execMode 归一化 GITDASH_PIPELINE_EXEC。
+func execMode() string {
+	return strings.ToLower(strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_EXEC")))
+}
+
+// BuiltinExecutorDisabled 内置执行器是否关闭。语义为 **默认关闭（opt-in）**：
+// 只有显式设为 docker / host 才启用；未设置或非法值一律视为关闭，避免
+// 「未配置即在宿主跑任意容器」的默认不安全姿态（审计 H1/P0）。
 func BuiltinExecutorDisabled() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_EXEC")), "off")
+	switch execMode() {
+	case "docker":
+		// docker 模式同样要求关闭开放注册：开放注册下任何注册用户都能让服务端
+		// 拉取并运行任意容器（与 host 模式对称）。
+		return !RegistrationDisabled()
+	case "host":
+		return false // hostAllowed 在 Init 中已按注册开关门控
+	default:
+		// 未显式配置：默认关闭。但 SetHostAllowed(true)（agent -exec host / 测试）
+		// 已经过注册开关门控，视为显式启用 host。
+		return !hostAllowed
+	}
 }
 
 // imageAllowed 校验镜像是否在 GITDASH_PIPELINE_IMAGES（逗号分隔）白名单内。
-// 未配置白名单时放行全部（保持向后兼容）；host 模式（image 为空）不受限。
+// 默认拒绝：未配置白名单时仅放行 host 模式（image 为空），任何镜像都拒绝，
+// 迫使运维显式声明允许的镜像（审计 H1/P0）。
 func imageAllowed(image string) bool {
+	if image == "" {
+		return true // host 模式（image 为空）不受镜像白名单限制
+	}
 	list := strings.TrimSpace(os.Getenv("GITDASH_PIPELINE_IMAGES"))
-	if list == "" || image == "" {
-		return true
+	if list == "" {
+		return false
 	}
 	for _, a := range strings.Split(list, ",") {
 		if strings.TrimSpace(a) == image {
@@ -83,6 +104,10 @@ func imageAllowed(image string) bool {
 func SetHostAllowed(v bool) { hostAllowed = v }
 
 const maxActiveRuns = 3
+
+// maxPipelineFiles 限制单次发现/触发的流水线文件数，避免 push 大量 .gitdash/*.yml
+// 造成运行/容器风暴。
+const maxPipelineFiles = 50
 
 const maxLogBytes = 512 << 10
 
@@ -108,6 +133,9 @@ func DiscoverFiles(owner, repo, ref string) []string {
 		}
 	}
 	sort.Strings(files)
+	if len(files) > maxPipelineFiles {
+		files = files[:maxPipelineFiles]
+	}
 	return files
 }
 
@@ -363,7 +391,8 @@ func pipelineFile(file string) string {
 // 同一文件进行中运行达上限时返回 ErrTooManyRuns。DSL 解析错误会记为 failed 的运行，便于排查。
 func Trigger(st *store.Store, opts TriggerOpts) (store.PipelineRun, error) {
 	file := pipelineFile(opts.File)
-	if active, err := st.RunningPipelineRunIDs(opts.Owner, opts.Repo, file); err == nil && len(active) >= maxActiveRuns {
+	// 并发上限按仓库（而非按文件）计，避免 push N 个文件排 N×maxActiveRuns 次运行。
+	if active, err := st.RunningPipelineRunIDs(opts.Owner, opts.Repo, ""); err == nil && len(active) >= maxActiveRuns {
 		return store.PipelineRun{}, ErrTooManyRuns
 	}
 	blob, err := gitsvc.ReadBlob(opts.Owner, opts.Repo, opts.SHA, file)

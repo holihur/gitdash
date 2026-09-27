@@ -862,6 +862,7 @@ export const zhCN: Messages = {
     turnOn: "开启",
     turnOff: "关闭",
     manage: "在流水线中管理",
+    executorDisabled: "本实例已关闭内置流水线执行器（需设置 GITDASH_PIPELINE_EXEC=docker 启用）。",
     enabled: "流水线已开启",
     disabled: "流水线已关闭",
     runNow: "立即运行",

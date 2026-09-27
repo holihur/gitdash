@@ -6,6 +6,8 @@ import RepoPipeline from "@/pages/RepoPipeline";
 
 vi.mock("@/lib/api", () => ({
   ApiError: class ApiError extends Error {},
+  isPipelineExecutorEnabled: () => true,
+  subscribeCopilot: () => () => {},
   api: {
     getPipeline: vi.fn(),
     listPipelineRuns: vi.fn(),

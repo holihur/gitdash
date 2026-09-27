@@ -131,6 +131,9 @@ def _spawn_server(binary: Path, tmpdir: Path, extra_env: dict | None = None, reg
         GITDASH_DATA=str(data_dir),
         # 应用默认队列已是 redis；黑盒默认实例固定内存队列（redis 路径由专门用例自建 redis 覆盖）
         GITDASH_QUEUE="memory",
+        # 内置流水线执行器生产默认关闭；测试显式开启 host 模式以便覆盖流水线 API
+        # （注册仍开放，故 host 步骤本身被拒，符合用例预期）。
+        GITDASH_PIPELINE_EXEC="host",
         GITDASH_DISABLE_RATE_LIMIT="1",
         GITDASH_HTTP_ADDR=f"127.0.0.1:{http_port}",
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
