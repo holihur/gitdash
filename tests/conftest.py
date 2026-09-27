@@ -160,11 +160,11 @@ def _spawn_server(binary: Path, tmpdir: Path, extra_env: dict | None = None, reg
     for var in ("GITDASH_SMTP_HOST", "GITDASH_SMTP_PORT", "GITDASH_SMTP_USER", "GITDASH_SMTP_PASS", "GITDASH_SMTP_FROM"):
         if os.environ.get(var):
             env[var] = os.environ[var]
-    # copilot agent 运行时：允许测试显式指定（否则 gitdash 找同目录的 agent / PATH）。
-    # copilot 默认关闭（宿主 RCE 面），仅在提供 agent 二进制时显式开启。
+    # copilot 生产默认关闭（宿主 RCE 面）；测试实例显式开启以覆盖路由与
+    # BYOK/copilot API（需要真实 agent 运行时用例仍要求 GITDASH_AGENT_BIN）。
+    env["GITDASH_COPILOT"] = "1"
     if os.environ.get("GITDASH_AGENT_BIN"):
         env["GITDASH_COPILOT_AGENT_BIN"] = os.environ["GITDASH_AGENT_BIN"]
-        env["GITDASH_COPILOT"] = "1"
     if extra_env:
         env.update(extra_env)
     if register_ssh:
