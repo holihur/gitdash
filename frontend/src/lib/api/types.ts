@@ -402,6 +402,9 @@ export interface Commit {
   /** GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省） */
   gpg_status?: "verified" | "unknown_key" | "invalid";
 }
+/** Issue 优先级（空 = 未设置）。 */
+export type IssuePriority = "critical" | "high" | "medium" | "low";
+
 export interface Issue {
   id: number;
   number: number;
@@ -409,6 +412,10 @@ export interface Issue {
   body: string;
   state: "open" | "closed";
   pinned?: boolean;
+  /** 优先级（空 = 未设置）。 */
+  priority?: IssuePriority | "";
+  /** 来源渠道（空 = 未知），如 audit / cli / feedback / webhook。 */
+  source?: string;
   author: string;
   created_at: string;
   updated_at: string;

@@ -62,6 +62,8 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [priority, setPriority] = useState("");
+  const [source, setSource] = useState("");
   const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
@@ -115,11 +117,16 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
     if (!title.trim()) return;
     setCreating(true);
     try {
-      const it = await api.createIssue(owner, name, title.trim(), body.trim());
+      const it = await api.createIssue(owner, name, title.trim(), body.trim(), {
+        priority,
+        source: source.trim(),
+      });
       toast.success(t("issues.created", { number: it.number }));
       setOpen(false);
       setTitle("");
       setBody("");
+      setPriority("");
+      setSource("");
       load();
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
@@ -161,6 +168,10 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
             onTitleChange={setTitle}
             body={body}
             onBodyChange={setBody}
+            priority={priority}
+            onPriorityChange={setPriority}
+            source={source}
+            onSourceChange={setSource}
             busy={creating}
             onSubmit={create}
             autocomplete={repoAutocomplete(owner, name)}

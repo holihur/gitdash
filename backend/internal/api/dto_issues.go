@@ -2,8 +2,10 @@ package api
 
 // createIssueReq 创建 Issue 请求体。
 type createIssueReq struct {
-	Title string `json:"title"` // Issue 标题（必填，最长 200 字符）
-	Body  string `json:"body"`  // Issue 正文（可选，最长 10000 字符）
+	Title    string `json:"title"`    // Issue 标题（必填，最长 200 字符）
+	Body     string `json:"body"`     // Issue 正文（可选，最长 10000 字符）
+	Priority string `json:"priority"` // 优先级 critical|high|medium|low（可选）
+	Source   string `json:"source"`   // 来源渠道（可选，最长 32 字符）
 }
 
 // setIssueStateReq 修改 Issue 状态请求体。
@@ -17,10 +19,12 @@ type setIssueStateReq struct {
 //
 //nolint:unused // 仅供 swagger @Param 注解引用
 type updateIssueReq struct {
-	Title  *string `json:"title"`  // 新标题（可选）
-	Body   *string `json:"body"`   // 新正文（可选）
-	State  *string `json:"state"`  // 新状态 open/closed（可选）
-	Pinned *bool   `json:"pinned"` // 是否置顶（可选）
+	Title    *string `json:"title"`    // 新标题（可选）
+	Body     *string `json:"body"`     // 新正文（可选）
+	State    *string `json:"state"`    // 新状态 open/closed（可选）
+	Pinned   *bool   `json:"pinned"`   // 是否置顶（可选）
+	Priority *string `json:"priority"` // 新优先级（可选；空串清除）
+	Source   *string `json:"source"`   // 新来源（可选；空串清除）
 }
 
 // setIssueLabelsReq 设置 Issue 标签请求体。

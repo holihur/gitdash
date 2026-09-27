@@ -16,6 +16,7 @@ vi.mock("@/lib/api", () => ({
     setIssueLabels: vi.fn(),
     setIssueMilestone: vi.fn(),
     setIssueAssignees: vi.fn(),
+    updateIssue: vi.fn(),
     subscribeIssue: vi.fn(),
     unsubscribeIssue: vi.fn(),
   },
@@ -42,6 +43,7 @@ const { api } = (await import("@/lib/api")) as unknown as {
     setIssueLabels: Mock;
     setIssueMilestone: Mock;
     setIssueAssignees: Mock;
+    updateIssue: Mock;
     subscribeIssue: Mock;
     unsubscribeIssue: Mock;
   };
@@ -108,6 +110,7 @@ beforeEach(() => {
   api.setIssueAssignees.mockResolvedValue(issue);
   api.setIssueLabels.mockResolvedValue(issue);
   api.setIssueMilestone.mockResolvedValue(issue);
+  api.updateIssue.mockResolvedValue(issue);
   api.subscribeIssue.mockResolvedValue({ subscribed: true });
   api.unsubscribeIssue.mockResolvedValue({ subscribed: false });
 });

@@ -7204,70 +7204,6 @@ const docTemplate = `{
             }
         },
         "/repos/{name}/issues": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "issues"
-                ],
-                "summary": "列出 Issue",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "仓库名",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "每页数量",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "偏移量",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "关键词（标题/正文/作者）",
-                        "name": "q",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "状态过滤：open 或 closed（空 = 全部）",
-                        "name": "state",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "里程碑过滤：里程碑 id 或 none（未指派，空 = 全部）",
-                        "name": "milestone",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/store.Issue"
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ]
-            },
             "post": {
                 "consumes": [
                     "application/json"
@@ -11037,77 +10973,6 @@ const docTemplate = `{
             }
         },
         "/users/{owner}/repos/{name}/issues": {
-            "get": {
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "issues"
-                ],
-                "summary": "列出 Issue",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "仓库所有者（owner 路由时）",
-                        "name": "owner",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "仓库名",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "每页数量",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "偏移量",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "关键词（标题/正文/作者）",
-                        "name": "q",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "状态过滤：open 或 closed（空 = 全部）",
-                        "name": "state",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "里程碑过滤：里程碑 id 或 none（未指派，空 = 全部）",
-                        "name": "milestone",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/store.Issue"
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ]
-            },
             "post": {
                 "consumes": [
                     "application/json"
@@ -17974,6 +17839,14 @@ const docTemplate = `{
                     "description": "Issue 正文（可选，最长 10000 字符）",
                     "type": "string"
                 },
+                "priority": {
+                    "description": "优先级 critical|high|medium|low（可选）",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "来源渠道（可选，最长 32 字符）",
+                    "type": "string"
+                },
                 "title": {
                     "description": "Issue 标题（必填，最长 200 字符）",
                     "type": "string"
@@ -18767,6 +18640,14 @@ const docTemplate = `{
                 "pinned": {
                     "description": "是否置顶（可选）",
                     "type": "boolean"
+                },
+                "priority": {
+                    "description": "新优先级（可选；空串清除）",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "新来源（可选；空串清除）",
+                    "type": "string"
                 },
                 "state": {
                     "description": "新状态 open/closed（可选）",
@@ -19809,6 +19690,14 @@ const docTemplate = `{
                 "pinned": {
                     "description": "置顶",
                     "type": "boolean"
+                },
+                "priority": {
+                    "description": "Priority 优先级：critical | high | medium | low（空 = 未设置）。",
+                    "type": "string"
+                },
+                "source": {
+                    "description": "Source 来源渠道（空 = 未知）。",
+                    "type": "string"
                 },
                 "state": {
                     "description": "\"open\" | \"closed\"",

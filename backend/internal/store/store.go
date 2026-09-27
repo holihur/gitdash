@@ -148,14 +148,18 @@ type DeployKey struct {
 }
 
 type Issue struct {
-	ID        int64   `json:"id"`
-	Owner     string  `json:"-"`
-	Repo      string  `json:"-"`
-	Number    int64   `json:"number"`
-	Title     string  `json:"title"`
-	Body      string  `json:"body"`
-	State     string  `json:"state"`  // "open" | "closed"
-	Pinned    bool    `json:"pinned"` // 置顶
+	ID     int64  `json:"id"`
+	Owner  string `json:"-"`
+	Repo   string `json:"-"`
+	Number int64  `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	State  string `json:"state"`  // "open" | "closed"
+	Pinned bool   `json:"pinned"` // 置顶
+	// Priority 优先级：critical | high | medium | low（空 = 未设置）。
+	Priority string `json:"priority"`
+	// Source 来源渠道（空 = 未知）。
+	Source    string  `json:"source"`
 	Author    string  `json:"author"`
 	CreatedAt string  `json:"created_at"`
 	UpdatedAt string  `json:"updated_at"`

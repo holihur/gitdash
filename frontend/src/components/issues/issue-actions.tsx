@@ -1,8 +1,21 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Bot, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { Bot, Flag, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { api, type ByokKey, type Issue } from "@/lib/api";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ISSUE_PRIORITIES, priorityI18nKey } from "@/components/issues/priority-badge";
 import { apiErrorMsg } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
@@ -117,6 +130,19 @@ export function IssueActions({
     }
   };
 
+  const setPriority = async (priority: string) => {
+    setBusy(true);
+    try {
+      await api.updateIssue(owner, name, issue.number, { priority });
+      toast.success(t("issues.edited", { number: issue.number }));
+      onChanged();
+    } catch (e) {
+      toast.error(apiErrorMsg(to, e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openEdit = () => {
     setEditTitle(issue.title);
     setEditBody(issue.body);
@@ -202,50 +228,74 @@ export function IssueActions({
           {isOpen ? t("issues.close") : t("issues.reopen")}
         </Button>
       )}
-      {canTriage && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 shrink-0 p-0"
-          title={issue.pinned ? t("issues.unpin") : t("issues.pin")}
-          disabled={busy}
-          onClick={togglePin}
-        >
-          {issue.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-        </Button>
-      )}
-      {canTriage && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 shrink-0 p-0"
-          title={t("issues.edit")}
-          onClick={openEdit}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </Button>
-      )}
-      {canWrite && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 shrink-0 p-0"
-          title={t("issues.fixWithCopilot")}
-          onClick={openCopilot}
-        >
-          <Bot className="h-3.5 w-3.5" />
-        </Button>
-      )}
-      {canTriage && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 w-8 shrink-0 p-0 text-destructive"
-          title={t("issues.delete")}
-          onClick={() => setDeleteOpen(true)}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+      {(canTriage || canWrite) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 shrink-0 p-0"
+              title={t("issues.moreActions")}
+              aria-label={t("issues.moreActions")}
+              disabled={busy}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            {canTriage && (
+              <DropdownMenuItem onClick={togglePin}>
+                {issue.pinned ? <PinOff /> : <Pin />}
+                {issue.pinned ? t("issues.unpin") : t("issues.pin")}
+              </DropdownMenuItem>
+            )}
+            {canTriage && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Flag />
+                  {t("issues.setPriority")}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuRadioGroup
+                    value={issue.priority || "none"}
+                    onValueChange={(v) => void setPriority(v === "none" ? "" : v)}
+                  >
+                    <DropdownMenuRadioItem value="none">
+                      {t("issues.priorityNone")}
+                    </DropdownMenuRadioItem>
+                    {ISSUE_PRIORITIES.map((p) => (
+                      <DropdownMenuRadioItem key={p} value={p}>
+                        {t(priorityI18nKey(p) ?? p)}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
+            {canTriage && (
+              <DropdownMenuItem onClick={openEdit}>
+                <Pencil />
+                {t("issues.edit")}
+              </DropdownMenuItem>
+            )}
+            {canWrite && (
+              <DropdownMenuItem onClick={openCopilot}>
+                <Bot />
+                {t("issues.fixWithCopilot")}
+              </DropdownMenuItem>
+            )}
+            {canTriage && <DropdownMenuSeparator />}
+            {canTriage && (
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 />
+                {t("issues.delete")}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
 
       <EditIssueDialog

@@ -15,6 +15,7 @@ import LabelChip from "@/components/label-chip";
 import { MarkdownView } from "@/components/markdown";
 import CommentSection from "@/components/comment-section";
 import { IssueActions } from "@/components/issues/issue-actions";
+import { ISSUE_PRIORITIES, priorityI18nKey } from "@/components/issues/priority-badge";
 import { canTriage, canWrite } from "@/lib/repo-role";
 
 /** Issue 详情独立页：左侧正文 + 评论，右侧标签 / 里程碑设置。 */
@@ -45,6 +46,8 @@ export default function IssueDetail({
   const [draftLabels, setDraftLabels] = useState<number[]>([]);
   const [draftMilestone, setDraftMilestone] = useState(0);
   const [draftAssignees, setDraftAssignees] = useState<string[]>([]);
+  const [draftPriority, setDraftPriority] = useState("");
+  const [draftSource, setDraftSource] = useState("");
   const [events, setEvents] = useState<IssueEvent[]>([]);
   const [collabs, setCollabs] = useState<Collab[]>([]);
   const [subscribed, setSubscribed] = useState(false);
@@ -69,6 +72,8 @@ export default function IssueDetail({
       setDraftLabels((it.labels ?? []).map((l) => l.id));
       setDraftMilestone(it.milestone?.id ?? 0);
       setDraftAssignees(it.assignees ?? []);
+      setDraftPriority(it.priority ?? "");
+      setDraftSource(it.source ?? "");
       setSubscribed(!!it.subscribed);
       setError("");
     } catch (e) {
@@ -89,7 +94,9 @@ export default function IssueDetail({
       draftLabels.some((id) => !issueLabels.some((l) => l.id === id)) ||
       (issue.milestone?.id ?? 0) !== draftMilestone ||
       draftAssignees.length !== (issue.assignees ?? []).length ||
-      draftAssignees.some((u) => !(issue.assignees ?? []).includes(u))
+      draftAssignees.some((u) => !(issue.assignees ?? []).includes(u)) ||
+      (issue.priority ?? "") !== draftPriority ||
+      (issue.source ?? "") !== draftSource.trim()
     : false;
 
   const toggleDraftLabel = (id: number) => {
@@ -108,6 +115,10 @@ export default function IssueDetail({
     if (!issue) return;
     setSavingMeta(true);
     try {
+      await api.updateIssue(owner, name, issue.number, {
+        priority: draftPriority,
+        source: draftSource.trim(),
+      });
       await api.setIssueLabels(owner, name, issue.number, draftLabels);
       await api.setIssueMilestone(owner, name, issue.number, draftMilestone);
       await api.setIssueAssignees(owner, name, issue.number, draftAssignees);
@@ -281,6 +292,37 @@ export default function IssueDetail({
                   })}
                 </div>
               )}
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                {t("issues.priority")}
+              </p>
+              <select
+                aria-label={t("issues.priority")}
+                value={draftPriority}
+                onChange={(e) => setDraftPriority(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">{t("issues.priorityNone")}</option>
+                {ISSUE_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(priorityI18nKey(p) ?? p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">{t("issues.source")}</p>
+              <input
+                aria-label={t("issues.source")}
+                value={draftSource}
+                maxLength={32}
+                placeholder={t("issues.sourcePlaceholder")}
+                onChange={(e) => setDraftSource(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
 
             <div className="space-y-1.5">

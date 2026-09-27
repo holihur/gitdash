@@ -13,6 +13,7 @@ import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import type { MarkdownAutocomplete } from "@/components/markdown-code-editor";
+import { ISSUE_PRIORITIES, priorityI18nKey } from "@/components/issues/priority-badge";
 import { useI18n } from "@/lib/i18n";
 
 /** 新建 issue 对话框 */
@@ -23,6 +24,10 @@ export function CreateIssueDialog({
   onTitleChange,
   body,
   onBodyChange,
+  priority,
+  onPriorityChange,
+  source,
+  onSourceChange,
   busy,
   onSubmit,
   autocomplete,
@@ -34,6 +39,10 @@ export function CreateIssueDialog({
   onTitleChange: (v: string) => void;
   body: string;
   onBodyChange: (v: string) => void;
+  priority: string;
+  onPriorityChange: (v: string) => void;
+  source: string;
+  onSourceChange: (v: string) => void;
   busy: boolean;
   onSubmit: () => void;
   autocomplete?: MarkdownAutocomplete;
@@ -74,6 +83,34 @@ export function CreateIssueDialog({
               autocomplete={autocomplete}
               draftKey={draftKey}
             />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <FieldLabel htmlFor="issue-priority">{t("issues.priority")}</FieldLabel>
+              <select
+                id="issue-priority"
+                value={priority}
+                onChange={(e) => onPriorityChange(e.target.value)}
+                className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">{t("issues.priorityNone")}</option>
+                {ISSUE_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {t(priorityI18nKey(p) ?? p)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <FieldLabel htmlFor="issue-source">{t("issues.source")}</FieldLabel>
+              <Input
+                id="issue-source"
+                value={source}
+                maxLength={32}
+                placeholder={t("issues.sourcePlaceholder")}
+                onChange={(e) => onSourceChange(e.target.value)}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>

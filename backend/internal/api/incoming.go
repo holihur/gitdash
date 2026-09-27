@@ -208,8 +208,9 @@ func (a *API) createIssueFromIncomingWebhook(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var in struct {
-		Title string `json:"title"`
-		Body  string `json:"body"`
+		Title    string `json:"title"`
+		Body     string `json:"body"`
+		Priority string `json:"priority"` // critical|high|medium|low（可选）
 		// Pipeline 非空时触发一次流水线（on 需包含 workflow_dispatch）；可与 issue 同时使用。
 		Pipeline *struct {
 			File   string            `json:"file"`
@@ -236,7 +237,7 @@ func (a *API) createIssueFromIncomingWebhook(w http.ResponseWriter, r *http.Requ
 		resp["runs"] = runs
 	}
 	if strings.TrimSpace(in.Title) != "" {
-		issue, ok := a.newIssue(w, owner, repo, owner, in.Title, in.Body)
+		issue, ok := a.newIssue(w, owner, repo, owner, in.Title, in.Body, in.Priority, "webhook")
 		if !ok {
 			return
 		}

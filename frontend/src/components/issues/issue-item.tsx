@@ -6,6 +6,7 @@ import { dateLocale, useI18n } from "@/lib/i18n";
 import { buildIssuePath } from "@/lib/repo-url";
 import LabelChip from "@/components/label-chip";
 import { IssueActions } from "@/components/issues/issue-actions";
+import { PriorityBadge } from "@/components/issues/priority-badge";
 
 /** issue 列表行：标题链接到独立的详情页，行尾保留快捷操作。 */
 export function IssueItem({
@@ -40,7 +41,7 @@ export function IssueItem({
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         )}
         <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1.5">
             {issue.pinned && <Pin className="h-3.5 w-3.5 shrink-0 fill-current text-amber-500" />}
             <span
               className={cn(
@@ -50,6 +51,7 @@ export function IssueItem({
             >
               {issue.title}
             </span>
+            {issue.priority && <PriorityBadge priority={issue.priority} className="shrink-0" />}
           </span>
           {(issueLabels.length > 0 || issue.milestone || (issue.assignees?.length ?? 0) > 0) && (
             <span className="mt-1 flex flex-wrap items-center gap-1">

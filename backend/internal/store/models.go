@@ -200,14 +200,18 @@ type CreatedPAT struct {
 // ---- issues / labels / milestones ----
 
 type issueRow struct {
-	ID          int64  `gorm:"primaryKey;autoIncrement"`
-	Owner       string `gorm:"not null;uniqueIndex:uq_issue;size:255"`
-	Repo        string `gorm:"not null;uniqueIndex:uq_issue;size:255"`
-	Number      int64  `gorm:"not null;uniqueIndex:uq_issue"`
-	Title       string `gorm:"not null"`
-	Body        string `gorm:"not null;default:''"`
-	State       string `gorm:"not null;default:'open';index:idx_issues_owner_repo"`
-	Pinned      bool   `gorm:"not null;default:false"` // 置顶：列表最前
+	ID     int64  `gorm:"primaryKey;autoIncrement"`
+	Owner  string `gorm:"not null;uniqueIndex:uq_issue;size:255"`
+	Repo   string `gorm:"not null;uniqueIndex:uq_issue;size:255"`
+	Number int64  `gorm:"not null;uniqueIndex:uq_issue"`
+	Title  string `gorm:"not null"`
+	Body   string `gorm:"not null;default:''"`
+	State  string `gorm:"not null;default:'open';index:idx_issues_owner_repo"`
+	Pinned bool   `gorm:"not null;default:false"` // 置顶：列表最前
+	// Priority 优先级：critical | high | medium | low（空 = 未设置）。
+	Priority string `gorm:"not null;default:'';size:16;index:idx_issues_priority"`
+	// Source 来源渠道：manual | web | cli | audit | feedback | webhook | copilot …（空 = 未知）。
+	Source      string `gorm:"not null;default:'';size:32"`
 	Author      string `gorm:"not null"`
 	CreatedAt   string `gorm:"not null"`
 	UpdatedAt   string `gorm:"not null"`

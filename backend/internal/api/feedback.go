@@ -210,7 +210,7 @@ func (a *API) submitFeedback(w http.ResponseWriter, r *http.Request) {
 		if author == "" {
 			author = owner
 		}
-		issue, created := a.newIssue(w, owner, repo, author, title, body, feedbackLabelName)
+		issue, created := a.newIssue(w, owner, repo, author, title, body, "", "feedback", feedbackLabelName)
 		if !created {
 			return
 		}

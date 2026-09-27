@@ -28,6 +28,31 @@ import (
 //	@Security    BearerAuth
 //	@Router      /users/{owner}/repos/{name}/issues [get]
 //	@Router      /repos/{name}/issues [get]
+//
+// issuePriorities 是允许的优先级取值；空 / "none" 表示未设置。
+var issuePriorities = map[string]bool{"critical": true, "high": true, "medium": true, "low": true}
+
+// normalizeIssuePriority 归一化优先级；非法值返回 ok=false。
+func normalizeIssuePriority(v string) (string, bool) {
+	p := strings.ToLower(strings.TrimSpace(v))
+	if p == "" || p == "none" {
+		return "", true
+	}
+	if !issuePriorities[p] {
+		return "", false
+	}
+	return p, true
+}
+
+// normalizeIssueSource 归一化来源（自由文本，最长 32 字符）；超长返回 ok=false。
+func normalizeIssueSource(v string) (string, bool) {
+	s := strings.TrimSpace(v)
+	if len([]rune(s)) > 32 {
+		return "", false
+	}
+	return s, true
+}
+
 func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 	owner, name, ok := a.requireAccess(w, r, false)
 	if !ok {
@@ -61,6 +86,14 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 			assignee = "none"
 		}
 	}
+	priorityRaw := strings.TrimSpace(r.URL.Query().Get("priority"))
+	if priorityRaw != "" && priorityRaw != "none" {
+		if _, valid := normalizeIssuePriority(priorityRaw); !valid {
+			writeCode(w, http.StatusBadRequest, "invalid_priority", "priority must be critical, high, medium, low or none")
+			return
+		}
+	}
+	source := strings.TrimSpace(r.URL.Query().Get("source"))
 	sort := strings.TrimSpace(r.URL.Query().Get("sort"))
 	switch sort {
 	case "", "newest", "oldest", "updated", "popular":
@@ -68,7 +101,7 @@ func (a *API) listIssues(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "invalid_sort", "sort must be newest, oldest, updated or popular")
 		return
 	}
-	filter := store.IssueFilter{Label: label, Assignee: assignee, Sort: sort}
+	filter := store.IssueFilter{Label: label, Assignee: assignee, Priority: priorityRaw, Source: source, Sort: sort}
 	issues, err := a.store.SearchIssuesInRepo(owner, name, q, state, milestone, limit, offset, filter)
 	if err != nil {
 		internalError(w, err)
@@ -140,7 +173,17 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	issue, ok := a.newIssue(w, owner, name, userFrom(r), in.Title, in.Body)
+	priority, valid := normalizeIssuePriority(in.Priority)
+	if !valid {
+		writeCode(w, http.StatusBadRequest, "invalid_priority", "priority must be critical, high, medium, low or none")
+		return
+	}
+	source, valid := normalizeIssueSource(in.Source)
+	if !valid {
+		writeCode(w, http.StatusBadRequest, "invalid_source", "source too long (max 32 chars)")
+		return
+	}
+	issue, ok := a.newIssue(w, owner, name, userFrom(r), in.Title, in.Body, priority, source)
 	if !ok {
 		return
 	}
@@ -152,7 +195,7 @@ func (a *API) createIssue(w http.ResponseWriter, r *http.Request) {
 //
 // 可选的 labelNames 会在创建后自动附到 issue 上（标签不存在时按需创建），
 // 目前用于把反馈 issue 打上 "feedback" 标签。
-func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body string, labelNames ...string) (map[string]any, bool) {
+func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body, priority, source string, labelNames ...string) (map[string]any, bool) {
 	title = strings.TrimSpace(title)
 	if title == "" {
 		writeCode(w, http.StatusBadRequest, "title_required", "title is required")
@@ -166,6 +209,15 @@ func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body s
 		writeCode(w, http.StatusBadRequest, "body_too_long", "body too long (max 10000 chars)")
 		return nil, false
 	}
+	var valid bool
+	if priority, valid = normalizeIssuePriority(priority); !valid {
+		writeCode(w, http.StatusBadRequest, "invalid_priority", "priority must be critical, high, medium, low or none")
+		return nil, false
+	}
+	if source, valid = normalizeIssueSource(source); !valid {
+		writeCode(w, http.StatusBadRequest, "invalid_source", "source too long (max 32 chars)")
+		return nil, false
+	}
 	repo, err := a.store.GetRepo(owner, name)
 	if err != nil {
 		internalError(w, err)
@@ -175,7 +227,7 @@ func (a *API) newIssue(w http.ResponseWriter, owner, name, author, title, body s
 		writeCode(w, http.StatusForbidden, "issues_disabled", "issues are disabled for this repository")
 		return nil, false
 	}
-	issue, err := a.store.CreateIssue(owner, name, author, title, body)
+	issue, err := a.store.CreateIssue(owner, name, author, title, body, priority, source)
 	if err != nil {
 		internalError(w, err)
 		return nil, false
@@ -349,6 +401,8 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 		Body        *string `json:"body"`
 		State       *string `json:"state"`
 		Pinned      *bool   `json:"pinned"`
+		Priority    *string `json:"priority"`
+		Source      *string `json:"source"`
 		Comment     string  `json:"comment"`      // 可选：关闭/重开时附带评论
 		StateReason string  `json:"state_reason"` // 可选：completed | not_planned
 	}
@@ -394,8 +448,25 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if titlePtr == nil && bodyPtr == nil && state == "" && in.Pinned == nil && strings.TrimSpace(in.Comment) == "" {
-		writeCode(w, http.StatusBadRequest, "no_changes", "provide title, body, state, pinned or comment")
+	var priorityPtr, sourcePtr *string
+	if in.Priority != nil {
+		p, valid := normalizeIssuePriority(*in.Priority)
+		if !valid {
+			writeCode(w, http.StatusBadRequest, "invalid_priority", "priority must be critical, high, medium, low or none")
+			return
+		}
+		priorityPtr = &p
+	}
+	if in.Source != nil {
+		s, valid := normalizeIssueSource(*in.Source)
+		if !valid {
+			writeCode(w, http.StatusBadRequest, "invalid_source", "source too long (max 32 chars)")
+			return
+		}
+		sourcePtr = &s
+	}
+	if titlePtr == nil && bodyPtr == nil && state == "" && in.Pinned == nil && priorityPtr == nil && sourcePtr == nil && strings.TrimSpace(in.Comment) == "" {
+		writeCode(w, http.StatusBadRequest, "no_changes", "provide title, body, state, pinned, priority, source or comment")
 		return
 	}
 	if in.Comment != "" && len([]rune(in.Comment)) > 10000 {
@@ -408,7 +479,7 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	issue, err := a.store.UpdateIssue(owner, name, number, titlePtr, bodyPtr)
+	issue, err := a.store.UpdateIssue(owner, name, number, titlePtr, bodyPtr, priorityPtr, sourcePtr)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -438,7 +509,8 @@ func (a *API) updateIssue(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = a.store.AddIssueEvent(owner, name, "issue", number, me, action, "")
 		a.notify(owner, name, "issue", action, me, issue.Number, issue.Title, "")
-	case (titlePtr != nil && *titlePtr != prev.Title) || (bodyPtr != nil && *bodyPtr != prev.Body):
+	case (titlePtr != nil && *titlePtr != prev.Title) || (bodyPtr != nil && *bodyPtr != prev.Body) ||
+		(priorityPtr != nil && *priorityPtr != prev.Priority) || (sourcePtr != nil && *sourcePtr != prev.Source):
 		_ = a.store.AddIssueEvent(owner, name, "issue", number, me, "edited", "")
 		a.notify(owner, name, "issue", "edited", me, issue.Number, issue.Title, "")
 	}

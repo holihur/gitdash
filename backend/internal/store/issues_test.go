@@ -200,3 +200,47 @@ func TestIssueMilestoneFilter(t *testing.T) {
 		t.Fatalf("invalid milestone should be empty, got %+v", got)
 	}
 }
+
+// TestIssuePriorityAndSource 覆盖新增的优先级/来源字段：创建、更新与过滤。
+func TestIssuePriorityAndSource(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUser("alice", "alice-pass-123"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateRepo("alice", "demo", "d", false); err != nil {
+		t.Fatal(err)
+	}
+	it, err := s.CreateIssue("alice", "demo", "alice", "bug", "body", "high", "audit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it.Priority != "high" || it.Source != "audit" {
+		t.Fatalf("create = %+v", it)
+	}
+	if _, err := s.CreateIssue("alice", "demo", "alice", "chore", "body"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.getIssue("alice", "demo", it.Number)
+	if err != nil || got.Priority != "high" || got.Source != "audit" {
+		t.Fatalf("get = %+v err=%v", got, err)
+	}
+
+	priority, source := "critical", "cli"
+	got, err = s.UpdateIssue("alice", "demo", it.Number, nil, nil, &priority, &source)
+	if err != nil || got.Priority != "critical" || got.Source != "cli" {
+		t.Fatalf("update = %+v err=%v", got, err)
+	}
+
+	critical, err := s.SearchIssuesInRepo("alice", "demo", "", "", "", 0, 0, IssueFilter{Priority: "critical"})
+	if err != nil || len(critical) != 1 || critical[0].Number != it.Number {
+		t.Fatalf("priority filter = %+v err=%v", critical, err)
+	}
+	none, err := s.SearchIssuesInRepo("alice", "demo", "", "", "", 0, 0, IssueFilter{Priority: "none"})
+	if err != nil || len(none) != 1 {
+		t.Fatalf("priority none filter = %+v err=%v", none, err)
+	}
+}

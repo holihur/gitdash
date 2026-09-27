@@ -3,6 +3,7 @@ package tests
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -125,5 +126,40 @@ func TestIssueUserIsolation(t *testing.T) {
 	}
 	if got := len(listIssues(t, alice, "demo")); got != 1 {
 		t.Fatalf("alice issues = %d", got)
+	}
+}
+
+// TestIssuePriorityAndSourceFields 覆盖新增优先级/来源字段的创建、更新、过滤与校验。
+func TestIssuePriorityAndSourceFields(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	alice.mustStatus("POST", "/repos", map[string]string{"name": "demo"}, 201)
+
+	m := alice.mustStatus("POST", "/repos/demo/issues",
+		map[string]string{"title": "audit finding", "body": "x", "priority": "high", "source": "audit"}, 201)
+	if m["priority"] != "high" || m["source"] != "audit" {
+		t.Fatalf("create = %v", m)
+	}
+	// 非法优先级 / 超长来源
+	alice.mustFail("POST", "/repos/demo/issues",
+		map[string]string{"title": "bad", "priority": "urgent"}, 400)
+	alice.mustFail("POST", "/repos/demo/issues",
+		map[string]string{"title": "bad", "source": "0123456789012345678901234567890123456789"}, 400)
+
+	// 更新优先级与来源
+	up := alice.mustStatus("PATCH", "/repos/demo/issues/1",
+		map[string]string{"priority": "critical", "source": "cli"}, 200)
+	if up["priority"] != "critical" || up["source"] != "cli" {
+		t.Fatalf("update = %v", up)
+	}
+	// 非法优先级更新拒绝
+	alice.mustFail("PATCH", "/repos/demo/issues/1", map[string]string{"priority": "wish"}, 400)
+
+	// 过滤：critical 命中，low 不命中
+	if body := rawGet(t, alice, "/repos/demo/issues?priority=critical"); !strings.Contains(body, "audit finding") {
+		t.Fatalf("priority filter missed issue: %s", body)
+	}
+	if body := rawGet(t, alice, "/repos/demo/issues?priority=low"); strings.Contains(body, "audit finding") {
+		t.Fatalf("priority filter leaked issue: %s", body)
 	}
 }

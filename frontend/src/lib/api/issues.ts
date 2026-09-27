@@ -8,7 +8,7 @@ export const issuesApi = {
     name: string,
     limit?: number,
     offset?: number,
-    filters?: { q?: string; state?: string; milestone?: string; label?: string; assignee?: string; sort?: string },
+    filters?: { q?: string; state?: string; milestone?: string; label?: string; assignee?: string; priority?: string; source?: string; sort?: string },
   ) => {
     const params = new URLSearchParams();
     if (limit) params.set("limit", String(limit));
@@ -18,6 +18,8 @@ export const issuesApi = {
     if (filters?.milestone) params.set("milestone", filters.milestone);
     if (filters?.label) params.set("label", filters.label);
     if (filters?.assignee) params.set("assignee", filters.assignee);
+    if (filters?.priority) params.set("priority", filters.priority);
+    if (filters?.source) params.set("source", filters.source);
     if (filters?.sort) params.set("sort", filters.sort);
     const qs = params.toString();
     return reqPage<Issue[]>(`/users/${owner}/repos/${name}/issues${qs ? `?${qs}` : ""}`);
@@ -39,10 +41,16 @@ export const issuesApi = {
   },
   getIssue: (owner: string, name: string, number: number) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`),
-  createIssue: (owner: string, name: string, title: string, body: string) =>
+  createIssue: (
+    owner: string,
+    name: string,
+    title: string,
+    body: string,
+    meta?: { priority?: string; source?: string },
+  ) =>
     req<Issue>(`/users/${owner}/repos/${name}/issues`, {
       method: "POST",
-      body: JSON.stringify({ title, body }),
+      body: JSON.stringify({ title, body, ...meta }),
     }),
   setIssueState: (owner: string, name: string, number: number, state: "open" | "closed") =>
     req<Issue>(`/users/${owner}/repos/${name}/issues/${number}`, {
@@ -58,6 +66,8 @@ export const issuesApi = {
       body?: string;
       state?: "open" | "closed";
       pinned?: boolean;
+      priority?: string;
+      source?: string;
       comment?: string;
       state_reason?: "completed" | "not_planned";
     },

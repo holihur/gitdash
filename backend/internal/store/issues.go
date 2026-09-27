@@ -12,7 +12,8 @@ import (
 func issueToDTO(r issueRow) Issue {
 	it := Issue{
 		ID: r.ID, Owner: r.Owner, Repo: r.Repo, Number: r.Number,
-		Title: r.Title, Body: r.Body, State: r.State, Pinned: r.Pinned, Author: r.Author,
+		Title: r.Title, Body: r.Body, State: r.State, Pinned: r.Pinned,
+		Priority: r.Priority, Source: r.Source, Author: r.Author,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 	if r.ClosedAt != nil {
@@ -35,7 +36,15 @@ func (s *Store) getIssue(owner, repo string, number int64) (Issue, error) {
 	return issueToDTO(r), nil
 }
 
-func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, error) {
+// CreateIssue 创建 issue；可选 meta 依次为 priority、source（缺省为空 = 未设置）。
+func (s *Store) CreateIssue(owner, repo, author, title, body string, meta ...string) (Issue, error) {
+	priority, source := "", ""
+	if len(meta) > 0 {
+		priority = meta[0]
+	}
+	if len(meta) > 1 {
+		source = meta[1]
+	}
 	now := now()
 	// 号码由仓库级持久计数器分配：同一仓库内单调递增，删除后不复用。
 	number, err := s.nextNumber(owner, repo, counterIssue)
@@ -45,6 +54,7 @@ func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, err
 	r := issueRow{
 		Owner: owner, Repo: repo, Number: number,
 		Title: title, Body: body, State: "open", Author: author,
+		Priority: priority, Source: source,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.db.Create(&r).Error; err != nil {
@@ -52,6 +62,7 @@ func (s *Store) CreateIssue(owner, repo, author, title, body string) (Issue, err
 	}
 	return Issue{ID: r.ID, Owner: owner, Repo: repo, Number: r.Number,
 		Title: title, Body: body, State: "open", Author: author,
+		Priority: priority, Source: source,
 		CreatedAt: now, UpdatedAt: now}, nil
 }
 
@@ -78,6 +89,8 @@ func (s *Store) ListIssues(owner, repo string, limit, offset int) ([]Issue, erro
 type IssueFilter struct {
 	Label    string
 	Assignee string
+	Priority string // 空 = 不过滤；"none" = 未设置优先级；否则按优先级精确匹配
+	Source   string // 空 = 不过滤；"none" = 未设置来源；否则按来源精确匹配
 	Sort     string // newest（默认）| oldest | updated | popular
 }
 
@@ -124,6 +137,18 @@ func (s *Store) issueQuery(owner, repo, q, state, milestone string, opts ...Issu
 			query = query.Where("id NOT IN (SELECT issue_id FROM issue_assignees)")
 		case f.Assignee != "":
 			query = query.Where("id IN (SELECT issue_id FROM issue_assignees WHERE username = ?)", f.Assignee)
+		}
+		switch {
+		case f.Priority == "none":
+			query = query.Where("priority = ''")
+		case f.Priority != "":
+			query = query.Where("priority = ?", f.Priority)
+		}
+		switch {
+		case f.Source == "none":
+			query = query.Where("source = ''")
+		case f.Source != "":
+			query = query.Where("source = ?", f.Source)
 		}
 	}
 	return query
@@ -245,14 +270,28 @@ func (s *Store) SetIssuePinned(owner, repo string, number int64, pinned bool) (I
 	return s.getIssue(owner, repo, number)
 }
 
-// UpdateIssue 局部更新 issue 标题/正文（nil 表示不修改）；不存在返回 ErrNotFound。
-func (s *Store) UpdateIssue(owner, repo string, number int64, title, body *string) (Issue, error) {
+// UpdateIssue 局部更新 issue 标题/正文/优先级/来源（nil 表示不修改）；不存在返回 ErrNotFound。
+// 可选 meta 依次为 priority、source（nil = 不修改）。
+func (s *Store) UpdateIssue(owner, repo string, number int64, title, body *string, meta ...*string) (Issue, error) {
+	var priority, source *string
+	if len(meta) > 0 {
+		priority = meta[0]
+	}
+	if len(meta) > 1 {
+		source = meta[1]
+	}
 	updates := map[string]any{"updated_at": now()}
 	if title != nil {
 		updates["title"] = *title
 	}
 	if body != nil {
 		updates["body"] = *body
+	}
+	if priority != nil {
+		updates["priority"] = *priority
+	}
+	if source != nil {
+		updates["source"] = *source
 	}
 	res := s.db.Model(&issueRow{}).
 		Where("owner = ? AND repo = ? AND number = ?", owner, repo, number).
