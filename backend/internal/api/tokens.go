@@ -69,6 +69,14 @@ func (a *API) createTokens(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "pat_name_too_long", "name must be at most 100 characters")
 		return
 	}
+	// 防提权：携带 PAT/OAuth 凭据的调用者不能铸造超出自身作用域的 PAT。
+	// （中间件 patAllowed 已拒绝 PAT 访问 /api/tokens，这里是纵深防御。）
+	if callerScopes, isPAT := r.Context().Value(ctxPatScopes{}).([]string); isPAT {
+		if !scopeSubset(in.Scopes, callerScopes) {
+			writeCode(w, http.StatusForbidden, "insufficient_scope", "cannot create a token with broader scopes")
+			return
+		}
+	}
 	scopeStr, ok := store.NormalizePATScopes(in.Scopes)
 	if !ok {
 		writeCode(w, http.StatusBadRequest, "invalid_scope", "scopes must be repo/inbox/keys")

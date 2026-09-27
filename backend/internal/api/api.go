@@ -1058,14 +1058,33 @@ func forceMFAExemptPath(path string) bool {
 	}
 }
 
-// patAllowed 判定 PAT 是否覆盖该路径所需 scope：// /api/admin* 一律拒绝；/api/tokens* 管理自身放行；/api/inbox* 需 inbox；
+// credentialManagementPath 是“凭据管理”端点：创建/删除 PAT、注册 passkey、
+// 创建 OAuth 应用、管理 BYOK 密钥。这些端点只能由交互式会话（cookie）调用，
+// 否则一个窄作用域 PAT/OAuth token 即可铸造全权凭据（安全审计 A1）。
+func credentialManagementPath(path string) bool {
+	switch {
+	case strings.HasPrefix(path, "/api/tokens"):
+		return true
+	case strings.HasPrefix(path, "/api/me/passkeys"):
+		return true
+	case strings.HasPrefix(path, "/api/applications"):
+		return true
+	case strings.HasPrefix(path, "/api/me/byok"):
+		return true
+	default:
+		return false
+	}
+}
+
+// patAllowed 判定 PAT 是否覆盖该路径所需 scope：// /api/admin* 一律拒绝；
+// 凭据管理端点一律拒绝（仅交互式会话）；/api/inbox* 需 inbox；
 // /api/keys* 与 /api/gpg* 需 keys；其余需 repo。
 func patAllowed(path string, scopes []string) bool {
 	if strings.HasPrefix(path, "/api/admin") {
 		return false
 	}
-	if strings.HasPrefix(path, "/api/tokens") {
-		return true
+	if credentialManagementPath(path) {
+		return false
 	}
 	required := "repo"
 	switch {
@@ -1080,6 +1099,21 @@ func patAllowed(path string, scopes []string) bool {
 		}
 	}
 	return false
+}
+
+// scopeSubset 报告 want 中的每个 scope 是否都包含在 have 中（用于
+// 防止窄作用域 PAT 铸造更宽的 PAT）。
+func scopeSubset(want, have []string) bool {
+	set := make(map[string]struct{}, len(have))
+	for _, s := range have {
+		set[s] = struct{}{}
+	}
+	for _, s := range want {
+		if _, ok := set[s]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func logMiddleware(next http.Handler) http.Handler {

@@ -84,6 +84,36 @@ def test_pat_scope_enforcement(user_factory, client_factory):
     assert r.status_code == 403
 
 
+def test_pat_cannot_escalate_scopes(user_factory, client_factory):
+    """安全审计 A1：窄作用域 PAT 不能铸造全权 PAT，也不能碰凭据管理端点。"""
+    _, _, client = user_factory()
+    body = client.post(
+        "/tokens", json={"name": "narrow", "scopes": ["inbox"]}, expect=201
+    ).json()
+    pat = client_factory(body["token"])
+
+    # 不能读/写 PAT
+    r = pat.get("/tokens")
+    assert r.status_code == 403, r.text
+    r = pat.post("/tokens", json={"name": "wide", "scopes": ["repo", "inbox", "keys"]})
+    assert r.status_code == 403, r.text
+    assert r.json().get("code") == "insufficient_scope"
+    # 不能删除自己的 PAT
+    r = pat.delete(f"/tokens/{body['id']}")
+    assert r.status_code == 403, r.text
+
+    # 不能注册 passkey / OAuth 应用 / BYOK
+    r = pat.post("/me/passkeys/register/begin")
+    assert r.status_code == 403, r.text
+    r = pat.post("/applications", json={"name": "app", "redirect_uris": ["https://x"]})
+    assert r.status_code == 403, r.text
+    r = pat.post("/me/byok", json={"name": "k", "provider": "anthropic", "api_key": "sk-x"})
+    assert r.status_code == 403, r.text
+
+    # 原 PAT 仍然有效
+    pat.get("/inbox", expect=200)
+
+
 def test_pat_invalid_after_delete(user_factory, client_factory):
     _, _, client = user_factory()
     body = client.post("/tokens", json={"name": "gone"}, expect=201).json()
