@@ -190,6 +190,10 @@ def runner_env(tmp_path_factory):
         GITDASH_REDIS_ADDR=f"127.0.0.1:{rport}",
         # 反向模式测试用 127.0.0.1 作为 runner 地址，需放开 SSRF 私有网段限制
         GITDASH_SSRF_ALLOW_PRIVATE="1",
+        # 内置执行器默认关闭（opt-in）；显式启用 host 模式以便开启流水线开关
+        # （任务均带 runs-on 派发给 runner，不会真的在宿主执行）。
+        GITDASH_PIPELINE_EXEC="host",
+        GITDASH_COPILOT="1",
     )
     log = open(tmpdir / "server.log", "wb")
     proc = subprocess.Popen(

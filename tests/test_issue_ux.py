@@ -154,6 +154,8 @@ def test_author_and_mention_notifications(issue_env, user_factory):
 
     # @提及非参与者也应收到通知
     cn, _, carol = user_factory("carol")
+    # 私有仓库只通知有读权限的被提及者（审计 M1.4）；先授予 carol 只读协作权限。
+    alice.post(_p(an, repo, "/collabs"), json={"username": cn, "permission": "read"}, expect=200)
     alice.post(
         _p(an, repo, f"/issues/{num}/comments"),
         json={"body": f"@{cn} please look"},

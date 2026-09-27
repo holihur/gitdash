@@ -25,6 +25,12 @@ def _totp(secret: str, t: float | None = None) -> str:
     return f"{value:06d}"
 
 
+def _totp_step(secret: str, step: int = 0) -> str:
+    """取当前时间步 + step 的窗口中点验证码（step 在 ±1 内，且可递增以规避防重放）。"""
+    counter = int(time.time()) // 30 + step
+    return _totp(secret, counter * 30 + 15)
+
+
 @pytest.fixture
 def user(user_factory):
     return user_factory("p")
@@ -125,8 +131,8 @@ def test_mfa_enable_login_disable(user):
     st = c.get("/me/mfa", expect=200).json()
     assert st["enabled"] is False and st["pending_secret"] == secret
 
-    # 激活
-    c.post("/me/mfa/activate", json={"code": _totp(secret)}, expect=204)
+    # 激活（step -1，后续登录/禁用用更大的 step 以避免 TOTP 防重放）
+    c.post("/me/mfa/activate", json={"code": _totp_step(secret, -1)}, expect=204)
     assert c.get("/me/mfa", expect=200).json()["enabled"] is True
     c.post("/me/mfa/enroll", expect=409)
 
@@ -137,7 +143,7 @@ def test_mfa_enable_login_disable(user):
 
     # 错误 code 401，且令牌保留（可重试）
     c.post("/auth/mfa-verify", json={"mfa_token": mfa_token, "code": "000000"}, expect=401)
-    ok = c.post("/auth/mfa-verify", json={"mfa_token": mfa_token, "code": _totp(secret)}, expect=200).json()
+    ok = c.post("/auth/mfa-verify", json={"mfa_token": mfa_token, "code": _totp_step(secret, 0)}, expect=200).json()
     assert ok["token"] and ok["username"] == username
     # 一次性
     c.post("/auth/mfa-verify", json={"mfa_token": mfa_token, "code": _totp(secret)}, expect=401)
@@ -147,7 +153,7 @@ def test_mfa_enable_login_disable(user):
     # 禁用需要密码+code
     c.post("/me/mfa/disable", json={"password": "wrong", "code": _totp(secret)}, expect=401)
     c.post("/me/mfa/disable", json={"password": "test-pass-123456", "code": "000000"}, expect=400)
-    c.post("/me/mfa/disable", json={"password": "test-pass-123456", "code": _totp(secret)}, expect=204)
+    c.post("/me/mfa/disable", json={"password": "test-pass-123456", "code": _totp_step(secret, 1)}, expect=204)
     assert c.get("/me/mfa", expect=200).json()["enabled"] is False
     # 禁用后登录无需验证码
     r = c.post("/auth/login", json={"username": username, "password": "test-pass-123456"}, expect=200).json()
