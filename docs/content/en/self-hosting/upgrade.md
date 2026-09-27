@@ -10,6 +10,20 @@ gitdash update
 
 Optional background auto-update is off by default. Back up before upgrading.
 
+## Database migrations
+
+Schema changes are tracked in a `schema_meta` table. Destructive migrations
+(legacy `DROP TABLE` / `DROP INDEX`) are **refused by default** and require
+explicit confirmation:
+
+```bash
+gitdash backup                                   # take a snapshot first
+GITDASH_ALLOW_DESTRUCTIVE_MIGRATION=1 gitdash serve
+```
+
+Use `GITDASH_MIGRATE_DRY_RUN=1 gitdash serve` to only print the pending
+destructive steps and exit without changing anything.
+
 ## Release integrity
 
 Official releases ship `checksums.txt` plus a detached `checksums.txt.minisig`
