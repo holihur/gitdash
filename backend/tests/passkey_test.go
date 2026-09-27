@@ -37,23 +37,22 @@ func newVirtualAuthenticator(t *testing.T, rpID, origin string) *virtualAuthenti
 
 func b64url(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
-func pad32(b []byte) []byte {
-	if len(b) >= 32 {
-		return b[len(b)-32:]
-	}
-	out := make([]byte, 32)
-	copy(out[32-len(b):], b)
-	return out
-}
-
 func (va *virtualAuthenticator) coseKey(t *testing.T) []byte {
 	t.Helper()
+	// 用 PublicKey.Bytes() 取未压缩点（0x04 || X || Y），避免直接读已废弃的 X/Y 字段。
+	pub, err := va.key.PublicKey.Bytes()
+	if err != nil {
+		t.Fatalf("encode P-256 public key: %v", err)
+	}
+	if len(pub) != 65 || pub[0] != 0x04 {
+		t.Fatalf("unexpected P-256 public key encoding: %x", pub)
+	}
 	m := map[int]any{
-		1:  2,  // kty: EC2
-		3:  -7, // alg: ES256
-		-1: 1,  // crv: P-256
-		-2: pad32(va.key.PublicKey.X.Bytes()),
-		-3: pad32(va.key.PublicKey.Y.Bytes()),
+		1:  2,                               // kty: EC2
+		3:  -7,                              // alg: ES256
+		-1: 1,                               // crv: P-256
+		-2: append([]byte{}, pub[1:33]...),  // x
+		-3: append([]byte{}, pub[33:65]...), // y
 	}
 	out, err := cbor.Marshal(m)
 	if err != nil {

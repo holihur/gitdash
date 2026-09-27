@@ -19,7 +19,7 @@ backend/internal/api/docs/swagger.yaml
 # local todo list (do not commit)
 todo.md
 next.md
-HANDOVER.md
+HANDOVER*.md
 OMISSIONS.md
 
 # local assets / test keys (do not commit)
