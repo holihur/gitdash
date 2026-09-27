@@ -29,6 +29,7 @@ func startAPISeed(t *testing.T, seed func(*store.Store)) (*httptest.Server, *sto
 	if seed != nil {
 		seed(st)
 	}
+	t.Cleanup(func() { _ = st.Close() })
 	hs := httptest.NewServer(api.New(st, "test").Handler(""))
 	t.Cleanup(hs.Close)
 	return hs, st

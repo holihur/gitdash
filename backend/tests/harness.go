@@ -81,6 +81,8 @@ func start(t *testing.T) *Env {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
+	// 先于 t.TempDir() 的清理关闭连接池，避免 WAL 文件在目录清理后被重建。
+	t.Cleanup(func() { _ = st.Close() })
 	// 内容寻址 blob 存储（包 / Docker 注册表）；与 main.go 保持一致。
 	store.SetBlobDir(filepath.Join(dir, "packages-blobs"))
 

@@ -443,6 +443,16 @@ func openGorm(dial gorm.Dialector) (*Store, error) {
 // DB 暴露底层 gorm.DB（供需要原生查询的特殊场景使用）。
 func (s *Store) DB() *gorm.DB { return s.db }
 
+// Close 关闭底层数据库连接池。测试与优雅退出时调用，避免残留连接在临时目录
+// 被清理后仍重建 WAL 文件（表现为 t.TempDir cleanup 失败）。
+func (s *Store) Close() error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}
+
 // Ping 供健康检查（readiness）使用：确认底层数据库仍可连通。
 func (s *Store) Ping(ctx context.Context) error {
 	sqlDB, err := s.db.DB()
