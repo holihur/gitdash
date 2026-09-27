@@ -1,8 +1,45 @@
 package tests
 
 import (
+	"encoding/json"
+	"net/http"
+	"strings"
 	"testing"
 )
+
+// TestSessionTokenOmittedForBrowser 覆盖安全审计 M2.3：浏览器请求（带
+// Sec-Fetch-*）不返回明文会话 token（只下发 HttpOnly cookie）；非浏览器客户端
+// 保持兼容。
+func TestSessionTokenOmittedForBrowser(t *testing.T) {
+	env := start(t)
+	do := func(username string, browser bool) map[string]any {
+		t.Helper()
+		body, _ := json.Marshal(map[string]string{"username": username, "password": "password-123456"})
+		req, _ := http.NewRequest("POST", env.BaseURL+"/api/auth/register", strings.NewReader(string(body)))
+		req.Header.Set("Content-Type", "application/json")
+		if browser {
+			req.Header.Set("Sec-Fetch-Site", "same-origin")
+			req.Header.Set("Sec-Fetch-Mode", "cors")
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		var m map[string]any
+		_ = json.NewDecoder(res.Body).Decode(&m)
+		return m
+	}
+
+	if m := do("browseruser", true); m["token"] != nil {
+		t.Fatalf("browser response leaked token: %v", m)
+	} else if m["username"] != "browseruser" {
+		t.Fatalf("register response = %v", m)
+	}
+	if m := do("cliuser", false); m["token"] == nil {
+		t.Fatalf("non-browser client missing token: %v", m)
+	}
+}
 
 func TestRegisterLoginSession(t *testing.T) {
 	env := start(t)

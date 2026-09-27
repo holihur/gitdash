@@ -300,7 +300,32 @@ func (a *API) startSession(w http.ResponseWriter, r *http.Request, status int, u
 		return
 	}
 	a.setSessionCookie(w, r, token)
-	writeJSON(w, status, map[string]string{"token": token, "username": ua.Username})
+	resp := map[string]string{"username": ua.Username}
+	// 会话 token 默认经 HttpOnly cookie 下发；仅非浏览器客户端（CLI/测试，
+	// 不带 Sec-Fetch-*）或显式请求时回传明文，避免 XSS 从 JSON 响应体绕过
+	// HttpOnly 读取 token（安全审计 M2.3）。
+	if wantBearerToken(r) {
+		resp["token"] = token
+	}
+	writeJSON(w, status, resp)
+}
+
+// wantBearerToken 报告响应是否附带明文会话 token：
+//   - 显式请求（X-Gitdash-Return-Token: 1 或 ?return_token=1）→ 是；
+//   - 浏览器请求（fetch/XHR 会带 Sec-Fetch-*）→ 否；
+//   - 其他（CLI/SDK/测试）→ 是（兼容既有客户端）。
+func wantBearerToken(r *http.Request) bool {
+	if r.Header.Get("X-Gitdash-Return-Token") == "1" {
+		return true
+	}
+	switch strings.ToLower(r.URL.Query().Get("return_token")) {
+	case "1", "true", "yes":
+		return true
+	}
+	if r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" {
+		return false
+	}
+	return true
 }
 
 // beginMFAChallenge 在用户启用 MFA 时创建一个一次性挑战。required=false 表示

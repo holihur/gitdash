@@ -62,20 +62,28 @@ func Code(secret string, t time.Time) (string, error) {
 
 // Verify 校验验证码（允许 ±window 个时间步的时钟偏移）。
 func Verify(secret, code string, window int) bool {
+	_, ok := VerifyCounter(secret, code, window)
+	return ok
+}
+
+// VerifyCounter 与 Verify 类似，但返回匹配的时间步（counter = unix/30）。
+// 调用方可持久化 counter 以实现防重放（安全审计 M2.4）。
+func VerifyCounter(secret, code string, window int) (int64, bool) {
 	if code == "" {
-		return false
+		return 0, false
 	}
 	now := time.Now()
 	for i := -window; i <= window; i++ {
-		c, err := Code(secret, now.Add(time.Duration(i)*period*time.Second))
+		t := now.Add(time.Duration(i) * period * time.Second)
+		c, err := Code(secret, t)
 		if err != nil {
-			return false
+			return 0, false
 		}
 		if hmac.Equal([]byte(c), []byte(code)) {
-			return true
+			return t.Unix() / period, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 func decodeSecret(secret string) ([]byte, error) {

@@ -3,6 +3,8 @@ package store
 import (
 	"strings"
 	"time"
+
+	"gitdash/backend/internal/totp"
 )
 
 // ---- users & sessions ----
@@ -231,7 +233,7 @@ func (s *Store) UpdatePassword(username, passwordHash string) error {
 // SetMFASecret 写入（或覆盖）MFA secret；enable=false 时保留 secret 但标记未激活。
 func (s *Store) SetMFASecret(username, secret string, enabled bool) error {
 	res := s.db.Model(&userRow{}).Where("username = ?", username).
-		Updates(map[string]any{"mfa_secret": secret, "mfa_enabled": enabled})
+		Updates(map[string]any{"mfa_secret": secret, "mfa_enabled": enabled, "mfa_last_counter": 0})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -243,7 +245,20 @@ func (s *Store) SetMFASecret(username, secret string, enabled bool) error {
 
 func (s *Store) ClearMFA(username string) error {
 	return s.db.Model(&userRow{}).Where("username = ?", username).
-		Updates(map[string]any{"mfa_secret": "", "mfa_enabled": false, "mfa_method": "totp"}).Error
+		Updates(map[string]any{"mfa_secret": "", "mfa_enabled": false, "mfa_method": "totp", "mfa_last_counter": 0}).Error
+}
+
+// AcceptTOTP 校验 TOTP 并防重放：仅接受 counter 大于上次成功使用值的一次性验证码。
+// 使用单条条件 UPDATE 保证并发下也只有一个请求能消费某个时间步（安全审计 M2.4）。
+func (s *Store) AcceptTOTP(username, secret, code string, window int) bool {
+	counter, ok := totp.VerifyCounter(secret, code, window)
+	if !ok {
+		return false
+	}
+	res := s.db.Model(&userRow{}).
+		Where("username = ? AND mfa_last_counter < ?", username, counter).
+		Update("mfa_last_counter", counter)
+	return res.Error == nil && res.RowsAffected == 1
 }
 
 // SetMFAMethod 设置 MFA 方式与启用状态（email 方式绑定/激活时调用）。

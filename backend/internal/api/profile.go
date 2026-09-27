@@ -1,12 +1,19 @@
 package api
 
 import (
-	"gitdash/backend/internal/totp"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
+
+	"gitdash/backend/internal/totp"
 )
+
+// mfaPendingTTL 是未激活 TOTP secret 的有效期（安全审计 M2.9）。
+const mfaPendingTTL = 10 * time.Minute
+
+func mfaPendingKey(username string) string { return "mfa_pending:" + username }
 
 // ---- user profile & mfa ----
 
@@ -58,6 +65,23 @@ func (a *API) changePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// revokeOtherSessions 吊销当前用户除当前会话外的全部会话（“登出所有设备”）。
+//
+//	@Summary     吊销其它会话
+//	@Tags        users
+//	@Produce     json
+//	@Security    BearerAuth
+//	@Success     204 {object} nil
+//	@Router      /me/sessions/revoke [post]
+func (a *API) revokeOtherSessions(w http.ResponseWriter, r *http.Request) {
+	username := userFrom(r)
+	if err := a.store.DeleteSessionsExcept(username, requestSessionToken(r)); err != nil {
+		internalError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // mfaStatus 查询当前用户 MFA 状态。
 //
 //	@Summary     MFA 状态
@@ -81,8 +105,14 @@ func (a *API) mfaStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := map[string]any{"enabled": ua.MFAEnabled, "method": method}
 	if !ua.MFAEnabled && ua.MFASecret != "" { // 待激活的 secret（页面刷新后仍可继续）
-		resp["pending_secret"] = ua.MFASecret
-		resp["otpauth_url"] = totp.URI("gitdash", ua.Username, ua.MFASecret)
+		exp := a.store.GetSetting(mfaPendingKey(ua.Username))
+		if exp == "" || exp <= time.Now().UTC().Format(time.RFC3339) {
+			// 待激活 secret 过期（或缺少时间戳的历史数据）：清除，避免永久留存。
+			_ = a.store.ClearMFA(ua.Username)
+		} else {
+			resp["pending_secret"] = ua.MFASecret
+			resp["otpauth_url"] = totp.URI("gitdash", ua.Username, ua.MFASecret)
+		}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -121,6 +151,8 @@ func (a *API) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 			internalError(w, err)
 			return
 		}
+		// 记录待激活有效期；过期后 mfaStatus 会清除 secret。
+		_ = a.store.SetSetting(mfaPendingKey(username), time.Now().Add(mfaPendingTTL).UTC().Format(time.RFC3339))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"secret":      secret,
@@ -163,7 +195,7 @@ func (a *API) mfaActivate(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+	if !a.store.AcceptTOTP(username, ua.MFASecret, strings.TrimSpace(in.Code), 1) {
 		writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid authenticator code")
 		return
 	}
@@ -171,6 +203,7 @@ func (a *API) mfaActivate(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	_ = a.store.SetSetting(mfaPendingKey(username), "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -215,7 +248,7 @@ func (a *API) mfaDisable(w http.ResponseWriter, r *http.Request) {
 			writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid or expired verification code")
 			return
 		}
-	} else if !totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1) {
+	} else if !a.store.AcceptTOTP(username, ua.MFASecret, strings.TrimSpace(in.Code), 1) {
 		writeCode(w, http.StatusBadRequest, "invalid_mfa_code", "invalid authenticator code")
 		return
 	}

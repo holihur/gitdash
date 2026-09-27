@@ -69,12 +69,20 @@ func (a *API) oidcStart(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	verifier, err := newCodeVerifier()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	a.setOAuthFlowCookies(w, r, state, verifier)
 	q := url.Values{}
 	q.Set("client_id", id)
 	q.Set("response_type", "code")
 	q.Set("scope", "openid profile email")
 	q.Set("redirect_uri", reqBase(r)+"/api/auth/oidc/callback")
 	q.Set("state", state)
+	q.Set("code_challenge", codeChallengeS256(verifier))
+	q.Set("code_challenge_method", "S256")
 	_ = name
 	http.Redirect(w, r, d.AuthorizationEndpoint+"?"+q.Encode(), http.StatusFound)
 }
@@ -94,6 +102,11 @@ func (a *API) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		fail("invalid oidc response")
 		return
 	}
+	verifier, ok := a.takeOAuthFlowCookies(w, r, state)
+	if !ok {
+		fail("oauth state mismatch, try again")
+		return
+	}
 	if !a.checkOAuthState(state) {
 		fail("oauth state expired, try again")
 		return
@@ -110,6 +123,7 @@ func (a *API) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	tf.Set("redirect_uri", reqBase(r)+"/api/auth/oidc/callback")
 	tf.Set("client_id", id)
 	tf.Set("client_secret", secret)
+	tf.Set("code_verifier", verifier)
 	treq, _ := http.NewRequest(http.MethodPost, d.TokenEndpoint, strings.NewReader(tf.Encode()))
 	treq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	treq.Header.Set("Accept", "application/json")

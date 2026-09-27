@@ -141,6 +141,8 @@ func (a *API) githubStart(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	// GitHub OAuth App 不支持 PKCE，仅做 state 与浏览器绑定。
+	a.setOAuthFlowCookies(w, r, state, "")
 	q := url.Values{}
 	q.Set("client_id", id)
 	q.Set("scope", "read:user user:email")
@@ -162,6 +164,10 @@ func (a *API) githubCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	if code == "" || state == "" {
 		fail("invalid oauth response")
+		return
+	}
+	if _, ok := a.takeOAuthFlowCookies(w, r, state); !ok {
+		fail("oauth state mismatch, try again")
 		return
 	}
 	if !a.checkOAuthState(state) {

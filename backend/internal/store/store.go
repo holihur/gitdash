@@ -45,7 +45,9 @@ type UserAuth struct {
 	MFASecret    string // 空 = 未启用/无待激活 secret
 	MFAEnabled   bool
 	MFAMethod    string // totp（默认）| email；旧数据为空时按 totp 处理
-	NotifyEmail  bool   // 邮件通知开关（默认关）
+	// MFALastCounter 是上次成功使用的 TOTP 时间步（防重放，安全审计 M2.4）。
+	MFALastCounter int64
+	NotifyEmail    bool // 邮件通知开关（默认关）
 	// 邮箱验证状态（仅对非空邮箱有意义）
 	EmailVerified bool
 	EmailToken    string

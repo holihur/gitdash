@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"gitdash/backend/internal/envx"
 	"gitdash/backend/internal/logx"
 
 	_ "github.com/glebarez/sqlite" // 注册 database/sql 驱动 "sqlite"（VACUUM INTO 一致性快照）
@@ -257,6 +258,13 @@ func writeBackup(dataDir, out string) error {
 	tw := tar.NewWriter(gz)
 
 	skip := map[string]bool{"gitdash.db": true, "gitdash.db-wal": true, "gitdash.db-shm": true}
+	// 静态加密密钥与密文同包会使加密失效（安全审计 M2.6）：默认排除 secrets.key，
+	// 需自包含备份时用 GITDASH_BACKUP_INCLUDE_SECRET_KEY=1 显式包含。
+	if envx.Bool("GITDASH_BACKUP_INCLUDE_SECRET_KEY", false) {
+		logx.Warnf("backup: including secrets.key (GITDASH_BACKUP_INCLUDE_SECRET_KEY=1); keep this archive strictly confidential")
+	} else {
+		skip["secrets.key"] = true
+	}
 	walkErr := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

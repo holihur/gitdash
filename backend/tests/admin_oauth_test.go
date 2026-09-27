@@ -194,9 +194,10 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 		t.Fatalf("providers = %+v", prov)
 	}
 
-	// OIDC 登录全流程（模拟 IdP 回调）
+	// OIDC 登录全流程（模拟 IdP 回调）；state 绑定浏览器，start 与 callback 需同一 cookie jar。
 	start, _ := http.NewRequest("GET", hs.URL+"/api/auth/oidc/start", nil)
-	r4, err := noRedirectClient().Do(start)
+	user, _ := jarNoRedirectClient()
+	r4, err := user.Do(start)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +210,6 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 	state := u.Query().Get("state")
 
 	cb, _ := http.NewRequest("GET", hs.URL+"/api/auth/oidc/callback?state="+url.QueryEscape(state)+"&code=xyz", nil)
-	user, _ := jarNoRedirectClient()
 	r5, err := user.Do(cb)
 	if err != nil {
 		t.Fatal(err)
@@ -237,14 +237,14 @@ func TestAdminConfigOIDCLogin(t *testing.T) {
 
 	// 再次登录同 sub：绑定同一账号（不新建）
 	start2, _ := http.NewRequest("GET", hs.URL+"/api/auth/oidc/start", nil)
-	r7, err := noRedirectClient().Do(start2)
+	user2, _ := jarNoRedirectClient()
+	r7, err := user2.Do(start2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = r7.Body.Close()
 	u2, _ := url.Parse(r7.Header.Get("Location"))
 	cb2, _ := http.NewRequest("GET", hs.URL+"/api/auth/oidc/callback?state="+url.QueryEscape(u2.Query().Get("state"))+"&code=abc", nil)
-	user2, _ := jarNoRedirectClient()
 	r8, err := user2.Do(cb2)
 	if err != nil {
 		t.Fatal(err)

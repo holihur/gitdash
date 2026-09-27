@@ -64,7 +64,8 @@ func TestLegacySchemaReset(t *testing.T) {
 	}
 	_ = db.Close()
 
-	// 打开时自动重置旧表并创建新 schema
+	// 打开时自动重置旧表并创建新 schema（破坏性迁移需显式 opt-in）。
+	t.Setenv("GITDASH_ALLOW_DESTRUCTIVE_MIGRATION", "1")
 	if _, err := store.Open(path); err != nil {
 		t.Fatal(err)
 	}

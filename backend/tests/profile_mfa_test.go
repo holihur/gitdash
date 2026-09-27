@@ -10,10 +10,17 @@ import (
 	"gitdash/backend/internal/totp"
 )
 
-func mfaCode(t *testing.T, secret string) string {
+// mfaCode 生成 TOTP 验证码；step 选择相对当前的时间步（-1/0/+1），
+// 用于在同一测试中依次执行 activate/login/disable 而触发防重放递增。
+func mfaCode(t *testing.T, secret string, step ...int) string {
 	t.Helper()
-	// 用未来 1 步内的当前时间窗口；直接取当前时间（与服务端同机）
-	c, err := totp.Code(secret, time.Now().Add(-2*time.Second))
+	off := int64(0)
+	if len(step) > 0 {
+		off = int64(step[0])
+	}
+	// 取当前时间步 + off 的窗口中点（+15s），避免窗口边界抖动。
+	counter := time.Now().Unix()/30 + off
+	c, err := totp.Code(secret, time.Unix(counter*30+15, 0))
 	if err != nil {
 		t.Fatalf("totp code: %v", err)
 	}
@@ -77,7 +84,7 @@ func TestMFAEnrollLoginDisable(t *testing.T) {
 	// 错误验证码无法激活
 	alice.mustFail("POST", "/me/mfa/activate", map[string]string{"code": "000000"}, 400)
 	// 正确验证码激活
-	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret)}, 204)
+	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret, -1)}, 204)
 	if m := alice.mustStatus("GET", "/me/mfa", nil, 200); m["enabled"] != true {
 		t.Fatalf("mfa after activate = %v", m)
 	}
@@ -96,7 +103,7 @@ func TestMFAEnrollLoginDisable(t *testing.T) {
 	alice.mustFail("POST", "/auth/mfa-verify",
 		map[string]string{"mfa_token": mfaToken, "code": "000000"}, 401)
 	ok := alice.mustStatus("POST", "/auth/mfa-verify",
-		map[string]string{"mfa_token": mfaToken, "code": mfaCode(t, secret)}, 200)
+		map[string]string{"mfa_token": mfaToken, "code": mfaCode(t, secret, 0)}, 200)
 	if ok["token"] == nil {
 		t.Fatalf("mfa verify = %v", ok)
 	}
@@ -108,7 +115,7 @@ func TestMFAEnrollLoginDisable(t *testing.T) {
 	alice.mustFail("POST", "/me/mfa/disable",
 		map[string]string{"password": "wrong", "code": mfaCode(t, secret)}, 401)
 	alice.mustStatus("POST", "/me/mfa/disable",
-		map[string]string{"password": "alice-pass-123", "code": mfaCode(t, secret)}, 204)
+		map[string]string{"password": "alice-pass-123", "code": mfaCode(t, secret, 1)}, 204)
 	if m := alice.mustStatus("GET", "/me/mfa", nil, 200); m["enabled"] != false {
 		t.Fatalf("mfa after disable = %v", m)
 	}
@@ -130,7 +137,7 @@ func TestMFAIsolationAndCodes(t *testing.T) {
 	// bob 启用 MFA 不影响 alice
 	enroll := bob.mustStatus("POST", "/me/mfa/enroll", nil, 200)
 	secret, _ := enroll["secret"].(string)
-	bob.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret)}, 204)
+	bob.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret, -1)}, 204)
 
 	aliceLogin := alice.mustStatus("POST", "/auth/login",
 		map[string]string{"username": "alice", "password": "alice-pass-123"}, 200)
@@ -145,7 +152,7 @@ func TestMFAIsolationAndCodes(t *testing.T) {
 	bobLogin := bob.mustStatus("POST", "/auth/login",
 		map[string]string{"username": "bobby", "password": "bob-pass-123456"}, 200)
 	tok, _ := bobLogin["mfa_token"].(string)
-	bob.mustStatus("POST", "/auth/mfa-verify", map[string]string{"mfa_token": tok, "code": mfaCode(t, secret)}, 200)
+	bob.mustStatus("POST", "/auth/mfa-verify", map[string]string{"mfa_token": tok, "code": mfaCode(t, secret, 0)}, 200)
 }
 
 func TestPasswordChangeRevokesOtherSessions(t *testing.T) {
@@ -171,7 +178,7 @@ func TestMFAVerifyAttemptLimit(t *testing.T) {
 	alice := register(t, env, "alice", "alice-pass-123")
 	e := alice.mustStatus("POST", "/me/mfa/enroll", nil, 200)
 	secret, _ := e["secret"].(string)
-	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret)}, 204)
+	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret, -1)}, 204)
 
 	login := alice.mustStatus("POST", "/auth/login",
 		map[string]string{"username": "alice", "password": "alice-pass-123"}, 200)
@@ -301,4 +308,46 @@ func TestLoginRateLimit(t *testing.T) {
 	}
 	anon.mustFail("POST", "/auth/login",
 		map[string]string{"username": "alice", "password": "alice-pass-123"}, 429)
+}
+
+// TestMFAPendingSecretExpires 覆盖安全审计 M2.9：未激活的 TOTP secret 有有效期，
+// 过期后不再返回并被清除。
+func TestMFAPendingSecretExpires(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	first := alice.mustStatus("POST", "/me/mfa/enroll", nil, 200)
+	if first["secret"] == nil {
+		t.Fatalf("enroll = %v", first)
+	}
+	if m := alice.mustStatus("GET", "/me/mfa", nil, 200); m["pending_secret"] == nil {
+		t.Fatalf("pending secret missing right after enroll: %v", m)
+	}
+	// 人为把待激活标记置为过期
+	if err := env.Store.SetSetting("mfa_pending:alice", "2000-01-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	if m := alice.mustStatus("GET", "/me/mfa", nil, 200); m["pending_secret"] != nil {
+		t.Fatalf("expired pending secret still returned: %v", m)
+	}
+	// secret 已被清除：重新 enroll 得到新的 secret
+	second := alice.mustStatus("POST", "/me/mfa/enroll", nil, 200)
+	if second["secret"] == first["secret"] {
+		t.Fatal("expected a freshly generated secret after expiry")
+	}
+}
+
+// TestRevokeOtherSessions 覆盖安全审计 M2.5：“登出所有设备”接口保留当前会话、
+// 吊销其它会话。
+func TestRevokeOtherSessions(t *testing.T) {
+	env := start(t)
+	alice := register(t, env, "alice", "alice-pass-123")
+	login := alice.mustStatus("POST", "/auth/login",
+		map[string]string{"username": "alice", "password": "alice-pass-123"}, 200)
+	otherToken, _ := login["token"].(string)
+	other := &Client{env: env, token: otherToken}
+	other.mustStatus("GET", "/me", nil, 200)
+
+	alice.mustStatus("POST", "/me/sessions/revoke", nil, 204)
+	alice.mustStatus("GET", "/me", nil, 200)
+	other.mustFail("GET", "/me", nil, 401)
 }

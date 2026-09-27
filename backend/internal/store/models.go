@@ -14,7 +14,9 @@ type userRow struct {
 	MFASecret    string `gorm:"not null;default:''"`
 	MFAEnabled   bool   `gorm:"not null;default:false"`
 	MFAMethod    string `gorm:"not null;default:'totp';size:16"` // totp | email
-	NotifyEmail  bool   `gorm:"not null;default:false"`
+	// MFALastCounter 是上次成功使用的 TOTP 时间步，用于防重放（安全审计 M2.4）。
+	MFALastCounter int64 `gorm:"not null;default:0"`
+	NotifyEmail    bool  `gorm:"not null;default:false"`
 	// 邮箱验证：仅对非空邮箱生效；token 24h 有效
 	EmailVerified bool   `gorm:"not null;default:false"`
 	EmailToken    string `gorm:"not null;default:'';size:255"`

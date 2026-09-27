@@ -2,10 +2,25 @@ package store
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"gorm.io/gorm/clause"
 )
+
+// sensitiveSettings 是需要静态加密（sealSecret）落库的 settings 键。
+// CI secrets/BYOK/镜像凭据等已走 sealSecret，而这些 OAuth client secret、
+// SMTP 密码、feedback token 此前是明文（安全审计 M2.7）。
+var sensitiveSettings = map[string]bool{
+	"github_client_secret":    true,
+	"google_client_secret":    true,
+	"oidc_client_secret":      true,
+	"gitlab_client_secret":    true,
+	"gitea_client_secret":     true,
+	"bitbucket_client_secret": true,
+	"smtp_pass":               true,
+	"feedback_token":          true,
+}
 
 func (s *Store) AdminCount() (int, error) {
 	var n int64
@@ -105,10 +120,20 @@ func (s *Store) GetSetting(key string) string {
 	if err := s.db.Where("\"key\" = ?", key).First(&row).Error; err != nil {
 		return ""
 	}
+	if sensitiveSettings[key] && strings.HasPrefix(row.Value, "v1:") {
+		pt, err := openSecret(row.Value)
+		if err != nil {
+			return ""
+		}
+		return pt
+	}
 	return row.Value
 }
 
 func (s *Store) SetSetting(key, value string) error {
+	if sensitiveSettings[key] && value != "" {
+		value = sealSecret(value)
+	}
 	row := settingRow{Key: key, Value: value}
 	return s.db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "key"}},

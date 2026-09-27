@@ -69,10 +69,10 @@ func TestPATExpiryBlocked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := doWithIP(t, env, liveTok, "", "/tokens"); code != http.StatusOK {
+	if code := doWithIP(t, env, liveTok, "", "/repos"); code != http.StatusOK {
 		t.Fatalf("live pat = %d, want 200", code)
 	}
-	if code := doWithIP(t, env, expiredTok, "", "/tokens"); code != http.StatusUnauthorized {
+	if code := doWithIP(t, env, expiredTok, "", "/repos"); code != http.StatusUnauthorized {
 		t.Fatalf("expired pat = %d, want 401", code)
 	}
 }
@@ -88,15 +88,15 @@ func TestPATCIDRRestriction(t *testing.T) {
 		t.Fatal("created token empty")
 	}
 	// 默认来源（回环）不在白名单 → 拒绝
-	if code := doWithIP(t, env, tok, "", "/tokens"); code != http.StatusUnauthorized {
+	if code := doWithIP(t, env, tok, "", "/repos"); code != http.StatusUnauthorized {
 		t.Fatalf("default source = %d, want 401", code)
 	}
 	// 伪造 192.0.2.10（回环为受信反代，XFF 生效）→ 放行
-	if code := doWithIP(t, env, tok, "192.0.2.10", "/tokens"); code != http.StatusOK {
+	if code := doWithIP(t, env, tok, "192.0.2.10", "/repos"); code != http.StatusOK {
 		t.Fatalf("allowed source = %d, want 200", code)
 	}
 	// 同一网段欢迎其他 IP → 放行
-	if code := doWithIP(t, env, tok, "192.0.2.200", "/tokens"); code != http.StatusOK {
+	if code := doWithIP(t, env, tok, "192.0.2.200", "/repos"); code != http.StatusOK {
 		t.Fatalf("allowed source 2 = %d, want 200", code)
 	}
 }
@@ -116,7 +116,7 @@ func TestPATCIDRWithIPOnly(t *testing.T) {
 		if xff == "192.0.2.6" {
 			want = http.StatusUnauthorized
 		}
-		if code := doWithIP(t, env, tok, xff, "/tokens"); code != want {
+		if code := doWithIP(t, env, tok, xff, "/repos"); code != want {
 			t.Fatalf("xff %s = %d, want %d", xff, code, want)
 		}
 	}

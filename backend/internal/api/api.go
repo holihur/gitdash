@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"gitdash/backend/internal/api/docs"
@@ -158,6 +161,56 @@ func (a *API) saveOAuthState(state string) error {
 func (a *API) checkOAuthState(state string) bool {
 	ok, err := a.store.TakeOAuthState(state, time.Now().UTC().Format(time.RFC3339))
 	return err == nil && ok
+}
+
+// OAuth 登录流绑定 cookie：state 绑定发起浏览器，verifier 用于 PKCE（安全审计 M2.1）。
+const (
+	oauthStateCookie    = "gitdash_oauth_state"
+	oauthVerifierCookie = "gitdash_oauth_verifier"
+)
+
+func oauthCookieSecure(r *http.Request) bool { return r.TLS != nil || forceSecureCookies }
+
+// newCodeVerifier 生成 PKCE code_verifier（32 字节 → 43 字符 base64url）。
+func newCodeVerifier() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// codeChallengeS256 按 RFC 7636 计算 S256 code_challenge。
+func codeChallengeS256(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// setOAuthFlowCookies 把 state（及可选 PKCE verifier）绑定到发起登录的浏览器。
+// 社交登录 callback 是跨站 GET，SameSite=Lax 可在顶层导航回跳时携带。
+func (a *API) setOAuthFlowCookies(w http.ResponseWriter, r *http.Request, state, verifier string) {
+	http.SetCookie(w, &http.Cookie{Name: oauthStateCookie, Value: state, Path: "/", HttpOnly: true, Secure: oauthCookieSecure(r), SameSite: http.SameSiteLaxMode, MaxAge: 600})
+	if verifier != "" {
+		http.SetCookie(w, &http.Cookie{Name: oauthVerifierCookie, Value: verifier, Path: "/", HttpOnly: true, Secure: oauthCookieSecure(r), SameSite: http.SameSiteLaxMode, MaxAge: 600})
+	}
+}
+
+// takeOAuthFlowCookies 校验并消费 flow cookie；state 不匹配返回 ok=false。
+// 无论成败都会清除 cookie。
+func (a *API) takeOAuthFlowCookies(w http.ResponseWriter, r *http.Request, state string) (verifier string, ok bool) {
+	secure := oauthCookieSecure(r)
+	clear := func(name string) {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	}
+	defer func() { clear(oauthStateCookie); clear(oauthVerifierCookie) }()
+	c, err := r.Cookie(oauthStateCookie)
+	if err != nil || c.Value == "" || subtle.ConstantTimeCompare([]byte(c.Value), []byte(state)) != 1 {
+		return "", false
+	}
+	if vc, err := r.Cookie(oauthVerifierCookie); err == nil {
+		verifier = vc.Value
+	}
+	return verifier, true
 }
 
 // 登录限速：15 分钟窗口内最多 5 次失败
@@ -398,6 +451,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 
 	// user profile & mfa
 	mux.HandleFunc("POST /api/me/password", a.auth(a.changePassword))
+	mux.HandleFunc("POST /api/me/sessions/revoke", a.auth(a.revokeOtherSessions))
 	mux.HandleFunc("POST /api/me/profile", a.auth(a.updateProfile))
 	mux.HandleFunc("GET /api/me/mfa", a.auth(a.mfaStatus))
 	mux.HandleFunc("POST /api/me/mfa/enroll", a.auth(a.mfaEnroll))
@@ -1066,6 +1120,8 @@ func credentialManagementPath(path string) bool {
 	case strings.HasPrefix(path, "/api/tokens"):
 		return true
 	case strings.HasPrefix(path, "/api/me/passkeys"):
+		return true
+	case strings.HasPrefix(path, "/api/me/sessions"):
 		return true
 	case strings.HasPrefix(path, "/api/applications"):
 		return true

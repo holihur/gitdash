@@ -8,7 +8,6 @@ import (
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/store"
-	"gitdash/backend/internal/totp"
 	"net/http"
 	"strings"
 
@@ -86,7 +85,7 @@ func (a *API) deleteMe(w http.ResponseWriter, r *http.Request) {
 			// 复用 /me/mfa/email/send 下发的验证码（key: disable:<username>）
 			ok = a.checkEmailMFACode("disable:"+username, in.Code)
 		} else {
-			ok = totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1)
+			ok = a.store.AcceptTOTP(username, ua.MFASecret, strings.TrimSpace(in.Code), 1)
 		}
 		if !ok {
 			a.rateFail(key)

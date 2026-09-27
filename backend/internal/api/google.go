@@ -53,12 +53,20 @@ func (a *API) googleStart(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	verifier, err := newCodeVerifier()
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	a.setOAuthFlowCookies(w, r, state, verifier)
 	q := url.Values{}
 	q.Set("client_id", id)
 	q.Set("response_type", "code")
 	q.Set("scope", "openid email profile")
 	q.Set("redirect_uri", reqBase(r)+"/api/auth/google/callback")
 	q.Set("state", state)
+	q.Set("code_challenge", codeChallengeS256(verifier))
+	q.Set("code_challenge_method", "S256")
 	// 已登录多个 Google 账号时让用户选择
 	q.Set("prompt", "select_account")
 	http.Redirect(w, r, googleAuthURL()+"?"+q.Encode(), http.StatusFound)
@@ -86,6 +94,11 @@ func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {
 		fail("invalid oauth response")
 		return
 	}
+	verifier, ok := a.takeOAuthFlowCookies(w, r, state)
+	if !ok {
+		fail("oauth state mismatch, try again")
+		return
+	}
 	if !a.checkOAuthState(state) {
 		fail("oauth state expired, try again")
 		return
@@ -97,6 +110,7 @@ func (a *API) googleCallback(w http.ResponseWriter, r *http.Request) {
 	tf.Set("redirect_uri", reqBase(r)+"/api/auth/google/callback")
 	tf.Set("client_id", id)
 	tf.Set("client_secret", secret)
+	tf.Set("code_verifier", verifier)
 	treq, _ := http.NewRequest(http.MethodPost, googleTokenURL(), strings.NewReader(tf.Encode()))
 	treq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	treq.Header.Set("Accept", "application/json")

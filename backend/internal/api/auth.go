@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"gitdash/backend/internal/logx"
 	"gitdash/backend/internal/store"
-	"gitdash/backend/internal/totp"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -264,7 +263,7 @@ func (a *API) mfaVerify(w http.ResponseWriter, r *http.Request) {
 	if ua.MFAMethod == "email" { // email 方式：比对登录时下发的邮箱验证码（哈希 + 恒定时间）
 		ok = a.checkEmailMFACode(in.MFAToken, in.Code)
 	} else {
-		ok = totp.Verify(ua.MFASecret, strings.TrimSpace(in.Code), 1)
+		ok = a.store.AcceptTOTP(username, ua.MFASecret, strings.TrimSpace(in.Code), 1)
 	}
 	if !ok {
 		a.rateFail(rateKey)

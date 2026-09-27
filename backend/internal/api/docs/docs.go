@@ -4979,6 +4979,27 @@ const docTemplate = `{
                 ]
             }
         },
+        "/me/sessions/revoke": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "吊销其它会话",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/orgs": {
             "get": {
                 "produces": [

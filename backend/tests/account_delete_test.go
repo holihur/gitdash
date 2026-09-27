@@ -131,7 +131,7 @@ func TestDeleteOwnAccountRequiresMFA(t *testing.T) {
 
 	e := alice.mustStatus("POST", "/me/mfa/enroll", nil, 200)
 	secret, _ := e["secret"].(string)
-	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret)}, 204)
+	alice.mustStatus("POST", "/me/mfa/activate", map[string]string{"code": mfaCode(t, secret, -1)}, 204)
 
 	// 缺少 / 错误验证码被拒绝
 	alice.mustFail("DELETE", "/me", map[string]string{"password": "alice-pass-123"}, 400)
@@ -139,7 +139,7 @@ func TestDeleteOwnAccountRequiresMFA(t *testing.T) {
 		map[string]string{"password": "alice-pass-123", "code": "000000"}, 400)
 	// 正确密码 + 验证码
 	alice.mustStatus("DELETE", "/me",
-		map[string]string{"password": "alice-pass-123", "code": mfaCode(t, secret)}, 204)
+		map[string]string{"password": "alice-pass-123", "code": mfaCode(t, secret, 0)}, 204)
 	alice.mustFail("GET", "/me", nil, 401)
 	if _, err := env.Store.GetByUsername("alice"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("user with MFA still present after deletion: %v", err)
