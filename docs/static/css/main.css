@@ -266,3 +266,30 @@ body.search-open { overflow: hidden; }
 .search-modal-bar { display: flex; align-items: flex-start; gap: 0.5rem; }
 .search-modal-bar #search { flex: 1; min-width: 0; }
 .search-close { flex: 0 0 auto; }
+
+/* ---- notice shortcode（{{% notice warning %}} 等） ---- */
+.notice {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--border));
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: hsl(var(--secondary));
+}
+.notice > :first-child { margin-top: 0; }
+.notice > :last-child { margin-bottom: 0; }
+.notice-warning {
+  border-color: hsl(38 92% 50% / 0.5);
+  border-left-color: hsl(38 92% 50%);
+  background: hsl(38 92% 50% / 0.1);
+}
+.notice-info {
+  border-color: hsl(217 91% 60% / 0.5);
+  border-left-color: hsl(217 91% 60%);
+  background: hsl(217 91% 60% / 0.1);
+}
+.notice-tip {
+  border-color: hsl(142 71% 45% / 0.5);
+  border-left-color: hsl(142 71% 45%);
+  background: hsl(142 71% 45% / 0.1);
+}
