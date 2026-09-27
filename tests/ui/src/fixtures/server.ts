@@ -54,6 +54,9 @@ async function spawnServer(binary: string): Promise<GitdashInstance> {
       GITDASH_SSH_ADDR: `127.0.0.1:${sshPort}`,
       // 关闭“注册自动建同名仓库”，保持 UI 用例对仓库列表的确定性
       GITDASH_PROFILE_REPO: "0",
+      // 启用管理面板（admin.spec.ts 用固定凭据登录）
+      GITDASH_ADMIN_USER: process.env.GITDASH_ADMIN_USER ?? "gitdash-admin",
+      GITDASH_ADMIN_PASSWORD: process.env.GITDASH_ADMIN_PASSWORD ?? "admin-test-pass-123456",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

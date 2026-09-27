@@ -60,6 +60,11 @@ func (a *API) register(w http.ResponseWriter, r *http.Request) {
 		writeCode(w, http.StatusBadRequest, "username_invalid", "username must be 4-32 chars: lowercase letters, digits, '_' or '-', starting alphanumeric")
 		return
 	}
+	if a.store.IsReservedName(username) { // 管理端保留名：禁止自助注册（管理员仍可创建）
+		a.rateFail(ipKey)
+		writeCode(w, http.StatusForbidden, "username_reserved", "this username is reserved")
+		return
+	}
 	if code, msg := passwordIssue(in.Password); code != "" {
 		a.rateFail(ipKey)
 		writeCode(w, http.StatusBadRequest, code, msg)
@@ -308,6 +313,7 @@ func (a *API) me(w http.ResponseWriter, r *http.Request) {
 		"email":          ua.Email,
 		"created_at":     ua.CreatedAt,
 		"mfa_enabled":    ua.MFAEnabled,
+		"mfa_required":   a.store.GetSetting("force_mfa") == "1" && !ua.MFAEnabled,
 		"notify_email":   ua.NotifyEmail,
 		"email_verified": ua.EmailVerified,
 		"avatar_url":     a.avatarURL(ua.Username),

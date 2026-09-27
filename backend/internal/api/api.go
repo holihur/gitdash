@@ -377,6 +377,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/admin/ip-bans", a.adminAuth(a.adminListIPBans))
 	mux.HandleFunc("POST /api/admin/ip-bans", a.adminAuth(a.adminAddIPBan))
 	mux.HandleFunc("DELETE /api/admin/ip-bans/{id}", a.adminAuth(a.adminDeleteIPBan))
+	// 注册保留名黑名单
+	mux.HandleFunc("GET /api/admin/reserved-names", a.adminAuth(a.adminListReservedNames))
+	mux.HandleFunc("POST /api/admin/reserved-names", a.adminAuth(a.adminAddReservedName))
+	mux.HandleFunc("DELETE /api/admin/reserved-names/{name}", a.adminAuth(a.adminDeleteReservedName))
 	// auth
 	mux.HandleFunc("POST /api/auth/register", a.register)
 	mux.HandleFunc("POST /api/auth/login", a.login)
@@ -1003,6 +1007,13 @@ func (a *API) auth(next http.HandlerFunc) http.HandlerFunc {
 			writeCode(w, http.StatusForbidden, "insufficient_scope", "token does not have the required scope")
 			return
 		}
+		// 强制 MFA：仅对交互式会话生效（PAT / 自动化不受影响），MFA 相关端点放行以便完成设置。
+		if !isPAT && !forceMFAExemptPath(r.URL.Path) && a.store.GetSetting("force_mfa") == "1" {
+			if ua, err := a.store.GetByUsername(username); err == nil && !ua.MFAEnabled {
+				writeCode(w, http.StatusForbidden, "mfa_required", "MFA is required; enable it in your account settings")
+				return
+			}
+		}
 		ctx := context.WithValue(r.Context(), ctxUser{}, username)
 		if isPAT {
 			ctx = context.WithValue(ctx, ctxPatScopes{}, scopes)
@@ -1027,8 +1038,22 @@ func (a *API) authOptional(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// patAllowed 判定 PAT 是否覆盖该路径所需 scope：
-// /api/admin* 一律拒绝；/api/tokens* 管理自身放行；/api/inbox* 需 inbox；
+// forceMFAExemptPath 在“强制 MFA”生效时仍允许访问的端点：
+// 读取自身状态、MFA 注册/激活/关闭，以及登出。
+func forceMFAExemptPath(path string) bool {
+	switch {
+	case path == "/api/me":
+		return true
+	case strings.HasPrefix(path, "/api/me/mfa"):
+		return true
+	case path == "/api/auth/logout":
+		return true
+	default:
+		return false
+	}
+}
+
+// patAllowed 判定 PAT 是否覆盖该路径所需 scope：// /api/admin* 一律拒绝；/api/tokens* 管理自身放行；/api/inbox* 需 inbox；
 // /api/keys* 与 /api/gpg* 需 keys；其余需 repo。
 func patAllowed(path string, scopes []string) bool {
 	if strings.HasPrefix(path, "/api/admin") {

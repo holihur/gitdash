@@ -15,6 +15,7 @@ import { useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
 import { onAuthExpired, stashReturnPath } from "@/lib/auth-expiry";
 import Login from "@/pages/Login";
+import { MFARequiredGate } from "@/components/mfa-required-gate";
 
 // 页面按需加载：首屏只需 App 外壳 + 登录页，其余页面路由切换时才拉取
 const Repos = lazy(() => import("@/pages/Repos"));
@@ -45,6 +46,7 @@ export default function App() {
   const { t } = useI18n();
   const { resolved } = useTheme();
   const [user, setUser] = useState<string | null>(null);
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -74,6 +76,7 @@ export default function App() {
         // 会话在 httpOnly cookie 中自动携带：刷新后直接探测 /api/me 恢复登录态
         const me = await api.me();
         setUser(me.username);
+        setMfaRequired(Boolean(me.mfa_required));
       } catch {
         // 无有效会话（未登录 / 已过期）→ 展示登录页
         setUser(null);
@@ -92,10 +95,21 @@ export default function App() {
       /* ignore */
     }
     setUser(null);
+    setMfaRequired(false);
     // 登出后回登录页，重新登录后回到登出前的页面
     stashReturnPath();
     toast.success(t("app.loggedOut"));
   };
+
+  // MFA 绑定成功后重新检查是否仍被强制拦截。
+  const refreshMe = useCallback(async () => {
+    try {
+      const me = await api.me();
+      setMfaRequired(Boolean(me.mfa_required));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // 任意 API 返回 401（会话过期）→ 回登录页；登录后按暂存地址原路返回
   useEffect(() => {
@@ -113,7 +127,11 @@ export default function App() {
     <BrowserRouter>
       <AnnouncementBanner />
       {user ? (
-        <Shell user={user} onLogout={logout} />
+        mfaRequired ? (
+          <MFARequiredGate onChanged={refreshMe} onLogout={logout} />
+        ) : (
+          <Shell user={user} onLogout={logout} />
+        )
       ) : (
         <Login onAuthed={(u) => setUser(u)} />
       )}

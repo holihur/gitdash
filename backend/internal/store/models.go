@@ -1020,3 +1020,12 @@ type ipBanRow struct {
 }
 
 func (ipBanRow) TableName() string { return "ip_bans" }
+
+// reservedNameRow 保留用户名黑名单：禁止自助注册，但管理员仍可创建。
+type reservedNameRow struct {
+	Name      string `gorm:"primaryKey;size:255"`
+	CreatedBy string `gorm:"not null;default:'';size:255"`
+	CreatedAt string `gorm:"not null"`
+}
+
+func (reservedNameRow) TableName() string { return "reserved_names" }

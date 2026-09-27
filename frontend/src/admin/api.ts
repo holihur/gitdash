@@ -152,6 +152,8 @@ export interface Settings {
   registration_disabled: boolean;
   /** 仓库代码成分（语言）分析开关，默认开启。 */
   language_stats_enabled: boolean;
+  /** 是否强制所有交互式用户启用 MFA。 */
+  force_mfa: boolean;
   /** 全站通知（公告条）。 */
   announcement_enabled: boolean;
   announcement_level: string;

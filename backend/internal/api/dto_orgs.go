@@ -38,6 +38,13 @@ type incomingWebhookUpdateReq struct {
 	Enabled bool `json:"enabled"` // 是否启用
 }
 
+// reservedNameReq 新增注册保留名请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type reservedNameReq struct {
+	Name string `json:"name"` // 保留的用户名/组织名
+}
+
 // setPipelineReq 设置流水线开关请求体。
 //
 //nolint:unused // 仅供 swagger @Param 注解引用

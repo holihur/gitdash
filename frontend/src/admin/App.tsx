@@ -55,9 +55,12 @@ export default function AdminApp() {
   }
 
   return (
-    <Routes>
-      <Route path="/:section?" element={<Dashboard user={me} onLogout={() => setMe(null)} />} />
-    </Routes>
+    <ShellHeader>
+      <Routes>
+        <Route path="/:section?" element={<Dashboard user={me} onLogout={() => setMe(null)} />} />
+        <Route path="*" element={<Dashboard user={me} onLogout={() => setMe(null)} />} />
+      </Routes>
+    </ShellHeader>
   );
 }
 

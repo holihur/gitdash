@@ -17,6 +17,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
   const [versionVisible, setVersionVisible] = useState(true);
   const [registrationOpen, setRegistrationOpen] = useState(true);
   const [languageStats, setLanguageStats] = useState(true);
+  const [forceMFA, setForceMFA] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -27,6 +28,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
       setVersionVisible(settings.version_visible !== false);
       setRegistrationOpen(settings.registration_disabled !== true);
       setLanguageStats(settings.language_stats_enabled !== false);
+      setForceMFA(settings.force_mfa === true);
     }
   }, [settings]);
 
@@ -40,6 +42,7 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
         version_visible: versionVisible,
         registration_disabled: !registrationOpen,
         language_stats_enabled: languageStats,
+        force_mfa: forceMFA,
       });
       setMsg(t("admin.saved"));
       onChange();
@@ -123,6 +126,18 @@ export function AccessSettings({ settings, onChange }: { settings: Settings | nu
             <span className="block text-xs text-muted-foreground">
               {t("admin.languageStatsHint")}
             </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={forceMFA}
+            onChange={(e) => setForceMFA(e.target.checked)}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="font-medium">{t("admin.forceMFA")}</span>
+            <span className="block text-xs text-muted-foreground">{t("admin.forceMFAHint")}</span>
           </span>
         </label>
         {msg && <p className="text-sm text-muted-foreground">{msg}</p>}

@@ -192,6 +192,8 @@ func (a *API) adminSettings(w http.ResponseWriter, r *http.Request) {
 		"password_login_enabled": a.store.GetSetting("password_login_enabled") != "0",
 		"version_visible":        a.store.GetSetting("version_visible") != "0",
 		"registration_disabled":  a.store.GetSetting("registration_disabled") == "1",
+		// 强制 MFA：开启后未启用 MFA 的交互式会话必须先在个人设置中启用才能使用 API。
+		"force_mfa": a.store.GetSetting("force_mfa") == "1",
 		// 代码成分（语言）分析：默认开启，可关闭以省资源。
 		"language_stats_enabled": a.store.GetSetting(jobs.SettingLanguageStats) != "0",
 		"smtp_enabled":           a.store.GetSetting("smtp_enabled") == "1",
@@ -271,6 +273,7 @@ func (a *API) adminSaveSettings(w http.ResponseWriter, r *http.Request) {
 	setBool("password_login_enabled", in["password_login_enabled"])
 	setBool("version_visible", in["version_visible"])
 	setBool("registration_disabled", in["registration_disabled"])
+	setBool("force_mfa", in["force_mfa"])
 	// 代码成分分析开关：从关闭变为开启时，异步回填尚未分析的仓库。
 	langBefore := a.store.GetSetting(jobs.SettingLanguageStats) != "0"
 	setBool(jobs.SettingLanguageStats, in[jobs.SettingLanguageStats])

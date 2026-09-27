@@ -108,6 +108,7 @@ func (s *Store) migrate() error {
 		&oauthDeviceGrantRow{},
 		&incomingWebhookRow{},
 		&ipBanRow{},
+		&reservedNameRow{},
 	); err != nil {
 		return err
 	}

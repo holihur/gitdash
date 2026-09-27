@@ -7,6 +7,8 @@ export interface User {
   email?: string;
   created_at: string;
   mfa_enabled: boolean;
+  /** 实例强制 MFA 且当前用户未启用时为 true（需先在账号设置中启用）。 */
+  mfa_required?: boolean;
   email_verified?: boolean;
   avatar_url?: string;
   cover_url?: string;

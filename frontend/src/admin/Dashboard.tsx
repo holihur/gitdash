@@ -21,6 +21,7 @@ import { IPBlacklistSection } from "./sections/IPBlacklistSection";
 import { QuotaSection } from "./sections/QuotaSection";
 import { CodeSearchSection } from "./sections/CodeSearchSection";
 import { BadgesSection } from "./sections/BadgesSection";
+import { ReservedNamesSection } from "./sections/ReservedNamesSection";
 
 const SECTIONS = ["general", "authentication", "content", "moderation", "system"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -103,6 +104,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
           <ReposSection />
           <OrgsSection />
           <BadgesSection />
+          <ReservedNamesSection />
         </>
       ),
     },
@@ -138,7 +140,7 @@ export function Dashboard({ user, onLogout }: { user: string; onLogout: () => vo
       }
       items={items}
       active={section}
-      onSelect={(key) => nav(key === "general" ? "/admin" : `/admin/${key}`)}
+      onSelect={(key) => nav(key === "general" ? "/" : `/${key}`)}
     />
   );
 }

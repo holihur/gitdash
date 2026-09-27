@@ -57,6 +57,7 @@ describe("AccessSettings", () => {
       version_visible: true,
       registration_disabled: false,
       language_stats_enabled: true,
+      force_mfa: false,
     });
   });
 });
