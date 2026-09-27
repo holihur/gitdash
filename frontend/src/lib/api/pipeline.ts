@@ -1,5 +1,5 @@
 import { req } from "./core";
-import type { ArtifactFile, PipelineGraph, PipelineRun, RepoEnvVar, RepoSecret, Runner } from "./types";
+import type { ArtifactFile, PipelineGraph, PipelineParams, PipelineRun, RepoEnvVar, RepoSecret, Runner } from "./types";
 
 export const pipelineApi = {
   // pipeline（CI）
@@ -12,6 +12,13 @@ export const pipelineApi = {
     const qs = params.toString();
     return req<PipelineGraph>(`/users/${owner}/repos/${name}/pipeline/graph${qs ? `?${qs}` : ""}`);
   },
+  getPipelineParams: (owner: string, name: string, ref?: string, file?: string) => {
+    const params = new URLSearchParams();
+    if (ref) params.set("ref", ref);
+    if (file) params.set("file", file);
+    const qs = params.toString();
+    return req<PipelineParams>(`/users/${owner}/repos/${name}/pipeline/params${qs ? `?${qs}` : ""}`);
+  },
   setPipeline: (owner: string, name: string, enabled: boolean) =>
     req<{ enabled: boolean }>(`/users/${owner}/repos/${name}/pipeline`, {
       method: "PUT",
@@ -21,7 +28,7 @@ export const pipelineApi = {
     req<PipelineRun[]>(`/users/${owner}/repos/${name}/pipeline/runs?limit=50`),
   getPipelineRun: (owner: string, name: string, id: number) =>
     req<PipelineRun>(`/users/${owner}/repos/${name}/pipeline/runs/${id}`, {}, { fresh: true }),
-  triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string; file?: string; delay?: string } | string) =>
+  triggerPipelineRun: (owner: string, name: string, body?: { ref?: string; sha?: string; file?: string; delay?: string; inputs?: Record<string, string> } | string) =>
     req<{ runs: PipelineRun[] }>(`/users/${owner}/repos/${name}/pipeline/runs`, {
       method: "POST",
       body: JSON.stringify(typeof body === "string" ? { ref: body } : (body ?? {})),

@@ -691,6 +691,7 @@ func (a *API) Handler(staticDir string) http.Handler {
 	// pipeline（CI）
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline", a.auth(a.getPipeline))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/graph", a.auth(a.getPipelineGraph))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/params", a.auth(a.getPipelineParams))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/pipeline", a.auth(a.setPipeline))
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.listPipelineRuns))
 	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/pipeline/runs", a.auth(a.createPipelineRun))

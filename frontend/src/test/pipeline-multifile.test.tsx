@@ -11,6 +11,7 @@ vi.mock("@/lib/api", () => ({
     listPipelineRuns: vi.fn(),
     getPipelineRun: vi.fn(),
     getPipelineGraph: vi.fn(),
+    getPipelineParams: vi.fn(),
     setPipeline: vi.fn(),
     triggerPipelineRun: vi.fn(),
     rerunPipelineRun: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/components/mermaid", () => ({ MermaidDiagram: () => null }));
 
 const { api } = (await import("@/lib/api")) as unknown as {
-  api: { getPipeline: Mock; listPipelineRuns: Mock; triggerPipelineRun: Mock };
+  api: { getPipeline: Mock; listPipelineRuns: Mock; triggerPipelineRun: Mock; getPipelineParams: Mock };
 };
 
 function run(id: number, file: string) {
@@ -49,6 +50,7 @@ beforeEach(() => {
     files: [".gitdash.yml", ".gitdash/ci.yml"],
   });
   api.listPipelineRuns.mockResolvedValue([run(2, ".gitdash/ci.yml")]);
+  api.getPipelineParams.mockResolvedValue({ ref: "main", file: ".gitdash.yml", params: [] });
   api.triggerPipelineRun.mockResolvedValue({
     runs: [run(3, ".gitdash.yml"), run(4, ".gitdash/ci.yml")],
   });
@@ -73,6 +75,32 @@ describe("RepoPipeline multi-file", () => {
     const combo = screen.getByRole("combobox");
     expect(within(combo).getByRole("option", { name: ".gitdash.yml" })).toBeInTheDocument();
     expect(within(combo).getByRole("option", { name: ".gitdash/ci.yml" })).toBeInTheDocument();
+  });
+
+  it("opens a form for parameterized pipelines and submits inputs", async () => {
+    api.getPipelineParams.mockResolvedValue({
+      ref: "main",
+      file: ".gitdash.yml",
+      params: [
+        { name: "version", description: "Release version", required: true },
+        { name: "environment", type: "choice", options: ["staging", "production"], default: "staging" },
+      ],
+    });
+    const user = userEvent.setup();
+    renderPipeline();
+    await screen.findByRole("table");
+
+    await user.click(screen.getByRole("button", { name: /run now/i }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText(/version/i), "1.2.3");
+    await user.click(within(dialog).getByRole("button", { name: /run now/i }));
+
+    await waitFor(() =>
+      expect(api.triggerPipelineRun).toHaveBeenCalledWith("alice", "demo", {
+        file: ".gitdash.yml",
+        inputs: { version: "1.2.3", environment: "staging" },
+      }),
+    );
   });
 
   it("triggers the selected file and prepends all returned runs", async () => {

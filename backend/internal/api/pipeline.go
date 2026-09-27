@@ -94,7 +94,58 @@ func (a *API) getPipelineGraph(w http.ResponseWriter, r *http.Request) {
 		"file":    file,
 		"image":   cfg.Image,
 		"timeout": cfg.Timeout.String(),
+		"params":  cfg.Params,
 		"graph":   cfg.Graph(),
+	})
+}
+
+// getPipelineParams 返回某个流水线文件声明的手动触发参数（表单化流水线）。
+//
+//	@Summary     流水线参数
+//	@Description 返回指定文件声明的 params（用于手动触发时渲染表单）；未声明时为空数组。
+//	@Tags        pipeline
+//	@Produce     json
+//	@Param       owner path string true "仓库所有者"
+//	@Param       name  path string true "仓库名"
+//	@Param       ref   query string false "分支或 tag（默认仓库默认分支）"
+//	@Param       file  query string false "流水线文件（默认第一个发现的文件）"
+//	@Success     200 {object} map[string]any
+//	@Failure     404 {object} map[string]string
+//	@Security    BearerAuth
+//	@Router      /users/{owner}/repos/{name}/pipeline/params [get]
+func (a *API) getPipelineParams(w http.ResponseWriter, r *http.Request) {
+	owner, name, ok := a.requireAccess(w, r, false)
+	if !ok {
+		return
+	}
+	ref := strings.TrimSpace(r.URL.Query().Get("ref"))
+	if ref == "" {
+		if hb, err := gitsvc.HeadBranch(owner, name); err == nil {
+			ref = hb
+		}
+	}
+	if ref == "" {
+		writeCode(w, http.StatusBadRequest, "ref_required", "repository has no default branch")
+		return
+	}
+	file := strings.TrimSpace(r.URL.Query().Get("file"))
+	if file == "" {
+		if files := pipeline.DiscoverFiles(owner, name, ref); len(files) > 0 {
+			file = files[0]
+		}
+	}
+	if file == "" {
+		file = pipeline.FileName
+	}
+	cfg := a.pipelineConfig(owner, name, ref, file)
+	if cfg == nil {
+		writeCode(w, http.StatusNotFound, "pipeline_not_found", "no "+file+" at "+ref)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ref":    ref,
+		"file":   file,
+		"params": cfg.Params,
 	})
 }
 

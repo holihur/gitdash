@@ -212,8 +212,15 @@ func (a *API) triggerRuns(w http.ResponseWriter, r *http.Request, owner, name st
 		return
 	}
 	var inputs map[string]string
-	if event == "workflow_dispatch" {
-		inputs = sanitizeInputs(in.Inputs)
+	inputs = sanitizeInputs(in.Inputs)
+	// 声明了 params 的流水线：套用默认值并校验必填/选项（手动与 dispatch 一致）。
+	if cfg := a.pipelineConfig(owner, name, sha, file); cfg != nil && len(cfg.Params) > 0 {
+		resolved, perr := pipeline.ResolveInputs(cfg, inputs)
+		if perr != nil {
+			writeCode(w, http.StatusBadRequest, "invalid_inputs", perr.Error())
+			return
+		}
+		inputs = resolved
 	}
 	delay, derr := parseRunDelay(in.Delay)
 	if derr != nil {
@@ -264,12 +271,24 @@ func (a *API) pipelineDispatchEnabled(owner, name, sha, file string) bool {
 
 // pipelineFileDispatchEnabled 单个流水线文件的 DSL 是否启用了外部 dispatch。
 func (a *API) pipelineFileDispatchEnabled(owner, name, sha, file string) bool {
+	cfg := a.pipelineConfig(owner, name, sha, file)
+	return cfg != nil && cfg.DispatchEnabled()
+}
+
+// pipelineConfig 解析目标提交上某个流水线文件的配置；未指定文件或读取/解析失败返回 nil。
+func (a *API) pipelineConfig(owner, name, sha, file string) *pipeline.Config {
+	if strings.TrimSpace(file) == "" {
+		return nil
+	}
 	blob, err := gitsvc.ReadBlob(owner, name, sha, file)
 	if err != nil || blob.Encoding != "utf-8" {
-		return false
+		return nil
 	}
 	cfg, err := pipeline.Parse([]byte(blob.Content))
-	return err == nil && cfg.DispatchEnabled()
+	if err != nil {
+		return nil
+	}
+	return cfg
 }
 
 // resolveRunTarget 解析触发目标：sha 优先，其次 ref（分支或 tag 短名），都空取默认分支。

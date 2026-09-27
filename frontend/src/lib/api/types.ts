@@ -811,7 +811,26 @@ export interface PipelineGraph {
   file?: string;
   image?: string;
   timeout?: string;
+  params?: PipelineParam[];
   graph: { image?: string; nodes: PipelineGraphNode[]; edges: PipelineGraphEdge[] };
+}
+
+/** 手动触发流水线时可填写的参数（表单化流水线）。 */
+export interface PipelineParam {
+  name: string;
+  description?: string;
+  /** string（默认）| choice | boolean */
+  type?: "string" | "choice" | "boolean";
+  default?: string;
+  required?: boolean;
+  options?: string[];
+}
+
+/** getPipelineParams 响应。 */
+export interface PipelineParams {
+  ref: string;
+  file: string;
+  params: PipelineParam[];
 }
 
 export interface ByokKey {

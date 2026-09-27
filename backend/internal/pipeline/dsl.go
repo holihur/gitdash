@@ -70,6 +70,8 @@ const (
 	MaxSecrets = 50
 	// MaxWorkspacePaths 单条流水线可缓存/归档的路径数上限。
 	MaxWorkspacePaths = 10
+	// MaxParams 单条流水线可声明的参数（手动触发表单）上限。
+	MaxParams = 20
 )
 
 // DefaultStepTimeout 单步默认超时，可被 GITDASH_PIPELINE_DEFAULT_TIMEOUT 覆盖
@@ -85,6 +87,17 @@ type Step struct {
 	When     string
 	whenCond cel.Program
 	Parallel []Step // 可选：并发子步骤（不允许嵌套 parallel）
+}
+
+// Param 手动触发流水线时的一个输入参数（渲染为表单）。
+type Param struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	// Type: string（默认）| choice | boolean
+	Type     string   `json:"type,omitempty"`
+	Default  string   `json:"default,omitempty"`
+	Required bool     `json:"required,omitempty"`
+	Options  []string `json:"options,omitempty"` // type=choice
 }
 
 // Config 解析后的流水线配置。
@@ -108,6 +121,8 @@ type Config struct {
 	On []string
 	// Schedule 可选：cron（5 字段：分 时 日 月 周）表达式列表，需 On 包含 schedule。
 	Schedule []string
+	// Params 可选：手动触发 / dispatch 时可填写的参数（表单化流水线）。
+	Params []Param
 }
 
 // allowedTriggers 事件白名单。
@@ -381,8 +396,17 @@ func Parse(data []byte) (*Config, error) {
 			if err != nil {
 				return nil, err
 			}
+		case "params":
+			if val != "" {
+				return nil, fmt.Errorf("line %d: params takes a list of parameter definitions", i+1)
+			}
+			var err error
+			i, err = readParams(lines, i+1, cfg)
+			if err != nil {
+				return nil, err
+			}
 		default:
-			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, cache, artifacts, volumes, runs-on, steps)", i+1, key)
+			return nil, fmt.Errorf("line %d: unknown key %q (allowed: image, timeout, job_timeout, on, schedule, env, secrets, cache, artifacts, volumes, runs-on, params, steps)", i+1, key)
 		}
 	}
 	if err := cfg.validate(); err != nil {
@@ -403,6 +427,9 @@ func (c *Config) validate() error {
 	}
 	if len(c.Schedule) > 0 && !c.Triggers("schedule") {
 		return fmt.Errorf("schedule expressions require \"schedule\" in on")
+	}
+	if err := validateParams(c.Params); err != nil {
+		return err
 	}
 	if len(c.Steps) == 0 {
 		return fmt.Errorf("at least one step is required")

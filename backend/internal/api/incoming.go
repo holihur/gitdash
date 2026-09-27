@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"gitdash/backend/internal/logx"
+	"gitdash/backend/internal/pipeline"
 	"gitdash/backend/internal/store"
 	"net/http"
 	"strconv"
@@ -206,14 +207,82 @@ func (a *API) createIssueFromIncomingWebhook(w http.ResponseWriter, r *http.Requ
 		writeNotFound(w, "repo")
 		return
 	}
-	var in createIssueReq
+	var in struct {
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		// Pipeline 非空时触发一次流水线（on 需包含 workflow_dispatch）；可与 issue 同时使用。
+		Pipeline *struct {
+			File   string            `json:"file"`
+			Ref    string            `json:"ref"`
+			Inputs map[string]string `json:"inputs"`
+		} `json:"pipeline"`
+	}
 	if err := readJSON(w, r, &in); err != nil {
 		return
 	}
-	// 入站 webhook 无登录用户，issue 作者记为仓库 owner。
-	issue, ok := a.newIssue(w, owner, repo, owner, in.Title, in.Body)
-	if !ok {
+	if in.Pipeline == nil && strings.TrimSpace(in.Title) == "" {
+		writeCode(w, http.StatusBadRequest, "title_required", "title is required (or provide a pipeline block)")
 		return
 	}
-	writeJSON(w, http.StatusCreated, issue)
+
+	resp := map[string]any{}
+	if in.Pipeline != nil {
+		// 入站 webhook 无登录用户，触发者记为仓库 owner。
+		runs, code, msg := a.triggerPipelineFromWebhook(owner, repo, owner, in.Pipeline.File, in.Pipeline.Ref, in.Pipeline.Inputs)
+		if code != "" {
+			writeCode(w, http.StatusBadRequest, code, msg)
+			return
+		}
+		resp["runs"] = runs
+	}
+	if strings.TrimSpace(in.Title) != "" {
+		issue, ok := a.newIssue(w, owner, repo, owner, in.Title, in.Body)
+		if !ok {
+			return
+		}
+		// 仅创建 issue 时保持原有响应形状（直接返回 issue 对象）。
+		if in.Pipeline == nil {
+			writeJSON(w, http.StatusCreated, issue)
+			return
+		}
+		resp["issue"] = issue
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+// triggerPipelineFromWebhook 以 workflow_dispatch 语义触发流水线（供入站 webhook 使用）。
+// 返回 (runs, 错误码, 错误信息)；错误码为空表示成功。
+func (a *API) triggerPipelineFromWebhook(owner, name, actor, file, ref string, inputs map[string]string) ([]store.PipelineRun, string, string) {
+	resolvedRef, sha, code, msg := resolveRunTarget(owner, name, ref, "")
+	if code != "" {
+		return nil, code, msg
+	}
+	file = strings.TrimSpace(file)
+	if !a.pipelineDispatchEnabled(owner, name, sha, file) {
+		return nil, "dispatch_not_enabled", "add \"workflow_dispatch\" to on: in the pipeline file to enable dispatch"
+	}
+	resolved := sanitizeInputs(inputs)
+	if cfg := a.pipelineConfig(owner, name, sha, file); cfg != nil && len(cfg.Params) > 0 {
+		resolvedInputs, perr := pipeline.ResolveInputs(cfg, resolved)
+		if perr != nil {
+			return nil, "invalid_inputs", perr.Error()
+		}
+		resolved = resolvedInputs
+	}
+	runs, err := pipeline.TriggerAll(a.store, pipeline.TriggerOpts{
+		Owner: owner, Repo: name, File: file, SHA: sha, Ref: resolvedRef,
+		By: actor, Event: "workflow_dispatch", Inputs: resolved,
+	})
+	switch {
+	case err == nil:
+		return runs, "", ""
+	case errors.Is(err, pipeline.ErrNoPipeline):
+		return nil, "pipeline_file_missing", "no pipeline definition found at the target commit"
+	case errors.Is(err, pipeline.ErrTriggerDisabled):
+		return nil, "trigger_disabled", "this pipeline does not enable the requested trigger (see on: in the pipeline file)"
+	case errors.Is(err, pipeline.ErrTooManyRuns):
+		return nil, "too_many_runs", "too many active pipeline runs"
+	default:
+		return nil, "internal", "internal server error"
+	}
 }
