@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MarkdownView } from "@/components/markdown";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { repoAutocomplete } from "@/lib/md-autocomplete";
 import Pagination from "@/components/ui/pagination";
 import { useQueryState } from "@/lib/query-state";
 import { cn, formatDate } from "@/lib/utils";
@@ -217,6 +218,8 @@ export default function RepoPulls({
                   rows={4}
                   value={body}
                   onChange={setBody}
+                  autocomplete={repoAutocomplete(owner, name)}
+                  draftKey={`pull-new:${owner}/${name}`}
                 />
               </div>
               <label className="flex items-center gap-2 text-sm">

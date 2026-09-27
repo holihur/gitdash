@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { MergeGateBadges } from "@/components/merge-gate";
 import { MarkdownView } from "@/components/markdown";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { repoAutocomplete } from "@/lib/md-autocomplete";
 import { useI18n } from "@/lib/i18n";
 import { RelativeTime } from "@/components/relative-time";
 import { apiErrorMsg } from "@/lib/errors";
@@ -121,6 +122,8 @@ export default function PullReviewSection({
             placeholder={t("pulls.reviewPlaceholder")}
             value={body}
             onChange={setBody}
+            autocomplete={repoAutocomplete(owner, name)}
+            draftKey={`review:${owner}/${name}/${number}`}
           />
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" className="gap-1 text-green-600 dark:text-green-400" disabled={busy} onClick={() => submit("approve")}>

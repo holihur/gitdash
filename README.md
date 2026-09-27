@@ -19,6 +19,7 @@ A minimal self-hosted Git service MVP (like a mini Gitea):
 - **Connected accounts & batch import**: link GitHub, GitLab, Gitea/Forgejo or Bitbucket accounts (OAuth) and import selected repositories in bulk from the import dialog
 - **Webhooks**: per-repo outbound webhooks with per-event subscriptions (push / issues / pull requests / comments / branches & tags / releases / pipeline / fork / star / watch) and HMAC signature delivery, dispatched asynchronously through the job queue with backoff retries; plus an **incoming webhook** token that lets external systems create issues
 - **GPG keys**: upload GPG public keys to verify commit signatures
+- **Markdown editor**: CodeMirror-powered editor for issues, PRs and comments with a formatting toolbar, `⌘/Ctrl+B/I/K` shortcuts, split preview, drag-and-drop/paste image upload and `@mention` / `#issue` autocomplete
 - **Passkeys (WebAuthn)**: register FIDO2 / platform authenticators (Touch ID, Windows Hello, security keys, password managers) in **Profile → Passkeys** and sign in passwordlessly; configure `GITDASH_WEBAUTHN_RPID` / `GITDASH_WEBAUTHN_ORIGINS` for non-standard domains
 - **OAuth login**: GitHub OAuth, Google login and generic OIDC login (configurable in the admin panel)
 - **OAuth 2.0 provider**: gitdash can act as an OAuth 2.0 authorization server — register third-party apps, run the authorization-code flow, and issue `repo`/`inbox`/`keys` access tokens (managed in **OAuth Apps**) — see [OAuth 2.0 provider](#oauth-20-provider-applications)

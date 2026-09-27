@@ -120,6 +120,16 @@ export const authApi = {
     req<null>("/me/mfa/email/activate", { method: "POST", body: JSON.stringify({ code }) }),
   mfaEmailSend: () => req<null>("/me/mfa/email/send", { method: "POST" }),
 
+  // Markdown 编辑器上传（图片 / 附件）
+  uploadFile: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return sendForm<{ key: string; url: string; name: string; content_type: string; size: number }>(
+      "/uploads",
+      form,
+    );
+  },
+
   // passkey（WebAuthn / FIDO2）
   passkeyList: () => req<{ passkeys: Passkey[] }>("/me/passkeys"),
   passkeyRegisterBegin: (name?: string) =>

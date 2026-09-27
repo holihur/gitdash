@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MarkdownView } from "@/components/markdown";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { useI18n } from "@/lib/i18n";
+import { repoAutocomplete } from "@/lib/md-autocomplete";
 import { RelativeTime } from "@/components/relative-time";
 
 interface Props {
@@ -189,7 +190,12 @@ export default function CommentSection({ owner, name, number, kind = "issues", e
                 </div>
                 {editingId === item.c.id ? (
                   <div className="mt-2 space-y-2">
-                    <MarkdownEditor rows={3} value={editBody} onChange={setEditBody} />
+                    <MarkdownEditor
+                      rows={3}
+                      value={editBody}
+                      onChange={setEditBody}
+                      autocomplete={repoAutocomplete(owner, name)}
+                    />
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -219,6 +225,8 @@ export default function CommentSection({ owner, name, number, kind = "issues", e
           placeholder={t("comments.placeholder")}
           value={body}
           onChange={setBody}
+          autocomplete={repoAutocomplete(owner, name)}
+          draftKey={`comment:${owner}/${name}/${kind}/${number}`}
         />
         <Button size="sm" disabled={posting || !body.trim()} onClick={post}>
           {t("comments.post")}

@@ -19,6 +19,7 @@ English | 简体中文
 - **账号绑定与批量导入**：通过 OAuth 绑定 GitHub、GitLab、Gitea/Forgejo、Bitbucket 账号，在导入弹窗中勾选并批量导入仓库
 - **Webhook**：仓库级出站 webhook，支持按事件类型订阅（push / issue / PR / 评论 / 分支标签 / Release / 流水线 / fork / star / watch），HMAC 签名推送，经任务队列异步派发并按退避重试；另提供**入站 webhook** token，外部系统可凭其创建 issue
 - **GPG Key**：上传 GPG 公钥验证提交签名
+- **Markdown 编辑器**：基于 CodeMirror，支持格式工具栏、`⌘/Ctrl+B/I/K` 快捷键、分屏预览、粘贴/拖拽上传图片，以及 `@提及` / `#issue` 自动补全
 - **Passkey（WebAuthn）**：在 **个人资料 → Passkey** 中注册 FIDO2 / 平台认证器（Touch ID、Windows Hello、安全密钥、密码管理器）并免密码登录；非标准域名/反代场景可配置 `GITDASH_WEBAUTHN_RPID` / `GITDASH_WEBAUTHN_ORIGINS`
 - **OAuth 登录**：GitHub OAuth、Google 登录与通用 OIDC 登录（管理面板可配置）
 - **OAuth 2.0 提供方**：gitdash 可作为 OAuth 2.0 授权服务器——注册第三方应用、跑授权码流程、签发 `repo`/`inbox`/`keys` 访问令牌（在「OAuth Apps」管理），见 [OAuth 2.0 提供方](#oauth-20-提供方applications)

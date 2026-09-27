@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label as FieldLabel } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import type { MarkdownAutocomplete } from "@/components/markdown-code-editor";
 import { useI18n } from "@/lib/i18n";
 
 /** 新建 issue 对话框 */
@@ -24,6 +25,8 @@ export function CreateIssueDialog({
   onBodyChange,
   busy,
   onSubmit,
+  autocomplete,
+  draftKey,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,6 +36,8 @@ export function CreateIssueDialog({
   onBodyChange: (v: string) => void;
   busy: boolean;
   onSubmit: () => void;
+  autocomplete?: MarkdownAutocomplete;
+  draftKey?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -66,6 +71,8 @@ export function CreateIssueDialog({
               placeholder={t("issues.bodyPlaceholder")}
               value={body}
               onChange={onBodyChange}
+              autocomplete={autocomplete}
+              draftKey={draftKey}
             />
           </div>
         </div>
@@ -90,6 +97,8 @@ export function EditIssueDialog({
   busy,
   onSubmit,
   onCancel,
+  autocomplete,
+  draftKey,
 }: {
   open: boolean;
   number: number;
@@ -100,6 +109,8 @@ export function EditIssueDialog({
   busy: boolean;
   onSubmit: () => void;
   onCancel: () => void;
+  autocomplete?: MarkdownAutocomplete;
+  draftKey?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -120,7 +131,14 @@ export function EditIssueDialog({
           </div>
           <div className="grid gap-2">
             <FieldLabel htmlFor="edit-issue-body">{t("issues.bodyLabel")}</FieldLabel>
-            <MarkdownEditor id="edit-issue-body" rows={6} value={body} onChange={onBodyChange} />
+            <MarkdownEditor
+              id="edit-issue-body"
+              rows={6}
+              value={body}
+              onChange={onBodyChange}
+              autocomplete={autocomplete}
+              draftKey={draftKey}
+            />
           </div>
         </div>
         <DialogFooter>

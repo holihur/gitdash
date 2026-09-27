@@ -93,6 +93,7 @@ func (s *Store) migrate() error {
 		&byokKeyRow{},
 		&copilotSessionRow{},
 		&userAvatarRow{},
+		&uploadRow{},
 		&userCoverRow{},
 		&orgCoverRow{},
 		&oauthAppRow{},

@@ -827,6 +827,20 @@ type userAvatarRow struct {
 
 func (userAvatarRow) TableName() string { return "user_avatars" }
 
+// uploadRow 是 Markdown 编辑器上传的附件 / 图片（内容寻址式随机 key，单独表避免主查询加载大字段）。
+type uploadRow struct {
+	ID          int64  `gorm:"primaryKey;autoIncrement"`
+	Key         string `gorm:"not null;uniqueIndex;size:64"`
+	Name        string `gorm:"not null;default:'';size:255"`
+	ContentType string `gorm:"not null;default:'';size:128"`
+	Size        int64  `gorm:"not null;default:0"`
+	Uploader    string `gorm:"not null;default:'';index;size:255"`
+	Data        []byte `gorm:"not null"`
+	CreatedAt   string `gorm:"not null"`
+}
+
+func (uploadRow) TableName() string { return "uploads" }
+
 // ---- user covers ----
 
 // userCoverRow 用户封面（个人主页顶部横幅）图片（单独表，避免 users 常规查询加载大字段）。

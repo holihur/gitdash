@@ -412,6 +412,9 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/me/pins", a.auth(a.listMyPins))
 	mux.HandleFunc("POST /api/me/pins", a.auth(a.pinMyRepo))
 	mux.HandleFunc("DELETE /api/me/pins/{owner}/{repo}", a.auth(a.unpinMyRepo))
+	// Markdown 编辑器上传（图片 / 附件）
+	mux.HandleFunc("POST /api/uploads", a.auth(a.uploadFile))
+	mux.HandleFunc("GET /api/uploads/{key}", a.getUpload)
 
 	// byok（bring your own key：用户自带 LLM 密钥）
 	mux.HandleFunc("GET /api/me/byok", a.auth(a.listByok))

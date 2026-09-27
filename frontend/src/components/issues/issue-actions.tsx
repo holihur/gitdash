@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MarkdownEditor } from "@/components/markdown-editor";
+import { repoAutocomplete } from "@/lib/md-autocomplete";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { CopilotLaunchDialog, EditIssueDialog } from "@/components/issues/dialogs";
 
@@ -257,6 +258,8 @@ export function IssueActions({
         busy={savingEdit}
         onSubmit={saveEdit}
         onCancel={() => setEditOpen(false)}
+        autocomplete={repoAutocomplete(owner, name)}
+        draftKey={`issue-edit:${owner}/${name}/${issue.number}`}
       />
       <CopilotLaunchDialog
         open={copilotOpen}
@@ -290,6 +293,8 @@ export function IssueActions({
               placeholder={t("issues.closeCommentPlaceholder")}
               value={closeComment}
               onChange={setCloseComment}
+              autocomplete={repoAutocomplete(owner, name)}
+              draftKey={`issue-close:${owner}/${name}/${issue.number}`}
             />
             <div className="grid gap-1.5">
               <span className="text-sm font-medium">{t("issues.closeReason")}</span>

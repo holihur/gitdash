@@ -12,6 +12,7 @@ import ListSkeleton from "@/components/list-skeleton";
 import LabelsManager from "@/components/labels-manager";
 import MilestonesManager from "@/components/milestones-manager";
 import { CreateIssueDialog } from "@/components/issues/dialogs";
+import { repoAutocomplete } from "@/lib/md-autocomplete";
 import { IssueItem } from "@/components/issues/issue-item";
 import { canTriage, canWrite } from "@/lib/repo-role";
 import { IssueFilters } from "@/components/issues/issue-filters";
@@ -162,6 +163,8 @@ export default function RepoIssues({ owner, name, role }: { owner: string; name:
             onBodyChange={setBody}
             busy={creating}
             onSubmit={create}
+            autocomplete={repoAutocomplete(owner, name)}
+            draftKey={`issue-new:${owner}/${name}`}
           />
         </div>
       </div>

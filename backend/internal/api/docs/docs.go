@@ -8542,6 +8542,99 @@ const docTemplate = `{
                 ]
             }
         },
+        "/uploads": {
+            "post": {
+                "description": "multipart 字段 file；支持 png/jpeg/gif/webp/pdf/txt，最大 10MB。返回可直接嵌入 Markdown 的 URL。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "上传附件",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.Upload"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/uploads/{key}": {
+            "get": {
+                "description": "以正确的 Content-Type 返回上传的文件；不存在返回 404。",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "读取上传附件",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "上传 key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/users/{owner}/repos/{name}": {
             "get": {
                 "description": "返回仓库信息（含 fork/导入来源、star/watch 状态与当前用户角色）。",
@@ -20031,6 +20124,10 @@ const docTemplate = `{
                 "banned": {
                     "type": "boolean"
                 },
+                "commit_count": {
+                    "description": "CommitCount 默认分支提交总数；-1 表示尚未统计（前端隐藏）。",
+                    "type": "integer"
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -20133,6 +20230,10 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 仓库最近一次 push / 网页提交时间（旧数据回退为 CreatedAt）。",
+                    "type": "string"
                 },
                 "visibility": {
                     "description": "private | public | anonymous（匿名只读）",
@@ -20246,6 +20347,29 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "topic": {
+                    "type": "string"
+                }
+            }
+        },
+        "store.Upload": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "url": {
                     "type": "string"
                 }
             }
