@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Save, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -30,6 +30,23 @@ export default function MirrorDialog({ open, onOpenChange, owner, repo }: Props)
   const [key, setKey] = useState("");
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
+  const pollRef = useRef<number | null>(null);
+  const aliveRef = useRef(true);
+
+  const stopPoll = useCallback(() => {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      stopPoll();
+    };
+  }, [stopPoll]);
 
   const load = useCallback(async () => {
     try {
@@ -47,8 +64,12 @@ export default function MirrorDialog({ open, onOpenChange, owner, repo }: Props)
       setKey("");
       setConfigured(false);
       load();
+    } else {
+      // 关闭对话框即停止轮询，避免后台请求风暴与卸载后 toast。
+      stopPoll();
+      setBusy(false);
     }
-  }, [open, load]);
+  }, [open, load, stopPoll]);
 
   const save = async () => {
     if (!url.trim()) return;
@@ -85,26 +106,38 @@ export default function MirrorDialog({ open, onOpenChange, owner, repo }: Props)
     try {
       await api.syncMirror(owner, repo);
       toast.success(t("mirror.syncQueued"));
-      // 轮询任务状态直到 synced/failed（导入与镜像同步走异步队列）
+      // 轮询任务状态直到 synced/failed（导入与镜像同步走异步队列）。
+      // busy 保持 true 直到轮询结束，避免用户反复点击产生多个并发轮询。
       const deadline = Date.now() + 60_000;
-      const poll = setInterval(async () => {
+      stopPoll();
+      pollRef.current = window.setInterval(async () => {
+        if (!aliveRef.current) {
+          stopPoll();
+          return;
+        }
         try {
           const m = await api.getMirror(owner, repo);
+          if (!aliveRef.current) {
+            stopPoll();
+            return;
+          }
           if (m.status === "synced") {
-            clearInterval(poll);
+            stopPoll();
             toast.success(t("mirror.synced"));
+            setBusy(false);
           } else if (m.status === "failed" || Date.now() > deadline) {
-            clearInterval(poll);
+            stopPoll();
             if (m.status === "failed")
               toast.error(`${t("mirror.syncFailed")}${m.error ? `: ${m.error}` : ""}`);
+            setBusy(false);
           }
         } catch {
-          clearInterval(poll);
+          stopPoll();
+          setBusy(false);
         }
       }, 1500);
     } catch (e) {
       toast.error(apiErrorMsg(to, e));
-    } finally {
       setBusy(false);
     }
   };

@@ -334,7 +334,12 @@ func (a *API) SetSSHPort(addr string) {
 //	@Success     200 {object} object
 //	@Router      /instance [get]
 func (a *API) instance(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"version": a.publicVersion(), "ssh_port": a.sshPort, "docs_url": a.docsURL()})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"version":         a.publicVersion(),
+		"ssh_port":        a.sshPort,
+		"docs_url":        a.docsURL(),
+		"copilot_enabled": copilot.Enabled(),
+	})
 }
 
 // docsURL 返回文档站地址：环境变量 GITDASH_DOCS_URL 优先，其次管理端设置 docs_url；未配置返回空串。

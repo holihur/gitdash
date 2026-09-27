@@ -64,10 +64,14 @@ export default function CopilotTab({ owner, name, role }: CopilotTabProps) {
     }
   }, [owner, name, to]);
 
+  // 切换仓库时重置并重新加载；load 依赖 owner/name，不能只在 mount 时跑一次，
+  // 否则会显示上一个仓库的会话（并连到上一个仓库的 WebSocket）。
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setSessions([]);
+    setActiveId(null);
+    setLoading(true);
+    void load();
+  }, [load]);
 
   // 从 issue 页面跳转过来（?copilot=<id>）时聚焦对应会话。
   useEffect(() => {

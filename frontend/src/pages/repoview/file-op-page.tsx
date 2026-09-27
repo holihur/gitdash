@@ -47,6 +47,8 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
   );
   const path = kind === "edit" ? editPath : newPath;
   const [content, setContent] = useState("");
+  // baseline 是当前 branch 加载进来的原始内容；用于判断编辑缓冲是否已被修改。
+  const [baseline, setBaseline] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(mode === "edit");
@@ -93,6 +95,7 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
           setContent("");
         } else {
           setContent(b.content);
+          setBaseline(b.content);
           setLoadError("");
         }
       })
@@ -226,7 +229,19 @@ export default function FileOpPage({ mode }: { mode: FileOpMode }) {
             <select
               id="fop-branch"
               value={branch}
-              onChange={(e) => setBranch(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value;
+                // 编辑模式下切换分支会重新拉取并覆盖本地缓冲：有未保存修改时先确认。
+                if (
+                  mode === "edit" &&
+                  next !== branch &&
+                  content !== baseline &&
+                  !window.confirm(t("fops.discardOnBranchChange"))
+                ) {
+                  return;
+                }
+                setBranch(next);
+              }}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-56"
             >
               {branchOptions.length === 0 && <option value={branch || "main"}>{branch || "main"}</option>}

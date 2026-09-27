@@ -1000,6 +1000,9 @@ func cmdCopilot(args []string, host, token string, jsonOut bool) error {
 	if err != nil {
 		return err
 	}
+	if copilotDisabled(cl) {
+		return errors.New("copilot is disabled on this instance (set GITDASH_COPILOT=1 on the server to enable)")
+	}
 	switch args[0] {
 	case "list", "ls":
 		owner, repo, err := needRepo(args[1:])
@@ -1038,6 +1041,18 @@ func cmdCopilot(args []string, host, token string, jsonOut bool) error {
 	default:
 		return fmt.Errorf("unknown copilot subcommand %q", args[0])
 	}
+}
+
+// copilotDisabled 查询 /instance 的 copilot 能力位；字段缺失（旧服务端）或查询
+// 失败均视为未禁用，避免误拦截。
+func copilotDisabled(cl *client) bool {
+	var info struct {
+		Enabled *bool `json:"copilot_enabled"`
+	}
+	if err := cl.get("/instance", &info); err != nil || info.Enabled == nil {
+		return false
+	}
+	return !*info.Enabled
 }
 
 func cmdCopilotCreate(cl *client, args []string, jsonOut bool) error {

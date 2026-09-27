@@ -19,6 +19,8 @@ vi.mock("@/lib/api", () => {
     ApiError,
     cloneCommand: (owner: string, name: string) => `git clone ssh://x/${owner}/${name}.git`,
     cloneUrl: (owner: string, name: string) => `ssh://x/${owner}/${name}.git`,
+    isCopilotEnabled: () => false,
+    subscribeCopilot: () => () => {},
     api: {
       me: vi.fn(),
       getRepo: vi.fn(),

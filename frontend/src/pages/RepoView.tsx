@@ -1,7 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { api, cloneCommand } from "@/lib/api";
+import { api, cloneCommand, isCopilotEnabled, subscribeCopilot } from "@/lib/api";
 import { buildFileOpPath, type RepoTab } from "@/lib/repo-url";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -196,6 +196,9 @@ export default function RepoView() {
     [name, owner, branches],
   );
 
+  // copilot 默认关闭（需 GITDASH_COPILOT=1），能力位来自 /api/instance。
+  const copilotOn = useSyncExternalStore(subscribeCopilot, isCopilotEnabled, isCopilotEnabled);
+
   const overflowTabs = useMemo(
     () => [
       { value: "code", label: t("repo.code") },
@@ -203,20 +206,23 @@ export default function RepoView() {
       ...(repo?.has_issues === false ? [] : [{ value: "issues", label: t("issues.title") }]),
       { value: "pulls", label: t("pulls.title") },
       { value: "pipeline", label: t("pipeline.tab") },
-      { value: "copilot", label: t("copilot.tab") },
+      ...(copilotOn ? [{ value: "copilot", label: t("copilot.tab") }] : []),
       { value: "releases", label: t("releases.tab") },
       { value: "projects", label: t("projects.tab") },
       ...(canMaintainRepo ? [{ value: "settings", label: t("repo.settings") }] : []),
     ],
-    [t, canMaintainRepo, repo?.has_issues],
+    [t, canMaintainRepo, repo?.has_issues, copilotOn],
   );
 
-  // 关闭 issue 后，若 URL 仍指向 issues tab，回退到 code。
+  // 关闭 issue 后，若 URL 仍指向 issues tab，回退到 code；copilot 关闭同理。
   const issuesDisabled = repo?.has_issues === false;
-  const activeTab: RepoTab = issuesDisabled && tab === "issues" ? "code" : tab;
+  const copilotDisabled = !copilotOn;
+  const activeTab: RepoTab =
+    (issuesDisabled && tab === "issues") || (copilotDisabled && tab === "copilot") ? "code" : tab;
   useEffect(() => {
     if (issuesDisabled && tab === "issues") setParams({ tab: null });
-  }, [issuesDisabled, tab, setParams]);
+    if (copilotDisabled && tab === "copilot") setParams({ tab: null });
+  }, [issuesDisabled, copilotDisabled, tab, setParams]);
 
   if (missing) {
     return (

@@ -75,17 +75,33 @@ export function useRepoData({
   const reloadTree = useCallback(() => setLoadTick((n) => n + 1), []);
 
   useEffect(() => {
+    let alive = true;
+    // 切换仓库时先清除上一次的 missing（否则一次 5xx/网络抖动会让该组件实例
+    // 永久显示“未找到”，前后退复用实例时也不会恢复）。
+    setMissing(false);
     (async () => {
       try {
         const [r, bs] = await Promise.all([api.getRepo(owner, name), api.branches(owner, name)]);
+        if (!alive) return;
         setRepo(r);
         setBranches(bs);
-        api.listTags(owner, name).then(setTags).catch(() => undefined);
+        setError("");
+        setMissing(false);
+        api
+          .listTags(owner, name)
+          .then((t) => {
+            if (alive) setTags(t);
+          })
+          .catch(() => undefined);
       } catch (e) {
+        if (!alive) return;
         setMissing(true);
         setError(e instanceof Error ? e.message : String(e));
       }
     })();
+    return () => {
+      alive = false;
+    };
   }, [name, owner]);
 
   const loadTree = useCallback(async () => {

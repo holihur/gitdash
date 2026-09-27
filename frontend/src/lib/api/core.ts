@@ -16,16 +16,39 @@ export class ApiError extends Error {
 }
 
 let sshPort = "2222";
+let copilotEnabled = false;
+const copilotListeners = new Set<() => void>();
 
-/** 启动时调用：拉取实例信息（真实 SSH 端口、文档站地址），失败保持默认。 */
+/** 订阅 copilot 能力位变化（配合 useSyncExternalStore）。 */
+export function subscribeCopilot(fn: () => void): () => void {
+  copilotListeners.add(fn);
+  return () => copilotListeners.delete(fn);
+}
+
+/** 启动时调用：拉取实例信息（真实 SSH 端口、文档站地址、copilot 能力位），失败保持默认。 */
 export async function loadInstanceInfo(): Promise<void> {
   try {
-    const r = await req<{ version: string; ssh_port: string; docs_url?: string }>("/instance");
+    const r = await req<{
+      version: string;
+      ssh_port: string;
+      docs_url?: string;
+      copilot_enabled?: boolean;
+    }>("/instance");
     if (r.ssh_port) sshPort = r.ssh_port;
     if (r.docs_url) setDocsURL(r.docs_url);
+    const next = Boolean(r.copilot_enabled);
+    if (next !== copilotEnabled) {
+      copilotEnabled = next;
+      copilotListeners.forEach((fn) => fn());
+    }
   } catch {
     /* ignore：回退默认端口 */
   }
+}
+
+/** 实例是否启用 copilot（由 /api/instance 能力位驱动；默认关闭）。 */
+export function isCopilotEnabled(): boolean {
+  return copilotEnabled;
 }
 
 export function cloneUrl(owner: string, name: string): string {
