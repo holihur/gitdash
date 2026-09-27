@@ -18959,6 +18959,13 @@ const docTemplate = `{
                 "date": {
                     "type": "string"
                 },
+                "gpg_status": {
+                    "type": "string"
+                },
+                "gpg_verified": {
+                    "description": "GPGVerified / GPGStatus 由 API 层校验签名后填充（可选）。",
+                    "type": "string"
+                },
                 "message": {
                     "type": "string"
                 },
@@ -19029,6 +19036,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "date": {
+                    "type": "string"
+                },
+                "gpg_status": {
+                    "type": "string"
+                },
+                "gpg_verified": {
+                    "description": "GPGVerified / GPGStatus 由 API 层校验签名后填充（可选）。",
                     "type": "string"
                 },
                 "message": {

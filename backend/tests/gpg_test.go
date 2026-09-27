@@ -139,4 +139,30 @@ func TestGPGVerifiedCommit(t *testing.T) {
 	if !signedFound {
 		t.Fatalf("signed commit missing from log; commits = %v", commits)
 	}
+
+	// blob 的 latest_commit 也带 gpg_verified
+	var blob map[string]any
+	if err := json.Unmarshal([]byte(rawGet(t, alice, "/repos/signed/blob?ref=main&path=b.txt")), &blob); err != nil {
+		t.Fatalf("decode blob: %v", err)
+	}
+	if lc, ok := blob["latest_commit"].(map[string]any); !ok || lc["gpg_verified"] != "alice" {
+		t.Fatalf("blob latest_commit gpg = %v", blob["latest_commit"])
+	}
+
+	// blame 中的提交也带 gpg_verified
+	var blame map[string]any
+	if err := json.Unmarshal([]byte(rawGet(t, alice, "/repos/signed/blame?ref=main&path=b.txt")), &blame); err != nil {
+		t.Fatalf("decode blame: %v", err)
+	}
+	foundVerified := false
+	if cs, ok := blame["commits"].(map[string]any); ok {
+		for _, v := range cs {
+			if m, ok := v.(map[string]any); ok && m["gpg_verified"] == "alice" {
+				foundVerified = true
+			}
+		}
+	}
+	if !foundVerified {
+		t.Fatalf("blame commits missing gpg_verified: %v", blame["commits"])
+	}
 }

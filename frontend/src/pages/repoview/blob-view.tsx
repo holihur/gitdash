@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MarkdownView } from "@/components/markdown";
 import CodeMirrorEditor from "@/components/code-editor-lazy";
+import { CommitVerifiedBadge } from "@/components/commit-verified-badge";
 import { formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -158,6 +159,12 @@ export default function BlobView({
                           >
                             <span className="font-medium">{c ? c.author : l.commit.slice(0, 7)}</span>
                             <span className="ml-1 font-mono text-[10px]">{l.commit.slice(0, 7)}</span>
+                            <CommitVerifiedBadge
+                              verified={c?.gpg_verified}
+                              status={c?.gpg_status}
+                              compact
+                              className="ml-1 inline-block align-middle"
+                            />
                           </button>
                         </td>
                         <td className="w-10 whitespace-nowrap px-2 py-0.5 align-top text-right text-muted-foreground">

@@ -101,6 +101,7 @@ func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 	}
 	// 当前目录的整体最后提交（“综合”信息），供前端 Latest commit 横幅展示
 	latest, _ := gitsvc.LastCommit(owner, name, ref, dir)
+	a.fillCommitGPG(owner, name, latest)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"path": dir, "entries": entries, "truncated": truncated, "latest_commit": latest,
 	})
@@ -137,6 +138,7 @@ func (a *API) blob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.LatestCommit, _ = gitsvc.LastCommit(owner, name, ref, file)
+	a.fillCommitGPG(owner, name, b.LatestCommit)
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -224,6 +226,7 @@ func (a *API) blame(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	a.fillBlameGPG(owner, name, b)
 	writeJSON(w, http.StatusOK, b)
 }
 
@@ -294,4 +297,58 @@ type commitResp struct {
 	GPGVerified string   `json:"gpg_verified,omitempty"`
 	// GPG 签名状态：verified | unknown_key | invalid（无签名字段缺省，与旧行为兼容）
 	GPGStatus string `json:"gpg_status,omitempty"`
+}
+
+// gpgInfoFor 批量校验提交的 GPG 签名，返回 sha -> [user, status]。
+// 公钥走 TTL 缓存，commit 原文用单次 cat-file --batch 读取。
+func (a *API) gpgInfoFor(owner, name string, shas []string) map[string][2]string {
+	out := map[string][2]string{}
+	keys := a.gpgVerifyKeys()
+	if len(keys) == 0 || len(shas) == 0 {
+		return out
+	}
+	raws := gitsvc.RawCommits(owner, name, shas)
+	for _, sha := range shas {
+		raw, ok := raws[sha]
+		if !ok {
+			continue
+		}
+		user, _, status := gpgsig.VerifyCommit(raw, keys)
+		if status != gpgsig.StatusUnsigned {
+			out[sha] = [2]string{user, status}
+		}
+	}
+	return out
+}
+
+// fillCommitGPG 为单个提交（最新提交 / 提交详情）填充 GPG 校验结果。
+func (a *API) fillCommitGPG(owner, name string, c *gitsvc.Commit) {
+	if c == nil || c.SHA == "" {
+		return
+	}
+	if v, ok := a.gpgInfoFor(owner, name, []string{c.SHA})[c.SHA]; ok {
+		c.GPGStatus = v[1]
+		if v[1] == gpgsig.StatusVerified {
+			c.GPGVerified = v[0]
+		}
+	}
+}
+
+// fillBlameGPG 为 blame 结果中的每个提交填充 GPG 校验结果。
+func (a *API) fillBlameGPG(owner, name string, b *gitsvc.Blame) {
+	if b == nil || len(b.Commits) == 0 {
+		return
+	}
+	shas := make([]string, 0, len(b.Commits))
+	for sha := range b.Commits {
+		shas = append(shas, sha)
+	}
+	for sha, v := range a.gpgInfoFor(owner, name, shas) {
+		c := b.Commits[sha]
+		c.GPGStatus = v[1]
+		if v[1] == gpgsig.StatusVerified {
+			c.GPGVerified = v[0]
+		}
+		b.Commits[sha] = c
+	}
 }

@@ -90,6 +90,9 @@ type Commit struct {
 	Message string   `json:"message"`
 	Parents []string `json:"parents,omitempty"` // 父提交 sha（用于提交图）；根提交为空
 	Refs    []string `json:"refs,omitempty"`    // 指向该提交的本地分支/标签（如 "HEAD -> main"、"tag: v1.0"）
+	// GPGVerified / GPGStatus 由 API 层校验签名后填充（可选）。
+	GPGVerified string `json:"gpg_verified,omitempty"`
+	GPGStatus   string `json:"gpg_status,omitempty"`
 }
 
 // maxCommitScan 带搜索词时最多向后扫描的提交数（避免超大仓库全量遍历）。

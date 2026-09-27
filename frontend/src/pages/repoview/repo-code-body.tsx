@@ -8,6 +8,7 @@ import { MarkdownWithToc } from "@/components/markdown";
 import type { RepoLinkTarget } from "@/lib/md-links";
 import TreeListing from "@/components/tree-listing";
 import { CodeBlock } from "@/components/code-block";
+import { CommitVerifiedBadge } from "@/components/commit-verified-badge";
 import BlobView from "./blob-view";
 
 interface Props {
@@ -94,6 +95,7 @@ export function RepoCodeBody({
           <span className="shrink-0 whitespace-nowrap text-muted-foreground">
             <RelativeTime iso={latestCommit.date} locale={locale} />
           </span>
+          <CommitVerifiedBadge verified={latestCommit.gpg_verified} status={latestCommit.gpg_status} />
         </div>
       )}
 

@@ -479,5 +479,6 @@ func (a *API) commitInfo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	a.fillCommitGPG(owner, name, c)
 	writeJSON(w, http.StatusOK, c)
 }

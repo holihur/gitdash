@@ -370,6 +370,10 @@ export interface BlameCommit {
   author: string;
   date: string;
   message: string;
+  /** 经已注册 GPG 公钥验证的提交所属用户 */
+  gpg_verified?: string;
+  /** GPG 签名状态：verified | unknown_key | invalid */
+  gpg_status?: "verified" | "unknown_key" | "invalid";
 }
 
 export interface BlameLine {

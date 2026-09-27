@@ -13,6 +13,9 @@ type BlameCommit struct {
 	Author  string `json:"author"`
 	Date    string `json:"date"`
 	Message string `json:"message"`
+	// GPGVerified / GPGStatus 由 API 层校验签名后填充（可选）。
+	GPGVerified string `json:"gpg_verified,omitempty"`
+	GPGStatus   string `json:"gpg_status,omitempty"`
 }
 
 type BlameLine struct {

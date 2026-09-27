@@ -2,18 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  BadgeCheck,
   ChevronDown,
   GitBranch,
   GitCommitHorizontal,
   Search,
-  ShieldAlert,
-  ShieldQuestion,
   Tag,
   Undo2,
 } from "lucide-react";
 import { api, type Commit, type PullDiff } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { CommitVerifiedBadge } from "@/components/commit-verified-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -334,36 +332,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
                           <RefBadge key={r} label={r} />
                         ))}
                         <span className="truncate">{c.message}</span>
-                        {c.gpg_verified && (
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 gap-1 border-green-600/40 text-green-600"
-                            title={t("commits.gpgSigned", { user: c.gpg_verified })}
-                          >
-                            <BadgeCheck className="h-3 w-3" />
-                            {c.gpg_verified}
-                          </Badge>
-                        )}
-                        {!c.gpg_verified && c.gpg_status === "unknown_key" && (
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 text-amber-600 dark:text-amber-400"
-                            title={t("commits.gpgUnknownKey")}
-                          >
-                            <ShieldQuestion className="h-3 w-3" />
-                            {t("commits.gpgUnknownKeyShort")}
-                          </Badge>
-                        )}
-                        {!c.gpg_verified && c.gpg_status === "invalid" && (
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 gap-1 border-destructive/40 text-destructive"
-                            title={t("commits.gpgInvalid")}
-                          >
-                            <ShieldAlert className="h-3 w-3" />
-                            {t("commits.gpgInvalidShort")}
-                          </Badge>
-                        )}
+                        <CommitVerifiedBadge verified={c.gpg_verified} status={c.gpg_status} />
                         <ChevronDown
                           className={cn(
                             "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
@@ -423,6 +392,7 @@ export default function CommitsTab({ owner, name, refName, emptyRepo, role }: Co
                       <>
                         <span>{focusCommit.author}</span>
                         <RelativeTime iso={focusCommit.date} locale={locale} />
+                        <CommitVerifiedBadge verified={focusCommit.gpg_verified} status={focusCommit.gpg_status} />
                       </>
                     )}
                   </p>
