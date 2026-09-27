@@ -11,9 +11,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn, formatSize } from "@/lib/utils";
-import { useI18n } from "@/lib/i18n";
+import { dateLocale, useI18n } from "@/lib/i18n";
 import { cloneCommand, type Repo } from "@/lib/api";
 import { BadgeStrip } from "@/components/badge-strip";
+import { RelativeTime } from "@/components/relative-time";
 
 interface Props {
   owner: string;
@@ -41,7 +42,7 @@ export default function RepoHeader({
   onFork,
   onCopy,
 }: Props) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const navigate = useNavigate();
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
@@ -55,6 +56,12 @@ export default function RepoHeader({
         </h1>
         <BadgeStrip kind="repo" owner={owner} repo={name} className="mt-1" />
         <p className="text-sm text-muted-foreground">{repo?.description || t("common.noDescription")}</p>
+        {repo?.updated_at && (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t("repos.lastUpdated")}{" "}
+            <RelativeTime iso={repo.updated_at} locale={dateLocale(lang)} />
+          </p>
+        )}
         {repo?.topics && repo.topics.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {repo.topics.map((tp) => (

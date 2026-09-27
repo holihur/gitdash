@@ -57,6 +57,7 @@ func (a *API) getUserProfile(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
+	a.ensureRepoStats(repos)
 	annotatePins(repos, pins)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)

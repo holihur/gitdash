@@ -35,6 +35,8 @@ func toRepo(r repoRow) Repo {
 		PagesBranch:   r.PagesBranch,
 		PagesDir:      r.PagesDir,
 		CreatedAt:     r.CreatedAt,
+		UpdatedAt:     r.UpdatedAt,
+		CommitCount:   r.CommitCount,
 	}
 }
 
@@ -67,6 +69,8 @@ func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo,
 			"default_branch": row.DefaultBranch,
 			"has_issues":     row.HasIssues,
 			"created_at":     row.CreatedAt,
+			"updated_at":     row.CreatedAt,
+			"commit_count":   0,
 		}).Error; err != nil {
 			return err
 		}
@@ -82,6 +86,25 @@ func (s *Store) CreateRepo(owner, name, description string, private bool) (Repo,
 		return r, nil
 	}
 	return toRepo(row), nil
+}
+
+// TouchRepo 记录仓库最近一次活动时间（push / 网页提交后调用）。
+// 仓库已删除时静默忽略。
+func (s *Store) TouchRepo(owner, name string) error {
+	return s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("updated_at", now()).Error
+}
+
+// SetRepoCommitCount 写入仓库默认分支的提交总数（push 后更新）。
+func (s *Store) SetRepoCommitCount(owner, name string, n int) error {
+	return s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("commit_count", n).Error
+}
+
+// SetRepoUpdatedAt 写入仓库最近更新时间（从 git 补算时使用）。
+func (s *Store) SetRepoUpdatedAt(owner, name, at string) error {
+	return s.db.Model(&repoRow{}).Where("owner = ? AND name = ?", owner, name).
+		Update("updated_at", at).Error
 }
 
 func (s *Store) ListRepos(owner string) ([]Repo, error) {
@@ -503,10 +526,12 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 		DefaultBranch string
 		HasIssues     bool
 		CreatedAt     string
+		UpdatedAt     string
+		CommitCount   int
 		RoleRank      int
 	}
 	sql := `SELECT r.id, r.owner, r.name, r.description, r.private, r.is_template, r.banned,
-			r.default_branch, r.has_issues, r.created_at, t.role_rank
+			r.default_branch, r.has_issues, r.created_at, r.updated_at, r.commit_count, t.role_rank
 		FROM (` + accessibleReposSubquery + `) t
 		JOIN repos r ON r.id = t.id
 		ORDER BY r.owner, r.name`
@@ -527,6 +552,7 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 			ID: r.ID, Owner: r.Owner, Name: r.Name, Description: r.Description,
 			Private: r.Private, IsTemplate: r.IsTemplate, Banned: r.Banned,
 			DefaultBranch: r.DefaultBranch, HasIssues: r.HasIssues, CreatedAt: r.CreatedAt,
+			UpdatedAt: r.UpdatedAt, CommitCount: r.CommitCount,
 		})
 		dto.Role = roleFromRank(r.RoleRank)
 		repos = append(repos, dto)

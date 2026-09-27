@@ -159,6 +159,8 @@ export const en = {
   repos: {
     title: "Repositories",
     subtitle: "Clone / push via SSH, browse code in the web UI.",
+    lastUpdated: "Updated",
+    lastUpdatedTitle: "Last updated",
     new: "New repository",
     newDialogDescription: "Create a bare repository, then push via SSH.",
     nameInvalid:

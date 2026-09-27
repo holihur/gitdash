@@ -12,6 +12,7 @@ import { CommitMessage } from "@/components/commit-message";
 import { cn, formatSize } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { RelativeTime } from "@/components/relative-time";
+import { preloadFile } from "@/components/code-editor-lazy";
 
 interface Props {
   entries: TreeEntry[];
@@ -57,6 +58,8 @@ export default function TreeListing({
                     <div className="flex items-center gap-2">
                       <button
                         className="flex min-w-0 items-center gap-2 hover:underline"
+                        onMouseEnter={() => entry.type === "blob" && void preloadFile(targetPath)}
+                        onFocus={() => entry.type === "blob" && void preloadFile(targetPath)}
                         onClick={() => onOpenEntry(entry)}
                       >
                         {entry.type === "tree" ? (

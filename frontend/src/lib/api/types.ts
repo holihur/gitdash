@@ -141,6 +141,10 @@ export interface Repo {
   name: string;
   description: string;
   created_at: string;
+  /** 仓库最近一次 push / 网页提交时间（旧数据可能缺省，回退 created_at） */
+  updated_at?: string;
+  /** 默认分支提交总数；-1 表示尚未统计（前端隐藏）。 */
+  commit_count?: number;
   private?: boolean;
   visibility?: string; // private | public | anonymous
   is_template?: boolean;

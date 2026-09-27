@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { CalendarDays, FolderGit2, Pin, PinOff, Settings, Star, UserMinus, UserPlus } from "lucide-react";
+import { CalendarDays, Clock, FolderGit2, GitCommitHorizontal, Pin, PinOff, Settings, Star, UserMinus, UserPlus } from "lucide-react";
 import { api, type Repo, type UserProfile, type UserSummary } from "@/lib/api";
 import { dateLocale, useI18n } from "@/lib/i18n";
 import { apiErrorMsg } from "@/lib/errors";
@@ -346,13 +346,23 @@ function RepoCard({
         </p>
         <BadgeStrip kind="repo" owner={repo.owner} repo={repo.name} />
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>
-            <RelativeTime iso={repo.created_at} locale={locale} />
-          </span>
+          {repo.updated_at && (
+            <span className="flex items-center gap-1" title={t("repos.lastUpdatedTitle")}>
+              <Clock className="h-3 w-3" />
+              {t("repos.lastUpdated")}
+              <RelativeTime iso={repo.updated_at} locale={locale} />
+            </span>
+          )}
           {typeof repo.stars === "number" && (
             <span className="flex items-center gap-1">
               <Star className="h-3 w-3" />
               {repo.stars}
+            </span>
+          )}
+          {typeof repo.commit_count === "number" && repo.commit_count >= 0 && (
+            <span className="flex items-center gap-1" title={t("repos.commitsTitle")}>
+              <GitCommitHorizontal className="h-3 w-3" />
+              {repo.commit_count}
             </span>
           )}
         </div>

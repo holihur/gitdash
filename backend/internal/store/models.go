@@ -72,6 +72,10 @@ type repoRow struct {
 	PagesBranch  string `gorm:"not null;default:'';size:255"`
 	PagesDir     string `gorm:"not null;default:'';size:255"`
 	CreatedAt    string `gorm:"not null"`
+	// UpdatedAt 最近一次 push / 网页提交的时间（列表页展示“更新于”）。
+	UpdatedAt string `gorm:"not null;default:''"`
+	// CommitCount 默认分支可达提交数；-1 表示尚未统计（启动时后台回填），0 为真空仓库。
+	CommitCount int `gorm:"not null;default:-1"`
 }
 
 func (repoRow) TableName() string { return "repos" }

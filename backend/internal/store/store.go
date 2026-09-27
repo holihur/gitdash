@@ -78,6 +78,10 @@ type Repo struct {
 	PagesBranch  string `json:"pages_branch,omitempty"`
 	PagesDir     string `json:"pages_dir,omitempty"`
 	CreatedAt    string `json:"created_at"`
+	// UpdatedAt 仓库最近一次 push / 网页提交时间（旧数据回退为 CreatedAt）。
+	UpdatedAt string `json:"updated_at,omitempty"`
+	// CommitCount 默认分支提交总数；-1 表示尚未统计（前端隐藏）。
+	CommitCount int `json:"commit_count"`
 	// Role 仅用于“可访问仓库列表”（owner / read / write），普通查询为空
 	Role string `json:"role,omitempty"`
 	// Pinned / PinPosition 用户主页置顶标记（由 API 层填充，store 查询不扫描）

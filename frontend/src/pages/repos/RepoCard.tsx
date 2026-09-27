@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Eye, MoreVertical, Pin, PinOff, Star, Trash2, Users, Webhook } from "lucide-react";
+import { Clock, Eye, GitCommitHorizontal, MoreVertical, Pin, PinOff, Star, Trash2, Users, Webhook } from "lucide-react";
 import type { Repo } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,9 +120,17 @@ export default function RepoCard({
       </CardHeader>
       <CardContent className="mt-auto space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="font-normal">
-            <RelativeTime iso={repo.created_at} locale={locale} />
-          </Badge>
+          {repo.updated_at && (
+            <Badge
+              variant="secondary"
+              className="gap-1 font-normal"
+              title={t("repos.lastUpdatedTitle")}
+            >
+              <Clock className="h-3 w-3" />
+              {t("repos.lastUpdated")}{" "}
+              <RelativeTime iso={repo.updated_at} locale={locale} />
+            </Badge>
+          )}
           {repo.language && (
             <Badge variant="secondary" className="font-normal">
               <LanguageBadge language={repo.language} />
@@ -137,6 +145,12 @@ export default function RepoCard({
             <Badge variant="secondary" className="gap-1 font-normal">
               <Pin className="h-3 w-3" />
               {t("user.pinned")}
+            </Badge>
+          )}
+          {typeof repo.commit_count === "number" && repo.commit_count >= 0 && (
+            <Badge variant="secondary" className="gap-1 font-normal" title={t("repos.commitsTitle")}>
+              <GitCommitHorizontal className="h-3 w-3" />
+              {repo.commit_count}
             </Badge>
           )}
           <Badge variant="secondary" className="gap-1 font-normal">

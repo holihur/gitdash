@@ -94,6 +94,18 @@ interface Props {
   onDocChange?: (value: string) => void;
 }
 
+/**
+ * preloadLanguage 预加载某路径对应的语法高亮语言包。
+ * 文件树 / 文件列表在 hover（或键盘聚焦）时调用，使用户点击文件时无需等待语言 chunk。
+ */
+export async function preloadLanguage(path: string): Promise<void> {
+  try {
+    await loadLanguage(path);
+  } catch {
+    /* 预加载失败不影响后续正常加载 */
+  }
+}
+
 /** CodeMirror 6 封装：明暗主题 + 语法高亮（语言由 path 自动推断）。 */
 export default function CodeMirrorEditor({
   value,

@@ -9,6 +9,23 @@ import (
 	"strings"
 )
 
+// CommitCount 返回 ref 可达的提交总数；无效参数或读取失败返回 -1（未知）。
+// 空仓库的默认分支不存在也会返回 -1，调用方应将其视为 0。
+func CommitCount(owner, name, ref string) int {
+	if !ValidName(owner) || !ValidName(name) || ref == "" {
+		return -1
+	}
+	out, err := gitOut(repoPath(owner, name), "rev-list", "--count", ref)
+	if err != nil {
+		return -1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return -1
+	}
+	return n
+}
+
 func rawCommit(owner, name, sha string) ([]byte, error) {
 	path := repoPath(owner, name)
 	cmd := exec.Command("git", "-C", path, "cat-file", "commit", sha)

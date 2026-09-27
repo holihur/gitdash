@@ -18,6 +18,7 @@ import CodeRefBar from "./code-ref-bar";
 import { CodeSearch } from "@/components/code-search";
 import { RepoCodeBody } from "./repo-code-body";
 import { LanguageBar } from "@/components/language-bar";
+import { preloadEditor } from "@/components/code-editor-lazy";
 
 
 
@@ -86,6 +87,13 @@ export default function CodeTab({
   const [treeOpen, setTreeOpen] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+
+  // 代码页挂载后空闲时预加载编辑器 chunk（CodeMirror 核心 + 主题），
+  // 使用户首次点击文件时无需等待大 chunk 下载。
+  useEffect(() => {
+    const id = window.setTimeout(() => preloadEditor(), 200);
+    return () => window.clearTimeout(id);
+  }, []);
 
   const openEntry = (entry: TreeEntry) => {
     if (entry.type === "tree") {

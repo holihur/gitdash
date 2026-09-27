@@ -54,6 +54,30 @@ func isDefaultBranchPush(st *store.Store, ev webhooks.Event) bool {
 	return false
 }
 
+// repoTouchHandler 在 push 后更新仓库的“最近更新时间”与提交总数（仓库列表 / 头部展示）。
+// 任意分支/标签的 push 都算活动；删除引用不计。
+func repoTouchHandler(st *store.Store) func(webhooks.Event) {
+	return func(ev webhooks.Event) {
+		if ev.Event != "push" || ev.Owner == "" || ev.Repo == "" {
+			return
+		}
+		if strings.Trim(ev.New, "0") == "" { // 删除引用：零 SHA
+			return
+		}
+		if err := st.TouchRepo(ev.Owner, ev.Repo); err != nil {
+			logx.Infof("repo touch %s/%s: %v", ev.Owner, ev.Repo, err)
+		}
+		// 默认分支 push 后重算提交总数（异步，不阻塞 push 处理）。
+		if strings.HasPrefix(ev.Ref, "refs/heads/") && isDefaultBranchPush(st, ev) {
+			if n := gitsvc.CommitCount(ev.Owner, ev.Repo, ev.Ref); n >= 0 {
+				if err := st.SetRepoCommitCount(ev.Owner, ev.Repo, n); err != nil {
+					logx.Infof("repo commit-count %s/%s: %v", ev.Owner, ev.Repo, err)
+				}
+			}
+		}
+	}
+}
+
 // languagePushHandler 在每次默认分支 push 后异步分析仓库代码成分（语言占比）。
 // 仅默认分支影响列表页展示，其它分支/标签 push 不触发；删除引用（零 SHA）跳过。
 // 实际分析由任务队列 worker 执行。
@@ -533,7 +557,7 @@ func run() {
 
 	// webhook 调度：消费 post-receive spool 中的 push 事件
 	// （webhook 投递 + 流水线触发 + 代码成分分析 + 代码索引重建）
-	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st), languagePushHandler(jobsMgr, st), codeIndexPushHandler(jobsMgr, st))
+	go dispatcher.Run(gitsvc.SpoolDir(), 2*time.Second, pipeline.PushHandler(st), repoTouchHandler(st), languagePushHandler(jobsMgr, st), codeIndexPushHandler(jobsMgr, st))
 
 	// API 侧事件 spool：issue/pull/评论事件（webhook 投递 + 邮件通知）
 	apiSpool := filepath.Join(dataDir, "webhooks-spool-api")

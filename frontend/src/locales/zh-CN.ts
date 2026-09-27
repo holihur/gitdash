@@ -160,6 +160,8 @@ export const zhCN: Messages = {
   repos: {
     title: "仓库",
     subtitle: "通过 SSH 进行 clone / push，网页端浏览代码。",
+    lastUpdated: "更新于",
+    lastUpdatedTitle: "最后更新时间",
     new: "新建仓库",
     newDialogDescription: "创建一个 bare 仓库，之后即可通过 SSH push。",
     nameInvalid: "仓库名只能包含字母、数字、._- 且以字母数字开头",

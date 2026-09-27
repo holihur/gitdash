@@ -392,6 +392,7 @@ func (a *API) exploreRepos(w http.ResponseWriter, r *http.Request) {
 	// 返回所有公开仓库（含自己的，便于确认可见性设置是否生效）
 	me := userFrom(r)
 	out := append([]store.Repo{}, repos...)
+	a.ensureRepoStats(out)
 	a.attachStars(out, me)
 	a.attachTopics(out)
 	a.attachLanguages(out)

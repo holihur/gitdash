@@ -202,3 +202,42 @@ func TestCreateRepoSeedsDefaultLabels(t *testing.T) {
 		t.Fatalf("labels after duplicate create = %d, want %d", len(again), len(defaultLabels))
 	}
 }
+
+func TestRepoTouchUpdatedAt(t *testing.T) {
+	s := openReposStore(t)
+	if _, err := s.CreateUser("alice", "alice-pass-123"); err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.CreateRepo("alice", "demo", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 新建仓库：updated_at 回退为 created_at
+	if r.UpdatedAt == "" || r.UpdatedAt != r.CreatedAt {
+		t.Fatalf("created repo updated_at = %q, created_at = %q", r.UpdatedAt, r.CreatedAt)
+	}
+	if r.CommitCount != 0 {
+		t.Fatalf("created repo commit_count = %d, want 0", r.CommitCount)
+	}
+	if err := s.SetRepoCommitCount("alice", "demo", 7); err != nil {
+		t.Fatalf("set commit count: %v", err)
+	}
+	if got, _ := s.GetRepo("alice", "demo"); got.CommitCount != 7 {
+		t.Fatalf("commit_count = %d, want 7", got.CommitCount)
+	}
+	// 触摸后刷新为当前时间（>= created_at），且被 GetRepo 读回
+	if err := s.TouchRepo("alice", "demo"); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+	got, err := s.GetRepo("alice", "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UpdatedAt < r.CreatedAt {
+		t.Fatalf("updated_at %q < created_at %q", got.UpdatedAt, r.CreatedAt)
+	}
+	// 不存在的仓库静默忽略（不报错）
+	if err := s.TouchRepo("alice", "missing"); err != nil {
+		t.Fatalf("touch missing repo: %v", err)
+	}
+}

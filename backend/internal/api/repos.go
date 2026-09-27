@@ -47,6 +47,29 @@ func (a *API) attachLanguages(repos []store.Repo) {
 	}
 }
 
+// ensureRepoStats 为缺失“最近更新时间 / 提交数”的仓库从 git 实时计算并回写。
+// 仅对缺失值生效（旧数据），正常情况下零开销；计算失败保持原样。
+func (a *API) ensureRepoStats(repos []store.Repo) {
+	for i := range repos {
+		r := &repos[i]
+		if (r.UpdatedAt != "" && r.CommitCount >= 0) || r.DefaultBranch == "" {
+			continue
+		}
+		if r.UpdatedAt == "" {
+			if c, err := gitsvc.LastCommit(r.Owner, r.Name, r.DefaultBranch, ""); err == nil && c != nil {
+				r.UpdatedAt = c.Date
+				_ = a.store.SetRepoUpdatedAt(r.Owner, r.Name, c.Date)
+			}
+		}
+		if r.CommitCount < 0 {
+			if n := gitsvc.CommitCount(r.Owner, r.Name, r.DefaultBranch); n >= 0 {
+				r.CommitCount = n
+				_ = a.store.SetRepoCommitCount(r.Owner, r.Name, n)
+			}
+		}
+	}
+}
+
 // listRepos 列出当前用户可访问的仓库。
 //
 //	@Summary     列出可访问仓库
@@ -73,6 +96,7 @@ func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setTotal(w, total)
+	a.ensureRepoStats(repos)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
 	a.attachLanguages(repos)
@@ -228,6 +252,7 @@ func (a *API) getRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	me := userFrom(r)
 	list := []store.Repo{repo}
+	a.ensureRepoStats(list)
 	a.attachStars(list, me)
 	repo = list[0]
 	// 仓库磁盘占用（代码体积）；仓库不在磁盘上（如导入中）时留 0。

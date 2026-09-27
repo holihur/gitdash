@@ -102,6 +102,7 @@ func (a *API) listStarred(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	setTotal(w, total)
+	a.ensureRepoStats(repos)
 	a.attachStars(repos, me)
 	a.attachTopics(repos)
 	a.attachLanguages(repos)

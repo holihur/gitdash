@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 import { api, type TreeEntry } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { preloadFile } from "@/components/code-editor-lazy";
 
 interface FileTreeProps {
   owner: string;
@@ -156,6 +157,8 @@ export default function FileTree({
             isActive && "bg-muted font-medium text-foreground",
           )}
           style={pad}
+          onMouseEnter={() => void preloadFile(full)}
+          onFocus={() => void preloadFile(full)}
           onClick={() => onOpenFile(full)}
         >
           <span className="w-3.5 shrink-0" />
