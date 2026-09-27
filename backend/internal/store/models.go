@@ -995,12 +995,15 @@ type oauthDeviceGrantRow struct {
 func (oauthDeviceGrantRow) TableName() string { return "oauth_device_grants" }
 
 // incomingWebhookRow 仓库的入站 webhook：外部系统在请求中携带 token（X-Gitdash-Token）
-// 调用即可创建 issue。TokenHash 为 token 的 sha256；明文仅在创建/轮换时返回一次。
+// 调用即可创建 issue。一个仓库可配置多个（各自独立 token，Name 用于区分）。
+// TokenHash 为 token 的 sha256；明文仅在创建时返回一次。
 type incomingWebhookRow struct {
 	ID         int64  `gorm:"primaryKey;autoIncrement"`
-	Owner      string `gorm:"not null;uniqueIndex:uq_incoming;size:255"`
-	Repo       string `gorm:"not null;uniqueIndex:uq_incoming;size:255"`
+	Owner      string `gorm:"not null;index;size:255"`
+	Repo       string `gorm:"not null;index;size:255"`
+	Name       string `gorm:"not null;default:'';size:255"`
 	TokenHash  string `gorm:"not null;uniqueIndex;size:255"`
+	Enabled    bool   `gorm:"not null;default:true"`
 	CreatedAt  string `gorm:"not null"`
 	LastUsedAt string `gorm:"not null;default:''"`
 }

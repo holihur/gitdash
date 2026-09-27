@@ -10683,16 +10683,16 @@ const docTemplate = `{
                 ]
             }
         },
-        "/users/{owner}/repos/{name}/incoming-webhook": {
+        "/users/{owner}/repos/{name}/incoming-webhooks": {
             "get": {
-                "description": "返回该仓库是否已配置入站 webhook（不返回 token 明文）。",
+                "description": "返回仓库已配置的入站 webhook（不返回 token 明文）与调用路径。",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "webhooks"
                 ],
-                "summary": "查看入站 webhook",
+                "summary": "列出入站 webhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -10711,7 +10711,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "enabled / created_at / last_used_at / path",
+                        "description": "webhooks / path",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -10725,14 +10725,17 @@ const docTemplate = `{
                 ]
             },
             "post": {
-                "description": "生成（或轮换）用于创建 issue 的入站 webhook token；明文 token 仅此一次返回。",
+                "description": "生成一个新的用于创建 issue 的入站 webhook token；明文 token 仅此一次返回。可配置多个。",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "webhooks"
                 ],
-                "summary": "创建/轮换入站 webhook",
+                "summary": "新增入站 webhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -10747,11 +10750,19 @@ const docTemplate = `{
                         "name": "name",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "名称（可空，默认 default）",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/api.incomingWebhookCreateReq"
+                        }
                     }
                 ],
                 "responses": {
                     "201": {
-                        "description": "token / path / created_at",
+                        "description": "webhook / token / path",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -10763,7 +10774,9 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ]
-            },
+            }
+        },
+        "/users/{owner}/repos/{name}/incoming-webhooks/{id}": {
             "delete": {
                 "produces": [
                     "application/json"
@@ -10786,11 +10799,86 @@ const docTemplate = `{
                         "name": "name",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "webhook id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
                     }
                 ],
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "description": "禁用后该 token 立即失效，但配置保留，可再次启用。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "webhooks"
+                ],
+                "summary": "启用/禁入站 webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "仓库所有者",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "仓库名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "webhook id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "enabled",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/api.incomingWebhookUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
                     },
                     "404": {
                         "description": "Not Found",
@@ -18056,6 +18144,24 @@ const docTemplate = `{
                 "url": {
                     "description": "外部仓库地址（http(s)/ssh/git）",
                     "type": "string"
+                }
+            }
+        },
+        "api.incomingWebhookCreateReq": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "名称（可空，默认 default）",
+                    "type": "string"
+                }
+            }
+        },
+        "api.incomingWebhookUpdateReq": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "description": "是否启用",
+                    "type": "boolean"
                 }
             }
         },

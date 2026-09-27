@@ -364,9 +364,13 @@ type Webhook struct {
 }
 
 // IncomingWebhook 仓库入站 webhook 的元信息（不含 token 明文/散列）。
+// 一个仓库可配置多个，各自独立 token。
 type IncomingWebhook struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
 	Owner      string `json:"owner"`
 	Repo       string `json:"repo"`
+	Enabled    bool   `json:"enabled"`
 	CreatedAt  string `json:"created_at"`
 	LastUsedAt string `json:"last_used_at"`
 }

@@ -690,15 +690,27 @@ export interface Webhook {
   created_at: string;
 }
 
-/** 入站 webhook：外部系统凭 token 创建 issue。 */
+/** 入站 webhook：外部系统凭 token 创建 issue（一个仓库可配置多个）。 */
 export interface IncomingWebhook {
+  id: number;
+  name: string;
   enabled: boolean;
-  /** 调用路径（如 /api/hooks/incoming/owner/repo），仅配置后返回 */
-  path?: string;
-  created_at?: string;
+  created_at: string;
   last_used_at?: string;
-  /** token 明文仅在创建/轮换响应中返回一次 */
-  token?: string;
+}
+
+/** 入站 webhook 列表响应。 */
+export interface IncomingWebhookList {
+  webhooks: IncomingWebhook[];
+  /** 调用路径（如 /api/hooks/incoming/owner/repo） */
+  path: string;
+}
+
+/** 新建入站 webhook 响应：token 明文仅此一次返回。 */
+export interface IncomingWebhookCreated {
+  webhook: IncomingWebhook;
+  token: string;
+  path: string;
 }
 
 export interface GlobalSearchResult {

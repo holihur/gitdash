@@ -675,9 +675,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/webhook-events", a.auth(a.listWebhookEvents))
 
 	// incoming webhook（入站：外部系统凭 token 创建 issue；不经过登录鉴权）
-	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.getIncomingWebhook))
-	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.setIncomingWebhook))
-	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/incoming-webhook", a.auth(a.deleteIncomingWebhook))
+	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/incoming-webhooks", a.auth(a.listIncomingWebhooks))
+	mux.HandleFunc("POST /api/users/{owner}/repos/{name}/incoming-webhooks", a.auth(a.createIncomingWebhook))
+	mux.HandleFunc("PATCH /api/users/{owner}/repos/{name}/incoming-webhooks/{id}", a.auth(a.updateIncomingWebhook))
+	mux.HandleFunc("DELETE /api/users/{owner}/repos/{name}/incoming-webhooks/{id}", a.auth(a.deleteIncomingWebhook))
 	mux.HandleFunc("POST /api/hooks/incoming/{owner}/{repo}", a.createIssueFromIncomingWebhook)
 
 	// 入站邮件（reply-by-email）：由邮件服务商/MTA 管道调用，凭共享密钥鉴权

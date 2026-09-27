@@ -24,6 +24,20 @@ type createWebhookReq struct {
 	Secret string `json:"secret"` // 可选签名密钥，至少 16 字符
 }
 
+// incomingWebhookCreateReq 新增入站 webhook 请求体（可空）。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type incomingWebhookCreateReq struct {
+	Name string `json:"name"` // 名称（可空，默认 default）
+}
+
+// incomingWebhookUpdateReq 启用/禁入站 webhook 请求体。
+//
+//nolint:unused // 仅供 swagger @Param 注解引用
+type incomingWebhookUpdateReq struct {
+	Enabled bool `json:"enabled"` // 是否启用
+}
+
 // setPipelineReq 设置流水线开关请求体。
 //
 //nolint:unused // 仅供 swagger @Param 注解引用

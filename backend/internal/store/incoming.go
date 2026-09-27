@@ -17,52 +17,49 @@ func incomingTokenHash(token string) string {
 
 func toIncomingWebhook(r incomingWebhookRow) IncomingWebhook {
 	return IncomingWebhook{
+		ID:         r.ID,
+		Name:       r.Name,
 		Owner:      r.Owner,
 		Repo:       r.Repo,
+		Enabled:    r.Enabled,
 		CreatedAt:  r.CreatedAt,
 		LastUsedAt: r.LastUsedAt,
 	}
 }
 
-// SetIncomingWebhook 创建或轮换仓库的入站 webhook token，返回明文 token（仅此一次）。
-// 每个仓库同时只保留一个 token（重新调用即轮换）。
-func (s *Store) SetIncomingWebhook(owner, repo string) (string, IncomingWebhook, error) {
+// CreateIncomingWebhook 为仓库新增一个入站 webhook token，返回明文 token（仅此一次）。
+// 一个仓库可有多个 token，各自独立（Name 仅用于展示/区分）。
+func (s *Store) CreateIncomingWebhook(owner, repo, name string) (string, IncomingWebhook, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", IncomingWebhook{}, err
 	}
 	token := hex.EncodeToString(raw)
 	row := incomingWebhookRow{
-		Owner: owner, Repo: repo, TokenHash: incomingTokenHash(token), CreatedAt: now(),
+		Owner: owner, Repo: repo, Name: name, TokenHash: incomingTokenHash(token), Enabled: true, CreatedAt: now(),
 	}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("owner = ? AND repo = ?", owner, repo).Delete(&incomingWebhookRow{}).Error; err != nil {
-			return err
-		}
-		return tx.Create(&row).Error
-	})
-	if err != nil {
+	if err := s.db.Create(&row).Error; err != nil {
 		return "", IncomingWebhook{}, err
 	}
 	return token, toIncomingWebhook(row), nil
 }
 
-// GetIncomingWebhook 返回仓库入站 webhook 的元信息（未配置时 ok=false）。
-func (s *Store) GetIncomingWebhook(owner, repo string) (IncomingWebhook, bool, error) {
-	var row incomingWebhookRow
-	err := s.db.Where("owner = ? AND repo = ?", owner, repo).First(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return IncomingWebhook{}, false, nil
+// ListIncomingWebhooks 返回仓库的全部入站 webhook（按创建顺序）。
+func (s *Store) ListIncomingWebhooks(owner, repo string) ([]IncomingWebhook, error) {
+	var rows []incomingWebhookRow
+	if err := s.db.Where("owner = ? AND repo = ?", owner, repo).Order("id ASC").Find(&rows).Error; err != nil {
+		return nil, err
 	}
-	if err != nil {
-		return IncomingWebhook{}, false, err
+	out := make([]IncomingWebhook, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toIncomingWebhook(r))
 	}
-	return toIncomingWebhook(row), true, nil
+	return out, nil
 }
 
-// DeleteIncomingWebhook 删除仓库入站 webhook（不存在返回 ErrNotFound）。
-func (s *Store) DeleteIncomingWebhook(owner, repo string) error {
-	res := s.db.Where("owner = ? AND repo = ?", owner, repo).Delete(&incomingWebhookRow{})
+// DeleteIncomingWebhook 按 id 删除仓库的一个入站 webhook（不存在返回 ErrNotFound）。
+func (s *Store) DeleteIncomingWebhook(owner, repo string, id int64) error {
+	res := s.db.Where("id = ? AND owner = ? AND repo = ?", id, owner, repo).Delete(&incomingWebhookRow{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -72,13 +69,27 @@ func (s *Store) DeleteIncomingWebhook(owner, repo string) error {
 	return nil
 }
 
-// ResolveIncomingWebhook 校验 token 是否匹配该仓库的入站 webhook；匹配时记录最近使用时间。
+// SetIncomingWebhookEnabled 启用 / 禁用某个入站 webhook（禁用后 token 立即失效，但保留配置）。
+func (s *Store) SetIncomingWebhookEnabled(owner, repo string, id int64, enabled bool) error {
+	res := s.db.Model(&incomingWebhookRow{}).
+		Where("id = ? AND owner = ? AND repo = ?", id, owner, repo).
+		Update("enabled", enabled)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ResolveIncomingWebhook 校验 token 是否匹配该仓库的某个启用中的入站 webhook；匹配时记录最近使用时间。
 func (s *Store) ResolveIncomingWebhook(owner, repo, token string) (bool, error) {
 	if token == "" {
 		return false, nil
 	}
 	var row incomingWebhookRow
-	err := s.db.Where("owner = ? AND repo = ? AND token_hash = ?", owner, repo, incomingTokenHash(token)).
+	err := s.db.Where("owner = ? AND repo = ? AND token_hash = ? AND enabled = ?", owner, repo, incomingTokenHash(token), true).
 		First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil

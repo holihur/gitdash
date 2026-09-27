@@ -6,11 +6,15 @@ import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider, detectLang, preloadLang } from "@/lib/i18n";
 import { LanguageColorsProvider } from "@/lib/language-colors";
 import { loadInstanceInfo } from "@/lib/api";
+import { registerWebMCP } from "@/lib/webmcp";
 import ErrorBoundary from "@/components/error-boundary";
 
 // 实例信息（SSH 端口、文档地址）不再阻塞首次渲染：先并行发起请求，docsUrl 在
 // 到达后通过可订阅 store 通知相关组件补渲染，避免首屏空等一个网络往返。
 void loadInstanceInfo();
+
+// WebMCP：向支持 navigator.modelContext 的浏览器注册 gitdash 工具（无此 API 时 no-op）。
+registerWebMCP();
 
 // 只等待当前语言包（单个小 chunk）即可渲染，避免首帧闪现英文兜底文案；
 // 其余语言在切换时才按需加载。

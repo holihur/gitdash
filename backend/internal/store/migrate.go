@@ -16,6 +16,13 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+	// incoming_webhooks 旧版对 (owner, repo) 有唯一约束（每仓库仅一个 token）；
+	// 多 token 需去掉该约束（AutoMigrate 不会删除既有索引）。
+	if s.db.Migrator().HasTable("incoming_webhooks") && s.db.Migrator().HasIndex(&incomingWebhookRow{}, "uq_incoming") {
+		if err := s.db.Migrator().DropIndex(&incomingWebhookRow{}, "uq_incoming"); err != nil {
+			return err
+		}
+	}
 	if err := s.db.AutoMigrate(
 		&userRow{},
 		&sessionRow{},
