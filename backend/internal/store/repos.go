@@ -581,7 +581,7 @@ func (s *Store) AccessibleRepos(username string, limit, offset int) ([]Repo, err
 			r.default_branch, r.has_issues, r.created_at, r.updated_at, r.commit_count, t.role_rank
 		FROM (` + accessibleReposSubquery + `) t
 		JOIN repos r ON r.id = t.id
-		ORDER BY r.owner, r.name`
+		ORDER BY r.updated_at DESC, r.owner, r.name`
 	args := []any{username, username, username, username, false, true}
 	if limit > 0 {
 		if offset < 0 {

@@ -295,9 +295,9 @@ def test_pipeline_dispatch_requires_optin(pl_env):
     assert run["event"] == "workflow_dispatch"
     assert run["inputs"] == {"greeting": "hi"}
 
-    # 手动触发不接收 inputs（仅 dispatch 生效）
+    # 手动触发同样接受 inputs（参数化流水线表单走手动触发），但 event=manual。
     manual = first_run(alice.post(_p(an, repo, "/runs"), json={"inputs": {"greeting": "hi"}}, expect=201))
-    assert not manual.get("inputs")
+    assert manual.get("inputs") == {"greeting": "hi"}
     assert manual["event"] == "manual"
 
 
@@ -409,6 +409,9 @@ def queue_env(tmp_path_factory):
         GITDASH_SSH_ADDR=f"127.0.0.1:{ssh_port}",
         GITDASH_QUEUE="redis",
         GITDASH_REDIS_ADDR=f"127.0.0.1:{rport}",
+        # 内置执行器默认关闭（opt-in），测试显式启用 host 模式（注册仍开放，
+        # host 步骤本身会被拒，符合用例对 failed 的预期）。
+        GITDASH_PIPELINE_EXEC="host",
     )
     log = open(tmpdir / "server.log", "wb")
     proc = subprocess.Popen([GITDASH_BIN, "serve"], env=env, stdout=log, stderr=subprocess.STDOUT)

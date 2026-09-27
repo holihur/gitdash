@@ -241,3 +241,37 @@ func TestRepoTouchUpdatedAt(t *testing.T) {
 		t.Fatalf("touch missing repo: %v", err)
 	}
 }
+
+// TestAccessibleReposOrderedByUpdatedAt 覆盖「我的仓库按最后更新排序」。
+func TestAccessibleReposOrderedByUpdatedAt(t *testing.T) {
+	s := openBanStore(t)
+	if _, err := s.CreateUser("alice", "hash"); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"old", "new", "mid"} {
+		if _, err := s.CreateRepo("alice", n, "", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 显式设置不同的 updated_at（字符串可直接比较）。
+	_ = s.SetRepoUpdatedAt("alice", "old", "2026-01-01T00:00:00Z")
+	_ = s.SetRepoUpdatedAt("alice", "new", "2026-03-01T00:00:00Z")
+	_ = s.SetRepoUpdatedAt("alice", "mid", "2026-02-01T00:00:00Z")
+	repos, err := s.AccessibleRepos("alice", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(repos))
+	for _, r := range repos {
+		names = append(names, r.Name)
+	}
+	want := []string{"new", "mid", "old"}
+	if len(names) != len(want) {
+		t.Fatalf("names = %v", names)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("order = %v, want %v", names, want)
+		}
+	}
+}
