@@ -1101,6 +1101,8 @@ func (a *API) staticHandler(dir string) http.HandlerFunc {
 		}
 		p := filepath.Join(dir, filepath.Clean("/"+r.URL.Path))
 		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			rel := strings.TrimPrefix(filepath.ToSlash(p), filepath.ToSlash(dir))
+			setStaticCache(w, rel)
 			fs.ServeHTTP(w, r)
 			return
 		}
@@ -1110,8 +1112,22 @@ func (a *API) staticHandler(dir string) http.HandlerFunc {
 				fallback = "admin.html"
 			}
 		}
+		// SPA 入口不缓存：升级后旧 index 会引用已删除的哈希资源，导致白屏。
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		http.ServeFile(w, r, filepath.Join(dir, fallback))
 	}
+}
+
+// setStaticCache 为前端静态资源设置缓存策略：Vite 产物位于 assets/ 且文件名带内容哈希，
+// 可长期强缓存；其余（入口 HTML、favicon、public 下的无哈希文件）必须协商缓存，
+// 避免升级后浏览器继续使用旧 index.html 而引用已不存在的哈希资源。
+func setStaticCache(w http.ResponseWriter, p string) {
+	p = strings.TrimPrefix(filepath.ToSlash(p), "/")
+	if strings.HasPrefix(p, "assets/") {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 }
 
 func (a *API) embeddedHandler() http.HandlerFunc {
@@ -1126,6 +1142,7 @@ func (a *API) embeddedHandler() http.HandlerFunc {
 		if p != "" {
 			if f, err := fsys.Open(p); err == nil {
 				_ = f.Close()
+				setStaticCache(w, p)
 				fileServer.ServeHTTP(w, r)
 				return
 			}
@@ -1143,6 +1160,8 @@ func (a *API) embeddedHandler() http.HandlerFunc {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// 入口 HTML 不缓存：升级后旧 index 引用已删除的哈希资源会导致白屏。
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 		_, _ = w.Write(index)
 	}
 }
