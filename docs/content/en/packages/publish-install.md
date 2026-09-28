@@ -4,7 +4,7 @@ weight: 1
 summary: "Registry URLs and authentication for each ecosystem."
 ---
 
-Gitdash ships a built-in private package registry covering **npm (node)**, **composer (PHP)**, **pypi (Python)**, **rubygems (Ruby)**, **Go modules**, **cargo (Rust)**, **Maven (Java)** and a **Docker / OCI registry**.
+Gitdash ships a built-in private package registry covering **npm (node)**, **composer (PHP)**, **pypi (Python)**, **rubygems (Ruby)**, **Go modules**, **cargo (Rust)**, **Maven (Java)**, **Dart / Pub**, **Kubernetes / Helm** and a **Docker / OCI registry**.
 
 Common rules:
 
@@ -389,6 +389,60 @@ signature checking disabled:
 
 Copy-pasteable client configs live in
 [`examples/packages/system/`](https://github.com/holihur/gitdash/tree/main/examples/packages/system).
+
+---
+
+## 10. Kubernetes / Helm (k8s)
+
+gitdash can host a classic Helm HTTP repository. Upload a chart archive
+(`<name>-<version>.tgz`); the chart name/version are read from `Chart.yaml`
+(or from the optional `meta` form field):
+
+```bash
+curl -u <owner>:<PAT> \
+  -F file=@hello-0.1.0.tgz \
+  http://<host>/api/packages/k8s/<owner>/<repo>/publish
+```
+
+The server generates the standard `index.yaml`:
+
+```bash
+helm repo add gitdash http://<host>/api/packages/k8s/<owner>/<repo>
+helm repo update
+helm search repo gitdash
+helm install hello gitdash/hello
+```
+
+For a private repository pass credentials to `helm repo add
+--username <user> --password <PAT>`. `helm push` to the OCI registry keeps
+working through the Docker / OCI endpoint (`/v2/...`).
+
+## 11. Dart / Pub
+
+gitdash implements the pub hosted API, so the native tooling works:
+
+```bash
+# one-time credentials (the PAT needs the repo scope)
+dart pub token add http://<host>/api/packages/dart/<owner>
+
+# publish from a package directory
+dart pub publish --server http://<host>/api/packages/dart/<owner>
+```
+
+Consume it from `pubspec.yaml`:
+
+```yaml
+dependencies:
+  hello:
+    hosted:
+      name: hello
+      url: http://<host>/api/packages/dart/<owner>
+    version: ^1.0.0
+```
+
+A manual multipart upload is also available at
+`POST /api/packages/dart/<owner>/publish` with a `file` field containing the
+`.tar.gz` archive.
 
 ---
 

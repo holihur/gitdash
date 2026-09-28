@@ -1,6 +1,6 @@
 export const en = {
   app: {
-    title: "gitdash",
+    title: "Gitdash",
     logout: "Sign out",
     loggedOut: "Logged out",
     theme: "Theme",
@@ -1216,7 +1216,7 @@ export const en = {
     saved: "Badges updated",
   },
   admin: {
-    title: "gitdash Admin",
+    title: "Gitdash Admin",
     signIn: "Sign in",
     signInHint: "Admin panel is disabled by default; enable it with GITDASH_ADMIN_PASSWORD on first start.",
     signOut: "Sign out",
@@ -1634,7 +1634,7 @@ export const en = {
   packages: {
     title: "Package Registry",
     subtitle:
-      "Private packages you published under your namespace (npm / composer / pypi / rubygems / go / cargo / maven). See docs/packages.md for client setup.",
+      "Private packages you published under your namespace (npm / composer / pypi / rubygems / go / cargo / maven / dart / k8s). See docs/packages.md for client setup.",
     all: "All",
     type: "Type",
     version: "Latest version",

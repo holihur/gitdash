@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { GitBranch, Github, Fingerprint, KeyRound, Mail, ShieldCheck } from "lucide-react";
+import { GitBranch, Github, Fingerprint, KeyRound, Mail, ShieldCheck, Compass } from "lucide-react";
 import { api } from "@/lib/api";
 import { getPasskeyAssertion, passkeySupported } from "@/lib/webauthn";
 import { useDocsUrl } from "@/lib/docs";
@@ -10,7 +10,7 @@ import { apiErrorMsg } from "@/lib/errors";
 import { takeReturnPath } from "@/lib/auth-expiry";
 import { ThemeToggle, LangToggle } from "@/components/header-controls";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -219,7 +219,7 @@ export default function Login({ onAuthed }: Props) {
 
   if (mfaToken) {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-full flex-col">
         <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
           <ThemeToggle />
           <LangToggle />
@@ -289,7 +289,7 @@ export default function Login({ onAuthed }: Props) {
 
   if (view === "forgot") {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-full flex-col">
         <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
           <ThemeToggle />
           <LangToggle />
@@ -337,7 +337,7 @@ export default function Login({ onAuthed }: Props) {
 
   if (view === "reset") {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-full flex-col">
         <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
           <ThemeToggle />
           <LangToggle />
@@ -402,34 +402,24 @@ export default function Login({ onAuthed }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="flex items-center justify-end gap-2 px-3 py-2 sm:px-6 sm:py-3">
-        {swaggerEnabled && (
-          <a
-            href="/api/swagger/"
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            {t("login.apiDocs")}
-          </a>
-        )}
+    <div className="flex min-h-full flex-col">
+      <div className="flex items-center justify-end gap-1 px-3 py-2 sm:px-6 sm:py-3">
+        <Link
+          to="/explore"
+          className="mr-1 flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          <Compass className="h-3.5 w-3.5" />
+          {t("nav.explore")}
+        </Link>
         <ThemeToggle />
         <LangToggle />
       </div>
       <div className="flex flex-1 items-center justify-center px-4 pb-8">
         <Card className="w-full max-w-sm">
-          <CardHeader className="items-center text-center">
-            <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <GitBranch className="h-6 w-6" />
-            </div>
-            <CardTitle className="flex items-center justify-center gap-2">
-              gitdash
-              {version && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-mono font-normal text-muted-foreground">
-                  {version}
-                </span>
-              )}
+          <CardHeader className="items-center space-y-2 pb-4 text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-xl">
+              <GitBranch className="h-5 w-5 text-primary" />
+              Gitdash
             </CardTitle>
             <CardDescription>{t("login.subtitle")}</CardDescription>
           </CardHeader>
@@ -486,6 +476,7 @@ export default function Login({ onAuthed }: Props) {
                       <Button type="submit" className="w-full" disabled={busy}>
                         {t("login.registerAndSignIn")}
                       </Button>
+                      <p className="text-center text-xs text-muted-foreground">{t("login.hint")}</p>
                     </TabsContent>
                   </form>
                 )}
@@ -495,21 +486,8 @@ export default function Login({ onAuthed }: Props) {
                 {t("login.passwordDisabled")}
               </p>
             )}
-            <p className="mt-4 text-center text-xs text-muted-foreground">{t("login.hint")}</p>
-            {docs && (
-              <p className="mt-2 text-center text-xs">
-                <a
-                  href={docs}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                >
-                  {t("login.docs")}
-                </a>
-              </p>
-            )}
             {(passkeyEnabled || githubEnabled || googleEnabled || oidc.enabled || providersError) && (
-              <div className="mt-3 space-y-2">
+              <div className={passwordEnabled ? "mt-4 space-y-2 border-t pt-4" : "mt-4 space-y-2"}>
                 {passkeyEnabled && (
                   <button
                     type="button"
@@ -565,6 +543,34 @@ export default function Login({ onAuthed }: Props) {
               </div>
             )}
           </CardContent>
+          <CardFooter className="flex-col gap-1 pb-5 pt-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {docs && (
+                <a
+                  href={docs}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  {t("login.docs")}
+                </a>
+              )}
+              {docs && swaggerEnabled && <span aria-hidden>·</span>}
+              {swaggerEnabled && (
+                <a
+                  href="/api/swagger/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  {t("login.apiDocs")}
+                </a>
+              )}
+            </div>
+            {version && (
+              <span className="font-mono text-[10px] text-muted-foreground/70">v{version}</span>
+            )}
+          </CardFooter>
         </Card>
       </div>
     </div>

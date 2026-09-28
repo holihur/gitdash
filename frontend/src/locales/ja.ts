@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const ja: Messages = {
   "app": {
-    "title": "gitdash",
+    "title": "Gitdash",
     "logout": "ログアウト",
     "loggedOut": "ログアウトしました",
     "theme": "テーマ",
@@ -1623,7 +1623,7 @@ export const ja: Messages = {
   },
   "packages": {
     "title": "パッケージレジストリ",
-    "subtitle": "名前空間の下で公開したプライベートパッケージ（npm/composer/pypi/rubygems/go/cargo/maven）。クライアントの設定については docs/packages.md を参照してください。",
+    "subtitle": "名前空間の下で公開したプライベートパッケージ（npm/composer/pypi/rubygems/go/cargo/maven/dart/k8s）。クライアントの設定については docs/packages.md を参照してください。",
     "all": "すべて",
     "type": "種類",
     "version": "最新バージョン",

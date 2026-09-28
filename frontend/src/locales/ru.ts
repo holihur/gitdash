@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const ru: Messages = {
   "app": {
-    "title": "gitdash",
+    "title": "Gitdash",
     "logout": "Выйти",
     "loggedOut": "Вы вышли из системы",
     "theme": "Тема",
@@ -1623,7 +1623,7 @@ export const ru: Messages = {
   },
   "packages": {
     "title": "Реестр пакетов",
-    "subtitle": "Приватные пакеты, опубликованные в вашем пространстве имен (npm / composer / pypi / rubygems / go / cargo / maven). См. docs/packages.md для настройки клиента.",
+    "subtitle": "Приватные пакеты, опубликованные в вашем пространстве имен (npm / composer / pypi / rubygems / go / cargo / maven / dart / k8s). См. docs/packages.md для настройки клиента.",
     "all": "Все",
     "type": "Тип",
     "version": "Последняя версия",

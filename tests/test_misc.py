@@ -42,8 +42,9 @@ def test_global_search_visibility(user_factory, anon):
     priv = f"priv-{_uuid()}"
     bob.post("/repos", json={"name": priv, "private": True, "description": f"secret {token}"}, expect=201)
 
-    # 匿名 401；他人搜索不含私有仓库
-    anon.get("/search", params={"q": token}, expect=401)
+    # 匿名可搜索（Explore 入口），但结果不含私有仓库
+    anon_res = anon.get("/search", params={"q": token}, expect=200).json()
+    assert priv not in [r["name"] for r in anon_res["repos"]]
     res = bob.get("/search", params={"q": token}, expect=200).json()
     assert [r["name"] for r in res["repos"]] == [repo]
     assert priv not in [r["name"] for r in res["repos"]]
@@ -52,7 +53,7 @@ def test_global_search_visibility(user_factory, anon):
     assert any(i["title"] == f"issue {token}" for i in res["issues"])
     assert any(u["name"] == an for u in alice.get("/search", params={"q": an}, expect=200).json()["users"])
 
-    anon.get("/search", params={"q": ""}, expect=401)
+    anon.get("/search", params={"q": ""}, expect=400)
     bob.get("/search", params={"q": ""}, expect=400)
     bob.get("/search", params={"q": "  "}, expect=400)
 

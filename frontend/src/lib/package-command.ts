@@ -42,6 +42,10 @@ export function packageUseCommand(
       const group = parts.slice(0, -1).join(".");
       return `mvn dependency:get -DremoteRepositories=gitdash -Dartifact=${group}:${artifact}:${p.version}`;
     }
+    case "dart":
+      return `PUB_HOSTED_URL=${origin}/api/packages/dart/${p.owner} dart pub add ${p.name}`;
+    case "k8s":
+      return `helm repo add ${p.name} ${origin}/api/packages/k8s/${p.owner}/${p.name} && helm repo update`;
     default:
       return `${p.name}@${p.version}`;
   }
@@ -69,6 +73,8 @@ export function packageSetupCommands(
       ];
     case "npm":
       return [`npm config set //${host}/:_authToken <PAT>`];
+    case "dart":
+      return [`dart pub token add ${origin}/api/packages/dart/${p.owner}`];
     default:
       return [];
   }

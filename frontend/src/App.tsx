@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { Bell, Compass, GitBranch, KeyRound, Loader2, FolderGit2, Building2, Cpu, Package, Search, AppWindow, BookOpen } from "lucide-react";
 import { api } from "@/lib/api";
@@ -7,7 +7,7 @@ import { useDocsUrl } from "@/lib/docs";
 import { Button } from "@/components/ui/button";
 import { NavOverflow, type NavOverflowItem } from "@/components/nav-overflow";
 import { CommandPalette } from "@/components/command-palette";
-import { UserMenu } from "@/components/header-controls";
+import { UserMenu, ThemeToggle, LangToggle } from "@/components/header-controls";
 import { FeedbackWidget } from "@/components/feedback-widget";
 import { AnnouncementBanner } from "@/components/announcement-banner";
 import { useTheme } from "@/lib/theme";
@@ -40,6 +40,55 @@ function PageLoading() {
       <Loader2 className="h-6 w-6 animate-spin" />
     </div>
   );
+}
+
+/**
+ * 匿名可浏览的 Explore 页：未登录时访问 /explore 直接展示公开仓库，
+ * 顶栏提供登录入口，浏览/搜索等读接口后端以 authOptional 放行。
+ */
+function PublicExplore() {
+  const { t } = useI18n();
+  const docs = useDocsUrl();
+  return (
+    <div className="min-h-full">
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center gap-2 sm:gap-4">
+          <Link to="/explore" className="flex shrink-0 items-center gap-2 text-lg font-bold">
+            <GitBranch className="h-5 w-5" />
+            <span className="hidden sm:inline">Gitdash</span>
+          </Link>
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            {docs && (
+              <Button variant="ghost" size="icon" className="h-9 w-9" title={t("app.docs")} asChild>
+                <a href={docs} target="_blank" rel="noreferrer">
+                  <BookOpen className="h-4 w-4" />
+                </a>
+              </Button>
+            )}
+            <ThemeToggle />
+            <LangToggle />
+            <Button size="sm" asChild>
+              <Link to="/">{t("login.signIn")}</Link>
+            </Button>
+          </div>
+        </div>
+      </header>
+      <main className="container py-4 sm:py-8">
+        <Suspense fallback={<PageLoading />}>
+          <Explore anonymous />
+        </Suspense>
+      </main>
+    </div>
+  );
+}
+
+/** 未登录时的入口：/explore 走匿名 Explore，其余路径展示登录页。 */
+function UnauthenticatedHome({ onAuthed }: { onAuthed: (username: string) => void }) {
+  const location = useLocation();
+  const isPublicExplore =
+    location.pathname === "/explore" || location.pathname.startsWith("/explore/");
+  if (isPublicExplore) return <PublicExplore />;
+  return <Login onAuthed={onAuthed} />;
 }
 
 export default function App() {
@@ -125,16 +174,22 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <AnnouncementBanner />
-      {user ? (
-        mfaRequired ? (
-          <MFARequiredGate onChanged={refreshMe} onLogout={logout} />
-        ) : (
-          <Shell user={user} onLogout={logout} />
-        )
-      ) : (
-        <Login onAuthed={(u) => setUser(u)} />
-      )}
+      {/* 全站固定视口：公告条 + 内容区，页面本身不滚动，仅内容区滚动。
+          这样首页（登录页/仓库页）不会因为顶部公告条而产生页面级滚动条。 */}
+      <div className="flex h-dvh flex-col overflow-hidden">
+        <AnnouncementBanner />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {user ? (
+            mfaRequired ? (
+              <MFARequiredGate onChanged={refreshMe} onLogout={logout} />
+            ) : (
+              <Shell user={user} onLogout={logout} />
+            )
+          ) : (
+            <UnauthenticatedHome onAuthed={(u) => setUser(u)} />
+          )}
+        </div>
+      </div>
       <FeedbackWidget />
       <Toaster richColors position="top-center" theme={resolved} />
     </BrowserRouter>
@@ -247,12 +302,12 @@ function Shell({ user, onLogout }: { user: string; onLogout: () => void }) {
   );
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-full">
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center gap-2 sm:gap-4">
           <Link to="/" className="flex shrink-0 items-center gap-2 text-lg font-bold">
             <GitBranch className="h-5 w-5" />
-            <span className="hidden sm:inline">gitdash</span>
+            <span className="hidden sm:inline">Gitdash</span>
           </Link>
           <NavOverflow items={navItems} />
           <div className="ml-auto flex items-center gap-1 sm:gap-2">

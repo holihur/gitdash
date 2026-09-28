@@ -46,8 +46,10 @@ publishing examples to http://127.0.0.1:8080 as alice
   ok  apk
   ok  brew
   ok  snap
+  ok  k8s
+  ok  dart
 
-12/12 registries passed
+14/14 registries passed
 ```
 
 Every run publishes a unique `*-<hex>` name so it can be repeated safely. The
@@ -55,7 +57,9 @@ Docker / OCI registry is not covered by the script (it needs a real image
 client); use the example below. The five system repository types
 (`apt` / `yum` / `apk` / `brew` / `snap`) are published with client-supplied
 metadata and verified through their generated indexes — see
-[`system/`](system/) for the native client configuration.
+[`system/`](system/) for the native client configuration. The `k8s` (Helm chart)
+and `dart` (Pub hosted API) registries are exercised in the same script by
+uploading a real `.tgz` archive.
 
 Then pull them back the same way (read side):
 
@@ -63,7 +67,7 @@ Then pull them back the same way (read side):
 export GITDASH_OWNER=alice   # namespace to consume (defaults to GITDASH_USER)
 python3 examples/packages/consume.py
 
-#   12/12 registries consumed
+#   14/14 registries consumed
 ```
 
 ### One command for both layers
@@ -105,6 +109,8 @@ The example projects are buildable with the real package managers. Replace
 | apk | [`system/`](system/) | same `publish` endpoint with `type=apk` (Alpine) |
 | brew | [`system/`](system/) | same `publish` endpoint with `type=brew` (bottle) |
 | snap | [`system/`](system/) | same `publish` endpoint with `type=snap` |
+| k8s | [`k8s/`](k8s/) | `curl -u <owner>:<PAT> -F file=@hello-1.0.0.tgz http://<host>/api/packages/k8s/<owner>/<repo>/publish` |
+| dart | [`dart/`](dart/) | `dart pub publish --server http://<host>/api/packages/dart/<owner>` |
 | docker / OCI | [`docker/`](docker/) | `docker build -t hello:1.0 . && docker tag hello:1.0 <host>/<owner>/hello:1.0 && docker push <host>/<owner>/hello:1.0` |
 
 Authenticate the clients with **Basic auth**: your username as the user and a
@@ -147,6 +153,12 @@ packages/
 ├── maven/
 │   ├── hello/                 # pom.xml + src/main/java/com/example/Hello.java
 │   └── consume/               # pom.xml + settings.xml
+├── k8s/
+│   ├── hello/                 # Helm chart (Chart.yaml + templates/)
+│   └── README.md              # helm repo add / publish commands
+├── dart/
+│   ├── hello/                 # pubspec.yaml + lib/hello.dart
+│   └── README.md              # dart pub publish / hosted dependency
 └── docker/
     ├── Dockerfile + hello.sh  # build/push the image
     └── consume/               # FROM <host>/<owner>/hello:1.0

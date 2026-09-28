@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const de: Messages = {
   app: {
-    title: "gitdash",
+    title: "Gitdash",
     logout: "Abmelden",
     loggedOut: "Abgemeldet",
     theme: "Design",
@@ -1211,7 +1211,7 @@ export const de: Messages = {
     saved: "Abzeichen aktualisiert",
   },
   admin: {
-    title: "gitdash-Administration",
+    title: "Gitdash-Administration",
     signIn: "Anmelden",
     signInHint: "Das Admin-Panel ist standardmäßig deaktiviert; aktivieren Sie es beim ersten Start mit GITDASH_ADMIN_PASSWORD.",
     signOut: "Abmelden",
@@ -1623,7 +1623,7 @@ export const de: Messages = {
   },
   packages: {
     title: "Paketregistry",
-    subtitle: "Private Pakete, die Sie unter Ihrem Namespace veröffentlicht haben (npm / composer / pypi / rubygems / go / cargo / maven). Siehe docs/packages.md für die Client-Einrichtung.",
+    subtitle: "Private Pakete, die Sie unter Ihrem Namespace veröffentlicht haben (npm / composer / pypi / rubygems / go / cargo / maven / dart / k8s). Siehe docs/packages.md für die Client-Einrichtung.",
     all: "Alle",
     type: "Typ",
     version: "Neueste Version",

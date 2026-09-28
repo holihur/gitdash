@@ -50,6 +50,8 @@ const PKG_TYPES = [
   "apk",
   "brew",
   "snap",
+  "dart",
+  "k8s",
 ] as const;
 type PkgType = (typeof PKG_TYPES)[number];
 
@@ -68,6 +70,8 @@ const PKG_LANG: Record<PkgType, string> = {
   apk: "Alpine",
   brew: "Homebrew",
   snap: "Snap",
+  dart: "Dart / Pub",
+  k8s: "Kubernetes / Helm",
 };
 
 export default function Packages() {

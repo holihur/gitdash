@@ -60,15 +60,22 @@ func TestGlobalSearch(t *testing.T) {
 	}
 	// 缺 q 参数
 	alice.mustFail("GET", "/search", nil, 400)
-	// 未登录
-	req, _ := http.NewRequest("GET", env.BaseURL+"/api/search?q=x", nil)
+	// 匿名（未登录）：Explore 入口允许，搜索仅返回公开内容，不泄露他人私有 issue
+	req, _ := http.NewRequest("GET", env.BaseURL+"/api/search?q=needle", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = resp.Body.Close()
-	if resp.StatusCode != 401 {
-		t.Fatalf("unauthenticated search = %d", resp.StatusCode)
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != 200 {
+		t.Fatalf("anonymous search = %d", resp.StatusCode)
+	}
+	var anon map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&anon); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if countRepos(anon) != 1 || countIssues(anon) != 1 {
+		t.Fatalf("anonymous search = repos %d issues %d", countRepos(anon), countIssues(anon))
 	}
 	fmt.Println("global search ok")
 }

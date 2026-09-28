@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const es: Messages = {
   app: {
-    title: "gitdash",
+    title: "Gitdash",
     logout: "Cerrar sesión",
     loggedOut: "Sesión cerrada",
     theme: "Tema",
@@ -1211,7 +1211,7 @@ export const es: Messages = {
     saved: "Insignias actualizadas",
   },
   admin: {
-    title: "Administración de gitdash",
+    title: "Administración de Gitdash",
     signIn: "Iniciar sesión",
     signInHint: "El panel de administración está desactivado por defecto; actívalo con GITDASH_ADMIN_PASSWORD en el primer arranque.",
     signOut: "Cerrar sesión",
@@ -1623,7 +1623,7 @@ export const es: Messages = {
   },
   packages: {
     title: "Registro de paquetes",
-    subtitle: "Paquetes privados que publicaste bajo tu espacio de nombres (npm / composer / pypi / rubygems / go / cargo / maven). Consulta docs/packages.md para configurar el cliente.",
+    subtitle: "Paquetes privados que publicaste bajo tu espacio de nombres (npm / composer / pypi / rubygems / go / cargo / maven / dart / k8s). Consulta docs/packages.md para configurar el cliente.",
     all: "Todos",
     type: "Tipo",
     version: "Última versión",

@@ -6242,6 +6242,224 @@ const docTemplate = `{
                 }
             }
         },
+        "/packages/dart/{owner}/api/packages/versions/new": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "Pub 发布上传地址",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/packages/dart/{owner}/api/packages/versions/newUpload": {
+            "post": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "Pub 发布上传",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "pub 归档 (.tar.gz)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/packages/dart/{owner}/api/packages/{name}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "Pub 包信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/dart/{owner}/api/packages/{name}/download/{version}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "下载 Dart 包",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "版本",
+                        "name": "version",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/dart/{owner}/api/packages/{name}/versions/{version}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "Pub 单版本信息",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "包名",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "版本",
+                        "name": "version",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/dart/{owner}/publish": {
+            "post": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "手工发布 Dart 包",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "pub 归档 (.tar.gz)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.Package"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
+            }
+        },
         "/packages/go/{owner}/{rest}": {
             "get": {
                 "tags": [
@@ -6292,6 +6510,130 @@ const docTemplate = `{
                         "description": "Created"
                     }
                 }
+            }
+        },
+        "/packages/k8s/{owner}/{repo}/charts/{filename}": {
+            "get": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "下载 Helm chart",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Helm 仓库名",
+                        "name": "repo",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "chart 文件名",
+                        "name": "filename",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/k8s/{owner}/{repo}/index.yaml": {
+            "get": {
+                "produces": [
+                    "text/yaml"
+                ],
+                "tags": [
+                    "packages"
+                ],
+                "summary": "获取 Helm 仓库索引",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Helm 仓库名",
+                        "name": "repo",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "index.yaml",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/k8s/{owner}/{repo}/publish": {
+            "post": {
+                "tags": [
+                    "packages"
+                ],
+                "summary": "发布 Helm chart",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户或组织",
+                        "name": "owner",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Helm 仓库名",
+                        "name": "repo",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "chart 归档 (.tgz)",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "chart 元数据 JSON",
+                        "name": "meta",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/store.Package"
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ]
             }
         },
         "/packages/maven/{owner}/{rest}": {
@@ -12932,8 +13274,14 @@ const docTemplate = `{
                     },
                     {
                         "type": "integer",
-                        "description": "数量上限",
+                        "description": "每页数量上限",
                         "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "偏移量",
+                        "name": "offset",
                         "in": "query"
                     }
                 ],

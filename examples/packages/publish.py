@@ -4,7 +4,8 @@
 This is the runnable companion to the example projects in this directory: it
 exercises the whole private package registry (npm / pypi / composer / cargo /
 go / rubygems / maven, plus the system repositories apt / yum / apk / brew /
-snap) over plain HTTP using only the Python standard library, so it works even
+snap, the Kubernetes / Helm chart repository and the Dart / Pub hosted API)
+over plain HTTP using only the Python standard library, so it works even
 when the native package manager toolchains are not installed.
 
 It doubles as a manual end-to-end test of a running gitdash instance:
@@ -420,6 +421,64 @@ def snap() -> None:
     ok("snap")
 
 
+# ---- Kubernetes / Helm (k8s) -----------------------------------------------
+
+
+def k8s() -> None:
+    chart, version = "hello", "1.0.0"
+    content = tgz(
+        {
+            f"{chart}/Chart.yaml": (
+                f"apiVersion: v2\nname: {chart}\nversion: {version}\n"
+                "appVersion: \"1.0.0\"\ndescription: hello from gitdash\n"
+            ).encode(),
+            f"{chart}/values.yaml": b"replicas: 1\n",
+        }
+    )
+    payload, content_type = multipart({}, {"file": (f"{chart}-{version}.tgz", content)})
+    request(
+        "POST",
+        f"/api/packages/k8s/{USER}/charts/publish",
+        payload,
+        {"Content-Type": content_type},
+        201,
+    )
+    _, index = request("GET", f"/api/packages/k8s/{USER}/charts/index.yaml", expect=200)
+    assert b"name: hello" in index and b"version: 1.0.0" in index
+    _, got = request(
+        "GET", f"/api/packages/k8s/{USER}/charts/charts/{chart}-{version}.tgz", expect=200
+    )
+    assert got == content
+    ok("k8s")
+
+
+# ---- Dart / Pub ------------------------------------------------------------
+
+
+def dart() -> None:
+    name, version = f"hello_dart_{SUFFIX}", "1.0.0"
+    content = tgz(
+        {
+            "pubspec.yaml": (
+                f"name: {name}\nversion: {version}\ndescription: hello from gitdash\n"
+                "environment:\n  sdk: '>=2.17.0 <4.0.0'\n"
+            ).encode(),
+            "lib/main.dart": b"void main() {}\n",
+        }
+    )
+    # 原生 pub 发布流程：GET versions/new -> multipart POST 到返回的 url
+    new = json_body(f"/api/packages/dart/{USER}/api/packages/versions/new")
+    assert new.get("url")
+    payload, content_type = multipart({}, {"file": (f"{name}-{version}.tar.gz", content)})
+    status, _ = request("POST", new["url"], payload, {"Content-Type": content_type}, 200)
+    assert status == 200
+    pkg = json_body(f"/api/packages/dart/{USER}/api/packages/{name}")
+    assert pkg["latest"]["version"] == version
+    _, got = request("GET", pkg["latest"]["archive_url"], expect=200)
+    assert got == content
+    ok("dart")
+
+
 def main() -> int:
     print(f"publishing examples to {BASE} as {USER}")
     registries = [
@@ -435,6 +494,8 @@ def main() -> int:
         ("apk", apk),
         ("brew", brew),
         ("snap", snap),
+        ("k8s", k8s),
+        ("dart", dart),
     ]
     for name, fn in registries:
         try:

@@ -4,7 +4,7 @@ weight: 1
 summary: "各生态的 registry 地址与认证方式。"
 ---
 
-Gitdash 内置私有包仓库，覆盖 **npm (node)**、**composer (PHP)**、**pypi (Python)**、**rubygems (Ruby)**、**Go modules**、**cargo (Rust)**、**Maven (Java)** 与 **Docker / OCI 镜像仓库**。
+Gitdash 内置私有包仓库，覆盖 **npm (node)**、**composer (PHP)**、**pypi (Python)**、**rubygems (Ruby)**、**Go modules**、**cargo (Rust)**、**Maven (Java)**、**Dart / Pub**、**Kubernetes / Helm** 与 **Docker / OCI 镜像仓库**。
 
 通用规则：
 
@@ -383,6 +383,58 @@ curl -u <owner>:<PAT> \
 
 可直接复制的客户端配置见
 [`examples/packages/system/`](https://github.com/holihur/gitdash/tree/main/examples/packages/system)。
+
+---
+
+## 10. Kubernetes / Helm（k8s）
+
+gitdash 可托管标准的 Helm HTTP 仓库。上传 chart 归档
+（`<name>-<version>.tgz`），服务端从 `Chart.yaml`（或可选的 `meta` 字段）
+读取 chart 名称与版本：
+
+```bash
+curl -u <owner>:<PAT> \
+  -F file=@hello-0.1.0.tgz \
+  http://<host>/api/packages/k8s/<owner>/<repo>/publish
+```
+
+服务端据此生成标准 `index.yaml`：
+
+```bash
+helm repo add gitdash http://<host>/api/packages/k8s/<owner>/<repo>
+helm repo update
+helm search repo gitdash
+helm install hello gitdash/hello
+```
+
+私有仓库使用 `helm repo add --username <user> --password <PAT>`。
+`helm push` 走 OCI 注册表（Docker / OCI 端点 `/v2/...`）仍然可用。
+
+## 11. Dart / Pub
+
+gitdash 实现了 pub hosted API，原生工具链可直接使用：
+
+```bash
+# 一次性凭据（PAT 需 repo 作用域）
+dart pub token add http://<host>/api/packages/dart/<owner>
+
+# 在包目录中发布
+dart pub publish --server http://<host>/api/packages/dart/<owner>
+```
+
+在 `pubspec.yaml` 中引用：
+
+```yaml
+dependencies:
+  hello:
+    hosted:
+      name: hello
+      url: http://<host>/api/packages/dart/<owner>
+    version: ^1.0.0
+```
+
+也可用 multipart 手工发布：
+`POST /api/packages/dart/<owner>/publish`，`file` 字段为 `.tar.gz` 归档。
 
 ---
 

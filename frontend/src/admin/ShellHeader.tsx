@@ -9,7 +9,7 @@ export function ShellHeader({ children }: { children: React.ReactNode }) {
         <div className="container flex h-14 items-center gap-2">
           <span className="flex items-center gap-2 text-lg font-bold">
             <GitBranch className="h-5 w-5" />
-            gitdash Admin
+            Gitdash Admin
           </span>
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />

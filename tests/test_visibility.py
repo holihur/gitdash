@@ -82,3 +82,29 @@ def test_visibility_missing_field_400(repo_env):
 
 def test_visibility_requires_auth(client_factory):
     client_factory().post("/users/x/repos/y/visibility", json={"private": False}, expect=401)
+
+
+def test_anonymous_explore_entry(anon, user_factory):
+    """匿名 Explore 入口：未登录即可读取公开仓库列表 / tags / 搜索读接口。"""
+    an, _, c = user_factory("anon")
+    repo = f"anon-{_uuid()}"
+    c.post("/repos", json={"name": repo}, expect=201)
+    try:
+        # 私有仓库不出现在匿名 Explore
+        names = [f'{r["owner"]}/{r["name"]}' for r in anon.get("/explore/repos", expect=200).json()]
+        assert f"{an}/{repo}" not in names
+
+        # 设为公开后匿名可见
+        c.post(_p(an, repo) + "/visibility", json={"private": False}, expect=200)
+        names = [f'{r["owner"]}/{r["name"]}' for r in anon.get("/explore/repos", expect=200).json()]
+        assert f"{an}/{repo}" in names
+
+        # 匿名可读的 Explore 辅助读接口
+        anon.get("/topics", expect=200)
+        anon.get(f"/search?q={repo}", expect=200)
+        anon.get("/search/code?q=main", expect=200)
+    finally:
+        try:
+            c.delete(f"/repos/{repo}", expect=204)
+        except Exception:
+            pass

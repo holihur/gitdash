@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const ko: Messages = {
   app: {
-    title: "gitdash",
+    title: "Gitdash",
     logout: "로그아웃",
     loggedOut: "로그아웃되었습니다",
     theme: "테마",
@@ -1211,7 +1211,7 @@ export const ko: Messages = {
     saved: "배지를 업데이트했습니다",
   },
   admin: {
-    title: "gitdash 관리자",
+    title: "Gitdash 관리자",
     signIn: "로그인",
     signInHint: "관리자 패널은 기본적으로 비활성화되어 있습니다. 첫 시작 시 GITDASH_ADMIN_PASSWORD로 활성화하세요.",
     signOut: "로그아웃",
@@ -1623,7 +1623,7 @@ export const ko: Messages = {
   },
   packages: {
     title: "패키지 레지스트리",
-    subtitle: "내 네임스페이스 아래에 게시한 비공개 패키지(npm / composer / pypi / rubygems / go / cargo / maven). 클라이언트 설정은 docs/packages.md를 참고하세요.",
+    subtitle: "내 네임스페이스 아래에 게시한 비공개 패키지(npm / composer / pypi / rubygems / go / cargo / maven / dart / k8s). 클라이언트 설정은 docs/packages.md를 참고하세요.",
     all: "전체",
     type: "유형",
     version: "최신 버전",

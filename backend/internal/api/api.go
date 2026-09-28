@@ -685,11 +685,12 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/users/{owner}/repos/{name}/commit-rules", a.auth(a.getRepoCommitRules))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/commit-rules", a.auth(a.setRepoCommitRules))
 	mux.HandleFunc("PUT /api/users/{owner}/repos/{name}/topics", a.auth(a.setRepoTops))
-	mux.HandleFunc("GET /api/topics", a.auth(a.listTopics))
+	// 公开发现面：匿名可读（Explore 入口无需登录）
+	mux.HandleFunc("GET /api/topics", a.authOptional(a.listTopics))
 	mux.HandleFunc("GET /api/templates", a.auth(a.listTemplateRepos))
-	mux.HandleFunc("GET /api/explore/repos", a.auth(a.exploreRepos))
-	mux.HandleFunc("GET /api/search", a.auth(a.globalSearch))
-	mux.HandleFunc("GET /api/search/code", a.auth(a.searchCode))
+	mux.HandleFunc("GET /api/explore/repos", a.authOptional(a.exploreRepos))
+	mux.HandleFunc("GET /api/search", a.authOptional(a.globalSearch))
+	mux.HandleFunc("GET /api/search/code", a.authOptional(a.searchCode))
 
 	// badges（徽章展示 / 挂载设置）
 	mux.HandleFunc("GET /api/badges", a.authOptional(a.getBadges))
@@ -877,6 +878,19 @@ func (a *API) Handler(staticDir string) http.Handler {
 	mux.HandleFunc("GET /api/packages/brew/{owner}/{repo}/bottles/{filename}", a.authOptional(a.brewBottle))
 	mux.HandleFunc("GET /api/packages/snap/{owner}/{repo}/index.json", a.authOptional(a.snapIndex))
 	mux.HandleFunc("GET /api/packages/snap/{owner}/{repo}/download/{filename}", a.authOptional(a.snapDownload))
+
+	// k8s（Kubernetes / Helm chart 仓库）——multipart 发布 + index.yaml + chart 下载
+	mux.HandleFunc("POST /api/packages/k8s/{owner}/{repo}/publish", a.auth(a.k8sPublish))
+	mux.HandleFunc("GET /api/packages/k8s/{owner}/{repo}/index.yaml", a.authOptional(a.k8sIndex))
+	mux.HandleFunc("GET /api/packages/k8s/{owner}/{repo}/charts/{filename}", a.authOptional(a.k8sDownload))
+
+	// dart（Dart / Pub hosted API）
+	mux.HandleFunc("POST /api/packages/dart/{owner}/publish", a.auth(a.dartPublish))
+	mux.HandleFunc("GET /api/packages/dart/{owner}/api/packages/versions/new", a.auth(a.dartNewUpload))
+	mux.HandleFunc("POST /api/packages/dart/{owner}/api/packages/versions/newUpload", a.auth(a.dartNewUploadUpload))
+	mux.HandleFunc("GET /api/packages/dart/{owner}/api/packages/{name}", a.authOptional(a.dartPackage))
+	mux.HandleFunc("GET /api/packages/dart/{owner}/api/packages/{name}/versions/{version}", a.authOptional(a.dartVersion))
+	mux.HandleFunc("GET /api/packages/dart/{owner}/api/packages/{name}/download/{version}", a.authOptional(a.dartDownload))
 
 	// Docker / OCI 私有注册表（Distribution spec，统一在 /v2/ 下按路径分派）
 	mux.HandleFunc("/v2/", a.registryAuth(a.registryHandler))

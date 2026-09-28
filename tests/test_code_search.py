@@ -188,5 +188,6 @@ def test_query_required(code_env):
     assert r["code"] == "query_required"
 
 
-def test_code_search_requires_auth(code_env, anon):
-    anon.get("/search/code?q=x", expect=401)
+def test_code_search_anonymous_allowed(code_env, anon):
+    # 匿名 Explore 入口允许代码搜索（仅公开仓库）
+    anon.get("/search/code?q=x", expect=200)

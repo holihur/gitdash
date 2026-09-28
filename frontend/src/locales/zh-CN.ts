@@ -2,7 +2,7 @@ import type { Messages } from "./en";
 
 export const zhCN: Messages = {
   app: {
-    title: "gitdash",
+    title: "Gitdash",
     logout: "退出",
     loggedOut: "已退出登录",
     theme: "主题",
@@ -1211,7 +1211,7 @@ export const zhCN: Messages = {
     saved: "徽章已更新",
   },
   admin: {
-    title: "gitdash Admin",
+    title: "Gitdash Admin",
     signIn: "登录",
     signInHint: "管理面板默认关闭；首次启动时设置 GITDASH_ADMIN_PASSWORD 启用。",
     signOut: "退出",

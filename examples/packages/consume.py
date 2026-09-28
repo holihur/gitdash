@@ -87,6 +87,10 @@ def install_command(pkg: dict) -> str:
         return f"brew tap {owner}/{name}"
     if t == "snap":
         return f"curl -LO {BASE}/api/packages/snap/{owner}/{name}/download/{version}"
+    if t == "k8s":
+        return f"helm repo add {owner}-{name} {BASE}/api/packages/k8s/{owner}/{name} && helm repo update"
+    if t == "dart":
+        return f"PUB_HOSTED_URL={BASE}/api/packages/dart/{owner} dart pub add {name}"
     return f"{name}@{version}"
 
 
@@ -132,6 +136,12 @@ def consume(pkg: dict) -> str:
     elif t == "snap":
         get(f"/api/packages/snap/{owner}/{name}/index.json")
         get(f"/api/packages/snap/{owner}/{name}/download/{filename}")
+    elif t == "k8s":
+        get(f"/api/packages/k8s/{owner}/{name}/index.yaml")
+        get(f"/api/packages/k8s/{owner}/{name}/charts/{filename}")
+    elif t == "dart":
+        meta = json.loads(get(f"/api/packages/dart/{owner}/api/packages/{name}"))
+        get(meta["latest"]["archive_url"])
     else:
         raise RuntimeError(f"unsupported type {t}")
     return install_command(pkg)

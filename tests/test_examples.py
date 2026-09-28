@@ -43,7 +43,7 @@ def test_package_examples_publish_and_consume(base_url, user_factory):
     }
 
     published = _run(PUBLISH, env)
-    assert "/12 registries passed" in published.stdout
+    assert "/14 registries passed" in published.stdout
 
     consumed = _run(CONSUME, env)
-    assert "/12 registries consumed" in consumed.stdout
+    assert "/14 registries consumed" in consumed.stdout

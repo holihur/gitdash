@@ -32,7 +32,7 @@ python3 examples/packages/consume.py
 #   ok  cargo     cargo add hello-lib --registry gitdash
 #   ok  composer  composer require example/hello-lib
 #   ...
-#   7/7 registries consumed
+#   14/14 registries consumed
 ```
 
 ## Native clients
@@ -46,6 +46,8 @@ python3 examples/packages/consume.py
 | go | [`go/consume/`](go/consume/) | `go run .` (with `GOPROXY` set) |
 | rubygems | [`rubygems/consume/`](rubygems/consume/) | `bundle install` |
 | maven | [`maven/consume/`](maven/consume/) | `mvn -s settings.xml dependency:resolve` |
+| k8s | [`k8s/`](k8s/) | `helm repo add ...` then `helm install hello <alias>/hello` |
+| dart | [`dart/`](dart/) | add the hosted dependency to `pubspec.yaml`, then `dart pub get` |
 | docker / OCI | [`docker/consume/`](docker/consume/) | `docker login <host>` then `docker build` |
 
 Each directory has its own comments with the exact one-off setup (the

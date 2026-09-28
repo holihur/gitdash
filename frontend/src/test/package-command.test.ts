@@ -21,6 +21,12 @@ describe("packageUseCommand", () => {
     expect(packageUseCommand({ ...base, type: "rubygems" }, origin)).toBe(
       "gem install hello --source http://<user>:<PAT>@host:8080/api/packages/rubygems/alice",
     );
+    expect(packageUseCommand({ ...base, type: "dart" }, origin)).toBe(
+      "PUB_HOSTED_URL=http://host:8080/api/packages/dart/alice dart pub add hello",
+    );
+    expect(packageUseCommand({ ...base, type: "k8s" }, origin)).toBe(
+      "helm repo add hello http://host:8080/api/packages/k8s/alice/hello && helm repo update",
+    );
   });
 
   it("maven 把 group/artifact 路径还原为坐标", () => {
@@ -39,6 +45,9 @@ describe("packageSetupCommands", () => {
       "npm config set //host:8080/:_authToken <PAT>",
     ]);
     expect(packageSetupCommands({ type: "go", owner: "alice" }, origin)).toEqual([]);
+    expect(packageSetupCommands({ type: "dart", owner: "alice" }, origin)).toEqual([
+      "dart pub token add http://host:8080/api/packages/dart/alice",
+    ]);
   });
 });
 

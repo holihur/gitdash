@@ -16,8 +16,10 @@ import { dateLocale, useI18n } from "@/lib/i18n";
 import { useQueryState } from "@/lib/query-state";
 import { apiErrorMsg } from "@/lib/errors";
 
-export default function Explore() {
+export default function Explore({ anonymous = false }: { anonymous?: boolean } = {}) {
   const { t, lang, to } = useI18n();
+  // 匿名浏览：站内跳转统一带上 redirect，登录后可回到目标页。
+  const linkTo = (path: string) => (anonymous ? `/?redirect=${encodeURIComponent(path)}` : path);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [total, setTotal] = useState(0);
   // 页码/页大小/搜索词同步进 URL(?page/?size/?q)
@@ -169,7 +171,7 @@ export default function Explore() {
               {results.repos.map((r) => (
                 <Link
                   key={`${r.owner}/${r.name}`}
-                  to={`/repo/${r.owner}/${r.name}`}
+                  to={linkTo(`/repo/${r.owner}/${r.name}`)}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
                 >
                   <FolderGit2 className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -193,7 +195,7 @@ export default function Explore() {
               {codeResults.results.map((r, i) => (
                 <Link
                   key={`${r.owner}/${r.repo}:${r.path}:${r.line}:${i}`}
-                  to={`/repo/${r.owner}/${r.repo}?file=${encodeURIComponent(r.path)}&line=${r.line}`}
+                  to={linkTo(`/repo/${r.owner}/${r.repo}?file=${encodeURIComponent(r.path)}&line=${r.line}`)}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
                 >
                   <FileCode className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -220,7 +222,7 @@ export default function Explore() {
               {results.issues.map((i) => (
                 <Link
                   key={`${i.owner}/${i.repo}#${i.number}`}
-                  to={`/repo/${i.owner}/${i.repo}/issues`}
+                  to={linkTo(`/repo/${i.owner}/${i.repo}/issues`)}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
                 >
                   <CircleDot
@@ -260,7 +262,7 @@ export default function Explore() {
                 return u.kind === "user" ? (
                   <Link
                     key={`${u.kind}:${u.name}`}
-                    to={`/users/${u.name}`}
+                    to={linkTo(`/users/${u.name}`)}
                     className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
                   >
                     {inner}
@@ -326,7 +328,7 @@ export default function Explore() {
             <Card key={`${repo.owner}/${repo.name}`} className="flex min-w-0 flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="min-w-0 text-lg">
-                  <Link to={`/repo/${repo.owner}/${repo.name}`} className="block truncate hover:underline">
+                  <Link to={linkTo(`/repo/${repo.owner}/${repo.name}`)} className="block truncate hover:underline">
                     {repo.owner}/{repo.name}
                   </Link>
                 </CardTitle>
@@ -358,15 +360,17 @@ export default function Explore() {
                       <LanguageBadge language={repo.language} />
                     </Badge>
                   )}
-                  <Button
-                    variant={repo.starred ? "default" : "outline"}
-                    size="sm"
-                    className="h-6 gap-1 px-2 text-xs"
-                    onClick={() => toggleStar(repo)}
-                  >
-                    <Star className="h-3 w-3" />
-                    {repo.stars ?? 0}
-                  </Button>
+                  {!anonymous && (
+                    <Button
+                      variant={repo.starred ? "default" : "outline"}
+                      size="sm"
+                      className="h-6 gap-1 px-2 text-xs"
+                      onClick={() => toggleStar(repo)}
+                    >
+                      <Star className="h-3 w-3" />
+                      {repo.stars ?? 0}
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

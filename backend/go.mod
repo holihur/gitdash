@@ -28,6 +28,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gorm.io/driver/postgres v1.6.2
 	gorm.io/gorm v1.31.2
+	sigs.k8s.io/yaml v1.3.0
 )
 
 require (
@@ -125,7 +126,6 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 	modernc.org/sqlite v1.58.0 // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
 tool github.com/swaggo/swag/cmd/swag
