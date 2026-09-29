@@ -69,6 +69,23 @@ def test_login_happy(user_factory, client_factory):
     client_factory(body["token"]).get("/me", expect=200)
 
 
+def test_revoke_other_sessions(user_factory, client_factory):
+    """当前会话吊销其它会话：旧 token 失效，当前 token 仍可用。"""
+    username, _, first = user_factory()
+    # 二次登录产生另一个会话
+    second_token = (
+        client_factory()
+        .post("/auth/login", json={"username": username, "password": PASSWORD}, expect=200)
+        .json()["token"]
+    )
+    second = client_factory(second_token)
+    second.get("/me", expect=200)
+
+    second.post("/me/sessions/revoke", expect=204)
+    first.get("/me", expect=401)   # 其它会话被注销
+    second.get("/me", expect=200)  # 当前会话保留
+
+
 # ---- register bad path ----
 
 @pytest.mark.parametrize(

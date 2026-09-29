@@ -8,6 +8,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -24,6 +25,8 @@ const (
 	KindWebhook   = "gitdash:webhook"   // webhook 投递（异步队列处理）
 	KindLanguages = "gitdash:languages" // 代码成分（语言）分析
 	KindCodeIndex = "gitdash:codeindex" // 代码搜索索引（Bleve）异步重建
+	// KindLangBackfill 周期性回填缺失语言记录的仓库（由调度器定时入队）。
+	KindLangBackfill = "gitdash:langbackfill"
 )
 
 // SettingLanguageStats 管理端开关；默认开启（仅显式设为 "0" 时关闭）。
@@ -83,6 +86,46 @@ type Manager struct {
 	backfilling atomic.Bool
 	// indexBackfilling 保证同一时间只有一个代码索引回填任务在跑。
 	indexBackfilling atomic.Bool
+	// mirrorMu 按仓库串行镜像推送：git push --mirror 并发会争用远端 ref lock（
+	// 手动同步 + push 事件自动同步可能同时触发）。
+	mirrorMu keyedMutex
+}
+
+// keyedMutex 按 key 串行执行；无等待者时清理条目，避免 map 无限增长。
+type keyedMutex struct {
+	mu sync.Mutex
+	m  map[string]*keyedMutexEntry
+}
+
+type keyedMutexEntry struct {
+	mu   sync.Mutex
+	refs int
+}
+
+// lock 获取 key 的锁，返回释放函数。
+func (k *keyedMutex) lock(key string) func() {
+	k.mu.Lock()
+	if k.m == nil {
+		k.m = make(map[string]*keyedMutexEntry)
+	}
+	e := k.m[key]
+	if e == nil {
+		e = &keyedMutexEntry{}
+		k.m[key] = e
+	}
+	e.refs++
+	k.mu.Unlock()
+
+	e.mu.Lock()
+	return func() {
+		e.mu.Unlock()
+		k.mu.Lock()
+		e.refs--
+		if e.refs == 0 {
+			delete(k.m, key)
+		}
+		k.mu.Unlock()
+	}
 }
 
 // New 创建 Manager。q 为 nil 时所有入队返回 queue.ErrQueueFull。
@@ -92,7 +135,7 @@ func New(st *store.Store, q queue.Queue) *Manager {
 
 // DefaultKinds 返回 jobs 支持的全部任务类型。
 func DefaultKinds() []queue.JobKind {
-	return []queue.JobKind{KindImport, KindMirror, KindWebhook, KindLanguages, KindCodeIndex}
+	return []queue.JobKind{KindImport, KindMirror, KindWebhook, KindLanguages, KindCodeIndex, KindLangBackfill}
 }
 
 // SetWebhookHandler 注入 webhook 投递处理器（由 main 绑定，避免 jobs ↔ webhooks 循环依赖）。
@@ -174,8 +217,7 @@ func (m *Manager) EnqueueLanguages(owner, repo, ref string) error {
 	})
 }
 
-// BackfillLanguages 为尚无语言记录的仓库排队分析（启动/开启功能时调用）。
-// 功能关闭时直接返回。按 id 游标分批，保证每个仓库只入队一次；队列满时等待重试。
+// BackfillLanguages 异步触发一次语言回填（启动/开启功能时调用）。
 func (m *Manager) BackfillLanguages() {
 	if !m.languageEnabled() {
 		return
@@ -185,24 +227,43 @@ func (m *Manager) BackfillLanguages() {
 	}
 	go func() {
 		defer m.backfilling.Store(false)
-		var cursor int64
-		for {
-			rows, err := m.st.ReposMissingLanguages(cursor, 50)
-			if err != nil || len(rows) == 0 {
-				return
-			}
-			for _, r := range rows {
-				for {
-					if err := m.EnqueueLanguages(r.Owner, r.Repo, r.DefaultBranch); err == nil {
-						break
-					}
-					time.Sleep(time.Second) // 队列满：等待消费者排空后重试
-				}
-				cursor = r.ID
-			}
-			time.Sleep(500 * time.Millisecond) // 限速，避免一次性压满队列
-		}
+		m.backfillLanguages()
 	}()
+}
+
+// RunLanguageBackfill 同步执行一次语言回填（供周期性任务处理，不再额外起协程）。
+func (m *Manager) RunLanguageBackfill() {
+	if !m.languageEnabled() {
+		return
+	}
+	if !m.backfilling.CompareAndSwap(false, true) {
+		return // 已有回填在跑
+	}
+	defer m.backfilling.Store(false)
+	m.backfillLanguages()
+}
+
+// backfillLanguages 同步遍历尚无语言记录的仓库并入队分析；
+// 功能关闭时直接返回。按 id 游标分批，保证每个仓库只入队一次；队列满时等待重试。
+// 调用方负责置位 m.backfilling。
+func (m *Manager) backfillLanguages() {
+	var cursor int64
+	for {
+		rows, err := m.st.ReposMissingLanguages(cursor, 50)
+		if err != nil || len(rows) == 0 {
+			return
+		}
+		for _, r := range rows {
+			for {
+				if err := m.EnqueueLanguages(r.Owner, r.Repo, r.DefaultBranch); err == nil {
+					break
+				}
+				time.Sleep(time.Second) // 队列满：等待消费者排空后重试
+			}
+			cursor = r.ID
+		}
+		time.Sleep(500 * time.Millisecond) // 限速，避免一次性压满队列
+	}
 }
 
 // EnqueueCodeIndex 排队一次代码索引重建。未启用索引时静默跳过。
@@ -348,6 +409,11 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 		}
 		return m.webhookHandler(j.Payload)
 	}
+	// 周期性语言回填与具体仓库无关，不需要 payload / 仓库存在性检查。
+	if j.Kind == KindLangBackfill {
+		m.RunLanguageBackfill()
+		return nil
+	}
 	var p payload
 	uerr := json.Unmarshal(j.Payload, &p)
 	if uerr != nil || m.st == nil {
@@ -372,6 +438,10 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 		// 导入完成后分析代码成分（ref 为空时按仓库 HEAD 解析）
 		_ = m.EnqueueLanguages(p.Owner, p.Repo, "")
 	case KindMirror:
+		// 同一仓库的镜像推送串行化：手动同步与 push 事件自动同步可能并发，
+		// 并发 git push --mirror 会在远端争用 ref lock 而失败。
+		unlock := m.mirrorMu.lock(p.Owner + "/" + p.Repo)
+		defer unlock()
 		_ = m.st.SetMirrorStatus(p.Owner, p.Repo, StatusRunning, "")
 		if err := gitsvc.PushMirror(p.Owner, p.Repo, p.URL, p.PrivateKey); err != nil {
 			logx.Infof("jobs: mirror %s/%s -> %s: %v", p.Owner, p.Repo, logx.RedactURL(p.URL), err)

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
 // JobKind 任务类型标识（如 "pipeline:run"）。
@@ -38,6 +39,13 @@ type Producer interface {
 type Queue interface {
 	Producer
 	Start(ctx context.Context, kinds []JobKind, h Handler)
+}
+
+// PeriodicQueue 是队列的可选能力：按固定间隔重复入队同一任务。
+// 仅 asynq/redis 实现提供（用 asynq.Scheduler 统一调度，多实例可共享）；
+// memory 实现不提供，调用方用类型断言判断。
+type PeriodicQueue interface {
+	ScheduleEvery(interval time.Duration, job Job) error
 }
 
 // MemoryQueue 进程内实现：带缓冲 channel + N 个工人 goroutine。

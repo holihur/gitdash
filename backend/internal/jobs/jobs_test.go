@@ -179,3 +179,22 @@ func TestBackfillCodeIndex(t *testing.T) {
 	}
 	t.Fatal("BackfillCodeIndex did not enqueue")
 }
+
+// 周期性语言回填：处理 KindLangBackfill 任务时，为缺失语言记录的仓库入队 KindLanguages。
+func TestLangBackfillJobEnqueuesMissingRepos(t *testing.T) {
+	st := newStore(t)
+	fq := &fakeQueue{}
+	m := New(st, fq)
+	if err := m.handle(context.Background(), queue.Job{Kind: KindLangBackfill}); err != nil {
+		t.Fatal(err)
+	}
+	if fq.count() != 1 {
+		t.Fatalf("enqueued = %d, want 1", fq.count())
+	}
+	fq.mu.Lock()
+	got := fq.jobs[0].Kind
+	fq.mu.Unlock()
+	if got != KindLanguages {
+		t.Fatalf("enqueued kind = %q, want %q", got, KindLanguages)
+	}
+}

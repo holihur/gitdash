@@ -20,6 +20,10 @@ type AsynqQueue struct {
 	client     *asynq.Client
 
 	startOnce sync.Once
+
+	schedOnce sync.Once
+	sched     *asynq.Scheduler
+	schedErr  error
 }
 
 // 确认实现 Queue 接口
@@ -58,6 +62,29 @@ func (a *AsynqQueue) Enqueue(ctx context.Context, job Job) error {
 	if errors.Is(err, asynq.ErrTaskIDConflict) || errors.Is(err, asynq.ErrDuplicateTask) {
 		return nil
 	}
+	return err
+}
+
+// ScheduleEvery 用 asynq.Scheduler 注册一个固定间隔重复入队的任务。
+// 首次调用时惰性创建并启动调度器（内部自带心跳 goroutine）；多实例同时
+// 调用会各自注册，但任务带 TaskID 时可去重（重复入队视为成功）。
+func (a *AsynqQueue) ScheduleEvery(interval time.Duration, job Job) error {
+	a.schedOnce.Do(func() {
+		a.sched = asynq.NewScheduler(a.opt, nil)
+		a.schedErr = a.sched.Start()
+	})
+	if a.schedErr != nil {
+		return a.schedErr
+	}
+	opts := []asynq.Option{
+		asynq.MaxRetry(0),
+		asynq.Timeout(2 * time.Hour),
+		asynq.Queue(job.Kind),
+	}
+	if job.ID != "" {
+		opts = append(opts, asynq.TaskID(job.ID))
+	}
+	_, err := a.sched.Register("@every "+interval.String(), asynq.NewTask(job.Kind, job.Payload), opts...)
 	return err
 }
 

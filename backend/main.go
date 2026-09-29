@@ -556,10 +556,22 @@ func run() {
 		jobsMgr.EnableCodeIndex(true)
 	}
 	if !codeIndexConsume(codeSearchRemote, codeIndexer != nil, queueMode) {
-		jobsMgr.SetConsumeKinds(jobs.KindImport, jobs.KindMirror, jobs.KindWebhook, jobs.KindLanguages)
+		jobsMgr.SetConsumeKinds(jobs.KindImport, jobs.KindMirror, jobs.KindWebhook, jobs.KindLanguages, jobs.KindLangBackfill)
 	}
 	jobsMgr.Start()
 	a.SetJobsManager(jobsMgr)
+
+	// 周期性语言回填：用队列调度器（asynq.Scheduler）每 6 小时入队一次
+	// KindLangBackfill，回填缺失语言记录的仓库，覆盖 push 事件被漏掉的场景
+	// （拆分 SSH 网关未共享 spool、队列背压/不可用等）。memory 队列不提供
+	// 该能力时跳过（单进程只需启动时回填一次）。
+	if pq, ok := jobsQueue.(queue.PeriodicQueue); ok {
+		if err := pq.ScheduleEvery(6*time.Hour, queue.Job{
+			Kind: jobs.KindLangBackfill, ID: jobs.KindLangBackfill,
+		}); err != nil {
+			logx.Infof("schedule language backfill: %v", err)
+		}
+	}
 
 	// webhook 调度：消费 post-receive spool 中的 push 事件
 	// （webhook 投递 + 流水线触发 + 代码成分分析 + 代码索引重建）
