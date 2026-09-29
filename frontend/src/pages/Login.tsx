@@ -85,8 +85,10 @@ export default function Login({ onAuthed }: Props) {
     loadProviders();
   }, [loadProviders]);
 
-  const finish = (r: { token?: string; username?: string }) => {
-    if (!r.token || !r.username) return;
+  // 会话 token 经 httpOnly cookie 下发（浏览器请求不回传明文 token），
+  // 因此这里只以 username 判定登录成功，不能再依赖 r.token。
+  const finish = (r: { username?: string }) => {
+    if (!r.username) return;
     onAuthed(r.username);
     toast.success(t("login.welcomeBack", { name: r.username }));
     // 回跳优先级：URL ?redirect= > 401 暂存路径 > 首页
