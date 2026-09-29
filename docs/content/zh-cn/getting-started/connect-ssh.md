@@ -30,7 +30,7 @@ ssh -T -p 2222 git@<你的实例地址>
 git clone ssh://git@<host>:2222/<owner>/<repo>.git
 ```
 
-> 也可以使用 HTTPS + 个人访问令牌（PAT）：用户名任意，口令填 PAT。PAT 在 **Tokens** 页面创建。
+> 也可以使用 HTTPS + 个人访问令牌（PAT）：用户名任意，口令填 PAT。详见 [用 HTTPS 克隆](connect-https/)。
 
 ## 下一步
 

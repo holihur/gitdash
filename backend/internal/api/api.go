@@ -938,7 +938,10 @@ func (a *API) Handler(staticDir string) http.Handler {
 	}
 
 	a.routePatterns = mux.Routes()
-	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(a.writeThrottle(routeCoverage(mux)))))))
+	// Git Smart HTTP 在 mux 之前分发（/{owner}/{repo}/... 与 /v2/ 通配冲突，
+	// 无法用 ServeMux 模式注册）。
+	inner := a.gitHTTPDispatch(routeCoverage(mux))
+	return telemetry.Middleware(secureHeaders(logMiddleware(ipBanMiddleware(a.store, csrfGuard(a.writeThrottle(inner))))))
 }
 
 // metricsHandler 暴露 Prometheus 指标。设置 GITDASH_METRICS_TOKEN 后要求

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn, formatSize } from "@/lib/utils";
 import { dateLocale, useI18n } from "@/lib/i18n";
-import { cloneCommand, type Repo } from "@/lib/api";
+import { cloneCommand, httpCloneCommand, type Repo } from "@/lib/api";
 import { BadgeStrip } from "@/components/badge-strip";
 import { RelativeTime } from "@/components/relative-time";
 
@@ -137,20 +137,21 @@ export default function RepoHeader({
               className="h-8 shrink-0 gap-1.5 px-2 font-mono text-xs [&_svg]:size-3.5 sm:h-9 sm:gap-2 sm:px-3 sm:[&_svg]:size-4"
             >
               <GitBranch className="h-3.5 w-3.5" />
-              SSH
+              SSH / HTTPS
               <MoreVertical className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
-            <DropdownMenuLabel className="break-all font-mono text-xs normal-case">
-              {cloneCommand(owner, name)}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {/* onSelect 而非 onClick：移动端菜单项在 pointerup 后关闭，
-                用 onSelect 能确保选中时同步触发复制（保留用户手势）。 */}
+          <DropdownMenuContent align="end" className="w-96 max-w-[calc(100vw-2rem)]">
+            <DropdownMenuLabel className="text-xs uppercase text-muted-foreground">SSH</DropdownMenuLabel>
             <DropdownMenuItem onSelect={() => onCopy(cloneCommand(owner, name))}>
               <Copy />
-              {t("repo.copyCloneCommand")}
+              <span className="truncate font-mono text-xs">{cloneCommand(owner, name)}</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs uppercase text-muted-foreground">HTTPS</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => onCopy(httpCloneCommand(owner, name))}>
+              <Copy />
+              <span className="truncate font-mono text-xs">{httpCloneCommand(owner, name)}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

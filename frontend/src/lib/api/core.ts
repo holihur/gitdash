@@ -69,6 +69,16 @@ export function cloneCommand(owner: string, name: string): string {
   return `git clone ${cloneUrl(owner, name)}`;
 }
 
+/** HTTPS 克隆地址（GitHub/GitLab 风格）：认证用 PAT/会话 token 作 Basic 密码。 */
+export function httpCloneUrl(owner: string, name: string): string {
+  const proto = window.location.protocol === "https:" ? "https" : "http";
+  return `${proto}://${window.location.host}/${owner}/${name}.git`;
+}
+
+export function httpCloneCommand(owner: string, name: string): string {
+  return `git clone ${httpCloneUrl(owner, name)}`;
+}
+
 export async function send(path: string, opts: RequestInit = {}): Promise<Response> {
   const res = await fetch(`/api${path}`, {
     ...opts,

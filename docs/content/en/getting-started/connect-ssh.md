@@ -30,7 +30,7 @@ The repository page shows an SSH clone URL like:
 git clone ssh://git@<host>:2222/<owner>/<repo>.git
 ```
 
-> You can also use HTTPS with a personal access token (PAT): any username and the PAT as the password. Create one on the **Tokens** page.
+> You can also use HTTPS with a personal access token (PAT): any username and the PAT as the password. See [Clone over HTTPS](connect-https/).
 
 ## Next
 
