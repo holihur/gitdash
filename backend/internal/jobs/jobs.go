@@ -27,6 +27,10 @@ const (
 	KindCodeIndex = "gitdash:codeindex" // 代码搜索索引（Bleve）异步重建
 	// KindLangBackfill 周期性回填缺失语言记录的仓库（由调度器定时入队）。
 	KindLangBackfill = "gitdash:langbackfill"
+	// KindCodeIndexBackfill 周期性回填缺失/落后的代码搜索索引（由调度器定时入队）。
+	KindCodeIndexBackfill = "gitdash:codeindex-backfill"
+	// KindHousekeeping 周期性清理过期/临时数据行（由调度器定时入队）。
+	KindHousekeeping = "gitdash:housekeeping"
 )
 
 // SettingLanguageStats 管理端开关；默认开启（仅显式设为 "0" 时关闭）。
@@ -135,7 +139,10 @@ func New(st *store.Store, q queue.Queue) *Manager {
 
 // DefaultKinds 返回 jobs 支持的全部任务类型。
 func DefaultKinds() []queue.JobKind {
-	return []queue.JobKind{KindImport, KindMirror, KindWebhook, KindLanguages, KindCodeIndex, KindLangBackfill}
+	return []queue.JobKind{
+		KindImport, KindMirror, KindWebhook, KindLanguages,
+		KindCodeIndex, KindLangBackfill, KindCodeIndexBackfill, KindHousekeeping,
+	}
 }
 
 // SetWebhookHandler 注入 webhook 投递处理器（由 main 绑定，避免 jobs ↔ webhooks 循环依赖）。
@@ -296,27 +303,45 @@ func (m *Manager) BackfillCodeIndex() {
 	}
 	go func() {
 		defer m.indexBackfilling.Store(false)
-		var cursor int64
-		for {
-			rows, err := m.st.AllReposAfter(cursor, 50)
-			if err != nil || len(rows) == 0 {
-				return
-			}
-			for _, r := range rows {
-				cursor = r.ID
-				if !m.codeIndexer.NeedsIndex(r.Owner, r.Repo, r.ID, r.DefaultBranch) {
-					continue
-				}
-				for {
-					if err := m.EnqueueCodeIndex(r.Owner, r.Repo, r.DefaultBranch); err == nil {
-						break
-					}
-					time.Sleep(time.Second) // 队列满：等待消费者排空后重试
-				}
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
+		m.backfillCodeIndex()
 	}()
+}
+
+// RunCodeIndexBackfill 同步执行一次索引回填（供周期性任务处理，不再额外起协程）。
+func (m *Manager) RunCodeIndexBackfill() {
+	if m.codeIndexer == nil || m.st == nil {
+		return
+	}
+	if !m.indexBackfilling.CompareAndSwap(false, true) {
+		return // 已有回填在跑
+	}
+	defer m.indexBackfilling.Store(false)
+	m.backfillCodeIndex()
+}
+
+// backfillCodeIndex 同步遍历仓库，为缺失/落后索引的仓库入队重建任务。
+// 调用方负责置位 m.indexBackfilling。
+func (m *Manager) backfillCodeIndex() {
+	var cursor int64
+	for {
+		rows, err := m.st.AllReposAfter(cursor, 50)
+		if err != nil || len(rows) == 0 {
+			return
+		}
+		for _, r := range rows {
+			cursor = r.ID
+			if !m.codeIndexer.NeedsIndex(r.Owner, r.Repo, r.ID, r.DefaultBranch) {
+				continue
+			}
+			for {
+				if err := m.EnqueueCodeIndex(r.Owner, r.Repo, r.DefaultBranch); err == nil {
+					break
+				}
+				time.Sleep(time.Second) // 队列满：等待消费者排空后重试
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // EnqueueImport 排队一次仓库导入。credential 为可选的 HTTPS 账号凭据（"user:token"）。
@@ -412,6 +437,16 @@ func (m *Manager) handle(_ context.Context, j queue.Job) error {
 	// 周期性语言回填与具体仓库无关，不需要 payload / 仓库存在性检查。
 	if j.Kind == KindLangBackfill {
 		m.RunLanguageBackfill()
+		return nil
+	}
+	if j.Kind == KindCodeIndexBackfill {
+		m.RunCodeIndexBackfill()
+		return nil
+	}
+	if j.Kind == KindHousekeeping {
+		if m.st != nil {
+			m.st.CleanupExpired(time.Now().UTC())
+		}
 		return nil
 	}
 	var p payload

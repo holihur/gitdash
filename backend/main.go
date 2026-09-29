@@ -241,19 +241,20 @@ func runCodeIndexWorker() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	m := jobs.New(st, queue.NewAsynq(redisAddr, password, redisDB, conc))
+	q := queue.NewAsynq(redisAddr, password, redisDB, conc)
+	m := jobs.New(st, q)
 	m.SetCodeIndexer(svc)
-	m.SetConsumeKinds(jobs.KindCodeIndex)
+	m.SetConsumeKinds(jobs.KindCodeIndex, jobs.KindCodeIndexBackfill)
 	m.StartContext(ctx)
 	m.BackfillCodeIndex()
 	reconcileCodeIndexLoop(svc, st)
-	go func() {
-		t := time.NewTicker(30 * time.Minute)
-		defer t.Stop()
-		for range t.C {
-			m.BackfillCodeIndex()
-		}
-	}()
+	// 周期性索引回填：用队列调度器（asynq.Scheduler）替代原 30m 本地 ticker，
+	// 多索引 worker 时按 TaskID 去重，只有一个真正执行。
+	if err := q.ScheduleEvery(30*time.Minute, queue.Job{
+		Kind: jobs.KindCodeIndexBackfill, ID: jobs.KindCodeIndexBackfill,
+	}); err != nil {
+		logx.Infof("schedule codeindex backfill: %v", err)
+	}
 
 	listen := strings.TrimSpace(os.Getenv("GITDASH_SEARCH_LISTEN"))
 	if listen == "" {
@@ -377,62 +378,10 @@ func run() {
 		}
 	}
 
-	// 后台定期清理过期的登录失败限流行，防止表无限增长
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				logx.Infof("login-fails cleanup panic: %v", r)
-			}
-		}()
-		for {
-			if n, err := st.CleanupLoginFails(24 * time.Hour); err != nil {
-				logx.Infof("login-fails cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("login-fails cleanup: removed %d expired rows", n)
-			}
-			if n, err := st.PruneDeliveries(time.Now().UTC().Add(-7 * 24 * time.Hour).Format(time.RFC3339)); err != nil {
-				logx.Infof("webhook-deliveries cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("webhook-deliveries cleanup: removed %d old rows", n)
-			}
-			if n, err := st.PruneOAuthStates(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				logx.Infof("oauth-state cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("oauth-state cleanup: removed %d expired states", n)
-			}
-			if n, err := st.PruneOAuthGrants(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				logx.Infof("oauth-grant cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("oauth-grant cleanup: removed %d expired codes", n)
-			}
-			if n, err := st.PruneDeviceGrants(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				logx.Infof("oauth-device-grant cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("oauth-device-grant cleanup: removed %d expired grants", n)
-			}
-			if n, err := st.PruneMFAChallenges(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				logx.Infof("mfa-challenge cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("mfa-challenge cleanup: removed %d expired challenges", n)
-			}
-			if n, err := st.PruneWebAuthnSessions(time.Now().UTC().Format(time.RFC3339)); err != nil {
-				logx.Infof("webauthn-session cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("webauthn-session cleanup: removed %d expired sessions", n)
-			}
-			if n, err := st.PruneSessions(); err != nil {
-				logx.Infof("session cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("session cleanup: removed %d expired sessions", n)
-			}
-			if n, err := st.PruneNotifications(90 * 24 * time.Hour); err != nil {
-				logx.Infof("notification cleanup: %v", err)
-			} else if n > 0 {
-				logx.Infof("notification cleanup: removed %d old read notifications", n)
-			}
-			time.Sleep(time.Hour)
-		}
-	}()
+	// 过期/临时数据清理：启动清一次，之后由队列调度器周期触发
+	// （KindHousekeeping，见下方 ScheduleEvery），避免每个 API 进程各起一个
+	// time.Sleep 循环、多副本重复清理。
+	st.CleanupExpired(time.Now().UTC())
 
 	go func() {
 		logx.Infof("git ssh server listening on %s", sshAddr)
@@ -556,20 +505,27 @@ func run() {
 		jobsMgr.EnableCodeIndex(true)
 	}
 	if !codeIndexConsume(codeSearchRemote, codeIndexer != nil, queueMode) {
-		jobsMgr.SetConsumeKinds(jobs.KindImport, jobs.KindMirror, jobs.KindWebhook, jobs.KindLanguages, jobs.KindLangBackfill)
+		jobsMgr.SetConsumeKinds(
+			jobs.KindImport, jobs.KindMirror, jobs.KindWebhook, jobs.KindLanguages,
+			jobs.KindLangBackfill, jobs.KindCodeIndexBackfill, jobs.KindHousekeeping,
+		)
 	}
 	jobsMgr.Start()
 	a.SetJobsManager(jobsMgr)
 
-	// 周期性语言回填：用队列调度器（asynq.Scheduler）每 6 小时入队一次
-	// KindLangBackfill，回填缺失语言记录的仓库，覆盖 push 事件被漏掉的场景
-	// （拆分 SSH 网关未共享 spool、队列背压/不可用等）。memory 队列不提供
-	// 该能力时跳过（单进程只需启动时回填一次）。
+	// 周期性后台任务：用队列调度器（asynq.Scheduler）统一入队，避免每个 API 进程
+	// 各起一个 time.Sleep/ticker 循环（多副本重复执行、重启丢失）。memory 队列不提供
+	// 该能力时跳过（单进程由启动时的一次性清理/回填覆盖）。
 	if pq, ok := jobsQueue.(queue.PeriodicQueue); ok {
-		if err := pq.ScheduleEvery(6*time.Hour, queue.Job{
-			Kind: jobs.KindLangBackfill, ID: jobs.KindLangBackfill,
-		}); err != nil {
-			logx.Infof("schedule language backfill: %v", err)
+		schedule := func(interval time.Duration, kind string) {
+			if err := pq.ScheduleEvery(interval, queue.Job{Kind: kind, ID: kind}); err != nil {
+				logx.Infof("schedule %s: %v", kind, err)
+			}
+		}
+		schedule(6*time.Hour, jobs.KindLangBackfill) // 缺失语言记录的仓库
+		schedule(time.Hour, jobs.KindHousekeeping)   // 过期/临时数据清理
+		if codeIndexer != nil {
+			schedule(30*time.Minute, jobs.KindCodeIndexBackfill) // 缺失/落后的索引
 		}
 	}
 
@@ -601,17 +557,6 @@ func run() {
 	// 周期性与数据库对账，清理已删除仓库的陈旧索引。
 	if idx, ok := codeIndexer.(codeIndexReconciler); ok {
 		reconcileCodeIndexLoop(idx, st)
-	}
-	// 安全网：定期（增量）回填缺失/落后的索引，恢复因队列背压丢弃或 HEAD 推进而
-	// 留在「待重建」状态的仓库（未启用索引时为 no-op）。
-	if codeIndexer != nil {
-		go func() {
-			t := time.NewTicker(30 * time.Minute)
-			defer t.Stop()
-			for range t.C {
-				jobsMgr.BackfillCodeIndex()
-			}
-		}()
 	}
 	// 周期性强制段合并，避免频繁重建后索引段数累积拖慢检索（scorch 也会自动合并）。
 	if codeIndexer != nil {

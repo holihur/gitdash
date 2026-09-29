@@ -198,3 +198,26 @@ func TestLangBackfillJobEnqueuesMissingRepos(t *testing.T) {
 		t.Fatalf("enqueued kind = %q, want %q", got, KindLanguages)
 	}
 }
+
+// 周期性索引回填：处理 KindCodeIndexBackfill 任务时为 NeedsIndex 的仓库入队。
+func TestCodeIndexBackfillJob(t *testing.T) {
+	st := newStore(t)
+	fq := &fakeQueue{}
+	m := New(st, fq)
+	m.SetCodeIndexer(&fakeIndexer{needs: true})
+	if err := m.handle(context.Background(), queue.Job{Kind: KindCodeIndexBackfill}); err != nil {
+		t.Fatal(err)
+	}
+	if fq.count() != 1 {
+		t.Fatalf("enqueued = %d, want 1", fq.count())
+	}
+}
+
+// 周期性清理任务：KindHousekeeping 可正常执行（幂等、无仓库载荷）。
+func TestHousekeepingJob(t *testing.T) {
+	st := newStore(t)
+	m := New(st, &fakeQueue{})
+	if err := m.handle(context.Background(), queue.Job{Kind: KindHousekeeping}); err != nil {
+		t.Fatal(err)
+	}
+}
