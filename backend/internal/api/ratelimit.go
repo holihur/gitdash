@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
@@ -8,19 +9,27 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"gitdash/backend/internal/envx"
+	"gitdash/backend/internal/logx"
 )
 
 // 通用写操作限流。
 //
 // 背景：登录/注册/找回密码/反馈已有专门限流，但 issue、评论、PR、project、
 // release、package 等所有已认证写接口此前没有任何节流，单个账号即可高频创建
-// 对象拖垮数据库/磁盘。这里对所有非幂等 HTTP 方法加一层进程内令牌桶。
+// 对象拖垮数据库/磁盘。这里对所有非幂等 HTTP 方法加一层限流。
 //
-// 说明：多实例部署下每个实例独立计数（与 quota 的已知限制一致），
-// 属于缓解而非严格全局限流。
+// 多实例部署：队列为 redis 时（main 调用 UseRedisWriteLimit）用 redis 共享计数，
+// 多节点共用同一份额度；否则回退进程内令牌桶（每实例独立计数，仅作缓解）。
 
 const writeRateWindow = 10 * time.Minute
+
+// writeLimiter 限流器抽象：in-memory 令牌桶或 redis 共享计数。
+type writeLimiter interface {
+	allow(key string) bool
+}
 
 type rateBucket struct {
 	tokens float64
@@ -83,8 +92,38 @@ func (l *writeRateLimiter) cleanupLoop() {
 	}
 }
 
-// defaultWriteLimiter 进程级单例；GITDASH_DISABLE_RATE_LIMIT=1 时关闭。
+// defaultWriteLimiter 进程级单例（回退用）；GITDASH_DISABLE_RATE_LIMIT=1 时关闭。
 var defaultWriteLimiter = newWriteRateLimiter(int(envx.Int64("GITDASH_WRITE_RPM", 240)))
+
+// redisWriteLimiter 基于 redis 的固定窗口计数，多实例共享同一份额度。
+// Redis 不可用时 fail-open（放行）：限流是缓解手段，不应因依赖故障阻断写入。
+type redisWriteLimiter struct {
+	rdb    redis.UniversalClient
+	limit  int64
+	window time.Duration
+}
+
+func newRedisWriteLimiter(rdb redis.UniversalClient, perMinute int) *redisWriteLimiter {
+	if perMinute <= 0 {
+		perMinute = 240
+	}
+	return &redisWriteLimiter{rdb: rdb, limit: int64(perMinute), window: time.Minute}
+}
+
+func (l *redisWriteLimiter) allow(key string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	k := "gitdash:ratelimit:write:" + key
+	n, err := l.rdb.Incr(ctx, k).Result()
+	if err != nil {
+		logx.Infof("write rate limit: redis incr: %v", err)
+		return true // fail-open
+	}
+	if n == 1 {
+		l.rdb.Expire(ctx, k, l.window)
+	}
+	return n <= l.limit
+}
 
 // rateKeyForRequest 生成限流键：优先按登录凭证区分，避免同一 NAT/IP 下
 // 多个用户共享额度；匿名请求按客户端 IP。
@@ -123,7 +162,11 @@ func (a *API) writeThrottle(next http.Handler) http.Handler {
 		switch r.Method {
 		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 			if !rateLimitDisabled && !writeThrottleExempt(r.URL.Path) {
-				if !defaultWriteLimiter.allow(rateKeyForRequest(r)) {
+				lim := a.writeLimiter
+				if lim == nil {
+					lim = defaultWriteLimiter
+				}
+				if !lim.allow(rateKeyForRequest(r)) {
 					writeCode(w, http.StatusTooManyRequests, "rate_limited", "too many requests, slow down")
 					return
 				}

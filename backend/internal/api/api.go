@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -124,6 +125,10 @@ type API struct {
 	// routePatterns 是 Handler 注册的全部路由 pattern（RouteMux 记录），
 	// 供黑盒端点覆盖检查使用。
 	routePatterns []string
+
+	// writeLimiter 通用写限流器：默认进程内令牌桶；多实例部署由 main 注入
+	// redis 共享计数（UseRedisWriteLimit）。
+	writeLimiter writeLimiter
 }
 
 const gpgKeysCacheTTL = 30 * time.Second
@@ -222,11 +227,18 @@ const (
 
 func New(s *store.Store, version string) *API {
 	return &API{
-		store:      s,
-		version:    version,
-		sshPort:    "2222",
-		codeSearch: codesearch.NewGrep(),
+		store:        s,
+		version:      version,
+		sshPort:      "2222",
+		codeSearch:   codesearch.NewGrep(),
+		writeLimiter: defaultWriteLimiter,
 	}
+}
+
+// UseRedisWriteLimit 多实例部署时改用 redis 共享写限流（额度 GITDASH_WRITE_RPM）。
+// queue 为 redis 时由 main 调用；未调用时回退进程内令牌桶。
+func (a *API) UseRedisWriteLimit(rdb redis.UniversalClient) {
+	a.writeLimiter = newRedisWriteLimiter(rdb, int(envx.Int64("GITDASH_WRITE_RPM", 240)))
 }
 
 // SetCodeSearch 注入代码搜索实现。传入的实现若同时满足 Indexer（如

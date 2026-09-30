@@ -486,6 +486,8 @@ func run() {
 		jobsQueue = queue.NewAsynq(redisAddr, password, redisDB, 2)
 		runnerHub = runner.NewHub(st, queue.NewRedisClient(redisAddr, password, redisDB))
 		pipeline.BindHub(runnerHub)
+		// 通用写限流改用 redis 共享计数：多实例共用同一份额度（否则每节点各限各的）。
+		a.UseRedisWriteLimit(queue.NewRedisClient(redisAddr, password, redisDB))
 		logx.Infof("task queue: asynq (redis %s db %d, concurrency %d)", redisAddr, redisDB, concurrency)
 	} else {
 		pipeline.Bind(st, nil, nil)
