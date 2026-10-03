@@ -49,7 +49,7 @@ def _uuid() -> str:
 
 
 def _commit(c, owner, repo, path, content, action="create"):
-    c.post(
+    r = c.post(
         f"/users/{owner}/repos/{repo}/commits",
         json={
             "message": f"add {path}",
@@ -57,6 +57,8 @@ def _commit(c, owner, repo, path, content, action="create"):
         },
         expect=201,
     )
+    body = r.json() if hasattr(r, "json") else r
+    return (body or {}).get("sha")
 
 
 def _get_bytes(c, path):
@@ -252,19 +254,28 @@ def test_host_run_push_trigger(host_repo):
     """host 模式下 push 触发同样可用。"""
     username, repo, c = host_repo
     c.put(f"/users/{username}/repos/{repo}/pipeline", json={"enabled": True}, expect=200)
-    _commit(c, username, repo, ".gitdash.yml", HOST_YAML + "# updated\n")
+    sha = _commit(c, username, repo, ".gitdash.yml", HOST_YAML + "# updated\n")
 
     p = f"/users/{username}/repos/{repo}/pipeline/runs"
     deadline = time.time() + 15
-    runs = []
+    run = None
     while time.time() < deadline:
-        runs = c.get(p, expect=200)
-        if runs:
+        for r in c.get(p, expect=200):
+            # 只认「本次提交」的 push 运行：仓库模板提交也带 .gitdash.yml，
+            # 刚开启流水线时 spool 里它的旧 push 事件同样会触发一次运行
+            # （模板用 image: alpine，host 模式下会被镜像白名单拒绝 → failed）。
+            if r.get("sha") == sha and r.get("event") == "push":
+                run = r
+                break
+        if run:
             break
         time.sleep(1)
-    assert runs, "push should trigger a host-mode pipeline run"
-    final = _wait_terminal(c, username, repo, runs[0]["id"])
-    assert final["status"] == "success"
+    assert run, "push should trigger a host-mode pipeline run"
+    final = _wait_terminal(c, username, repo, run["id"])
+    assert final["status"] == "success", (
+        f"status={final['status']} error={final.get('error')!r} "
+        f"log={final.get('log', '')[-800:]!r}"
+    )
 
 
 def test_host_repo_env_vars_injected(host_repo):
