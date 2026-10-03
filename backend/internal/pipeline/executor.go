@@ -2,6 +2,8 @@ package pipeline
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -259,9 +261,19 @@ func dockerRunArgs(name, workdir string, cfg *Config, step Step, job RunJob) []s
 // containerSeq 为容器名提供进程内唯一后缀（并行子步骤也会得到不同名字）。
 var containerSeq atomic.Uint64
 
-// containerName 为一次 docker 步骤生成唯一容器名。
+// containerInstance 为每个服务进程生成一个短随机标识，拼进容器名，避免
+// 多实例（或并行测试 worker）共享同一 Docker daemon 时 run ID 相同而名字冲突。
+var containerInstance = func() string {
+	b := make([]byte, 3)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", os.Getpid())
+	}
+	return hex.EncodeToString(b)
+}()
+
+// containerName 为一次 docker 步骤生成全局唯一容器名。
 func containerName(runID int64) string {
-	return fmt.Sprintf("gitdash-run-%d-%d", runID, containerSeq.Add(1))
+	return fmt.Sprintf("gitdash-run-%s-%d-%d", containerInstance, runID, containerSeq.Add(1))
 }
 
 // removeContainer 强制删除容器（忽略“不存在”等错误）。

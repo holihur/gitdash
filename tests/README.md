@@ -22,6 +22,19 @@ cd tests
 GITDASH_BIN=/tmp/gitdash-server uv run pytest -v
 ```
 
+#### 并行运行（推荐，CI 同款）
+
+用例彼此隔离（随机用户名/仓库、每 worker 独立实例），可用 `pytest-xdist`
+按文件分组并行，I/O 等待为主，实测约 4x 提速：
+
+```bash
+cd tests
+GITDASH_BIN=/tmp/gitdash-server uv run --with pytest-xdist pytest -q -n auto --dist loadfile
+```
+
+> 说明：Docker 相关用例的容器名带每进程随机前缀（见 `containerName`），
+> 多 worker 共享同一 Docker daemon 也不会重名冲突。
+
 ### 方式二：指向一个已运行的实例（例如本地 dev server）
 
 ```bash

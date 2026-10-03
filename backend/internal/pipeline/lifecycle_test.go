@@ -99,7 +99,7 @@ func TestDockerRunArgsNamesContainer(t *testing.T) {
 	if n1 == n2 {
 		t.Fatalf("container names should be unique: %q", n1)
 	}
-	if !strings.HasPrefix(n1, "gitdash-run-7-") {
+	if !strings.HasPrefix(n1, "gitdash-run-") || !strings.Contains(n1, "-7-") {
 		t.Fatalf("container name = %q", n1)
 	}
 

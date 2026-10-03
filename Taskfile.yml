@@ -103,7 +103,8 @@ tasks:
     deps: [build:pytest-bin, agent]
     dir: tests
     cmds:
-      - uv run pytest -q
+      # xdist 并行（按文件分组）：I/O 等待为主，多路并行显著提速。
+      - uv run --with pytest-xdist pytest -q -n auto --dist loadfile
     env:
       GITDASH_BIN: "{{.PYTEST_BIN}}"
       GITDASH_AGENT_BIN: /tmp/agent
