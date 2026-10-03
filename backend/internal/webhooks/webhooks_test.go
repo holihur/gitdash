@@ -1,16 +1,19 @@
 package webhooks
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,12 +26,19 @@ import (
 var testDispatcher *Dispatcher
 
 // bindQueue 为异步 webhook 投递绑定内存队列 + worker（drain 只负责入队）。
+// 通过 t.Cleanup 停机，避免 worker 在测试结束后继续访问已删除的临时 DB。
 func bindQueue(t *testing.T, st *store.Store) {
 	t.Helper()
-	mgr := jobs.New(st, queue.NewMemory(64, 2))
+	q := queue.NewMemory(64, 2)
+	mgr := jobs.New(st, q)
 	testDispatcher = New(st, mgr)
 	mgr.SetWebhookHandler(testDispatcher.HandleJob)
-	mgr.Start()
+	ctx, cancel := context.WithCancel(context.Background())
+	mgr.StartContext(ctx)
+	t.Cleanup(func() {
+		cancel()
+		q.Close()
+	})
 }
 
 // drain 测试包装：委托给已绑定的 Dispatcher。
@@ -166,5 +176,63 @@ func TestDeliverBlocksPrivateWhenNotAllowed(t *testing.T) {
 
 	if _, err := deliver(srv.URL, []byte("{}"), ""); err == nil {
 		t.Fatal("expected loopback delivery to be blocked by SSRF guard")
+	}
+}
+
+// spool 原子认领：两个 dispatcher 并发排空同一目录，每个事件只被处理一次。
+func TestDrainClaimsEventOnce(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spool := filepath.Join(dir, "events")
+	if err := os.MkdirAll(spool, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const n = 40
+	for i := 0; i < n; i++ {
+		ev := fmt.Sprintf(`{"event":"push","owner":"alice","repo":"demo","old":"0000","new":"%040d","ref":"refs/heads/main","user":"bob","created_at":"2026-09-04T00:00:00Z"}`, i)
+		if err := os.WriteFile(filepath.Join(spool, fmt.Sprintf("alice__demo-%d.json", i)), []byte(ev), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var mu sync.Mutex
+	count := map[string]int{}
+	handler := func(e Event) {
+		mu.Lock()
+		count[e.New]++
+		mu.Unlock()
+	}
+
+	// 两个独立 Dispatcher（模拟两个节点）并发排空同一 spool；
+	// 原子认领保证每个事件恰好被一个节点处理一次。
+	d1, d2 := New(st, nil), New(st, nil)
+	var wg sync.WaitGroup
+	for _, d := range []*Dispatcher{d1, d2} {
+		wg.Add(1)
+		go func(d *Dispatcher) {
+			defer wg.Done()
+			for i := 0; i < 10; i++ {
+				d.drain(spool, []func(Event){handler})
+			}
+		}(d)
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(count) != n {
+		t.Fatalf("processed %d distinct events, want %d", len(count), n)
+	}
+	for k, v := range count {
+		if v != 1 {
+			t.Fatalf("event %s processed %d times, want 1", k, v)
+		}
+	}
+	left, _ := filepath.Glob(filepath.Join(spool, "*"))
+	if len(left) != 0 {
+		t.Fatalf("spool not drained: %v", left)
 	}
 }

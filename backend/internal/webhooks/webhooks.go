@@ -163,66 +163,106 @@ func (d *Dispatcher) Run(spoolDir string, interval time.Duration, handlers ...fu
 	}
 }
 
+// spoolClaimSuffix 原子认领后缀：drain 先把 *.json rename 成 *.json.claimed。
+// 多实例共享同一 spool 目录时，只有 rename 成功的节点会处理该事件，避免
+// webhook 重复投递 / CI 重复触发。
+const spoolClaimSuffix = ".claimed"
+
+// spoolClaimStale 认领超时：处理节点崩溃会留下 .claimed 文件，超过该时长后
+// 还原为待处理事件重新投递（保持至少一次语义）。
+const spoolClaimStale = 15 * time.Minute
+
 func (d *Dispatcher) drain(spoolDir string, handlers []func(Event)) {
-	st := d.st
 	d.processRetries()
+	d.reclaimStaleClaims(spoolDir)
 	files, err := filepath.Glob(filepath.Join(spoolDir, "*.json"))
 	if err != nil {
 		return
 	}
 	for _, f := range files {
-		b, err := os.ReadFile(f)
-		if err != nil {
+		// 原子认领：同目录 rename 是原子操作；多节点竞争时只有一个成功，
+		// 其余拿到 ENOENT（文件已被移走）直接跳过。
+		claimed := f + spoolClaimSuffix
+		if err := os.Rename(f, claimed); err != nil {
 			continue
 		}
-		var ev Event
-		if err := json.Unmarshal(b, &ev); err != nil || ev.Owner == "" || ev.Repo == "" {
-			_ = os.Remove(f)
-			continue
-		}
-		// 防 spool 文件名与事件内容不符（跨仓库伪造 webhook/CI）：文件名必须以
-		// `owner__repo-` 开头（WriteSpool 与 post-receive hook 均按此命名）。
-		if !strings.HasPrefix(filepath.Base(f), ev.Owner+"__"+ev.Repo+"-") {
-			logx.Infof("webhook: drop event %s/%s with mismatched spool name %s", ev.Owner, ev.Repo, filepath.Base(f))
-			_ = os.Remove(f)
-			continue
-		}
-		if ev.Event == "" {
-			ev.Event = "push"
-		}
-		hooks, err := st.ListWebhooks(ev.Owner, ev.Repo)
-		if err == nil && len(hooks) > 0 {
-			// 异步投递：入队后立即返回，由队列 worker 投递（不阻塞 spool 排空与 CI 触发）
-			body, merr := json.Marshal(ev)
-			if merr != nil {
-				logx.Infof("webhook: marshal event %s/%s: %v", ev.Owner, ev.Repo, merr)
-			} else {
-				for _, h := range hooks {
-					if d.q == nil {
-						break
-					}
-					if !Subscribes(h.Events, ev.Event) {
-						continue // 该 webhook 未订阅此类事件
-					}
-					if err := d.q.EnqueueWebhook(jobs.WebhookPayload{HookID: h.ID, Body: body}); err != nil {
-						logx.Infof("webhook: enqueue %s/%s hook %d: %v", ev.Owner, ev.Repo, h.ID, err)
-					}
-				}
-			}
-		}
-		// push mirror 自动同步（仅 push 事件，走异步任务队列，避免无界 goroutine）
-		if ev.Event == "push" && d.q != nil {
-			if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
-				if err := d.q.EnqueueMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey); err != nil {
-					logx.Infof("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, logx.RedactURL(m.URL), err)
-				}
-			}
-		}
-		for _, h := range handlers {
-			h(ev)
-		}
-		_ = os.Remove(f)
+		d.processClaimed(claimed, handlers)
 	}
+}
+
+// reclaimStaleClaims 把疑似崩溃遗留的 .claimed 文件还原成待处理事件。
+func (d *Dispatcher) reclaimStaleClaims(spoolDir string) {
+	claimed, err := filepath.Glob(filepath.Join(spoolDir, "*.json"+spoolClaimSuffix))
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-spoolClaimStale)
+	for _, c := range claimed {
+		fi, err := os.Stat(c)
+		if err != nil || fi.ModTime().After(cutoff) {
+			continue
+		}
+		_ = os.Rename(c, strings.TrimSuffix(c, spoolClaimSuffix))
+	}
+}
+
+// processClaimed 处理一个已认领的 spool 文件，完成后删除。
+// 永久无效（非法 JSON / 文件名不符）立即删除；处理过程中崩溃则保留 .claimed，
+// 由 reclaimStaleClaims 超时后重新入队。
+func (d *Dispatcher) processClaimed(f string, handlers []func(Event)) {
+	st := d.st
+	b, err := os.ReadFile(f)
+	if err != nil {
+		_ = os.Remove(f) // 已不可读：清掉认领文件，避免永久占用
+		return
+	}
+	var ev Event
+	if err := json.Unmarshal(b, &ev); err != nil || ev.Owner == "" || ev.Repo == "" {
+		_ = os.Remove(f)
+		return
+	}
+	// 防 spool 文件名与事件内容不符（跨仓库伪造 webhook/CI）：文件名必须以
+	// `owner__repo-` 开头（WriteSpool 与 post-receive hook 均按此命名）。
+	if !strings.HasPrefix(filepath.Base(f), ev.Owner+"__"+ev.Repo+"-") {
+		logx.Infof("webhook: drop event %s/%s with mismatched spool name %s", ev.Owner, ev.Repo, filepath.Base(f))
+		_ = os.Remove(f)
+		return
+	}
+	if ev.Event == "" {
+		ev.Event = "push"
+	}
+	hooks, err := st.ListWebhooks(ev.Owner, ev.Repo)
+	if err == nil && len(hooks) > 0 {
+		// 异步投递：入队后立即返回，由队列 worker 投递（不阻塞 spool 排空与 CI 触发）
+		body, merr := json.Marshal(ev)
+		if merr != nil {
+			logx.Infof("webhook: marshal event %s/%s: %v", ev.Owner, ev.Repo, merr)
+		} else {
+			for _, h := range hooks {
+				if d.q == nil {
+					break
+				}
+				if !Subscribes(h.Events, ev.Event) {
+					continue // 该 webhook 未订阅此类事件
+				}
+				if err := d.q.EnqueueWebhook(jobs.WebhookPayload{HookID: h.ID, Body: body}); err != nil {
+					logx.Infof("webhook: enqueue %s/%s hook %d: %v", ev.Owner, ev.Repo, h.ID, err)
+				}
+			}
+		}
+	}
+	// push mirror 自动同步（仅 push 事件，走异步任务队列，避免无界 goroutine）
+	if ev.Event == "push" && d.q != nil {
+		if m, err := st.GetMirror(ev.Owner, ev.Repo); err == nil && m.URL != "" {
+			if err := d.q.EnqueueMirror(ev.Owner, ev.Repo, m.URL, m.PrivateKey); err != nil {
+				logx.Infof("mirror: enqueue %s/%s -> %s: %v", ev.Owner, ev.Repo, logx.RedactURL(m.URL), err)
+			}
+		}
+	}
+	for _, h := range handlers {
+		h(ev)
+	}
+	_ = os.Remove(f)
 }
 
 // blockedLinkLocal 防 SSRF：默认禁止投递到回环/私有/链路本地/云元数据地址，
